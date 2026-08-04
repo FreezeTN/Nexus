@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+:root, [data-theme="5e"] {
+  --theme-accent: #f59e0b;
+  --theme-accent-hover: #d97706;
+  --theme-accent-light: #fde047;
+  --theme-accent-text: #fef08a;
+  --theme-accent-subtle: #fef3c7;
+  --theme-bg-accent: rgba(69, 26, 3, 0.7);
+  --theme-bg-accent-solid: #451a03;
+  --theme-border-accent: rgba(217, 119, 6, 0.5);
+  --theme-border-strong: #f59e0b;
+  --theme-glow: rgba(245, 158, 11, 0.25);
+  --theme-badge-bg: rgba(245, 158, 11, 0.18);
+  --theme-badge-text: #fcd34d;
+  --theme-ring: rgba(245, 158, 11, 0.5);
+  --theme-name: "D&D 5th Edition";
+}
+
+[data-theme="3.5e"] {
+  --theme-accent: #f43f5e;
+  --theme-accent-hover: #e11d48;
+  --theme-accent-light: #fda4af;
+  --theme-accent-text: #fecdd3;
+  --theme-accent-subtle: #ffe4e6;
+  --theme-bg-accent: rgba(76, 5, 25, 0.7);
+  --theme-bg-accent-solid: #4c0519;
+  --theme-border-accent: rgba(225, 29, 72, 0.5);
+  --theme-border-strong: #f43f5e;
+  --theme-glow: rgba(244, 63, 94, 0.25);
+  --theme-badge-bg: rgba(244, 63, 94, 0.18);
+  --theme-badge-text: #fda4af;
+  --theme-ring: rgba(244, 63, 94, 0.5);
+  --theme-name: "D&D 3.5 Edition";
+}
+
+[data-theme="shadowrun"] {
+  --theme-accent: #06b6d4;
+  --theme-accent-hover: #0891b2;
+  --theme-accent-light: #67e8f9;
+  --theme-accent-text: #a5f3fc;
+  --theme-accent-subtle: #cffaff;
+  --theme-bg-accent: rgba(8, 51, 68, 0.7);
+  --theme-bg-accent-solid: #083344;
+  --theme-border-accent: rgba(8, 145, 178, 0.5);
+  --theme-border-strong: #06b6d4;
+  --theme-glow: rgba(6, 182, 212, 0.25);
+  --theme-badge-bg: rgba(6, 182, 212, 0.18);
+  --theme-badge-text: #67e8f9;
+  --theme-ring: rgba(6, 182, 212, 0.5);
+  --theme-name: "Shadowrun";
+}
+
+[data-theme="pathfinder"] {
+  --theme-accent: #a855f7;
+  --theme-accent-hover: #9333ea;
+  --theme-accent-light: #d8b4fe;
+  --theme-accent-text: #e9d5ff;
+  --theme-accent-subtle: #f3e8ff;
+  --theme-bg-accent: rgba(58, 12, 94, 0.7);
+  --theme-bg-accent-solid: #3a0c5e;
+  --theme-border-accent: rgba(147, 51, 234, 0.5);
+  --theme-border-strong: #a855f7;
+  --theme-glow: rgba(168, 85, 247, 0.25);
+  --theme-badge-bg: rgba(168, 85, 247, 0.18);
+  --theme-badge-text: #d8b4fe;
+  --theme-ring: rgba(168, 85, 247, 0.5);
+  --theme-name: "Pathfinder 2e";
+}
+
+[data-theme="cthulhu"] {
+  --theme-accent: #10b981;
+  --theme-accent-hover: #059669;
+  --theme-accent-light: #6ee7b7;
+  --theme-accent-text: #a7f3d0;
+  --theme-accent-subtle: #d1fae5;
+  --theme-bg-accent: rgba(6, 78, 59, 0.7);
+  --theme-bg-accent-solid: #064e3b;
+  --theme-border-accent: rgba(5, 150, 105, 0.5);
+  --theme-border-strong: #10b981;
+  --theme-glow: rgba(16, 185, 129, 0.25);
+  --theme-badge-bg: rgba(16, 185, 129, 0.18);
+  --theme-badge-text: #6ee7b7;
+  --theme-ring: rgba(16, 185, 129, 0.5);
+  --theme-name: "Call of Cthulhu";
+}
+
+/* Dynamic theme helper classes */
+.text-theme-accent { color: var(--theme-accent) !important; }
+.text-theme-light { color: var(--theme-accent-light) !important; }
+.text-theme-text { color: var(--theme-accent-text) !important; }
+.bg-theme-accent { background-color: var(--theme-accent) !important; }
+.bg-theme-accent-hover:hover { background-color: var(--theme-accent-hover) !important; }
+.bg-theme-dark { background-color: var(--theme-bg-accent) !important; }
+.bg-theme-solid { background-color: var(--theme-bg-accent-solid) !important; }
+.bg-theme-badge { background-color: var(--theme-badge-bg) !important; }
+.border-theme-accent { border-color: var(--theme-border-accent) !important; }
+.border-theme-strong { border-color: var(--theme-border-strong) !important; }
+.shadow-theme-glow { box-shadow: 0 0 25px var(--theme-glow) !important; }
+.ring-theme-accent { --tw-ring-color: var(--theme-ring) !important; }
+
+/* Custom theme scrollbar accents */
+::-webkit-scrollbar-thumb {
+  background-color: var(--theme-border-accent);
+  border-radius: 4px;
+}
+

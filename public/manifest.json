@@ -1,0 +1,18 @@
+{
+  "short_name": "D&D Sheet",
+  "name": "D&D 5e Interactive Character Sheet",
+  "description": "Comprehensive 5e D&D character sheet with automated calculations, spell tracking, inventory, and integrated dice roller.",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0c0a09",
+  "theme_color": "#1c1917",
+  "display": "standalone",
+  "orientation": "any"
+}

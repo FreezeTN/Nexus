@@ -1,0 +1,1063 @@
+import React, { useState, useEffect } from 'react';
+import { RuleEdition } from '../../types';
+import { 
+  BookOpen, 
+  ShieldAlert, 
+  Crosshair, 
+  Package, 
+  Wand2, 
+  ScrollText, 
+  Dices, 
+  UserPlus, 
+  Download, 
+  Upload, 
+  Heart, 
+  Shield, 
+  Sparkles, 
+  Flame, 
+  RefreshCw,
+  HelpCircle,
+  Search,
+  Layers,
+  Award,
+  Swords,
+  Cpu,
+  Skull
+} from 'lucide-react';
+
+interface Sheet6UserGuideProps {
+  edition?: RuleEdition;
+}
+
+export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e' }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeSection, setActiveSection] = useState<string>('all');
+  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'conversion'>(edition);
+
+  useEffect(() => {
+    setGuideEdition(edition);
+  }, [edition]);
+
+  // 5e Guide Data
+  const guideSections5e = [
+    {
+      id: 'formulas-5e',
+      title: 'Edition Formulas & Calculations Breakdown (5e)',
+      icon: Wand2,
+      color: 'text-amber-300',
+      description: 'Mathematical breakdown of every score, bonus, save, AC, and spell stat in D&D 5e.',
+      items: [
+        {
+          name: 'Ability Modifier Formula',
+          action: 'Floor((Score - 10) / 2)',
+          detail: 'Score 10-11 = +0; Score 12-13 = +1; Score 14-15 = +2; Score 8-9 = -1. Standard D&D modifier calculation applied to all checks.'
+        },
+        {
+          name: 'Proficiency Bonus Scaling',
+          action: 'Floor((Level - 1) / 4) + 2',
+          detail: 'Levels 1–4: +2 | Levels 5–8: +3 | Levels 9–12: +4 | Levels 13–16: +5 | Levels 17–20: +6.'
+        },
+        {
+          name: 'Armor Class (AC) Calculations',
+          action: 'Base Armor + DEX Modifier',
+          detail: 'Unarmored: 10 + DEX Mod. Light Armor: Base AC + DEX Mod. Medium Armor: Base AC + min(2, DEX Mod). Heavy Armor: Base AC (no DEX). Shield: +2 AC.'
+        },
+        {
+          name: 'Saving Throws & Skill Checks',
+          action: 'd20 + Ability Mod + (Prof / Expertise)',
+          detail: 'Proficient Save/Skill: d20 + Mod + Prof. Expertise Skill: d20 + Mod + (2 × Prof). Jack of All Trades: d20 + Mod + Floor(Prof / 2).'
+        },
+        {
+          name: 'Passive Perception',
+          action: '10 + WIS Mod + Prof / Expertise',
+          detail: 'Base 10 + WIS Modifier + Proficiency Bonus (if proficient in Perception) + 5 if the character has Advantage.'
+        },
+        {
+          name: 'Weapon Attack & Damage Rolls',
+          action: 'd20 + Prof + STR/DEX',
+          detail: 'Melee Attack: d20 + STR Mod + Prof. Ranged / Finesse: d20 + DEX Mod + Prof. Weapon Damage: Weapon Die + STR or DEX Mod.'
+        },
+        {
+          name: 'Spell Save DC & Attack Bonus',
+          action: '8 + Prof + Casting Mod',
+          detail: 'Spell Save DC = 8 + Proficiency Bonus + Spellcasting Ability Mod (INT/WIS/CHA). Spell Attack = Prof + Casting Ability Mod.'
+        },
+        {
+          name: 'Hit Points & HP Calc Modes',
+          action: 'Class Hit Die + CON Mod',
+          detail: 'Level 1: Max Hit Die + CON Mod. Subsequent Levels (Average): Floor(Hit Die / 2) + 1 + CON Mod. Rolled Mode: Rolled die result + CON Mod.'
+        },
+        {
+          name: 'Carrying Capacity & Encumbrance',
+          action: 'STR × 15 lbs',
+          detail: 'Max Carrying Capacity = STR × 15 lbs. Push / Drag / Lift Capacity = STR × 30 lbs.'
+        },
+        {
+          name: 'Monster Encounter Defeat XP',
+          action: 'Custom Party XP Field',
+          detail: 'When a creature is marked as a Monster, the DM can specify the total Defeat XP awarded to the adventuring party upon victory.'
+        }
+      ]
+    },
+    {
+      id: 'header-mgmt',
+      title: 'Header & Character Management (5e)',
+      icon: UserPlus,
+      color: 'text-amber-400',
+      description: 'Manage 5e characters, portrait URLs, import/export backups, and trigger rests.',
+      items: [
+        {
+          name: 'Character Switcher',
+          action: 'Top Left Dropdown / Main Menu',
+          detail: 'Switch instantly between stored 5e characters. All character state is automatically saved to your browser local storage.'
+        },
+        {
+          name: 'Create New Character & HP Calc',
+          action: '"+ New" Button in Header',
+          detail: 'Input Class, Level, Race, Ability Scores, Portrait Image URL, and HP Calculation Mode (Average, Rolled, or Max Value HP).'
+        },
+        {
+          name: 'JSON Export & Import',
+          action: 'Export / Import Buttons in Header',
+          detail: 'Download your character sheet as a `.json` backup file or load previously exported character sheets to move between devices.'
+        },
+        {
+          name: 'Short Rest & Long Rest',
+          action: 'Rest Buttons next to Level',
+          detail: 'Short Rest restores temporary HP and lets you spend Hit Dice. Long Rest restores HP to maximum, resets spent Hit Dice, and refills all Spell Slots.'
+        },
+        {
+          name: 'Initiative Roll',
+          action: '⚡ Init Roll Button in Header',
+          detail: 'Rolls a d20 + your DEX initiative modifier and logs the result directly to the Floating Dice Roller.'
+        }
+      ]
+    },
+    {
+      id: 'sheet1-guide',
+      title: 'Stats & Features (5e)',
+      icon: ShieldAlert,
+      color: 'text-rose-400',
+      description: 'Ability Scores (Score Primary), Saving Throws, 18 Skills & Feats.',
+      items: [
+        {
+          name: 'Ability Scores & Modifiers',
+          action: 'Click any Ability Card or d20 icon',
+          detail: 'Displays primary Ability Score prominently with Modifier below. Modifiers are calculated automatically: (Score - 10) / 2. Click to roll a check with Normal, Advantage, or Disadvantage.'
+        },
+        {
+          name: 'Saving Throws',
+          action: 'Checkboxes next to Abilities',
+          detail: 'Toggle saving throw proficiency checkboxes. When proficiencies are enabled, your Proficiency Bonus (+2 to +6) is automatically added to rolls.'
+        },
+        {
+          name: '5e Skill Checks List',
+          action: 'Click any Skill row or d20 button',
+          detail: 'Complete 18 standard 5e skills list (Acrobatics, Athletics, Stealth, Perception, etc.). Radio/box toggles Proficiency or Expertise (+2x Prof Bonus).'
+        },
+        {
+          name: 'Class Features & Feats',
+          action: '"+ Add Feature / Feat" Buttons',
+          detail: 'Add custom racial traits, class features (e.g. Action Surge, Second Wind), or feats with custom source tags and descriptions.'
+        }
+      ]
+    },
+    {
+      id: 'sheet2-guide',
+      title: 'Combat & Actions (5e)',
+      icon: Crosshair,
+      color: 'text-emerald-400',
+      description: 'HP Management with Animated Orb, Armor Class, Weapons & 5e Rules.',
+      items: [
+        {
+          name: 'Hit Points & Animated HP Orb',
+          action: 'Quick adjustment buttons (-10, -1, +1, +10)',
+          detail: 'Track Current HP, Max HP, and Temp HP. Uses color-coded HP text (Green 75-100%, Yellow 49-74%, Red <49%) with an animated liquid vitality orb.'
+        },
+        {
+          name: 'Death Saving Throws & Permanent Death',
+          action: 'Success / Failure Checkboxes',
+          detail: 'Track 3 Successes and 3 Failures. Accumulating 3 Failures results in Permanent Death for PCs and Merchants: HP is locked to 0, labeled "DEAD", and standard rests or healing items/potions are disabled. Only Revive spells (e.g. Revivify, Resurrection) or manual DM HP modifications bring the character back to life.'
+        },
+        {
+          name: 'Encounter Tracker & Target AC Attack Resolver',
+          action: 'Combat View & Target AC Panel',
+          detail: 'Manage turn orders, initiative, status conditions, and use the automated Target AC Hit & Attack Resolver to roll attacks vs. enemy AC with 1-click damage application.'
+        },
+        {
+          name: 'Party Manager & Adventuring Groups',
+          action: 'Header "Parties" Button',
+          detail: 'Group player characters and allies into adventuring parties. View total party HP pool, average passive perception, average level, and add entire parties directly to combat encounters (dead members automatically excluded).'
+        },
+        {
+          name: 'Weapons & Attacks',
+          action: 'Click "Atk Roll" or "Damage Roll"',
+          detail: 'Add melee, ranged, or spell weapons with custom bonuses. Click "Atk Roll" to roll d20 + Prof + STR/DEX, or "Damage Roll" to parse expressions like 2d6+4.'
+        },
+        {
+          name: '5e Combat Rules Cheat Sheet',
+          action: 'Accordion / Reference Panels',
+          detail: 'Built-in 5e cheat sheet covering Movement, Actions (Attack, Cast Spell, Dash, Disengage, Dodge, Help, Hide, Ready), Bonus Actions, and Conditions (Blinded, Charmed, Grappled, Prone, Stunned, etc.).'
+        }
+      ]
+    },
+    {
+      id: 'sheet3-guide',
+      title: 'Gear, Inventory & Wealth (5e)',
+      icon: Package,
+      color: 'text-amber-300',
+      description: 'Currency, encumbrance weight tracking, and attunement slots.',
+      items: [
+        {
+          name: 'Currency Pouch',
+          action: 'Inputs for CP, SP, EP, GP, PP',
+          detail: 'Track copper, silver, electrum, gold, and platinum pieces with automatic total gold value conversion.'
+        },
+        {
+          name: 'Inventory Items & Merchant Mode',
+          action: '"+ Add Item" Button',
+          detail: 'Track quantity, unit weight, equipped status, and notes. Toggle Merchant/Vendor mode to apply price margins for trading.'
+        },
+        {
+          name: 'Encumbrance Calculator',
+          action: 'Automatic Weight Bar',
+          detail: 'Calculates Total Weight carried against Carrying Capacity (STR × 15 lbs) and Push/Drag/Lift capacity (STR × 30 lbs).'
+        },
+        {
+          name: 'Magic Items & Attunement',
+          action: 'Attunement Slots (Max 3)',
+          detail: 'Track magic items requiring attunement with active status indicators (e.g., Ring of Protection, Cloak of Displacement).'
+        }
+      ]
+    },
+    {
+      id: 'sheet4-guide',
+      title: 'Spells & Spellcasting (5e)',
+      icon: Wand2,
+      color: 'text-purple-400',
+      description: 'Spell slots tracker, Spell Save DC, and spellbook manager.',
+      items: [
+        {
+          name: 'Spellcasting Stats',
+          action: 'Casting Ability selector',
+          detail: 'Select INT, WIS, or CHA. Automatically computes Spell Save DC (8 + Prof + Mod) and Spell Attack Bonus (Prof + Mod).'
+        },
+        {
+          name: 'Spell Slots Tracker',
+          action: 'Slot counter buttons',
+          detail: 'Track total and remaining spell slots for 1st through 9th level spells. Click slot boxes to spend or restore slots.'
+        },
+        {
+          name: 'Official 5e Preset Spells & Wish',
+          action: '"+ Add Spell" Dropdown Picker',
+          detail: 'Choose from 20 iconic official D&D 5e spells (Wish, Revivify, Raise Dead, Resurrection, Fireball, Cure Wounds, Shield, Counterspell, etc.). Selecting a preset auto-populates casting time, range, components, duration, and spell descriptions.'
+        },
+        {
+          name: 'Revive Spells & Life Restoration',
+          action: 'Cast Revivify / Resurrection',
+          detail: 'Casting revive spells (Revivify, Raise Dead, Resurrection, True Resurrection) automatically restores a Dead character to life, clears death save failures, and restores hit points.'
+        },
+        {
+          name: 'Spellbook & Cantrips',
+          action: '"+ Add Spell" / Level Filters',
+          detail: 'Organize spells by level (Cantrip to 9th). Filter by level, mark prepared spells, and click "Cast / Roll" to trigger spell attacks or damage rolls directly.'
+        }
+      ]
+    },
+    {
+      id: 'sheet5-guide',
+      title: 'Description & Notes',
+      icon: ScrollText,
+      color: 'text-blue-400',
+      description: 'Physical appearance, backstory, personality traits, and campaign log.',
+      items: [
+        {
+          name: 'Physical Demographics & Portrait',
+          action: 'Form inputs & Image Link',
+          detail: 'Record age, height, weight, eyes, hair, skin color, gender, and display custom character portrait image.'
+        },
+        {
+          name: 'Personality, Ideals, Bonds & Flaws',
+          action: 'Text areas',
+          detail: 'Log standard roleplaying characteristics for quick access during social encounters.'
+        },
+        {
+          name: 'Backstory, Allies & Quest Log',
+          action: 'Large notes areas',
+          detail: 'Write detailed character history, faction allegiances, contacts, session secrets, and party loot.'
+        }
+      ]
+    },
+    {
+      id: 'dice-guide',
+      title: 'Floating Interactive Dice Roller',
+      icon: Dices,
+      color: 'text-amber-500',
+      description: 'Standard polyhedral dice floating toolbar and roll log history.',
+      items: [
+        {
+          name: 'Polyhedral Quick Buttons',
+          action: 'Bottom Floating Bar (d4, d6, d8, d10, d12, d20, d100)',
+          detail: 'Click any die button to roll instantly. Set custom count or modifiers.'
+        },
+        {
+          name: 'Advantage & Disadvantage',
+          action: 'ADV / DIS Toggle Buttons',
+          detail: 'When rolling a d20, toggle ADV (rolls 2d20, takes higher) or DIS (rolls 2d20, takes lower).'
+        },
+        {
+          name: 'Roll Log Drawer',
+          action: 'Click "Log" button on floating bar',
+          detail: 'Opens a complete history drawer of all recent rolls with timestamp, die breakdown, and total result.'
+        }
+      ]
+    }
+  ];
+
+  // 3.5e Edition Specific Guide Data
+  const guideSections35e = [
+    {
+      id: 'formulas-35e',
+      title: 'Edition Formulas & Calculations Breakdown (3.5e)',
+      icon: Wand2,
+      color: 'text-amber-300',
+      description: 'Mathematical breakdown of BAB, Fort/Ref/Will, Touch AC, Skill Point Calculator, and Encumbrance in 3.5e.',
+      items: [
+        {
+          name: 'Ability Modifier Formula',
+          action: 'Floor((Score - 10) / 2)',
+          detail: 'Score 10-11 = +0; Score 12-13 = +1; Score 14-15 = +2; Score 8-9 = -1.'
+        },
+        {
+          name: 'Base Attack Bonus (BAB) Progression',
+          action: 'Full (Lvl), 3/4 (Lvl×0.75), 1/2 (Lvl×0.5)',
+          detail: 'Good BAB (Fighter/Paladin/Barbarian/Ranger) = Level. Average BAB (Cleric/Rogue/Monk/Bard) = Floor(Level × 0.75). Poor BAB (Wizard/Sorcerer) = Floor(Level × 0.5). Extra iterative attacks gained at BAB +6/+1, +11/+6/+1, +16/+11/+6/+1.'
+        },
+        {
+          name: '3.5e Saving Throws (Fort, Ref, Will)',
+          action: 'Base Save + Ability Mod + Misc',
+          detail: 'Fortitude = Base Fort + CON Mod. Reflex = Base Ref + DEX Mod. Will = Base Will + WIS Mod. Good Save Base = Floor(Level / 2) + 2. Poor Save Base = Floor(Level / 3).'
+        },
+        {
+          name: 'Standard Armor Class (AC)',
+          action: '10 + Armor + Shield + DEX + Size',
+          detail: '10 + Armor Bonus + Shield Bonus + DEX Mod + Size Mod + Natural Armor + Deflection Mod.'
+        },
+        {
+          name: 'Touch Armor Class (Touch AC)',
+          action: '10 + DEX Mod + Size + Deflection',
+          detail: 'Ignores Armor, Shield, and Natural Armor. Used against spell rays, incorporeal attacks, and touch spells.'
+        },
+        {
+          name: 'Flat-Footed Armor Class',
+          action: '10 + Armor + Shield + Natural + Size',
+          detail: 'Ignores DEX Modifier and Dodge bonuses. Applies when surprised or caught flat-footed in combat.'
+        },
+        {
+          name: 'Grapple Check Formula',
+          action: 'BAB + STR Mod + Special Size Mod',
+          detail: 'BAB + STR Modifier + Size Mod (Medium 0, Large +4, Huge +8, Gargantuan +12, Colossal +16, Small -4, Tiny -8).'
+        },
+        {
+          name: '3.5e Skill Point Calculator & Max Ranks',
+          action: '(Base SP + INT Mod) × 4 at Lvl 1',
+          detail: 'Level 1: (Base Class SP + INT Mod) × 4 + Human (+4). Subsequent: Base Class SP + INT Mod + Human (+1). Class Skill Max Ranks = Level + 3 (1 SP/rank). Cross-Class Max Ranks = (Level + 3) / 2 (2 SP/rank).'
+        },
+        {
+          name: '3.5e Spell Save DC Formula',
+          action: '10 + Spell Level + Casting Mod',
+          detail: '10 + Spell Level + Ability Mod (INT for Wizard, WIS for Cleric/Druid, CHA for Sorcerer/Bard).'
+        },
+        {
+          name: 'Carrying Capacity Loads (3.5e)',
+          action: 'Light / Medium / Heavy Load',
+          detail: 'Light Load: No penalty, normal speed. Medium Load: Max DEX +3, -3 check penalty, 20ft speed. Heavy Load: Max DEX +1, -6 check penalty, 20ft speed.'
+        },
+        {
+          name: 'Monster Encounter Defeat XP',
+          action: 'Custom Party XP Field',
+          detail: 'DMs can flag encounter creatures as Monsters and set Defeat XP rewards for battle session planning.'
+        }
+      ]
+    },
+    {
+      id: 'header-mgmt',
+      title: 'Header & Character Management (3.5e)',
+      icon: UserPlus,
+      color: 'text-amber-400',
+      description: '3.5e ruleset management, BAB display, 3.5e saving throws, and HP calculation modes.',
+      items: [
+        {
+          name: '3.5e Ruleset Badge & Conversion',
+          action: 'Header Edition Badge / Switcher',
+          detail: 'Shows active D&D 3.5e system tag. You can convert any character between 3.5e and 5e rulesets in the top-right header menu.'
+        },
+        {
+          name: 'Base Attack Bonus (BAB)',
+          action: 'Header Vitals Bar',
+          detail: 'In 3.5e, Base Attack Bonus (BAB) replaces Proficiency Bonus and scales based on class progression (Full, 3/4, or 1/2 BAB).'
+        },
+        {
+          name: 'Custom Portrait & HP Calculation Mode',
+          action: 'Character Creation / Sheet Edit',
+          detail: 'Set custom portrait image URL. Choose between "Average HP", "Rolled HP" (simulating 5e HP calculator), or "Max Value HP" (max hit die per level).'
+        },
+        {
+          name: 'Short & Long Rest in 3.5e',
+          action: 'Rest Buttons next to Level',
+          detail: 'Long Rest restores full Hit Points and prepares 3.5e daily spell slots and domain powers.'
+        }
+      ]
+    },
+    {
+      id: 'sheet1-guide',
+      title: 'Stats, 3.5e Saves & Skill Point Calculator',
+      icon: ShieldAlert,
+      color: 'text-rose-400',
+      description: 'Ability Scores (Score Primary), Fort/Ref/Will Base Saves, and 30+ 3.5e Skill Ranks.',
+      items: [
+        {
+          name: 'Ability Scores & Modifiers',
+          action: 'Ability Card Grid',
+          detail: 'Displays primary Score in big typography with Modifier below. Modifiers are calculated automatically: (Score - 10) / 2.'
+        },
+        {
+          name: '3.5e Base Saving Throws',
+          action: 'Fortitude, Reflex, Will Cards',
+          detail: 'In 3.5e, saves are split into Fortitude (CON), Reflex (DEX), and Will (WIS). Total Save = Base Save + Ability Mod + Misc Mod.'
+        },
+        {
+          name: '3.5e Skill Point Calculator',
+          action: 'Top of Skills Panel',
+          detail: 'Automatically calculates Available Skill Points based on Level 1 formula ((Base SP + INT Mod) × 4 + Human bonus) and subsequent levels. Tracks spent SP vs remaining SP.'
+        },
+        {
+          name: 'Class Skill Checkboxes ("C" vs "X")',
+          action: 'Checkbox next to each 3.5e skill',
+          detail: 'Check box for Class Skill ("C", costs 1 SP per rank, max rank = Level + 3). Uncheck for Cross-Class Skill ("X", costs 2 SP per rank, max rank = (Level + 3) / 2).'
+        },
+        {
+          name: '30+ D&D 3.5e Skills List',
+          action: 'Skill Rows with Ranks & Misc Mod',
+          detail: 'Includes 3.5e specific skills such as Appraise, Balance, Climb, Concentration, Craft, Diplomacy, Disable Device, Disguise, Escape Artist, Heal, Hide, Move Silently, Search, Spellcraft, Use Magic Device, and more.'
+        }
+      ]
+    },
+    {
+      id: 'sheet2-guide',
+      title: '3.5e Combat, Armor Classes & Attacks',
+      icon: Crosshair,
+      color: 'text-emerald-400',
+      description: 'Touch AC, Flat-Footed AC, Grapple Checks, BAB, and Animated HP Orb.',
+      items: [
+        {
+          name: 'Armor Class Trio (Standard, Touch, Flat-Footed)',
+          action: 'Combat Sheet AC Cards',
+          detail: 'Computes Standard AC (10 + Armor + Shield + DEX + Size), Touch AC (ignores armor/shield: 10 + DEX + Size + Deflection), and Flat-Footed AC (ignores DEX mod: 10 + Armor + Shield + Size + Natural + Deflection).'
+        },
+        {
+          name: 'Grapple Check',
+          action: 'Grapple Stat Box',
+          detail: 'Calculated as BAB + STR Modifier + Size Modifier.'
+        },
+        {
+          name: 'Hit Points & Animated Vitality Orb',
+          action: 'HP Display Bar & Orb',
+          detail: 'Dynamic color-coded HP text (Green 75-100%, Yellow 49-74%, Red <49%) with pulsing liquid orb next to HP buttons and in top header.'
+        },
+        {
+          name: '3.5e Weapons & Attacks',
+          action: 'Click "Atk Roll" or "Damage Roll"',
+          detail: 'Weapon attacks roll d20 + BAB + STR/DEX modifier + Enhancement bonus.'
+        },
+        {
+          name: '3.5e Combat Cheat Sheet',
+          action: 'Accordion Panel',
+          detail: 'Includes 3.5e rules for Full Attacks, Attacks of Opportunity, Flanking, Cover, Concealment, Charge, Feint, Trip, and Grapple.'
+        }
+      ]
+    },
+    {
+      id: 'sheet3-guide',
+      title: 'Gear & 3.5e Carrying Capacity',
+      icon: Package,
+      color: 'text-amber-300',
+      description: 'Currency, 3.5e encumbrance thresholds (Light, Medium, Heavy), and Equipment.',
+      items: [
+        {
+          name: 'Currency & Coin Weight',
+          action: 'CP, SP, GP, PP Inputs',
+          detail: 'Track coins with gold piece conversion values. Includes coin weight calculations.'
+        },
+        {
+          name: '3.5e Carrying Capacity Loads',
+          action: 'Encumbrance Progress Bar',
+          detail: 'Tracks Light Load (no penalty), Medium Load (Max DEX +3, -3 check penalty, 20ft speed), and Heavy Load (Max DEX +1, -6 check penalty, 20ft speed) based on 3.5e Strength tables.'
+        },
+        {
+          name: 'Merchant / Vendor Trade Margin',
+          action: 'Toggle Merchant Mode',
+          detail: 'Allows calculating custom sell/buy profit margins for merchant PCs or shopkeeper NPCs.'
+        }
+      ]
+    },
+    {
+      id: 'sheet4-guide',
+      title: '3.5e Spells & Spellcasting',
+      icon: Wand2,
+      color: 'text-purple-400',
+      description: 'Spell Save DC (10 + Spell Level + Mod), 3.5e spell slots, and caster levels.',
+      items: [
+        {
+          name: '3.5e Spell Save DC Formula',
+          action: 'Casting Header',
+          detail: 'Calculated as 10 + Spell Level + Ability Modifier (INT for Wizard, WIS for Cleric/Druid, CHA for Sorcerer/Bard).'
+        },
+        {
+          name: '3.5e Daily Spell Slots & Bonus Spells',
+          action: 'Spell Level Grid (0 to 9th)',
+          detail: 'Track base daily spell slots and bonus slots earned from high ability scores.'
+        },
+        {
+          name: 'Spellbook Manager & Casting',
+          action: '"+ Add Spell" & "Cast / Roll"',
+          detail: 'Manage prepared spells, track material components, and click to trigger spell attack rolls or saving throw DCs.'
+        }
+      ]
+    },
+    {
+      id: 'sheet5-guide',
+      title: 'Description, Alignment & Notes',
+      icon: ScrollText,
+      color: 'text-blue-400',
+      description: '3.5e Alignment grid, Deity, Patron, Backstory, and Campaign Log.',
+      items: [
+        {
+          name: 'Physical Demographics & Portrait',
+          action: 'Appearance Section',
+          detail: 'Record age, height, weight, deity/patron, and paste custom image hyperlink for character portrait.'
+        },
+        {
+          name: '3.5e Alignment System',
+          action: 'Alignment Selector',
+          detail: 'Choose from 9 alignment combinations (Lawful Good to Chaotic Evil) relevant to paladin/cleric restrictions.'
+        },
+        {
+          name: 'Backstory, Allies & Quest Log',
+          action: 'Campaign Notes Textarea',
+          detail: 'Log session notes, loot splitting agreements, monster information, and NPC contacts.'
+        }
+      ]
+    },
+    {
+      id: 'dice-guide',
+      title: 'Floating Interactive Dice Roller',
+      icon: Dices,
+      color: 'text-amber-500',
+      description: 'Standard polyhedral dice floating toolbar and roll log history.',
+      items: [
+        {
+          name: 'Polyhedral Dice Buttons',
+          action: 'Floating Bar (d4, d6, d8, d10, d12, d20, d100)',
+          detail: 'Click any die to roll instantly with custom count and modifiers.'
+        },
+        {
+          name: 'Roll Log Drawer',
+          action: 'Log Button',
+          detail: 'View timestamped log of all recent rolls, complete with natural rolls and calculated total.'
+        }
+      ]
+    }
+  ];
+
+  // Shadowrun TRPG Guide Data
+  const guideSectionsShadowrun = [
+    {
+      id: 'sr-formulas',
+      title: 'Shadowrun 5e Mechanics & Formulas',
+      icon: Cpu,
+      color: 'text-cyan-400',
+      description: 'Dice Pools, Success Thresholds, Limits, Condition Monitors, and Wound Penalties in Shadowrun 5e.',
+      items: [
+        {
+          name: 'Dice Pool Formula',
+          action: 'Attribute Rating + Skill Rating',
+          detail: 'When performing tests in Shadowrun, roll d6 dice equal to Attribute + Skill. Every 5 or 6 rolled counts as a Hit (Success).'
+        },
+        {
+          name: 'Glitches & Critical Glitches',
+          action: '>= 50% Ones Rolled',
+          detail: 'If more than half the dice in your pool show 1s, a Glitch occurs. If you glitch with 0 hits, it becomes a Critical Glitch.'
+        },
+        {
+          name: 'Physical Condition Monitor',
+          action: '8 + Floor(BOD / 2) Boxes',
+          detail: 'Tracks physical damage taken. Every 3 boxes filled imposes a -1 Wound Penalty to all test dice pools.'
+        },
+        {
+          name: 'Stun Condition Monitor',
+          action: '8 + Floor(WIL / 2) Boxes',
+          detail: 'Tracks non-lethal stun/fatigue damage. When Stun boxes fill completely, character falls unconscious.'
+        },
+        {
+          name: 'Overflow Boxes',
+          action: 'Equal to Body Rating',
+          detail: 'Physical damage beyond your Physical Monitor enters Overflow. If Overflow boxes fill, character dies.'
+        },
+        {
+          name: 'Essence & Cyberware Limit',
+          action: 'Max 6.00 Essence',
+          detail: 'Starting Essence is 6.00. Installing cyberware/bioware reduces Essence. Essence Loss directly reduces Magic/Resonance ratings.'
+        },
+        {
+          name: 'Armor & Damage Resistance',
+          action: 'Body + Ballistic / Impact Armor',
+          detail: 'Roll Body + Total Armor vs Attack AP (Armor Penetration) to reduce incoming damage net hits.'
+        },
+        {
+          name: 'Nuyen (¥) & Karma',
+          action: 'Street Capital & EXP',
+          detail: 'Nuyen is spent on cyberware, vehicles, decks, and weapons. Karma is spent on raising attributes, skills, and Edge tests.'
+        }
+      ]
+    },
+    {
+      id: 'sr-cyberware',
+      title: 'Cyberware, Bioware & Matrix Decking',
+      icon: Cpu,
+      color: 'text-cyan-300',
+      description: 'Essence tracking, Cyberware grades, Cyberdecks, and Matrix Firewall stats.',
+      items: [
+        {
+          name: 'Cyberware Grade Multipliers',
+          action: 'Standard (1.0x), Alpha (0.8x), Beta (0.7x), Delta (0.5x)',
+          detail: 'Higher quality cyberware reduces Essence cost penalties. Deltaware cuts Essence cost in half.'
+        },
+        {
+          name: 'Cyberdeck Matrix Stats',
+          action: 'Device Rating, Data Processing, Firewall, Attack, Sleaze',
+          detail: 'Deckers assign attribute arrays to configure cyberdeck security for hacking and Overwatch score management.'
+        },
+        {
+          name: 'Positive & Negative Qualities',
+          action: 'Karma Cost / Gain',
+          detail: 'Street qualities grant tactical bonuses (e.g. High Pain Tolerance) or grant bonus Karma during character generation.'
+        }
+      ]
+    },
+    {
+      id: 'sr-combat',
+      title: 'Shadowrun Combat & Rigging',
+      icon: Crosshair,
+      color: 'text-emerald-400',
+      description: 'Initiative passes, recoil compensation, and vehicle/drone rigging.',
+      items: [
+        {
+          name: 'Initiative Score',
+          action: '(REA + INT) + Initiative Dice',
+          detail: 'Roll 1d6 (or more with Wired Reflexes/Synaptic Booster). High initiative score grants extra Action Passes per combat turn.'
+        },
+        {
+          name: 'Firearm Modes & Recoil',
+          action: 'Single Shot (SS), Semi-Auto (SA), Burst Fire (BF), Full Auto (FA)',
+          detail: 'Firing bursts increases damage and reduces target defense dice pools, but increases progressive Recoil.'
+        },
+        {
+          name: 'Vehicles & Drones',
+          action: 'Handling, Speed, Acceleration, Body, Armor, Sensor',
+          detail: 'Riggers jump into drones using a Control Rig for bonus dice pools and lower response latency.'
+        }
+      ]
+    }
+  ];
+
+  // Pathfinder 2e Guide Data
+  const guideSectionsPathfinder = [
+    {
+      id: 'pf-formulas',
+      title: 'Pathfinder 2e Mechanics & 3-Action System',
+      icon: BookOpen,
+      color: 'text-purple-400',
+      description: '3-Action Turn, Proficiency Ranks, Four Degrees of Success, and Perception Checks.',
+      items: [
+        {
+          name: '3-Action Economy',
+          action: '3 Actions + 1 Reaction per turn',
+          detail: 'In PF2e, characters receive 3 Actions to spend flexibly (Strike = 1 Action, Stride = 1 Action, Cast a Spell = 2 Actions).'
+        },
+        {
+          name: 'Multiple Attack Penalty (MAP)',
+          action: '1st: -0, 2nd: -5, 3rd: -10',
+          detail: 'Subsequent attacks on the same turn suffer cumulative accuracy penalties (-5 on 2nd attack, -10 on 3rd attack).'
+        },
+        {
+          name: 'Four Degrees of Success',
+          action: 'Critical Success, Success, Failure, Critical Failure',
+          detail: 'Beating a DC by 10+ results in a Critical Success. Missing a DC by 10 or more results in a Critical Failure.'
+        }
+      ]
+    }
+  ];
+
+  // Call of Cthulhu Guide Data
+  const guideSectionsCthulhu = [
+    {
+      id: 'coc-formulas',
+      title: 'Call of Cthulhu 7e Mechanics & Sanity System',
+      icon: Skull,
+      color: 'text-emerald-400',
+      description: 'd100 Skill Percentiles, Sanity Checks, Bouts of Madness, and Pushed Rolls.',
+      items: [
+        {
+          name: 'd100 Percentile Skill Rolls',
+          action: 'Roll <= Skill Percentage',
+          detail: 'Roll 1d100. If the roll is less than or equal to your skill rating, the check succeeds. Half skill = Hard Success, Fifth skill = Extreme Success.'
+        },
+        {
+          name: 'Sanity Loss & Bouts of Madness',
+          action: 'SAN Check vs Mythos Horrors',
+          detail: 'Losing 5+ SAN in a single encounter triggers temporary insanity and a Bout of Madness roll.'
+        }
+      ]
+    }
+  ];
+
+  // System Conversion Guide Data
+  const guideSectionsConversion = [
+    {
+      id: 'conv-overview',
+      title: 'TRPG System Conversion Mechanics',
+      icon: RefreshCw,
+      color: 'text-cyan-400',
+      description: 'How characters adapt between D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, and Call of Cthulhu.',
+      items: [
+        {
+          name: 'How to Convert Any Character',
+          action: 'Click <RefreshCw> in Top Header or System Switcher',
+          detail: 'Click the Convert button (<RefreshCw>) next to your character name in the header menu. Select your target system to convert instantly.'
+        },
+        {
+          name: 'D&D 5e ↔ D&D 3.5e Conversion',
+          action: 'Proficiency ↔ BAB & Base Saves',
+          detail: 'Proficiency bonus converts into Base Attack Bonus (BAB) and Fortitude, Reflex, and Will Base Saves. 5e skills adapt to 3.5e skill ranks.'
+        },
+        {
+          name: 'Fantasy (D&D/Pathfinder) ↔ Shadowrun',
+          action: 'Abilities ↔ Body, Agility, Logic, Nuyen',
+          detail: 'Strength & Dexterity map to Body, Agility & Strength; Intelligence & Wisdom map to Logic, Intuition & Willpower. Converts gold to Nuyen (¥25,000 base) and initializes starting Karma (10).'
+        },
+        {
+          name: 'D&D / Fantasy ↔ Call of Cthulhu',
+          action: 'Abilities ↔ Percentile Stats & Sanity',
+          detail: 'Ability scores multiply by 5 to create d100 stats. Initializes Sanity points (WIS × 5) and Madness tracking.'
+        },
+        {
+          name: 'Zero Data Loss Guarantee',
+          action: 'Safe Persistent Storage',
+          detail: 'Your equipment inventory, custom weapons, backstory, spell lists, portrait image URL, and character notes are safely preserved across all conversion changes.'
+        }
+      ]
+    }
+  ];
+
+  const currentGuideSections = guideEdition === 'shadowrun'
+    ? guideSectionsShadowrun
+    : guideEdition === 'pathfinder'
+    ? guideSectionsPathfinder
+    : guideEdition === 'cthulhu'
+    ? guideSectionsCthulhu
+    : guideEdition === 'conversion'
+    ? guideSectionsConversion
+    : guideEdition === '3.5e'
+    ? guideSections35e
+    : guideSections5e;
+
+  const filteredSections = currentGuideSections.map(section => {
+    if (!searchQuery.trim()) return section;
+    const query = searchQuery.toLowerCase();
+    const matchingItems = section.items.filter(
+      item =>
+        item.name.toLowerCase().includes(query) ||
+        item.action.toLowerCase().includes(query) ||
+        item.detail.toLowerCase().includes(query)
+    );
+    const titleMatches = section.title.toLowerCase().includes(query) || section.description.toLowerCase().includes(query);
+
+    if (titleMatches || matchingItems.length > 0) {
+      return {
+        ...section,
+        items: titleMatches ? section.items : matchingItems
+      };
+    }
+    return null;
+  }).filter(Boolean);
+
+  return (
+    <div className="space-y-6 pb-16">
+      {/* Banner Intro & Edition Switcher */}
+      <div className="bg-gradient-to-r from-amber-950/80 via-stone-900 to-amber-950/80 border border-amber-600/40 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
+        <div className="absolute -right-8 -bottom-8 opacity-10 pointer-events-none">
+          <BookOpen className="w-64 h-64 text-amber-500" />
+        </div>
+
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10 border-b border-amber-900/40 pb-6">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/15 border border-amber-500/30 rounded-full text-amber-300 text-xs font-mono font-bold uppercase tracking-wider">
+              <HelpCircle className="w-4 h-4 text-amber-400" />
+              Edition-Specific User Manual
+            </div>
+            <h2 className="text-2xl md:text-3xl font-serif font-bold text-amber-100">
+              {guideEdition === 'shadowrun'
+                ? 'Shadowrun Cyberpunk Guide'
+                : guideEdition === 'pathfinder'
+                ? 'Pathfinder 2e System Guide'
+                : guideEdition === 'cthulhu'
+                ? 'Call of Cthulhu 7e Horror Guide'
+                : guideEdition === 'conversion'
+                ? 'TRPG System Conversion Guide'
+                : guideEdition === '3.5e'
+                ? 'D&D 3.5 Edition (3.5e) Guide'
+                : 'D&D 5th Edition (5e) Guide'}
+            </h2>
+            <p className="text-stone-300 text-xs md:text-sm leading-relaxed">
+              {guideEdition === 'shadowrun'
+                ? 'Complete manual for Shadowrun mechanics: Dice pools, Success hits, Cyberware & Essence limits, Matrix hacking, Physical/Stun condition monitors, Nuyen (¥), and Karma.'
+                : guideEdition === 'pathfinder'
+                ? 'Complete manual for Pathfinder 2e mechanics: 3-Action turn economy, Multiple Attack Penalty (MAP), and Four Degrees of Success.'
+                : guideEdition === 'cthulhu'
+                ? 'Complete manual for Call of Cthulhu 7e mechanics: d100 percentile skills, Sanity points (SAN), Bouts of Madness, and Eldritch horror tracking.'
+                : guideEdition === 'conversion'
+                ? 'Comprehensive guide on converting characters seamlessly between D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, and Call of Cthulhu with zero data loss.'
+                : guideEdition === '3.5e'
+                ? 'Complete manual for D&D 3.5e mechanics: Base Attack Bonus (BAB), Touch AC, Flat-Footed AC, Fort/Ref/Will Base Saves, 3.5e Skill Point Calculator, and Class Skill checkboxes.'
+                : 'Complete manual for D&D 5e mechanics: Proficiency bonus, 18 skills, Advantage/Disadvantage, death saves, spell slots, and character management.'}
+            </p>
+          </div>
+
+          {/* Edition Selection Toggle Tabs */}
+          <div className="bg-stone-950/90 p-1.5 rounded-2xl border border-amber-600/40 flex flex-wrap items-center gap-1.5 shrink-0 shadow-lg">
+            <button
+              onClick={() => setGuideEdition('5e')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === '5e'
+                  ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+              }`}
+            >
+              <Award className="w-3.5 h-3.5" />
+              D&D 5e
+            </button>
+            <button
+              onClick={() => setGuideEdition('3.5e')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === '3.5e'
+                  ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+              }`}
+            >
+              <Swords className="w-3.5 h-3.5" />
+              D&D 3.5e
+            </button>
+            <button
+              onClick={() => setGuideEdition('shadowrun')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === 'shadowrun'
+                  ? 'bg-cyan-500 text-stone-950 shadow-md ring-1 ring-cyan-300'
+                  : 'text-stone-400 hover:text-cyan-300 hover:bg-stone-900'
+              }`}
+            >
+              <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+              Shadowrun
+            </button>
+            <button
+              onClick={() => setGuideEdition('pathfinder')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === 'pathfinder'
+                  ? 'bg-purple-600 text-stone-950 shadow-md ring-1 ring-purple-300'
+                  : 'text-stone-400 hover:text-purple-300 hover:bg-stone-900'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+              Pathfinder
+            </button>
+            <button
+              onClick={() => setGuideEdition('cthulhu')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === 'cthulhu'
+                  ? 'bg-emerald-600 text-stone-950 shadow-md ring-1 ring-emerald-300'
+                  : 'text-stone-400 hover:text-emerald-300 hover:bg-stone-900'
+              }`}
+            >
+              <Skull className="w-3.5 h-3.5 text-emerald-400" />
+              Cthulhu
+            </button>
+            <button
+              onClick={() => setGuideEdition('conversion')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === 'conversion'
+                  ? 'bg-blue-600 text-white shadow-md ring-1 ring-blue-300'
+                  : 'text-stone-400 hover:text-blue-300 hover:bg-stone-900'
+              }`}
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-300" />
+              System Conversion
+            </button>
+          </div>
+        </div>
+
+        {/* Search Bar & Quick Section Filter */}
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative w-full sm:w-80 shrink-0">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={`Search ${guideEdition} functions (e.g. roll, BAB, skill, hp)...`}
+                className="w-full bg-stone-950/90 border border-stone-800 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-xs text-amber-400 hover:text-amber-300 transition self-start sm:self-center"
+              >
+                Clear Search
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1">
+            <button
+              onClick={() => setActiveSection('all')}
+              className={`px-3 py-1.5 rounded-lg border font-medium transition ${
+                activeSection === 'all'
+                  ? 'bg-amber-600 border-amber-500 text-stone-950 font-bold shadow-md'
+                  : 'bg-stone-950/80 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+              }`}
+            >
+              All Sections
+            </button>
+            {currentGuideSections.map((sec) => {
+              let shortTitle = sec.title.replace(' (5e)', '').replace(' (3.5e)', '');
+              if (sec.id.startsWith('formulas')) shortTitle = '📐 Formulas Breakdown';
+              if (sec.id === 'header-mgmt') shortTitle = 'Header & Management';
+              if (sec.id === 'sheet1-guide') shortTitle = 'Stats & Skills';
+              if (sec.id === 'sheet2-guide') shortTitle = 'Combat & Actions';
+              if (sec.id === 'sheet3-guide') shortTitle = 'Gear & Wealth';
+              if (sec.id === 'sheet4-guide') shortTitle = 'Spells & Casting';
+              if (sec.id === 'sheet5-guide') shortTitle = 'Description & Notes';
+              if (sec.id === 'dice-guide') shortTitle = 'Dice Roller';
+
+              return (
+                <button
+                  key={sec.id}
+                  onClick={() => setActiveSection(sec.id)}
+                  className={`px-3 py-1.5 rounded-lg border font-medium transition whitespace-nowrap ${
+                    activeSection === sec.id
+                      ? 'bg-amber-600 border-amber-500 text-stone-950 font-bold shadow-md'
+                      : 'bg-stone-950/80 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                  }`}
+                >
+                  {shortTitle}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Guide Sections Grid */}
+      <div className="space-y-6">
+        {filteredSections.map((section) => {
+          if (!section) return null;
+          if (activeSection !== 'all' && activeSection !== section.id) return null;
+
+          const IconComponent = section.icon;
+
+          return (
+            <div
+              key={section.id}
+              className="bg-stone-900/90 border border-stone-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-stone-950 border border-stone-800 rounded-xl">
+                    <IconComponent className={`w-5 h-5 ${section.color}`} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-serif font-bold text-amber-200">
+                      {section.title}
+                    </h3>
+                    <p className="text-xs text-stone-400">{section.description}</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-stone-500 bg-stone-950 px-2 py-1 rounded border border-stone-800">
+                  {section.items.length} Functions
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {section.items.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-stone-950/70 border border-stone-800/80 rounded-xl p-3.5 space-y-1.5 hover:border-amber-600/40 transition group"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-serif font-bold text-stone-100 text-xs group-hover:text-amber-300 transition">
+                        {item.name}
+                      </span>
+                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-stone-900 border border-stone-800 text-amber-400 rounded-full">
+                        {item.action}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                      {item.detail}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+
+        {filteredSections.length === 0 && (
+          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-12 text-center text-stone-400 space-y-2">
+            <HelpCircle className="w-10 h-10 text-stone-600 mx-auto" />
+            <p className="text-sm font-bold text-stone-300">No matching functions found for {guideEdition}</p>
+            <p className="text-xs">Try adjusting your search term or switch guide edition.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Quick FAQ / Tips Box */}
+      <div className="bg-stone-900/70 border border-amber-900/40 rounded-2xl p-6 shadow-xl space-y-4">
+        <h4 className="text-base font-serif font-bold text-amber-300 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-amber-400" /> Pro Tips for {guideEdition} Players
+        </h4>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
+            <div className="font-bold text-amber-200">💾 Automatic Local Persistence</div>
+            <p className="text-stone-400 text-[11px]">
+              Every edit, roll history, custom attack, portrait link, and spell adjustment is automatically saved to your browser.
+            </p>
+          </div>
+          <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
+            <div className="font-bold text-amber-200">🎲 Interactive Roll Triggers</div>
+            <p className="text-stone-400 text-[11px]">
+              Click any d20 icon across Stats, Skills, Attacks, and Spells to trigger instant interactive rolls logged to your dice tray.
+            </p>
+          </div>
+          <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
+            <div className="font-bold text-amber-200">🔄 Instant Edition Conversion</div>
+            <p className="text-stone-400 text-[11px]">
+              You can convert any character between 3.5e and 5e rulesets in the top-right header menu at any time.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
