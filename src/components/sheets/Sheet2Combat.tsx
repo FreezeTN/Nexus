@@ -3,13 +3,14 @@ import { Attack, CharacterData, Party } from '../../types';
 import { UserProfile } from '../../lib/firebase';
 import { ShadowrunCombatPanel } from '../shadowrun/ShadowrunCombatPanel';
 import { COMBAT_CHEAT_SHEET, CombatRule } from '../../data/dndRulesData';
-import { formatModifier, getAbilityModifier, get35eTouchAC, get35eFlatFootedAC, get35eGrapple, getEffectiveSpeed, OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, getArmorClassBreakdown, isHealingItem, isHealingSpell, getHealingExpression, rollHealing, isCharacterDead, isReviveSpell, getEffectiveMaxHp } from '../../utils/dndCalculations';
+import { formatModifier, getAbilityModifier, get35eTouchAC, get35eFlatFootedAC, get35eGrapple, getEffectiveSpeed, OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, getArmorClassBreakdown, isHealingItem, isHealingSpell, getHealingExpression, rollHealing, isCharacterDead, isReviveSpell, getEffectiveMaxHp, calculateCharacterTotalDR, getCharacterResistances, getCharacterImmunities } from '../../utils/dndCalculations';
 import { HpOrb } from '../HpOrb';
 import { ConditionsPanel } from '../combat/ConditionsPanel';
 import { RestModal } from '../combat/RestModal';
 import { EncounterTracker } from '../combat/EncounterTracker';
 import { MaxHpInspectorModal } from '../modals/MaxHpInspectorModal';
 import { SpellTargetModal } from '../modals/SpellTargetModal';
+import { getEnvironmentalTraitStatus } from '../../utils/environmentRules';
 import {
   Swords,
   Shield,
@@ -30,6 +31,8 @@ import {
   Flame,
   Moon,
   Pencil,
+  Sparkles,
+  Crown,
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
@@ -422,6 +425,43 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     }
   };
 
+  // Legendary Action Handler
+  const handleUseLegendaryAction = (legAct: any) => {
+    const current = character.legendaryActionsRemaining ?? character.legendaryActionsMax ?? 3;
+    if (current < legAct.cost) {
+      alert(`Not enough Legendary Actions remaining! (Cost: ${legAct.cost}, Remaining: ${current})`);
+      return;
+    }
+    const newRemaining = current - legAct.cost;
+    onUpdateCharacter({
+      ...character,
+      legendaryActionsRemaining: newRemaining
+    });
+
+    if (legAct.attackId) {
+      const matchedAtk = character.attacks.find(a => a.id === legAct.attackId);
+      if (matchedAtk) {
+        onRoll(`${character.name} Legendary Action: ${legAct.name} (${matchedAtk.name})`, 20, 1, matchedAtk.attackBonus, 'normal');
+        return;
+      }
+    }
+
+    const diceMatch = legAct.description.match(/\b(\d+d\d+(?:\s*[\+\-]\s*\d+)?)\b/i);
+    if (diceMatch) {
+      onRollDamage(`👑 ${character.name} Legendary Action: ${legAct.name}`, diceMatch[1]);
+    } else {
+      onRoll(`👑 ${character.name} Legendary Action: ${legAct.name} - ${legAct.description}`, 20, 1, 0, 'normal');
+    }
+  };
+
+  const handleResetLegendaryActions = () => {
+    const maxVal = character.legendaryActionsMax ?? 3;
+    onUpdateCharacter({
+      ...character,
+      legendaryActionsRemaining: maxVal
+    });
+  };
+
   // Filter Cheat Sheet
   const filteredCheatRules = COMBAT_CHEAT_SHEET.filter(rule => {
     const matchesCategory = cheatCategory === 'All' || rule.category === cheatCategory;
@@ -606,7 +646,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
 
             {/* Visual Animated HP Orb */}
             <div className="shrink-0">
-              <HpOrb hpCurrent={character.hpCurrent} hpMax={character.hpMax} size="md" showLabel={false} />
+              <HpOrb hpCurrent={character.hpCurrent} hpMax={effectiveMaxHp} size="md" showLabel={false} />
             </div>
           </div>
 
@@ -618,6 +658,55 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
             </div>
           </div>
         </div>
+
+        {/* Active Defensive Traits: DR, Resistances, Immunities */}
+        {(() => {
+          const drInfo = calculateCharacterTotalDR(character);
+          const resistances = getCharacterResistances(character);
+          const immunities = getCharacterImmunities(character);
+
+          const hasDefenses = drInfo.totalDR > 0 || resistances.length > 0 || immunities.length > 0;
+
+          return (
+            <div className="bg-stone-950/80 border border-stone-800 p-3 rounded-xl space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-stone-300 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                  <Shield className="w-3.5 h-3.5 text-cyan-400" /> Active Defenses & Mitigations
+                </span>
+                <span className="text-[10px] text-stone-500">Auto-applied in Combat Attacks</span>
+              </div>
+
+              {!hasDefenses ? (
+                <div className="text-[11px] text-stone-500 italic">
+                  No active DR, Resistances, or Immunities equipped. Equipping magical items, armor with DR/Resistance/Immunity, or gaining racial traits auto-populates here.
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {/* Immunities */}
+                  {immunities.map((im, idx) => (
+                    <span key={'im-' + idx} className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold bg-purple-950/90 text-purple-300 px-2 py-0.5 rounded-lg border border-purple-500/50 shadow-sm" title={`Immunity from ${im.source} (Negates 100% damage)`}>
+                      <Sparkles className="w-3 h-3 text-purple-400" /> IMMUNE: {im.type} <span className="text-[9px] text-purple-400/80 font-normal">({im.source})</span>
+                    </span>
+                  ))}
+
+                  {/* Resistances */}
+                  {resistances.map((res, idx) => (
+                    <span key={'res-' + idx} className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold bg-orange-950/90 text-orange-300 px-2 py-0.5 rounded-lg border border-orange-500/50 shadow-sm" title={`Resistance from ${res.source} (Halves damage)`}>
+                      <Sparkles className="w-3 h-3 text-orange-400" /> RESIST: {res.type} <span className="text-[9px] text-orange-400/80 font-normal">({res.source})</span>
+                    </span>
+                  ))}
+
+                  {/* DR */}
+                  {drInfo.totalDR > 0 && (
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold bg-cyan-950/90 text-cyan-300 px-2 py-0.5 rounded-lg border border-cyan-500/50 shadow-sm" title={`Damage Reduction from ${drInfo.sources.join(', ')}`}>
+                      <Shield className="w-3 h-3 text-cyan-400" /> DR {drInfo.totalDR} <span className="text-[9px] text-cyan-400/80 font-normal">({drInfo.sources.join(', ')})</span>
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Death Saves Section */}
         <div className={`p-3.5 rounded-xl border flex flex-wrap items-center justify-between gap-4 ${
@@ -737,6 +826,18 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
             </button>
           </div>
         </div>
+
+        {character.multiattack && (
+          <div className="bg-amber-950/40 border border-amber-600/50 p-3 rounded-xl flex items-center gap-3 text-xs shadow-inner">
+            <Swords className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <span className="font-serif font-bold text-amber-300 uppercase tracking-wider text-[11px] block">
+                Multiattack Action Routine
+              </span>
+              <p className="text-stone-300 leading-relaxed mt-0.5">{character.multiattack}</p>
+            </div>
+          </div>
+        )}
 
         {character.attacks.length === 0 ? (
           <p className="text-xs text-stone-500 italic py-3 text-center">
@@ -1066,6 +1167,25 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
                         <span>Combat Multi-Attack: Make 2 attacks per Attack action</span>
                       </div>
                     )}
+
+                    {/* Environmental Trait Status Badge (e.g. Aboleth Mucous Cloud) */}
+                    {(() => {
+                      const envStat = getEnvironmentalTraitStatus(feature.name, feature.description, 'underwater');
+                      if (envStat.isEnvironmental) {
+                        return (
+                          <div className={`mt-2 flex flex-col gap-1 p-2 rounded-lg border text-[11px] ${envStat.badgeBg}`}>
+                            <div className="font-bold flex items-center justify-between">
+                              <span>Location Feature: {feature.name}</span>
+                              <span className="font-mono text-[10px] px-1.5 py-0.5 bg-stone-900/80 rounded border border-stone-700">
+                                {envStat.badgeLabel}
+                              </span>
+                            </div>
+                            <p className="text-[10px] opacity-90">{envStat.effectDescription}</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
 
                   {/* Feature Action Buttons */}
@@ -1114,6 +1234,155 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* SECTION 2.8: Legendary Actions, Lair Actions & Reactions */}
+      {((character.legendaryActions && character.legendaryActions.length > 0) ||
+        (character.lairActions && character.lairActions.length > 0) ||
+        (character.reactions && character.reactions.length > 0)) && (
+        <div className="bg-stone-900 border border-amber-800/60 rounded-2xl p-4 md:p-6 shadow-2xl space-y-5">
+          <div className="flex flex-wrap items-center justify-between border-b border-stone-800 pb-3 gap-2">
+            <h3 className="text-lg font-serif font-bold text-amber-200 flex items-center gap-2">
+              <Crown className="w-5 h-5 text-amber-400" />
+              <span>Monster Legendary Actions, Lair Actions & Reactions</span>
+            </h3>
+            <span className="text-xs text-amber-400/80 font-mono bg-amber-950/60 px-2.5 py-1 rounded-lg border border-amber-700/50">
+              Boss Combat Capabilities
+            </span>
+          </div>
+
+          {/* LEGENDARY ACTIONS PANEL */}
+          {character.legendaryActions && character.legendaryActions.length > 0 && (
+            <div className="bg-stone-950 border border-amber-900/50 p-4 rounded-xl space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-amber-400" />
+                  <span className="font-serif font-bold text-amber-300 text-sm">Legendary Actions</span>
+                  <span className="text-[11px] text-stone-400 font-mono">
+                    ({character.legendaryActionsRemaining ?? character.legendaryActionsMax ?? 3} / {character.legendaryActionsMax ?? 3} Charges Remaining)
+                  </span>
+                </div>
+                <button
+                  onClick={handleResetLegendaryActions}
+                  className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/60 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                >
+                  Reset Charges
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {character.legendaryActions.map((leg) => {
+                  const remaining = character.legendaryActionsRemaining ?? character.legendaryActionsMax ?? 3;
+                  const canAfford = remaining >= leg.cost;
+
+                  return (
+                    <div
+                      key={leg.id}
+                      className={`p-3 rounded-xl border flex flex-col justify-between gap-2 text-xs transition ${
+                        !canAfford
+                          ? 'bg-stone-900/50 border-stone-800 opacity-60'
+                          : 'bg-stone-900 border-amber-900/40 hover:border-amber-600/60'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-serif font-bold text-amber-200">{leg.name}</span>
+                          <span className="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-800 shrink-0">
+                            Cost: {leg.cost} {leg.cost === 1 ? 'Action' : 'Actions'}
+                          </span>
+                        </div>
+                        <p className="text-stone-300 text-[11px] mt-1 leading-relaxed">{leg.description}</p>
+                      </div>
+
+                      <div className="pt-2 border-t border-stone-800/80 flex justify-end">
+                        <button
+                          onClick={() => handleUseLegendaryAction(leg)}
+                          disabled={!canAfford}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                            !canAfford
+                              ? 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
+                              : 'bg-amber-700 hover:bg-amber-600 text-white shadow-md'
+                          }`}
+                        >
+                          <Crown className="w-3.5 h-3.5" />
+                          <span>Use Action (Cost {leg.cost})</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* LAIR ACTIONS PANEL */}
+          {character.lairActions && character.lairActions.length > 0 && (
+            <div className="bg-stone-950 border border-stone-800 p-4 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 border-b border-stone-800 pb-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span className="font-serif font-bold text-purple-300 text-sm">Lair Actions (Initiative Count 20)</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {character.lairActions.map((lair) => {
+                  const diceMatch = lair.description.match(/\b(\d+d\d+(?:\s*[\+\-]\s*\d+)?)\b/i);
+                  return (
+                    <div key={lair.id} className="p-3 bg-stone-900 border border-stone-800 rounded-xl text-xs space-y-2">
+                      <div className="font-serif font-bold text-purple-200">{lair.name}</div>
+                      <p className="text-stone-300 text-[11px] leading-relaxed">{lair.description}</p>
+                      <div className="pt-2 border-t border-stone-800 flex justify-end">
+                        <button
+                          onClick={() => {
+                            if (diceMatch) {
+                              onRollDamage(`🏰 ${character.name} Lair Action: ${lair.name}`, diceMatch[1]);
+                            } else {
+                              onRoll(`🏰 ${character.name} Lair Action: ${lair.name} - ${lair.description}`, 20, 1, 0, 'normal');
+                            }
+                          }}
+                          className="px-3 py-1 bg-purple-900 hover:bg-purple-800 text-purple-100 border border-purple-600/50 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> Trigger Lair Action
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* REACTIONS PANEL */}
+          {character.reactions && character.reactions.length > 0 && (
+            <div className="bg-stone-950 border border-stone-800 p-4 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 border-b border-stone-800 pb-2">
+                <Swords className="w-4 h-4 text-cyan-400" />
+                <span className="font-serif font-bold text-cyan-300 text-sm">Monster Reactions</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {character.reactions.map((react) => (
+                  <div key={react.id} className="p-3 bg-stone-900 border border-stone-800 rounded-xl text-xs space-y-2">
+                    <div className="font-serif font-bold text-cyan-200">{react.name}</div>
+                    <p className="text-stone-300 text-[11px] leading-relaxed">{react.description}</p>
+                    <div className="pt-2 border-t border-stone-800 flex justify-end">
+                      <button
+                        onClick={() => {
+                          const diceMatch = react.description.match(/\b(\d+d\d+(?:\s*[\+\-]\s*\d+)?)\b/i);
+                          if (diceMatch) {
+                            onRollDamage(`⚡ ${character.name} Reaction: ${react.name}`, diceMatch[1]);
+                          } else {
+                            onRoll(`⚡ ${character.name} Reaction: ${react.name} - ${react.description}`, 20, 1, 0, 'normal');
+                          }
+                        }}
+                        className="px-3 py-1 bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 rounded-lg text-xs font-bold transition flex items-center gap-1.5"
+                      >
+                        <Swords className="w-3.5 h-3.5" /> Trigger Reaction
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

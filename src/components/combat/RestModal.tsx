@@ -8,15 +8,17 @@ interface RestModalProps {
   onClose: () => void;
   onUpdateCharacter: (updated: CharacterData) => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
+  initialRestType?: 'short' | 'long';
 }
 
 export const RestModal: React.FC<RestModalProps> = ({
   character,
   onClose,
   onUpdateCharacter,
-  onRoll
+  onRoll,
+  initialRestType = 'short'
 }) => {
-  const [restType, setRestType] = useState<'short' | 'long'>('short');
+  const [restType, setRestType] = useState<'short' | 'long'>(initialRestType);
   const [diceToSpend, setDiceToSpend] = useState<number>(1);
   const [restLog, setRestLog] = useState<string | null>(null);
 
@@ -63,11 +65,24 @@ export const RestModal: React.FC<RestModalProps> = ({
       return feat;
     });
 
+    let conditions = character.conditions || [];
+    let deathSavesSuccesses = character.deathSavesSuccesses || 0;
+    let deathSavesFailures = character.deathSavesFailures || 0;
+
+    if (character.hpCurrent <= 0 && newHp > 0) {
+      conditions = conditions.filter(c => c !== 'Unconscious');
+      deathSavesSuccesses = 0;
+      deathSavesFailures = 0;
+    }
+
     onUpdateCharacter({
       ...character,
       hpCurrent: newHp,
       hitDiceCurrent: newHitDice,
-      classFeatures: updatedFeatures
+      classFeatures: updatedFeatures,
+      conditions,
+      deathSavesSuccesses,
+      deathSavesFailures
     });
 
     if (onRoll) {
@@ -84,7 +99,7 @@ export const RestModal: React.FC<RestModalProps> = ({
       return;
     }
 
-    // Recover all HP
+    // Recover all HP up to effective Max HP
     const newHp = effectiveMaxHp;
 
     // Recover Hit Dice (up to half total or full max)
@@ -107,16 +122,19 @@ export const RestModal: React.FC<RestModalProps> = ({
 
     // Reduce Exhaustion by 1 if present
     const newExhaustion = Math.max(0, (character.exhaustionLevel || 0) - 1);
+    const conditions = (character.conditions || []).filter(c => c !== 'Unconscious');
 
     onUpdateCharacter({
       ...character,
       hpCurrent: newHp,
+      hpTemp: 0,
       hitDiceCurrent: newHitDice,
       spellSlots: updatedSpellSlots,
       classFeatures: updatedFeatures,
       deathSavesSuccesses: 0,
       deathSavesFailures: 0,
-      exhaustionLevel: newExhaustion
+      exhaustionLevel: newExhaustion,
+      conditions
     });
 
     setRestLog(`Long Rest Completed! Fully restored HP (${newHp}/${newHp}), recharged Spell Slots, reset Death Saves, recovered +${recoveredHdCount} Hit Dice, and reduced Exhaustion.`);

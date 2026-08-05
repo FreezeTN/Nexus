@@ -3,7 +3,7 @@ import { AbilityName, CharacterData, ClassFeature, Feat, Skill } from '../../typ
 import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { ShadowrunStatsPanel } from '../shadowrun/ShadowrunStatsPanel';
 import { ShadowrunSkillsPanel } from '../shadowrun/ShadowrunSkillsPanel';
-import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
+import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
 import { LevelProgressionModal } from '../modals/LevelProgressionModal';
 import {
   getAbilityModifier,
@@ -333,7 +333,9 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                   className="w-16 h-16 md:w-20 md:h-20 rounded-2xl object-cover border-2 border-amber-500/50 shadow-xl shrink-0"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
+                    const img = e.target as HTMLImageElement;
+                    img.onerror = null;
+                    img.src = generateMonsterSvgPortrait(character?.name);
                   }}
                 />
               ) : (

@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { CharacterData, Party } from '../../types';
+import { CharacterData, Party, EncounterEnvironment } from '../../types';
 import { UserProfile } from '../../lib/firebase';
 import { getAbilityModifier, formatModifier, isCharacterDead, getActiveClassChoice, getSecondaryXp, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { getLevelFromTotalXp } from '../../data/levelProgressionData';
-import { Crosshair, Swords, Plus, Trash2, ChevronRight, ChevronLeft, Dices, RefreshCw, Copy, UserCheck, Zap, ScrollText, Search, FileText, Check, Clock, MessageSquarePlus, Download, X, Users, Shield, Pencil } from 'lucide-react';
+import { Crosshair, Swords, Plus, Trash2, ChevronRight, ChevronLeft, Dices, RefreshCw, Copy, UserCheck, Zap, ScrollText, Search, FileText, Check, Clock, MessageSquarePlus, Download, X, Users, Shield, Pencil, Compass, Waves, Flame } from 'lucide-react';
 import { AttackResolver } from './AttackResolver';
-import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
+import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
+import { ENVIRONMENT_CONFIGS, getEnvironmentalTraitStatus } from '../../utils/environmentRules';
 
 export interface Combatant {
   id: string;
@@ -49,6 +50,7 @@ export interface SavedEncounterData {
   activeTurnIndex: number;
   roundNumber: number;
   combatLogs: CombatLogEntry[];
+  encounterEnvironment?: EncounterEnvironment;
 }
 
 export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
@@ -69,6 +71,7 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
     combatants: [defaultPlayer],
     activeTurnIndex: 0,
     roundNumber: 1,
+    encounterEnvironment: 'terrestrial',
     combatLogs: [
       {
         id: 'log-init-1',
@@ -105,6 +108,7 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
           combatants: syncedCombatants,
           activeTurnIndex: typeof parsed.activeTurnIndex === 'number' && parsed.activeTurnIndex < syncedCombatants.length ? parsed.activeTurnIndex : 0,
           roundNumber: typeof parsed.roundNumber === 'number' ? parsed.roundNumber : 1,
+          encounterEnvironment: parsed.encounterEnvironment || 'terrestrial',
           combatLogs: Array.isArray(parsed.combatLogs) && parsed.combatLogs.length > 0 ? parsed.combatLogs : defaultState.combatLogs
         };
       }
@@ -130,6 +134,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const [activeTurnIndex, setActiveTurnIndex] = useState<number>(() => loadSavedEncounter(character).activeTurnIndex);
   const [roundNumber, setRoundNumber] = useState<number>(() => loadSavedEncounter(character).roundNumber);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>(() => loadSavedEncounter(character).combatLogs);
+  const [encounterEnvironment, setEncounterEnvironment] = useState<EncounterEnvironment>(() => loadSavedEncounter(character).encounterEnvironment || 'terrestrial');
 
   // Reload saved encounter if active character ID changes
   React.useEffect(() => {
@@ -138,6 +143,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     setActiveTurnIndex(saved.activeTurnIndex);
     setRoundNumber(saved.roundNumber);
     setCombatLogs(saved.combatLogs);
+    setEncounterEnvironment(saved.encounterEnvironment || 'terrestrial');
   }, [character.id]);
 
   // Save encounter state to localStorage whenever state updates
@@ -148,13 +154,14 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         combatants,
         activeTurnIndex,
         roundNumber,
-        combatLogs
+        combatLogs,
+        encounterEnvironment
       };
       localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
     } catch (err) {
       console.error("Error saving encounter state to localStorage:", err);
     }
-  }, [combatants, activeTurnIndex, roundNumber, combatLogs, character.id]);
+  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, character.id]);
 
   // Keep player combatant HP, AC, conditions and Name synced with global character data
   React.useEffect(() => {
@@ -869,16 +876,272 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     setTimeout(() => setCopiedLog(false), 2000);
   };
 
+  // Environmental Action Triggers
+  const handleTriggerAbolethMucousCloud = () => {
+    if (onRoll) {
+      onRoll('🦠 Aboleth Mucous Cloud DC 14 CON Save', 20, 1, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🦠 ABOLETH MUCOUS CLOUD TRIGGERED: Under water within 10 ft of Aboleth, target must succeed on DC 14 CON Save or become diseased (unable to breathe outside water for 1d4 hours).',
+      'Aboleth'
+    );
+  };
+
+  const handleTriggerBeholderEyeRay = () => {
+    const rays = [
+      { name: '1. Charm Ray', dc: 16, save: 'WIS', desc: 'Target must succeed on DC 16 WIS save or be Charmed by Beholder for 1 hour.' },
+      { name: '2. Paralyzing Ray', dc: 16, save: 'CON', desc: 'Target must succeed on DC 16 CON save or be Paralyzed for 1 minute.' },
+      { name: '3. Fear Ray', dc: 16, save: 'WIS', desc: 'Target must succeed on DC 16 WIS save or be Frightened for 1 minute.' },
+      { name: '4. Slowing Ray', dc: 16, save: 'DEX', desc: 'Target must succeed on DC 16 DEX save or be Slowed (half speed, 1 action/turn) for 1 minute.' },
+      { name: '5. Enervation Ray', dc: 16, save: 'CON', dice: [8, 8], desc: 'DC 16 CON save or take 8d8 Necrotic damage (half on save).' },
+      { name: '6. Telekinetic Ray', dc: 16, save: 'STR', desc: 'Target must succeed on DC 16 STR save or be moved up to 30 feet.' },
+      { name: '7. Sleep Ray', dc: 16, save: 'WIS', desc: 'Target must succeed on DC 16 WIS save or fall Asleep for 1 minute.' },
+      { name: '8. Petrification Ray', dc: 16, save: 'DEX', desc: 'Target must succeed on DC 16 DEX save. Fail = turns to stone (Petrified).' },
+      { name: '9. Disintegration Ray', dc: 16, save: 'DEX', dice: [10, 8], desc: 'DC 16 DEX save or take 10d8 Force damage (turned to dust at 0 HP).' },
+      { name: '10. Death Ray', dc: 16, save: 'DEX', dice: [10, 10], desc: 'DC 16 DEX save or take 10d10 Necrotic damage (dies instantly at 0 HP).' }
+    ];
+    const rayIdx = Math.floor(Math.random() * 10);
+    const chosen = rays[rayIdx];
+    if (onRoll) {
+      if (chosen.dice) {
+        onRoll(`👁️ Beholder ${chosen.name} (${chosen.desc})`, chosen.dice[1], chosen.dice[0], 0, 'normal');
+      } else {
+        onRoll(`👁️ Beholder ${chosen.name} (DC 16 ${chosen.save} Save)`, 20, 1, 0, 'normal');
+      }
+    }
+    addLogEntry(
+      'ability',
+      `👁️ BEHOLDER EYE RAY ROLLED [${chosen.name}]: ${chosen.desc}`,
+      'Beholder'
+    );
+  };
+
+  const handleTriggerMedusaGaze = () => {
+    if (onRoll) {
+      onRoll('🗿 Medusa Petrifying Gaze (DC 14 CON Save)', 20, 1, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🗿 MEDUSA PETRIFYING GAZE: Target starting turn within 30 ft that can see Medusa must save DC 14 CON. Fail by 5+ = instant Petrified!',
+      'Medusa'
+    );
+  };
+
+  const handleTriggerRemorhazHeatedBody = () => {
+    if (onRoll) {
+      onRoll('🔥 Remorhaz Heated Body (3d6 Fire Damage)', 6, 3, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🔥 REMORHAZ HEATED BODY: Creature touching or hitting Remorhaz within 5 ft takes 3d6 Fire damage!',
+      'Remorhaz'
+    );
+  };
+
+  const handleTriggerRemorhazSwallow = () => {
+    if (onRoll) {
+      onRoll('🕳️ Remorhaz Swallow Whole (6d6 Acid Damage)', 6, 6, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🕳️ REMORHAZ SWALLOW: Swallowed target takes 6d6 Acid damage at start of Remorhaz turn (Blinded/Restrained inside).',
+      'Remorhaz'
+    );
+  };
+
+  const handleTriggerRoperReel = () => {
+    if (onRoll) {
+      onRoll('🪢 Roper Reel & Advantage Bite Attack (+7 to hit, 4d8+4 Piercing)', 8, 4, 4, 'advantage');
+    }
+    addLogEntry(
+      'ability',
+      '🪢 ROPER REEL & BITE: Pulls grappled targets 25 ft straight toward Roper and makes a Bite attack with Advantage (+7 to hit, 4d8+4 Piercing)!',
+      'Roper'
+    );
+  };
+
+  const handleTriggerIronGolemPoisonBreath = () => {
+    if (onRoll) {
+      onRoll('🧪 Iron Golem Poison Breath (10d8 Poison, DC 19 CON Save)', 8, 10, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🧪 IRON GOLEM POISON BREATH: 15 ft cone, targets must make DC 19 CON Save or take 10d8 Poison damage (half on save).',
+      'Iron Golem'
+    );
+  };
+
+  const handleTriggerIronGolemFireAbsorption = () => {
+    addLogEntry(
+      'ability',
+      '🔥 IRON GOLEM FIRE ABSORPTION: Subjected to Fire damage, takes 0 damage and instead regains HP equal to fire damage dealt!',
+      'Iron Golem'
+    );
+  };
+
+  const handleTriggerRustTouch = () => {
+    addLogEntry(
+      'ability',
+      '⚙️ RUST MONSTER RUST TOUCH: Nonmagical metal armor or weapon touched takes a permanent -1 penalty to AC or damage rolls!',
+      'Rust Monster'
+    );
+  };
+
+  const handleTriggerMindBlast = () => {
+    if (onRoll) {
+      onRoll('🧠 Mind Flayer Mind Blast (4d8+4 Psychic, DC 15 INT Save)', 8, 4, 4, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🧠 MIND BLAST: 60 ft cone, targets must make DC 15 INT Save or take 4d8+4 Psychic damage and be Stunned for 1 minute.',
+      'Mind Flayer'
+    );
+  };
+
+  const handleTriggerVampiricBite = () => {
+    if (onRoll) {
+      onRoll('🩸 Vampiric Bite (1d6+5 Piercing + 3d6 Necrotic)', 6, 3, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🩸 VAMPIRIC BITE: Deals 1d6+5 Piercing + 3d6 Necrotic. Vampire regains HP equal to necrotic damage, and target Max HP is reduced!',
+      'Vampire'
+    );
+  };
+
+  const handleTriggerGibberingMouther = () => {
+    const roll8 = Math.floor(Math.random() * 8) + 1;
+    let effect = '';
+    if (roll8 <= 4) effect = 'Creature does nothing this turn.';
+    else if (roll8 <= 6) effect = 'Creature takes no action/bonus action and moves in a random direction.';
+    else effect = 'Creature makes one melee attack against a randomly determined creature in range.';
+
+    if (onRoll) {
+      onRoll(`🗣️ Gibbering Mouther Aura Roll (${roll8}/8: ${effect})`, 8, 1, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      `🗣️ GIBBERING AURA (DC 10 WIS Save): Rolled ${roll8}/8 -> ${effect}`,
+      'Gibbering Mouther'
+    );
+  };
+
+  const handleTriggerCloakerTransfer = () => {
+    addLogEntry(
+      'ability',
+      '🧥 CLOAKER DAMAGE TRANSFER: Cloaker takes only half damage while attached to a target; the attached creature takes the remaining half!',
+      'Cloaker'
+    );
+  };
+
+  const handleTriggerShamblingMoundEngulf = () => {
+    if (onRoll) {
+      onRoll('🌿 Shambling Mound Engulf Damage (2d8+4 Bludgeoning)', 8, 2, 4, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🌿 SHAMBLING MOUND ENGULF: Target is grappled, restrained, blinded, and suffocating inside the plant body!',
+      'Shambling Mound'
+    );
+  };
+
+  const handleTriggerShamblingMoundLightning = () => {
+    addLogEntry(
+      'ability',
+      '⚡ SHAMBLING MOUND LIGHTNING ABSORPTION: Subjected to lightning damage, takes 0 damage and instead regains HP equal to the damage dealt!',
+      'Shambling Mound'
+    );
+  };
+
+  const handleTriggerPhaseSpiderJaunt = () => {
+    addLogEntry(
+      'ability',
+      '✨ PHASE SPIDER ETHEREAL JAUNT: Shifts between the Material Plane and the Ethereal Plane as a Bonus Action!',
+      'Phase Spider'
+    );
+  };
+
+  const handleTriggerFlameskullFireball = () => {
+    if (onRoll) {
+      onRoll('🔥 Flameskull Fireball (8d6 Fire, DC 13 DEX Save)', 6, 8, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🔥 FLAMESKULL FIREBALL: 20-ft radius sphere. Targets must make DC 13 DEX Save or take 8d6 Fire damage (half on save).',
+      'Flameskull'
+    );
+  };
+
+  const handleTriggerShadowStrengthDrain = () => {
+    const drainRoll = Math.floor(Math.random() * 4) + 1;
+    if (onRoll) {
+      onRoll(`👻 Shadow Strength Drain (${drainRoll} STR Loss)`, 4, 1, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      `👻 SHADOW STRENGTH DRAIN: Target hit takes 2d6+2 Necrotic damage and loses ${drainRoll} Strength score! (Target dies if STR reaches 0).`,
+      'Shadow'
+    );
+  };
+
+  const handleTriggerCockatricePetrify = () => {
+    if (onRoll) {
+      onRoll('🐓 Cockatrice Petrifying Touch (DC 11 CON Save)', 20, 1, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      '🐓 COCKATRICE PETRIFYING TOUCH: Target hit by bite must pass DC 11 CON Save or begin turning to stone (Petrified for 24 hours).',
+      'Cockatrice'
+    );
+  };
+
+  const handleTriggerMagmaEruption = () => {
+    if (onRoll) {
+      onRoll('🌋 Magma Eruption 6d6 Fire Damage (DC 15 DEX Save)', 6, 6, 0, 'normal');
+    }
+    addLogEntry(
+      'ability',
+      'DEX Save vs DC 15 or 6d6 Fire Damage from Magma Eruption',
+      'Environment'
+    );
+  };
+
+  const currentEnvConfig = ENVIRONMENT_CONFIGS[encounterEnvironment] || ENVIRONMENT_CONFIGS.terrestrial;
+
   return (
     <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-xl space-y-4">
       {/* Top Controls */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Crosshair className="w-5 h-5 text-amber-500" />
           <h3 className="font-serif font-bold text-stone-100 text-sm">Initiative & Encounter Tracker</h3>
           <span className="bg-amber-950 text-amber-300 border border-amber-600/40 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold">
             Round {roundNumber}
           </span>
+
+          {/* Environment Selector Dropdown */}
+          <div className="flex items-center gap-1.5 bg-stone-950 border border-stone-800 px-2.5 py-1 rounded-xl text-xs font-bold shadow">
+            <Compass className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-stone-400 font-sans hidden sm:inline">Location:</span>
+            <select
+              value={encounterEnvironment}
+              onChange={(e) => {
+                const nextEnv = e.target.value as EncounterEnvironment;
+                setEncounterEnvironment(nextEnv);
+                addLogEntry('note', `🌍 Location / Environment changed to: ${ENVIRONMENT_CONFIGS[nextEnv]?.name || nextEnv}`, 'DM');
+              }}
+              className="bg-stone-900 text-amber-200 border border-stone-700 rounded-lg px-2 py-1 text-xs font-serif font-bold cursor-pointer focus:outline-none focus:border-amber-500"
+            >
+              <option value="terrestrial">🏰 Standard Ground / Dungeon</option>
+              <option value="underwater">🌊 Underwater / Submerged</option>
+              <option value="volcanic">🌋 Volcanic / Extreme Heat</option>
+              <option value="arctic">❄️ Arctic / Glacial Cold</option>
+              <option value="shadowfell">🌫️ Shadowfell / Obscured Fog</option>
+              <option value="aerial">🦅 High Altitude / Airborne</option>
+              <option value="lair_active">👑 Boss Lair (Lair Actions Engaged)</option>
+            </select>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -934,6 +1197,290 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Active Encounter Location / Environment Rule Banner */}
+      {encounterEnvironment !== 'terrestrial' && (
+        <div className={`${currentEnvConfig.badgeBg} border ${currentEnvConfig.badgeBorder} rounded-xl p-3 shadow-xl space-y-2 animate-fadeIn`}>
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl shrink-0">{currentEnvConfig.icon}</span>
+              <div>
+                <div className="font-serif font-bold text-sm flex items-center gap-2 flex-wrap text-amber-100">
+                  <span>Location Active: {currentEnvConfig.name}</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-bold uppercase tracking-wide bg-stone-900 border border-stone-700 ${currentEnvConfig.color}`}>
+                    Special Environment
+                  </span>
+                </div>
+                <p className="text-xs text-stone-300 leading-relaxed mt-0.5">
+                  {currentEnvConfig.rulesBanner}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Trigger Buttons for Environment Features */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {encounterEnvironment === 'underwater' && (
+                <button
+                  onClick={handleTriggerAbolethMucousCloud}
+                  className="flex items-center gap-1.5 bg-cyan-500 hover:bg-cyan-400 text-stone-950 font-bold text-xs px-3 py-1.5 rounded-lg transition shadow"
+                  title="Trigger Aboleth Mucous Cloud (DC 14 CON Save)"
+                >
+                  <Waves className="w-3.5 h-3.5" />
+                  <span>🦠 Trigger Aboleth Mucous Cloud (DC 14 CON)</span>
+                </button>
+              )}
+
+              {encounterEnvironment === 'volcanic' && (
+                <button
+                  onClick={handleTriggerMagmaEruption}
+                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs px-3 py-1.5 rounded-lg transition shadow"
+                  title="Trigger Magma Eruption Hazard"
+                >
+                  <Flame className="w-3.5 h-3.5" />
+                  <span>🌋 Magma Eruption (DC 15 DEX / 6d6 Fire)</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Monster Special Mechanics Action Bar */}
+      {(() => {
+        const activeMonsterNames = combatants.map(c => c.name.toLowerCase());
+        const hasMonster = (keyword: string) => activeMonsterNames.some(name => name.includes(keyword.toLowerCase()));
+
+        const showBeholder = hasMonster('beholder');
+        const showMedusa = hasMonster('medusa');
+        const showRemorhaz = hasMonster('remorhaz');
+        const showRoper = hasMonster('roper');
+        const showIronGolem = hasMonster('iron golem') || hasMonster('golem');
+        const showRustMonster = hasMonster('rust');
+        const showMindFlayer = hasMonster('mind flayer') || hasMonster('illithid');
+        const showVampire = hasMonster('vampire') || hasMonster('vampiric');
+        const showGibbering = hasMonster('gibbering') || hasMonster('mouther');
+        const showCloaker = hasMonster('cloaker');
+        const showShambling = hasMonster('shambling') || hasMonster('mound');
+        const showPhaseSpider = hasMonster('phase spider') || hasMonster('phase');
+        const showFlameskull = hasMonster('flameskull');
+        const showShadow = hasMonster('shadow');
+        const showCockatrice = hasMonster('cockatrice');
+        const showAboleth = hasMonster('aboleth');
+
+        const hasAnySpecialMonster =
+          showBeholder || showMedusa || showRemorhaz || showRoper || showIronGolem ||
+          showRustMonster || showMindFlayer || showVampire || showGibbering || showCloaker ||
+          showShambling || showPhaseSpider || showFlameskull || showShadow || showCockatrice || showAboleth;
+
+        return (
+          <div className="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs font-serif font-bold text-amber-200">
+              <span className="flex items-center gap-1.5">
+                <span>👹</span>
+                <span>Monster Mechanics & Special Action Triggers</span>
+              </span>
+              <span className="text-[10px] text-stone-400 font-sans">
+                {hasAnySpecialMonster ? 'Click to trigger mechanics in die roller & combat log' : 'Active encounter monsters trigger shortcuts'}
+              </span>
+            </div>
+
+            {hasAnySpecialMonster ? (
+              <div className="flex items-center gap-2 flex-wrap text-xs">
+                {showBeholder && (
+                  <button
+                    onClick={handleTriggerBeholderEyeRay}
+                    className="px-2.5 py-1 bg-purple-950 hover:bg-purple-900 border border-purple-600/50 text-purple-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Roll random Beholder Eye Ray (1d10)"
+                  >
+                    <span>👁️</span> Beholder Eye Ray
+                  </button>
+                )}
+
+                {showMedusa && (
+                  <button
+                    onClick={handleTriggerMedusaGaze}
+                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Medusa Petrifying Gaze (DC 14 CON)"
+                  >
+                    <span>🗿</span> Medusa Gaze (DC 14)
+                  </button>
+                )}
+
+                {showRemorhaz && (
+                  <>
+                    <button
+                      onClick={handleTriggerRemorhazHeatedBody}
+                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Remorhaz Heated Body Counter (3d6 Fire)"
+                    >
+                      <span>🔥</span> Remorhaz Heated Body
+                    </button>
+                    <button
+                      onClick={handleTriggerRemorhazSwallow}
+                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Remorhaz Swallow Whole (6d6 Acid)"
+                    >
+                      <span>🕳️</span> Remorhaz Swallow
+                    </button>
+                  </>
+                )}
+
+                {showRoper && (
+                  <button
+                    onClick={handleTriggerRoperReel}
+                    className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 border border-emerald-600/50 text-emerald-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Roper Reel & Advantage Bite (+7 to hit, 4d8+4)"
+                  >
+                    <span>🪢</span> Roper Reel & Bite
+                  </button>
+                )}
+
+                {showIronGolem && (
+                  <>
+                    <button
+                      onClick={handleTriggerIronGolemPoisonBreath}
+                      className="px-2.5 py-1 bg-teal-950 hover:bg-teal-900 border border-teal-600/50 text-teal-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Iron Golem Poison Breath (10d8 Poison, DC 19)"
+                    >
+                      <span>🧪</span> Iron Golem Breath
+                    </button>
+                    <button
+                      onClick={handleTriggerIronGolemFireAbsorption}
+                      className="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 border border-rose-600/50 text-rose-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Iron Golem Fire Absorption"
+                    >
+                      <span>🔥</span> Iron Golem Fire Absorption
+                    </button>
+                  </>
+                )}
+
+                {showRustMonster && (
+                  <button
+                    onClick={handleTriggerRustTouch}
+                    className="px-2.5 py-1 bg-orange-950 hover:bg-orange-900 border border-orange-600/50 text-orange-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Rust Touch (-1 AC Penalty)"
+                  >
+                    <span>⚙️</span> Rust Touch (-1 AC)
+                  </button>
+                )}
+
+                {showMindFlayer && (
+                  <button
+                    onClick={handleTriggerMindBlast}
+                    className="px-2.5 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-600/50 text-indigo-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Mind Flayer Mind Blast (4d8+4, DC 15 INT)"
+                  >
+                    <span>🧠</span> Mind Blast (DC 15)
+                  </button>
+                )}
+
+                {showVampire && (
+                  <button
+                    onClick={handleTriggerVampiricBite}
+                    className="px-2.5 py-1 bg-red-950 hover:bg-red-900 border border-red-600/50 text-red-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Vampiric Bite & Max HP Drain"
+                  >
+                    <span>🩸</span> Vampiric Bite
+                  </button>
+                )}
+
+                {showGibbering && (
+                  <button
+                    onClick={handleTriggerGibberingMouther}
+                    className="px-2.5 py-1 bg-fuchsia-950 hover:bg-fuchsia-900 border border-fuchsia-600/50 text-fuchsia-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Gibbering Mouther Confusion Aura (1d8 Confusion Roll)"
+                  >
+                    <span>🗣️</span> Gibbering Aura
+                  </button>
+                )}
+
+                {showCloaker && (
+                  <button
+                    onClick={handleTriggerCloakerTransfer}
+                    className="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-600/50 text-slate-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Cloaker 50% Damage Transfer"
+                  >
+                    <span>🧥</span> Cloaker Damage Transfer
+                  </button>
+                )}
+
+                {showShambling && (
+                  <>
+                    <button
+                      onClick={handleTriggerShamblingMoundEngulf}
+                      className="px-2.5 py-1 bg-lime-950 hover:bg-lime-900 border border-lime-600/50 text-lime-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Shambling Mound Engulf & Suffocate"
+                    >
+                      <span>🌿</span> Shambling Engulf
+                    </button>
+                    <button
+                      onClick={handleTriggerShamblingMoundLightning}
+                      className="px-2.5 py-1 bg-yellow-950 hover:bg-yellow-900 border border-yellow-600/50 text-yellow-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Shambling Mound Lightning Absorption"
+                    >
+                      <span>⚡</span> Shambling Lightning Heal
+                    </button>
+                  </>
+                )}
+
+                {showPhaseSpider && (
+                  <button
+                    onClick={handleTriggerPhaseSpiderJaunt}
+                    className="px-2.5 py-1 bg-violet-950 hover:bg-violet-900 border border-violet-600/50 text-violet-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Phase Spider Ethereal Jaunt"
+                  >
+                    <span>✨</span> Phase Spider Jaunt
+                  </button>
+                )}
+
+                {showFlameskull && (
+                  <button
+                    onClick={handleTriggerFlameskullFireball}
+                    className="px-2.5 py-1 bg-orange-950 hover:bg-orange-900 border border-orange-600/50 text-orange-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Flameskull 8d6 Fireball"
+                  >
+                    <span>🔥</span> Flameskull Fireball
+                  </button>
+                )}
+
+                {showShadow && (
+                  <button
+                    onClick={handleTriggerShadowStrengthDrain}
+                    className="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-600 text-zinc-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Shadow Strength Drain (1d4 STR Loss)"
+                  >
+                    <span>👻</span> Shadow STR Drain
+                  </button>
+                )}
+
+                {showCockatrice && (
+                  <button
+                    onClick={handleTriggerCockatricePetrify}
+                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 border border-stone-500 text-stone-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Cockatrice Petrifying Touch (DC 11 CON)"
+                  >
+                    <span>🐓</span> Cockatrice Petrify
+                  </button>
+                )}
+
+                {showAboleth && (
+                  <button
+                    onClick={handleTriggerAbolethMucousCloud}
+                    className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-600/50 text-cyan-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Aboleth Mucous Cloud (DC 14 CON)"
+                  >
+                    <span>🦠</span> Aboleth Mucous Cloud
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="text-xs text-stone-400 italic bg-stone-900/40 p-2.5 rounded-lg border border-stone-850">
+                No monsters with special mechanic triggers in current encounter roster. Add monsters like <span className="text-amber-300 font-medium">Beholder, Mind Flayer, Cloaker, Shambling Mound, Gibbering Mouther, Flameskull, Shadow</span>, etc. to reveal quick action triggers.
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Defeated Monster XP Banner Notification */}
       {xpAlert && (
@@ -1024,7 +1571,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                       className="w-10 h-10 rounded-xl object-cover border border-stone-700 shadow shrink-0"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
+                        const img = e.target as HTMLImageElement;
+                        img.onerror = null;
+                        img.src = generateMonsterSvgPortrait(c?.name);
                       }}
                     />
                     <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-md flex items-center justify-center font-mono font-bold text-[10px] border shadow ${
@@ -1282,8 +1831,10 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
       <AttackResolver
         key={activeAttackerCharacter.id + '-' + (activeCombatant?.id || '')}
         character={activeAttackerCharacter}
+        allCharacters={allCharacters}
         combatants={combatants}
         activeCombatantId={activeCombatant?.id}
+        encounterEnvironment={encounterEnvironment}
         onRoll={onRoll}
         onApplyDamageToCombatant={(combatantId, dmg) => handleAdjustHp(combatantId, -dmg)}
         onLogAction={(cat, msg, act) => addLogEntry(cat, msg, act)}
@@ -1630,7 +2181,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                       className="w-9 h-9 rounded-xl object-cover border border-amber-500/50 shrink-0"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
+                        const img = e.target as HTMLImageElement;
+                        img.onerror = null;
+                        img.src = generateMonsterSvgPortrait(newName || 'Monster');
                       }}
                     />
                   )}

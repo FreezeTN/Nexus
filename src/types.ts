@@ -201,6 +201,26 @@ export interface ClassFeature {
   recharge?: 'Short Rest' | 'Long Rest' | 'Special' | 'None';
 }
 
+export interface LegendaryAction {
+  id: string;
+  name: string;
+  cost?: number; // 1, 2, or 3 actions (default 1)
+  description: string;
+  attackId?: string;
+}
+
+export interface LairAction {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface MonsterReaction {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface Feat {
   id: string;
   name: string;
@@ -226,6 +246,7 @@ export interface GearItem {
   armorType?: 'Heavy' | 'Medium' | 'Light' | 'Shield' | 'Bonus';
   damageReduction?: number; // Damage Reduction (DR) granted by item (e.g., 2, 5)
   resistance?: string; // Damage type resistance granted by item (e.g. Fire, Cold, Slashing, All)
+  immunity?: string; // Damage type immunity granted by item (e.g. Poison, Fire, Acid, All)
   stealthDisadvantage?: boolean;
   hpMaxBonus?: number; // Max HP bonus or penalty granted when equipped
   weaponStats?: {
@@ -352,6 +373,14 @@ export interface CharacterData {
   // Attacks
   attacks: Attack[];
 
+  // Monster Actions & Trait Mechanics
+  multiattack?: string;
+  legendaryActionsMax?: number;
+  legendaryActionsRemaining?: number;
+  legendaryActions?: LegendaryAction[];
+  lairActions?: LairAction[];
+  reactions?: MonsterReaction[];
+
   // Gear & Wealth
   wealth: Wealth;
   inventory: GearItem[];
@@ -403,3 +432,13 @@ export interface DiceRollResult {
   isNat20?: boolean;
   isNat1?: boolean;
 }
+
+export type EncounterEnvironment =
+  | 'terrestrial'
+  | 'underwater'
+  | 'volcanic'
+  | 'arctic'
+  | 'shadowfell'
+  | 'aerial'
+  | 'lair_active';
+

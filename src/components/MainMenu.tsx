@@ -1,6 +1,6 @@
 import React from 'react';
 import { CharacterData, RuleEdition } from '../types';
-import { getMonsterPortraitUrl } from '../data/monsterPortraits';
+import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../data/monsterPortraits';
 import { isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
 import {
   Shield,
@@ -105,8 +105,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     const currentUserId = currentUser?.uid || 'guest_player';
 
     const playerChars = systemChars.filter(c => !c.isMonster && !c.isVendor);
-    const monsterChars = isPlayerRole ? [] : systemChars.filter(c => c.isMonster);
-    const merchantChars = isPlayerRole ? [] : systemChars.filter(c => c.isVendor && !c.isMonster);
+    const monsterChars = systemChars.filter(c => c.isMonster);
+    const merchantChars = systemChars.filter(c => c.isVendor && !c.isMonster);
 
     const renderCard = (char: CharacterData) => {
       const isActive = char.id === activeCharacter.id;
@@ -153,7 +153,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 className={`w-12 h-12 rounded-xl object-cover border shrink-0 shadow ${isDead ? 'border-rose-600/70 grayscale' : 'border-stone-700'}`}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
+                  const img = e.target as HTMLImageElement;
+                  img.onerror = null;
+                  img.src = generateMonsterSvgPortrait(char?.name);
                 }}
               />
             ) : (
@@ -298,7 +300,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       }
     ];
 
-    const foldersConfig = isPlayerRole ? allFolders.filter(f => f.key === 'characters') : allFolders;
+    const foldersConfig = allFolders;
 
     const activeFolders = activeFolderTab === 'all'
       ? foldersConfig
@@ -348,7 +350,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
             }`}
           >
-            📁 All Folders ({isPlayerRole ? playerChars.length : systemChars.length})
+            📁 All Folders ({systemChars.length})
           </button>
           <button
             onClick={() => setActiveFolderTab('characters')}
@@ -360,30 +362,26 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           >
             🧙 Characters ({playerChars.length})
           </button>
-          {!isPlayerRole && (
-            <>
-              <button
-                onClick={() => setActiveFolderTab('monsters')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
-                  activeFolderTab === 'monsters'
-                    ? 'bg-red-600 text-stone-950 shadow-md'
-                    : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
-                }`}
-              >
-                👹 Monsters ({monsterChars.length})
-              </button>
-              <button
-                onClick={() => setActiveFolderTab('merchants')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
-                  activeFolderTab === 'merchants'
-                    ? 'bg-cyan-600 text-stone-950 shadow-md'
-                    : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
-                }`}
-              >
-                🏪 Merchants ({merchantChars.length})
-              </button>
-            </>
-          )}
+          <button
+            onClick={() => setActiveFolderTab('monsters')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
+              activeFolderTab === 'monsters'
+                ? 'bg-red-600 text-stone-950 shadow-md'
+                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+            }`}
+          >
+            👹 Monsters ({monsterChars.length})
+          </button>
+          <button
+            onClick={() => setActiveFolderTab('merchants')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
+              activeFolderTab === 'merchants'
+                ? 'bg-cyan-600 text-stone-950 shadow-md'
+                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+            }`}
+          >
+            🏪 Merchants ({merchantChars.length})
+          </button>
         </div>
 
         {/* Folder Sections */}

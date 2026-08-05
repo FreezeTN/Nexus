@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CharacterData, GearItem, Attack } from '../../types';
 import { saveCustomCompendiumEntry } from '../../data/compendiumData';
+import { PRESET_DND_ITEMS } from '../../data/presetItems';
 import { ShadowrunMatrixRiggingPanel } from '../shadowrun/ShadowrunMatrixRiggingPanel';
 import { getCarryingCapacity, getTotalWeight, getTotalWealthInGold, getEncumbranceDetails, getWeightBreakdown, OFFICIAL_DAMAGE_TYPES, recalculateCharacterAC, isHealingItem, getHealingExpression, rollHealing, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import {
@@ -83,6 +84,9 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
     setDragOverIndex(null);
   };
 
+  // Official D&D Preset Item Selection State
+  const [selectedPresetId, setSelectedPresetId] = useState<string>('');
+
   const [itemName, setItemName] = useState('');
   const [itemQty, setItemQty] = useState<number>(1);
   const [itemWeight, setItemWeight] = useState<number>(1);
@@ -93,6 +97,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   const [itemNotes, setItemNotes] = useState('');
   const [itemDamageReduction, setItemDamageReduction] = useState<number>(0);
   const [itemResistance, setItemResistance] = useState<string>('');
+  const [itemImmunity, setItemImmunity] = useState<string>('');
   const [itemHpMaxBonus, setItemHpMaxBonus] = useState<number>(0);
 
   // Item Type & Specific Parameters
@@ -110,6 +115,37 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   const [weaponDamageType, setWeaponDamageType] = useState<string>('Slashing');
   const [weaponRange, setWeaponRange] = useState<string>('5 ft Melee');
   const [weaponNotes, setWeaponNotes] = useState<string>('');
+
+  const handleSelectPresetItem = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (!presetId) return;
+
+    const preset = PRESET_DND_ITEMS.find(p => p.id === presetId);
+    if (!preset) return;
+
+    setItemType(preset.category);
+    setItemName(preset.name);
+    setItemWeight(preset.weight);
+    setItemCostGp(preset.costGp !== undefined ? String(preset.costGp) : '');
+    setItemMagic(preset.isMagic || false);
+    setItemNotes(preset.notes || '');
+    setItemDamageReduction(preset.damageReduction || 0);
+    setItemResistance(preset.resistance || '');
+    setItemImmunity(preset.immunity || '');
+    setItemHpMaxBonus(preset.hpMaxBonus || 0);
+
+    if (preset.category === 'Armor') {
+      setItemArmorAc(preset.armorAc !== undefined ? preset.armorAc : 10);
+      setItemArmorType(preset.armorType || 'Heavy');
+      setStealthDisadvantage(preset.stealthDisadvantage || false);
+    } else if (preset.category === 'Weapon') {
+      setWeaponAttackBonus(preset.weaponStats?.attackBonus || '+0');
+      setWeaponDamage(preset.weaponStats?.damage || '1d8');
+      setWeaponDamageType(preset.weaponStats?.damageType || 'Slashing');
+      setWeaponRange(preset.weaponStats?.range || '5 ft Melee');
+      setWeaponNotes(preset.weaponStats?.notes || '');
+    }
+  };
 
   const handleSelectArmorPreset = (preset: string) => {
     setArmorPreset(preset);
@@ -299,6 +335,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
       armorType: itemType === 'Armor' ? itemArmorType : undefined,
       damageReduction: itemDamageReduction > 0 ? itemDamageReduction : undefined,
       resistance: itemResistance.trim() ? itemResistance.trim() : undefined,
+      immunity: itemImmunity.trim() ? itemImmunity.trim() : undefined,
       hpMaxBonus: itemHpMaxBonus !== 0 ? itemHpMaxBonus : undefined,
       stealthDisadvantage: itemType === 'Armor' ? stealthDisadvantage : undefined,
       weaponStats: itemType === 'Weapon' ? {
@@ -1135,6 +1172,12 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                           </span>
                         )}
 
+                        {item.immunity && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-purple-950/90 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/50 font-bold" title="Damage Immunity granted by this item (0 HP taken)">
+                            <Shield className="w-3 h-3 text-purple-400" /> Immune: {item.immunity}
+                          </span>
+                        )}
+
                         {item.stored && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-mono bg-blue-950 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/50">
                             <Archive className="w-3 h-3 text-blue-400" /> Stored Away (Stash)
@@ -1266,6 +1309,66 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
             </h3>
 
             <div className="space-y-3 text-xs">
+              {/* Quick Select Official D&D Item Preset */}
+              <div className="p-3 bg-stone-950/90 border border-amber-500/40 rounded-xl space-y-1.5 shadow-inner">
+                <label className="block text-amber-300 font-bold text-xs flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-400" /> Pre-generated Official D&D Item
+                  </span>
+                  <span className="text-[10px] text-amber-500/80 font-sans font-normal">Auto-fills Stats</span>
+                </label>
+                <select
+                  value={selectedPresetId}
+                  onChange={(e) => handleSelectPresetItem(e.target.value)}
+                  className="w-full bg-stone-800 border border-amber-600/50 rounded-lg p-2 text-stone-100 text-xs font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                >
+                  <option value="">-- Select an Official D&D Item Preset... --</option>
+                  <optgroup label="⚔️ Simple Weapons">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Simple Weapon').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} ({i.weaponStats?.damage}, {i.costGp} GP, {i.weight} lbs)</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="⚔️ Martial Weapons">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Martial Weapon').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} ({i.weaponStats?.damage}, {i.costGp} GP, {i.weight} lbs)</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="✨ Magic Weapons">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Magic Weapon').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} (Magic, {i.weaponStats?.damage}, {i.costGp} GP)</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🛡️ Light & Medium Armors">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Light Armor' || i.subCategory === 'Medium Armor').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} (AC {i.armorAc}, {i.costGp} GP, {i.weight} lbs)</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🛡️ Heavy Armors & Shields">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Heavy Armor' || i.subCategory === 'Shield').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} (AC {i.armorAc}, {i.costGp} GP, {i.weight} lbs)</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🧪 Potions & Scrolls">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Potion' || i.subCategory === 'Scroll').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} ({i.costGp} GP)</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="💍 Rings, Cloaks & Wondrous Items">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Ring/Wondrous').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} ({i.costGp} GP)</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="🎒 Adventuring Gear & Tools">
+                    {PRESET_DND_ITEMS.filter(i => i.subCategory === 'Adventuring Gear' || i.subCategory === 'Tool/Focus').map(i => (
+                      <option key={i.id} value={i.id}>{i.name} ({i.costGp} GP, {i.weight} lbs)</option>
+                    ))}
+                  </optgroup>
+                </select>
+                <p className="text-[10px] text-stone-400">
+                  Selecting a preset automatically fills category, name, price, weight, magic status, AC / weapon damage, DR, resistance, and item notes.
+                </p>
+              </div>
+
               {/* Item Type Picker */}
               <div>
                 <label className="block text-stone-400 mb-1 font-semibold">Item Category / Type</label>
@@ -1537,13 +1640,13 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                 </label>
               </div>
 
-              {/* Item Defensive Properties: Damage Reduction & Resistance */}
+              {/* Item Defensive Properties: Damage Reduction, Resistance & Immunity */}
               <div className="p-3 bg-stone-950/80 border border-cyan-600/40 rounded-xl space-y-3">
                 <div className="text-cyan-300 font-bold flex items-center gap-1.5 text-xs">
-                  <Shield className="w-4 h-4 text-cyan-400" /> Defense & Combat Stats (DR & Resistance)
+                  <Shield className="w-4 h-4 text-cyan-400" /> Defense & Combat Stats (DR, Resistance & Immunity)
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-stone-300 text-xs mb-1 font-semibold">Damage Reduction (DR)</label>
                     <input
@@ -1554,7 +1657,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                       placeholder="e.g. 2 or 5"
                       className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-cyan-300 font-mono font-bold text-xs"
                     />
-                    <span className="text-[10px] text-stone-500 block mt-0.5">Flat damage absorbed per hit</span>
+                    <span className="text-[10px] text-stone-500 block mt-0.5">Flat damage absorbed</span>
                   </div>
 
                   <div>
@@ -1563,10 +1666,22 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                       type="text"
                       value={itemResistance}
                       onChange={(e) => setItemResistance(e.target.value)}
-                      placeholder="e.g. Fire, Cold, Slashing, All"
+                      placeholder="e.g. Fire, Cold, All"
                       className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-orange-300 font-mono font-bold text-xs"
                     />
-                    <span className="text-[10px] text-stone-500 block mt-0.5">Halves incoming damage of this type</span>
+                    <span className="text-[10px] text-stone-500 block mt-0.5">Halves damage</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-purple-300 text-xs mb-1 font-semibold">Immunity Granted</label>
+                    <input
+                      type="text"
+                      value={itemImmunity}
+                      onChange={(e) => setItemImmunity(e.target.value)}
+                      placeholder="e.g. Poison, Fire, All"
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-purple-300 font-mono font-bold text-xs"
+                    />
+                    <span className="text-[10px] text-stone-500 block mt-0.5">Negates damage (0 HP taken)</span>
                   </div>
 
                   <div>
@@ -1578,7 +1693,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                       placeholder="e.g. +10 or -5"
                       className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-rose-300 font-mono font-bold text-xs"
                     />
-                    <span className="text-[10px] text-stone-500 block mt-0.5">Applies while item is equipped</span>
+                    <span className="text-[10px] text-stone-500 block mt-0.5">While equipped</span>
                   </div>
                 </div>
               </div>
@@ -1823,13 +1938,13 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                 </div>
               )}
 
-              {/* Item Defensive Properties: Damage Reduction & Resistance */}
+              {/* Item Defensive Properties: Damage Reduction, Resistance & Immunity */}
               <div className="p-3 bg-stone-950/80 border border-cyan-600/40 rounded-xl space-y-3">
                 <div className="text-cyan-300 font-bold flex items-center gap-1.5 text-xs">
-                  <Shield className="w-4 h-4 text-cyan-400" /> Defense & Combat Stats (DR & Resistance)
+                  <Shield className="w-4 h-4 text-cyan-400" /> Defense & Combat Stats (DR, Resistance & Immunity)
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-stone-300 text-xs mb-1 font-semibold">Damage Reduction (DR)</label>
                     <input
@@ -1856,6 +1971,20 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                       })}
                       placeholder="e.g. Fire, Cold, Slashing, All"
                       className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-orange-300 font-mono font-bold text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-purple-300 text-xs mb-1 font-semibold">Immunity Granted</label>
+                    <input
+                      type="text"
+                      value={editingItem.immunity || ''}
+                      onChange={(e) => setEditingItem({
+                        ...editingItem,
+                        immunity: e.target.value
+                      })}
+                      placeholder="e.g. Poison, Fire, All"
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-purple-300 font-mono font-bold text-xs"
                     />
                   </div>
 

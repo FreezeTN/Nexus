@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CharacterData, Attack, Spell } from '../../types';
+import { CharacterData, Attack, Spell, EncounterEnvironment } from '../../types';
 import { Combatant } from './EncounterTracker';
 import { getSpellAttackBonus, getSpellSaveDC, formatModifier, rollCompoundDamage, RolledDamagePart, applyResistanceAndDRToDamage, calculateCharacterTotalDR, getCharacterResistances, getConditionEffects } from '../../utils/dndCalculations';
 import { playDiceSound } from '../../utils/diceAudio';
@@ -7,8 +7,10 @@ import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircl
 
 interface AttackResolverProps {
   character: CharacterData;
+  allCharacters?: CharacterData[];
   combatants: Combatant[];
   activeCombatantId?: string;
+  encounterEnvironment?: EncounterEnvironment;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onApplyDamageToCombatant?: (combatantId: string, damage: number) => void;
   onLogAction?: (category: 'attack' | 'damage' | 'heal' | 'ability', message: string, actor?: string) => void;
@@ -16,8 +18,10 @@ interface AttackResolverProps {
 
 export const AttackResolver: React.FC<AttackResolverProps> = ({
   character,
+  allCharacters = [],
   combatants,
   activeCombatantId,
+  encounterEnvironment = 'terrestrial',
   onRoll,
   onApplyDamageToCombatant,
   onLogAction
@@ -157,6 +161,35 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   const baseTargetAc = targetCombatant ? targetCombatant.armorClass : manualTargetAc;
   const effectiveTargetAc = baseTargetAc + coverBonus;
   const targetNameStr = targetCombatant ? targetCombatant.name : `Target (AC ${manualTargetAc})`;
+
+  // Full CharacterData object for target (lookup from allCharacters / character)
+  const targetCharacterData: CharacterData = React.useMemo(() => {
+    if (!targetCombatant) return character;
+    if (targetCombatant.isPlayerChar || targetCombatant.name.toLowerCase() === character.name.toLowerCase()) {
+      return character;
+    }
+    const cleanTargetName = targetCombatant.name.toLowerCase().replace(/\s+#\d+$/, '');
+    const found = allCharacters.find(ch => {
+      const cleanChId = ch.id.replace(/^(player-|party-|ally-|enemy-|comb-)/, '');
+      const cleanCombId = targetCombatant.id.replace(/^(player-|party-|ally-|enemy-|comb-)/, '').replace(/-\d+$/, '');
+      return (
+        ch.id === targetCombatant.id ||
+        cleanChId === cleanCombId ||
+        ch.name.toLowerCase() === cleanTargetName
+      );
+    });
+    if (found) return found;
+
+    return {
+      ...character,
+      id: targetCombatant.id,
+      name: targetCombatant.name,
+      armorClass: targetCombatant.armorClass,
+      hpCurrent: targetCombatant.hpCurrent,
+      hpMax: targetCombatant.hpMax,
+      conditions: targetCombatant.conditions || []
+    };
+  }, [targetCombatant, character, allCharacters]);
 
   // Mechanical Condition Evaluation
   const attackerConditions = character.conditions || [];
@@ -322,13 +355,44 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
       finalBreakdown = `${finalBreakdown} | Petrified: [Halved by Resistance to All Damage]`;
     }
 
-    // Apply DR and Resistance if the target is the active player character
-    if (targetCombatant?.id === character.id || !targetCombatant) {
+    // Apply DR, Resistance, and Immunity to target (supports multi-part damage e.g. 1d8 Slashing + 2d6 Fire)
+    if (result.parts.length > 1) {
+      let multiPartTotal = 0;
+      const allLogs: string[] = [];
+      for (const part of result.parts) {
+        let type = part.damageType || 'Slashing';
+        let partVal = part.totalPart;
+        
+        // Underwater Fire Damage Resistance (5e rule: submerged creatures have resistance to fire damage)
+        if (encounterEnvironment === 'underwater' && type.toLowerCase().includes('fire')) {
+          partVal = Math.floor(partVal / 2);
+          allLogs.push(`Fire: Halved by Underwater Resistance (${part.totalPart} -> ${partVal})`);
+        }
+
+        const res = applyResistanceAndDRToDamage(partVal, type, targetCharacterData);
+        multiPartTotal += res.finalTotal;
+        if (res.breakdownLogs.length > 0) {
+          allLogs.push(`${type}: ${res.breakdownLogs.join('; ')}`);
+        }
+      }
+      finalTotal = multiPartTotal;
+      if (allLogs.length > 0) {
+        finalBreakdown = `${finalBreakdown} | Defenses & Environment: [${allLogs.join(' | ')}]`;
+      }
+    } else {
       const activeType = result.parts[0]?.damageType || 'Slashing';
-      const appliedRes = applyResistanceAndDRToDamage(finalTotal, activeType, character);
+      let partVal = finalTotal;
+
+      // Underwater Fire Damage Resistance
+      if (encounterEnvironment === 'underwater' && activeType.toLowerCase().includes('fire')) {
+        partVal = Math.floor(partVal / 2);
+        finalBreakdown = `${finalBreakdown} | 🌊 Underwater Fire Resistance: [Halved]`;
+      }
+
+      const appliedRes = applyResistanceAndDRToDamage(partVal, activeType, targetCharacterData);
       finalTotal = appliedRes.finalTotal;
       if (appliedRes.breakdownLogs.length > 0) {
-        finalBreakdown = `${finalBreakdown} | Defense: [${appliedRes.breakdownLogs.join('; ')}]`;
+        finalBreakdown = `${finalBreakdown} | Target Defense: [${appliedRes.breakdownLogs.join('; ')}]`;
       }
     }
 

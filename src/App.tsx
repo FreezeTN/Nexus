@@ -35,7 +35,7 @@ import {
   subscribeToGameSession
 } from './lib/firebase';
 
-const STORAGE_KEY_CHARACTERS = 'dnd_app_characters_v4';
+const STORAGE_KEY_CHARACTERS = 'dnd_app_characters_v5';
 const STORAGE_KEY_ACTIVE = 'dnd_app_active_id_v4';
 const STORAGE_KEY_PARTIES = 'dnd_app_parties_v1';
 

@@ -144,6 +144,43 @@ MILESTONE 9: ROLE ACCESS CONTROL REFINEMENTS & NAVIGATION ANCHORING
   - Resolved scrolling issue where `Navigation.tsx` stayed fixed/sticky over the landing menu when unauthenticated.
   - Dynamic positioning applied: navigation operates in relative layout mode when logged out or on the main menu, and transitions to sticky top anchoring (`top-[108px] z-30`) only when signed in with an active character sheet.
 
+--------------------------------------------------------------------------------
+MILESTONE 10: REST & RECOVERY HP HEALING FIX & UNIFIED MODAL
+--------------------------------------------------------------------------------
+* Effective Max HP Restoration:
+  - Fixed Long Rest healing calculation across Header and Rest Modal to restore hit points to `getEffectiveMaxHp(character)` (e.g. 54 HP incorporating Tough feat, level bonuses, and DM overrides) rather than standard base `hpMax` (46 HP).
+  - Fixed Short Rest execution in Header to open the full `RestModal` engine, allowing players to spend hit dice and roll recovery HP rather than performing a silent feature reset.
+
+* Visual HP Orb & State Cleanup:
+  - Standardized `HpOrb` max HP display in Sheet 2 (Combat) to use `effectiveMaxHp`.
+  - Added temporary HP (`hpTemp: 0`) clearance and Unconscious condition removal upon completing a Long Rest or recovering from 0 HP during a Short Rest.
+
+--------------------------------------------------------------------------------
+MILESTONE 11: PRE-GENERATED OFFICIAL D&D ITEM PRESETS & STAT AUTO-FILL
+--------------------------------------------------------------------------------
+* Official D&D Item Preset Library:
+  - Created `src/data/presetItems.ts` containing over 50 official D&D 5e items spanning Simple Weapons, Martial Weapons, Magic Weapons, Light/Medium/Heavy Armor, Shields, Potions, Scrolls, Rings/Wondrous Items, and Adventuring Gear.
+
+* Modal Dropdown Integration:
+  - Added an official item preset selector inside the "Add Inventory Item" modal in Sheet 3 (Gear & Wealth).
+  - Selecting any official preset automatically populates category, item name, price (GP), weight (lbs), magic status, base AC / weapon damage expression, damage reduction (DR), resistances, and descriptive item notes. Players can further customize any populated values before saving.
+
+--------------------------------------------------------------------------------
+MILESTONE 12: ELEMENTAL & COMBAT DAMAGE IMMUNITIES
+--------------------------------------------------------------------------------
+* Elemental & Type Immunity Mechanics:
+  - Added `immunity?: string` field to `GearItem` and `PresetItem` interfaces.
+  - Implemented `getCharacterImmunities(char)` in `src/utils/dndCalculations.ts` to collect immunities from equipped inventory items (e.g., Periapt of Proof against Poison, Ring of Elemental Immunity) and active conditions (e.g. Petrified condition poison immunity).
+
+* Combat Damage Resolution:
+  - Updated `applyResistanceAndDRToDamage` to apply Immunity **FIRST** (per D&D 5e rules), reducing incoming damage to 0 HP before Resistance or Damage Reduction (DR) calculations occur.
+  - Generates clear combat combat logs: `🚫 Immunity (Source) completely negated all X damage (0 HP taken)`.
+
+* Sheet 3 (Gear & Wealth) & Sheet 2 (Combat) UI Integration:
+  - Added "Immunity Granted" input fields to the Add Inventory Item and Edit Inventory Item modals in Sheet 3.
+  - Added purple "Immune: <type>" badges to item inventory cards.
+  - Added an "Active Defenses & Mitigations" summary bar to Sheet 2 (Combat) displaying all active DR, Resistances, and Immunities currently equipped or active.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

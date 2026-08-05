@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData, Spell, Feat, ClassFeature, GearItem } from '../../types';
+import { getAbilityModifier, formatModifier } from '../../utils/dndCalculations';
+import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import {
   CompendiumItem,
   CompendiumCategory,
@@ -525,40 +527,267 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
             </div>
 
             {/* Modal Specific Fields */}
-            {selectedDetailItem.category === 'monsters' && selectedDetailItem.monsterData && (
-              <div className="grid grid-cols-3 gap-3 bg-stone-900/80 border border-stone-800 p-3.5 rounded-2xl text-center">
-                <div>
-                  <div className="text-[10px] font-mono text-stone-400">Armor Class</div>
-                  <div className="text-lg font-serif font-bold text-amber-400">{selectedDetailItem.monsterData.armorClass || 10}</div>
+            {selectedDetailItem.category === 'monsters' && selectedDetailItem.monsterData && (() => {
+              const m = selectedDetailItem.monsterData;
+              const portrait = m.portraitUrl || getMonsterPortraitUrl(m.name, m.id);
+              
+              return (
+                <div className="space-y-5">
+                  {/* Monster Portrait & Header Summary */}
+                  <div className="flex flex-col sm:flex-row items-center gap-4 bg-stone-900/60 p-4 rounded-2xl border border-stone-800">
+                    {portrait && (
+                      <img
+                        src={portrait}
+                        alt={m.name || selectedDetailItem.name}
+                        className="w-20 h-20 sm:w-24 sm:h-24 object-cover rounded-2xl border-2 border-amber-500/40 shadow-lg shrink-0"
+                      />
+                    )}
+                    <div className="space-y-1 text-center sm:text-left flex-1">
+                      <div className="text-xs font-mono text-amber-400 font-bold uppercase">
+                        {m.sizeCategory || 'Medium'} {m.race || 'Monstrosity'} • {m.alignment || 'Neutral'}
+                      </div>
+                      <div className="text-xs text-stone-300 font-mono flex items-center justify-center sm:justify-start gap-3 flex-wrap">
+                        <span>CR: <strong className="text-purple-400">{m.challengeRating || m.subclass || '1'}</strong></span>
+                        {m.monsterXpReward ? <span>• XP: <strong className="text-amber-300">{m.monsterXpReward} XP</strong></span> : null}
+                        {m.speed ? <span>• Speed: <strong className="text-cyan-300">{m.speed} ft</strong></span> : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Core Stats Grid */}
+                  <div className="grid grid-cols-3 gap-3 bg-stone-900/80 border border-stone-800 p-3.5 rounded-2xl text-center">
+                    <div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">Armor Class</div>
+                      <div className="text-xl font-serif font-bold text-amber-400">{m.armorClass || 10}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">Hit Points</div>
+                      <div className="text-xl font-serif font-bold text-emerald-400">
+                        {m.hpMax || 10} {m.hitDiceTotal ? <span className="text-xs text-stone-400 font-sans">({m.hitDiceTotal})</span> : null}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">Challenge Rating</div>
+                      <div className="text-xl font-serif font-bold text-purple-400">{m.challengeRating || m.subclass || '1'}</div>
+                    </div>
+                  </div>
+
+                  {/* Ability Scores Grid */}
+                  {m.abilities && (
+                    <div className="space-y-1.5">
+                      <h4 className="text-xs font-mono text-amber-300 uppercase font-bold flex items-center gap-1.5">
+                        <span>📊 Ability Scores</span>
+                      </h4>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
+                        {(['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const).map((ability) => {
+                          const score = m.abilities?.[ability]?.score ?? 10;
+                          const mod = getAbilityModifier(score);
+                          return (
+                            <div key={ability} className="bg-stone-900/90 border border-stone-800 p-2 rounded-xl">
+                              <div className="text-[10px] font-mono text-stone-400 font-bold">{ability}</div>
+                              <div className="text-sm font-bold text-stone-100">{score}</div>
+                              <div className="text-[11px] font-mono font-bold text-amber-400">{formatModifier(mod)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Multiattack & Actions / Moves */}
+                  {(m.multiattack || (m.attacks && m.attacks.length > 0)) && (
+                    <div className="space-y-2.5">
+                      <h4 className="text-xs font-mono text-amber-300 uppercase font-bold flex items-center gap-1.5">
+                        <span>⚔️ Actions & Moves</span>
+                      </h4>
+
+                      {m.multiattack && (
+                        <div className="bg-amber-950/30 border border-amber-500/30 p-3 rounded-xl text-xs text-amber-200 leading-relaxed font-serif">
+                          <strong className="text-amber-400 uppercase font-mono tracking-wider mr-1.5">Multiattack:</strong>
+                          {m.multiattack}
+                        </div>
+                      )}
+
+                      {m.attacks && m.attacks.length > 0 && (
+                        <div className="grid grid-cols-1 gap-2">
+                          {m.attacks.map((atk, idx) => (
+                            <div key={atk.id || idx} className="bg-stone-900/80 border border-stone-800 p-3 rounded-xl space-y-1">
+                              <div className="flex items-center justify-between gap-2 flex-wrap">
+                                <span className="font-serif font-bold text-stone-100 text-sm">{atk.name}</span>
+                                <div className="flex items-center gap-2 text-xs font-mono">
+                                  {atk.attackBonus !== undefined && (
+                                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold">
+                                      {formatModifier(atk.attackBonus)} to hit
+                                    </span>
+                                  )}
+                                  {atk.range && (
+                                    <span className="bg-stone-800 text-stone-300 px-2 py-0.5 rounded-md">
+                                      {atk.range}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              {(atk.damage || atk.damageType) && (
+                                <div className="text-xs font-mono text-emerald-400 font-bold">
+                                  Damage: {atk.damage || '0'} {atk.damageType || ''}
+                                </div>
+                              )}
+                              {atk.notes && (
+                                <p className="text-xs text-stone-300 italic bg-stone-950/50 p-1.5 rounded-lg border border-stone-850">
+                                  {atk.notes}
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Traits & Features / Feats */}
+                  {((m.classFeatures && m.classFeatures.length > 0) || (m.feats && m.feats.length > 0)) && (
+                    <div className="space-y-2.5">
+                      <h4 className="text-xs font-mono text-amber-300 uppercase font-bold flex items-center gap-1.5">
+                        <span>✨ Special Traits & Feats</span>
+                      </h4>
+                      <div className="space-y-2">
+                        {m.classFeatures?.map((feat, idx) => (
+                          <div key={feat.id || idx} className="bg-stone-900/80 border border-stone-800 p-3 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-serif font-bold text-amber-200 text-sm">{feat.name}</span>
+                              {feat.source && <span className="text-[10px] font-mono text-stone-400 uppercase bg-stone-800 px-2 py-0.5 rounded">{feat.source}</span>}
+                            </div>
+                            <p className="text-xs text-stone-300 leading-relaxed">{feat.description}</p>
+                          </div>
+                        ))}
+                        {m.feats?.map((feat, idx) => (
+                          <div key={feat.id || idx} className="bg-stone-900/80 border border-stone-800 p-3 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-serif font-bold text-amber-200 text-sm">{feat.name}</span>
+                              {feat.prerequisite && <span className="text-[10px] font-mono text-amber-400">Req: {feat.prerequisite}</span>}
+                            </div>
+                            <p className="text-xs text-stone-300 leading-relaxed">{feat.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Legendary Actions */}
+                  {m.legendaryActions && m.legendaryActions.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-mono text-purple-300 uppercase font-bold flex items-center gap-1.5">
+                        <span>👑 Legendary Actions</span>
+                      </h4>
+                      <div className="space-y-2">
+                        {m.legendaryActions.map((leg, idx) => (
+                          <div key={leg.id || idx} className="bg-purple-950/20 border border-purple-800/40 p-3 rounded-xl space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-serif font-bold text-purple-200 text-sm">{leg.name}</span>
+                              <span className="text-[10px] font-mono text-purple-300 bg-purple-900/50 px-2 py-0.5 rounded">
+                                Cost: {leg.cost || 1} Action{leg.cost && leg.cost > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <p className="text-xs text-stone-300 leading-relaxed">{leg.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Lair Actions */}
+                  {m.lairActions && m.lairActions.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-mono text-emerald-300 uppercase font-bold flex items-center gap-1.5">
+                        <span>🏰 Lair Actions</span>
+                      </h4>
+                      <div className="space-y-2">
+                        {m.lairActions.map((lair, idx) => (
+                          <div key={lair.id || idx} className="bg-emerald-950/20 border border-emerald-800/40 p-3 rounded-xl space-y-1">
+                            <div className="font-serif font-bold text-emerald-200 text-sm">{lair.name}</div>
+                            <p className="text-xs text-stone-300 leading-relaxed">{lair.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Spells */}
+                  {m.spells && m.spells.length > 0 && (
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-mono text-indigo-300 uppercase font-bold flex items-center gap-1.5">
+                        <span>📜 Inherent Spells</span>
+                      </h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {m.spells.map((sp, idx) => (
+                          <div key={sp.id || idx} className="bg-stone-900/80 border border-stone-800 p-2.5 rounded-xl text-xs space-y-0.5">
+                            <div className="font-bold text-indigo-200">{sp.name}</div>
+                            <div className="text-[10px] font-mono text-stone-400">
+                              Level {sp.level === 0 ? 'Cantrip' : sp.level} {sp.school || ''}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <div className="text-[10px] font-mono text-stone-400">Hit Points</div>
-                  <div className="text-lg font-serif font-bold text-emerald-400">{selectedDetailItem.monsterData.hpMax || 10}</div>
-                </div>
-                <div>
-                  <div className="text-[10px] font-mono text-stone-400">Challenge Rating</div>
-                  <div className="text-lg font-serif font-bold text-purple-400">{selectedDetailItem.monsterData.challengeRating || '1'}</div>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {selectedDetailItem.category === 'items' && selectedDetailItem.itemData && (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-stone-900/80 border border-stone-800 p-3 rounded-2xl text-xs font-mono text-stone-300">
-                <div>Type: <strong className="text-amber-400 uppercase">{selectedDetailItem.itemData.type}</strong></div>
+                <div>Type: <strong className="text-amber-400 uppercase">{selectedDetailItem.itemData.type || 'Gear'}</strong></div>
                 {selectedDetailItem.itemData.damage && <div>Damage: <strong className="text-emerald-400">{selectedDetailItem.itemData.damage}</strong></div>}
                 {selectedDetailItem.itemData.armorClass && <div>AC Bonus: <strong className="text-cyan-400">+{selectedDetailItem.itemData.armorClass}</strong></div>}
                 {selectedDetailItem.itemData.cost && <div>Value: <strong className="text-amber-300">{selectedDetailItem.itemData.cost}</strong></div>}
+                {selectedDetailItem.itemData.weight && <div>Weight: <strong className="text-stone-300">{selectedDetailItem.itemData.weight} lb</strong></div>}
+                {selectedDetailItem.itemData.rarity && <div>Rarity: <strong className="text-purple-300 capitalize">{selectedDetailItem.itemData.rarity}</strong></div>}
+                {selectedDetailItem.itemData.attunement && <div>Attunement: <strong className="text-rose-400">Required</strong></div>}
+              </div>
+            )}
+
+            {selectedDetailItem.category === 'feats' && selectedDetailItem.featData && (
+              <div className="bg-stone-900/80 border border-stone-800 p-3.5 rounded-2xl space-y-2 text-xs font-mono">
+                {selectedDetailItem.featData.prerequisite && (
+                  <div>Prerequisite: <strong className="text-amber-300">{selectedDetailItem.featData.prerequisite}</strong></div>
+                )}
+                {selectedDetailItem.featData.source && (
+                  <div>Source: <strong className="text-cyan-300">{selectedDetailItem.featData.source}</strong></div>
+                )}
+              </div>
+            )}
+
+            {selectedDetailItem.category === 'features' && selectedDetailItem.featureData && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-stone-900/80 border border-stone-800 p-3 rounded-2xl text-xs font-mono text-stone-300">
+                <div>Source: <strong className="text-amber-400">{selectedDetailItem.featureData.source || 'Class Feature'}</strong></div>
+                {selectedDetailItem.featureData.usesMax ? (
+                  <div>Uses: <strong className="text-emerald-400">{selectedDetailItem.featureData.usesMax} / {selectedDetailItem.featureData.recharge || 'Long Rest'}</strong></div>
+                ) : null}
               </div>
             )}
 
             {selectedDetailItem.category === 'spells' && selectedDetailItem.spellData && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-stone-900/80 border border-stone-800 p-3 rounded-2xl text-xs font-mono text-stone-300">
-                <div>Level: <strong className="text-purple-300">{selectedDetailItem.spellData.level === 0 ? 'Cantrip' : selectedDetailItem.spellData.level}</strong></div>
-                <div>School: <strong className="text-amber-400">{selectedDetailItem.spellData.school}</strong></div>
-                <div>Casting Time: <strong className="text-stone-200">{selectedDetailItem.spellData.castingTime}</strong></div>
-                <div>Range: <strong className="text-stone-200">{selectedDetailItem.spellData.range}</strong></div>
-                <div>Components: <strong className="text-stone-200">{selectedDetailItem.spellData.components}</strong></div>
-                <div>Duration: <strong className="text-stone-200">{selectedDetailItem.spellData.duration}</strong></div>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-stone-900/80 border border-stone-800 p-3 rounded-2xl text-xs font-mono text-stone-300">
+                  <div>Level: <strong className="text-purple-300">{selectedDetailItem.spellData.level === 0 ? 'Cantrip' : `Level ${selectedDetailItem.spellData.level}`}</strong></div>
+                  <div>School: <strong className="text-amber-400">{selectedDetailItem.spellData.school || 'General'}</strong></div>
+                  <div>Casting Time: <strong className="text-stone-200">{selectedDetailItem.spellData.castingTime || '1 action'}</strong></div>
+                  <div>Range: <strong className="text-stone-200">{selectedDetailItem.spellData.range || 'Touch'}</strong></div>
+                  <div>Components: <strong className="text-stone-200">{selectedDetailItem.spellData.components || 'V, S'}</strong></div>
+                  <div>Duration: <strong className="text-stone-200">{selectedDetailItem.spellData.duration || 'Instantaneous'}</strong></div>
+                  {selectedDetailItem.spellData.damage && (
+                    <div className="col-span-2 sm:col-span-1">Damage: <strong className="text-emerald-400">{selectedDetailItem.spellData.damage} {selectedDetailItem.spellData.damageType || ''}</strong></div>
+                  )}
+                  {selectedDetailItem.spellData.saveType && (
+                    <div>Save DC: <strong className="text-cyan-300">{selectedDetailItem.spellData.saveType} Save</strong></div>
+                  )}
+                </div>
+                {selectedDetailItem.spellData.shortDescription && (
+                  <div className="bg-purple-950/20 border border-purple-800/40 p-3 rounded-xl text-xs text-purple-200 leading-relaxed">
+                    <strong className="font-mono text-purple-400 uppercase mr-1">Summary:</strong>
+                    {selectedDetailItem.spellData.shortDescription}
+                  </div>
+                )}
               </div>
             )}
 
@@ -591,7 +820,9 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
             {/* Description Body */}
             <div className="space-y-2">
-              <h4 className="text-xs font-mono text-stone-400 uppercase font-bold">Description & Rules</h4>
+              <h4 className="text-xs font-mono text-stone-400 uppercase font-bold">
+                {selectedDetailItem.category === 'monsters' ? 'Lore & Description' : 'Description & Rules'}
+              </h4>
               <p className="text-stone-200 text-sm leading-relaxed whitespace-pre-wrap bg-stone-900/40 p-4 rounded-2xl border border-stone-800/80">
                 {selectedDetailItem.description}
               </p>

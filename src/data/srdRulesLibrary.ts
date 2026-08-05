@@ -607,6 +607,19 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-rdrag-2', name: 'Claw', attackBonus: 14, damage: '2d6 + 8', damageType: 'Slashing', range: '5 ft Melee' },
       { id: 'atk-rdrag-3', name: 'Fire Breath (DC 21 CON)', attackBonus: 0, damage: '18d6', damageType: 'Fire', range: '60 ft Cone' }
     ],
+    multiattack: 'The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-rdrag-1', name: 'Detect', cost: 1, description: 'The dragon makes a Wisdom (Perception) check.' },
+      { id: 'leg-rdrag-2', name: 'Tail Attack', cost: 1, description: 'The dragon makes a tail attack (+14 to hit, 2d8+8 bludgeoning damage).' },
+      { id: 'leg-rdrag-3', name: 'Wing Attack', cost: 2, description: 'Creatures within 10 ft DC 22 DEX save or take 15 (2d6+8) bludgeoning damage & fall prone. Dragon flies up to half speed.' }
+    ],
+    lairActions: [
+      { id: 'lair-rdrag-1', name: 'Magma Eruption', description: 'Magma erupts at a point on the ground (6d6 fire damage, DC 15 DEX save for half).' },
+      { id: 'lair-rdrag-2', name: 'Volcanic Tremor', description: 'A tremor shakes the lair; creatures within 60 ft DC 15 DEX save or fall prone.' },
+      { id: 'lair-rdrag-3', name: 'Volcanic Gas', description: 'Volcanic gas fills a 20-foot radius sphere dealing 2d6 poison damage.' }
+    ],
     classFeatures: [
       { id: 'trait-rdrag-1', name: 'Legendary Resistance (3/Day)', source: 'Dragon Trait', description: 'If the dragon fails a saving throw, it can choose to succeed instead.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' },
       { id: 'trait-rdrag-2', name: 'Frightful Presence', source: 'Dragon Action', description: 'Creatures within 120 feet must succeed on a DC 19 Wisdom save or become Frightened for 1 minute.' }
@@ -698,6 +711,7 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-35troll-1', name: 'Claw (x2)', attackBonus: 9, damage: '1d6 + 5', damageType: 'Slashing', range: '10 ft Melee' },
       { id: 'atk-35troll-2', name: 'Bite', attackBonus: 4, damage: '1d8 + 2', damageType: 'Piercing', range: '10 ft Melee' }
     ],
+    multiattack: 'The troll makes three attacks: one with its bite and two with its claws.',
     classFeatures: [
       { id: 'trait-35troll-1', name: 'Regeneration 5', source: 'Troll Special Ability', description: 'Fire and acid deal normal damage to a troll. All other damage is converted to nonlethal damage and heals at a rate of 5 HP per round.' },
       { id: 'trait-35troll-2', name: 'Rend 2d6+7', source: 'Troll Special Ability', description: 'If a troll hits with both claw attacks, it latches onto the opponent’s body and tears the flesh, dealing an additional 2d6+7 damage.' }
@@ -744,6 +758,7 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-35pit-2', name: 'Bite (Disease)', attackBonus: 25, damage: '2d8 + 6', damageType: 'Piercing', range: '10 ft Melee', notes: 'Inflicts Devil Chill disease' },
       { id: 'atk-35pit-3', name: 'Tail Slap', attackBonus: 25, damage: '2d8 + 6', damageType: 'Bludgeoning', range: '10 ft Melee' }
     ],
+    multiattack: 'The pit fiend makes six attacks: one with its mace, one bite, two claws, two wings, and one tail slap.',
     classFeatures: [
       { id: 'trait-35pit-1', name: 'Spell Resistance 32', source: 'Devil Trait', description: 'Casters must succeed on a 1d20 + Caster Level check vs DC 32 to affect the Pit Fiend.' },
       { id: 'trait-35pit-2', name: 'Damage Reduction 15/Good and Silver', source: 'Devil Trait', description: 'Ignores 15 points of damage from weapons unless they are both Good aligned and Silver.' },
@@ -910,6 +925,17 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-beh-1', name: 'Bite', attackBonus: 5, damage: '4d6', damageType: 'Piercing', range: '5 ft Melee' },
       { id: 'atk-beh-2', name: 'Eye Rays (x3 Random)', attackBonus: 0, damage: '5d10 / 8d8 / 10d10', damageType: 'Force / Necrotic / Radiant', range: '120 ft', notes: 'Shoots 3 random eye rays (Charm, Paralyze, Fear, Slow, Enervation, Telekinesis, Sleep, Petrifaction, Disintegration, Death)' }
     ],
+    multiattack: 'The beholder makes one Bite attack and uses three random Eye Rays.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-beh-1', name: 'Eye Ray', cost: 1, description: 'The beholder uses one random eye ray.' }
+    ],
+    lairActions: [
+      { id: 'lair-beh-1', name: 'Slime Slick', description: 'A 50-foot square area of ground within 120 feet becomes slick with slime. DC 15 DEX save or fall prone.' },
+      { id: 'lair-beh-2', name: 'Grasping Tentacles', description: 'Walls sprout tentacles that grapple a creature within 10 feet (DC 15 STR save).' },
+      { id: 'lair-beh-3', name: 'Ghostly Eye', description: 'A ghost eye opens on a solid surface within 60 feet and shoots a random eye ray at a target.' }
+    ],
     classFeatures: [
       { id: 'feat-beh-1', name: 'Antimagic Cone (150 ft)', source: 'Beholder Trait', description: 'Central eye creates a 150-foot cone of antimagic. All magic spells and items are suppressed within the area.' }
     ]
@@ -941,9 +967,23 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-abo-2', name: 'Tail', attackBonus: 9, damage: '3d6 + 5', damageType: 'Bludgeoning', range: '10 ft Melee' },
       { id: 'atk-abo-3', name: 'Enslave (3/day)', attackBonus: 0, damage: '0', damageType: 'Psychic', range: '30 ft', notes: 'DC 14 WIS save or charmed/controlled' }
     ],
+    multiattack: 'The aboleth makes three tentacle attacks.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-abo-1', name: 'Detect', cost: 1, description: 'The aboleth makes a Wisdom (Perception) check.' },
+      { id: 'leg-abo-2', name: 'Tail Swipe', cost: 1, description: 'The aboleth makes one tail attack.', attackId: 'atk-abo-2' },
+      { id: 'leg-abo-3', name: 'Psychic Drain', cost: 2, description: 'One creature charmed by the aboleth takes 10 (3d6) psychic damage, and the aboleth regains HP equal to damage dealt.' }
+    ],
+    lairActions: [
+      { id: 'lair-abo-1', name: 'Phantasmal Force', description: 'Casts Phantasmal Force on a target it can see within 60 feet (DC 14 INT save).' },
+      { id: 'lair-abo-2', name: 'Water Surge', description: 'Water in lair surges in a 60-foot radius, knocking creatures prone (DC 14 STR save).' },
+      { id: 'lair-abo-3', name: 'Grasping Tide', description: 'Water forms a conduit, pulling a target up to 60 feet towards water.' }
+    ],
     classFeatures: [
       { id: 'feat-abo-1', name: 'Amphibious', source: 'Aberration Trait', description: 'Can breathe air and water.' },
-      { id: 'feat-abo-2', name: 'Mucous Cloud', source: 'Aberration Trait', description: 'Under water, surrounded by mucous cloud. DC 14 CON save or unable to breathe outside water for 1d4 hours.' }
+      { id: 'feat-abo-2', name: 'Mucous Cloud', source: 'Aberration Trait', description: 'Under water, surrounded by mucous cloud. DC 14 CON save or unable to breathe outside water for 1d4 hours.' },
+      { id: 'feat-abo-3', name: 'Probing Telepathy', source: 'Aberration Trait', description: 'Telepathically learns target greatest desire if target communicates.' }
     ]
   },
   {
@@ -973,6 +1013,7 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-owl-1', name: 'Beak', attackBonus: 7, damage: '1d10 + 5', damageType: 'Piercing', range: '5 ft Melee' },
       { id: 'atk-owl-2', name: 'Claws', attackBonus: 7, damage: '2d8 + 5', damageType: 'Slashing', range: '5 ft Melee' }
     ],
+    multiattack: 'The owlbear makes two attacks: one with its beak and one with its claws.',
     classFeatures: [
       { id: 'feat-owl-1', name: 'Keen Sight and Smell', source: 'Monstrosity Trait', description: 'Advantage on Perception checks that rely on sight or smell.' }
     ]
@@ -1068,6 +1109,14 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-tar-4', name: 'Tail', attackBonus: 19, damage: '4d6 + 10', damageType: 'Bludgeoning', range: '20 ft Melee', notes: 'Target knocked prone (DC 20 STR save)' },
       { id: 'atk-tar-5', name: 'Frightful Presence', attackBonus: 0, damage: '0', damageType: 'Psychic', range: '120 ft', notes: 'DC 17 WIS save or frightened for 1 minute' }
     ],
+    multiattack: 'The Tarrasque can use its Frightful Presence. It then makes five attacks: one with its bite, two with its claws, one with its horns, and one with its tail.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-tar-1', name: 'Attack', cost: 1, description: 'The Tarrasque makes one claw attack or tail attack.', attackId: 'atk-tar-2' },
+      { id: 'leg-tar-2', name: 'Move', cost: 1, description: 'The Tarrasque moves up to half its speed.' },
+      { id: 'leg-tar-3', name: 'Chomp', cost: 2, description: 'The Tarrasque makes one bite attack or uses Swallow.', attackId: 'atk-tar-1' }
+    ],
     classFeatures: [
       { id: 'feat-tar-1', name: 'Reflective Carapace', source: 'Titan Trait', description: 'Any magic missile, line spell, or ranged attack spell is deflected away on a 1-5, or reflected back at caster on a 6.' },
       { id: 'feat-tar-2', name: 'Legendary Resistance (3/day)', source: 'Titan Trait', description: 'If the tarrasque fails a saving throw, it can choose to succeed instead.' },
@@ -1102,6 +1151,19 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-ard-2', name: 'Claw', attackBonus: 17, damage: '2d6 + 10', damageType: 'Slashing', range: '10 ft Melee' },
       { id: 'atk-ard-3', name: 'Fire Breath (Recharge 5-6)', attackBonus: 0, damage: '26d6', damageType: 'Fire', range: '90 ft Cone', notes: 'DC 24 DEX save for half damage' }
     ],
+    multiattack: 'The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-ard-1', name: 'Detect', cost: 1, description: 'The dragon makes a Wisdom (Perception) check.' },
+      { id: 'leg-ard-2', name: 'Tail Attack', cost: 1, description: 'The dragon makes a tail attack (+17 to hit, 2d8+10 bludgeoning damage).' },
+      { id: 'leg-ard-3', name: 'Wing Attack', cost: 2, description: 'Creatures within 15 ft DC 25 DEX save or take 17 (2d6+10) bludgeoning damage & fall prone. Dragon flies up to half speed.' }
+    ],
+    lairActions: [
+      { id: 'lair-ard-1', name: 'Magma Eruption', description: 'Magma erupts at a point on the ground (6d6 fire damage, DC 15 DEX save for half).' },
+      { id: 'lair-ard-2', name: 'Volcanic Tremor', description: 'A tremor shakes the lair; creatures within 60 ft DC 15 DEX save or fall prone.' },
+      { id: 'lair-ard-3', name: 'Volcanic Gas', description: 'Volcanic gas fills a 20-foot radius sphere dealing 2d6 poison damage.' }
+    ],
     classFeatures: [
       { id: 'feat-ard-1', name: 'Legendary Resistance (3/day)', source: 'Dragon Trait', description: 'Chooses to succeed failed saving throws.' },
       { id: 'feat-ard-2', name: 'Fire Immunity', source: 'Dragon Trait', description: 'Immune to all fire damage.' }
@@ -1135,6 +1197,20 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-lich-1', name: 'Paralyzing Touch', attackBonus: 12, damage: '3d6', damageType: 'Cold', range: '5 ft Melee', notes: 'DC 18 CON save or paralyzed for 1 minute' },
       { id: 'atk-lich-2', name: 'Power Word Kill (1st/day)', attackBonus: 0, damage: '100 HP Kill', damageType: 'Force', range: '60 ft', notes: 'Instantly kills target with <= 100 HP' }
     ],
+    multiattack: 'The lich can cast a spell or use its Paralyzing Touch.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-lich-1', name: 'Cantrip', cost: 1, description: 'The lich casts a cantrip.' },
+      { id: 'leg-lich-2', name: 'Paralyzing Touch', cost: 2, description: 'The lich uses its Paralyzing Touch attack.', attackId: 'atk-lich-1' },
+      { id: 'leg-lich-3', name: 'Frightening Gaze', cost: 2, description: 'Target creature within 10 ft DC 18 WIS save or frightened for 1 minute.' },
+      { id: 'leg-lich-4', name: 'Disrupt Life', cost: 3, description: 'Each non-undead creature within 20 ft DC 18 CON save or take 21 (6d6) necrotic damage.' }
+    ],
+    lairActions: [
+      { id: 'lair-lich-1', name: 'Spell Slot Recovery', description: 'Rolls 1d8 to regain a spell slot of that level or lower.' },
+      { id: 'lair-lich-2', name: 'Necrotic Tether', description: 'Apparition strikes a creature for 15 (3d10) necrotic damage.' },
+      { id: 'lair-lich-3', name: 'Negative Energy Surge', description: 'Suppresses all healing within lair until initiative count 20 next round.' }
+    ],
     classFeatures: [
       { id: 'feat-lich-1', name: 'Rejuvenation (Phylactery)', source: 'Undead Trait', description: 'Gains a new body in 1d10 days unless its phylactery is destroyed.' },
       { id: 'feat-lich-2', name: 'Turn Resistance', source: 'Undead Trait', description: 'Advantage on saving throws against effects that turn undead.' }
@@ -1166,6 +1242,14 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-vamp-2', name: 'Bite', attackBonus: 9, damage: '1d6 + 4 + 3d6', damageType: 'Piercing + Necrotic', range: '5 ft Melee', notes: 'Reduces max HP by necrotic damage dealt and heals vampire' },
       { id: 'atk-vamp-3', name: 'Charm', attackBonus: 0, damage: '0', damageType: 'Psychic', range: '30 ft', notes: 'DC 17 WIS save or charmed for 24 hours' }
     ],
+    multiattack: 'The vampire makes two attacks, only one of which can be a bite attack.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-vamp-1', name: 'Move', cost: 1, description: 'The vampire moves up to its speed without provoking opportunity attacks.' },
+      { id: 'leg-vamp-2', name: 'Unarmed Strike', cost: 1, description: 'The vampire makes one unarmed strike.', attackId: 'atk-vamp-1' },
+      { id: 'leg-vamp-3', name: 'Bite', cost: 2, description: 'The vampire makes one bite attack against a willing, grappled, or incapacitated target.', attackId: 'atk-vamp-2' }
+    ],
     classFeatures: [
       { id: 'feat-vamp-1', name: 'Regeneration (20 HP/turn)', source: 'Undead Trait', description: 'Regains 20 HP at start of turn unless taking radiant damage or in sunlight.' },
       { id: 'feat-vamp-2', name: 'Misty Escape', source: 'Undead Trait', description: 'Transforms into mist at 0 HP and retreats to coffin.' }
@@ -1195,9 +1279,12 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     abilities: { STR: { score: 19 }, DEX: { score: 11 }, CON: { score: 19 }, INT: { score: 3 }, WIS: { score: 14 }, CHA: { score: 10 } },
     optionalRules: { hasPowerfulBuild: true },
     attacks: [
-      { id: 'atk-chi-1', name: 'Multiattack (Bite, Horns, Claws)', attackBonus: 7, damage: '2d6+4 / 1d12+4 / 2d6+4', damageType: 'Piercing / Bludgeoning / Slashing', range: '5 ft Melee' },
-      { id: 'atk-chi-2', name: 'Fire Breath (Recharge 5-6)', attackBonus: 0, damage: '7d8', damageType: 'Fire', range: '15 ft Cone', notes: 'DC 15 DEX save for half damage' }
-    ]
+      { id: 'atk-chi-1', name: 'Bite', attackBonus: 7, damage: '2d6 + 4', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-chi-2', name: 'Horns', attackBonus: 7, damage: '1d12 + 4', damageType: 'Bludgeoning', range: '5 ft Melee' },
+      { id: 'atk-chi-3', name: 'Claws', attackBonus: 7, damage: '2d6 + 4', damageType: 'Slashing', range: '5 ft Melee' },
+      { id: 'atk-chi-4', name: 'Fire Breath (Recharge 5-6)', attackBonus: 0, damage: '7d8', damageType: 'Fire', range: '15 ft Cone', notes: 'DC 15 DEX save for half damage' }
+    ],
+    multiattack: 'The chimera makes three attacks: one with its bite, one with its horns, and one with its claws.'
   },
   {
     id: 'monster-5e-hill-giant',
@@ -1225,7 +1312,8 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-hg-1', name: 'Greatclub', attackBonus: 8, damage: '3d8 + 5', damageType: 'Bludgeoning', range: '10 ft Melee' },
       { id: 'atk-hg-2', name: 'Rock Throw', attackBonus: 8, damage: '3d10 + 5', damageType: 'Bludgeoning', range: '60/240 ft Ranged' }
-    ]
+    ],
+    multiattack: 'The giant makes two greatclub attacks.'
   },
   {
     id: 'monster-5e-fire-giant',
@@ -1253,7 +1341,8 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-fg-1', name: 'Greatsword', attackBonus: 11, damage: '6d6 + 7', damageType: 'Slashing', range: '10 ft Melee' },
       { id: 'atk-fg-2', name: 'Rock Throw', attackBonus: 11, damage: '4d10 + 7', damageType: 'Bludgeoning', range: '60/240 ft Ranged' }
-    ]
+    ],
+    multiattack: 'The giant makes two greatsword attacks.'
   },
   {
     id: 'monster-5e-skeleton',
@@ -1336,7 +1425,8 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-gho-1', name: 'Bite', attackBonus: 2, damage: '2d6 + 2', damageType: 'Piercing', range: '5 ft Melee' },
       { id: 'atk-gho-2', name: 'Claws', attackBonus: 4, damage: '2d4 + 2', damageType: 'Slashing', range: '5 ft Melee', notes: 'DC 10 CON save or paralyzed for 1 minute' }
-    ]
+    ],
+    multiattack: 'The ghoul makes two attacks: one with its bite and one with its claws.'
   },
   {
     id: 'monster-5e-specter',
@@ -1390,7 +1480,8 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-wgt-1', name: 'Longsword', attackBonus: 4, damage: '1d8 + 2', damageType: 'Slashing', range: '5 ft Melee' },
       { id: 'atk-wgt-2', name: 'Life Drain', attackBonus: 4, damage: '1d6 + 2', damageType: 'Necrotic', range: '5 ft Melee', notes: 'DC 13 CON save or max HP reduced' }
-    ]
+    ],
+    multiattack: 'The wight makes two longsword attacks or two longbow attacks. It can replace one attack with Life Drain.'
   },
   {
     id: 'monster-5e-wraith',
@@ -1473,6 +1564,19 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-ml-1', name: 'Rotting Fist', attackBonus: 9, damage: '3d6 + 4 + 6d6', damageType: 'Bludgeoning + Necrotic', range: '5 ft Melee', notes: 'DC 16 CON save or cursed with Mummy Rot' },
       { id: 'atk-ml-2', name: 'Dreadful Glare', attackBonus: 0, damage: '0', damageType: 'Psychic', range: '60 ft', notes: 'DC 16 WIS save or frightened & paralyzed' }
+    ],
+    multiattack: 'The mummy lord can use its Dreadful Glare and makes one attack with its rotting fist.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-ml-1', name: 'Attack', cost: 1, description: 'Makes one Rotting Fist or uses Dreadful Glare.', attackId: 'atk-ml-1' },
+      { id: 'leg-ml-2', name: 'Blinding Dust', cost: 2, description: 'Blinding dust swirls within 10 ft (DC 16 CON save or blinded).' },
+      { id: 'leg-ml-3', name: 'Blasphemous Word', cost: 2, description: 'Non-mummy within 10 ft DC 16 CON save or stunned.' },
+      { id: 'leg-ml-4', name: 'Whirlwind of Sand', cost: 2, description: 'Transforms into sand whirlwind, flies up to 60 ft without opportunity attacks.' }
+    ],
+    lairActions: [
+      { id: 'lair-ml-1', name: 'Sand Surge', description: 'Sand erupts in lair dealing 3d6 slashing damage.' },
+      { id: 'lair-ml-2', name: 'Divine Rebuke', description: 'Fiery explosion deals 4d6 fire damage.' }
     ]
   },
   {
@@ -1525,7 +1629,8 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-vs-1', name: 'Claws', attackBonus: 6, damage: '2d4 + 3', damageType: 'Slashing', range: '5 ft Melee', notes: 'Can grapple instead of damage' },
       { id: 'atk-vs-2', name: 'Bite', attackBonus: 6, damage: '1d6 + 3 + 2d6', damageType: 'Piercing + Necrotic', range: '5 ft Melee', notes: 'Target grappled/incapacitated; heals spawn' }
-    ]
+    ],
+    multiattack: 'The vampire spawn makes two attacks, only one of which can be a bite attack.'
   },
   {
     id: 'monster-5e-air-elemental',
@@ -1552,7 +1657,8 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-ae-1', name: 'Slam', attackBonus: 8, damage: '2d8 + 5', damageType: 'Bludgeoning', range: '5 ft Melee' },
       { id: 'atk-ae-2', name: 'Whirlwind (Recharge 4-6)', attackBonus: 0, damage: '3d8 + 2', damageType: 'Bludgeoning', range: '5 ft Radius', notes: 'DC 13 STR save or flung 20 ft and knocked prone' }
-    ]
+    ],
+    multiattack: 'The elemental makes two slam attacks.'
   },
   {
     id: 'monster-5e-earth-elemental',
@@ -1580,6 +1686,7 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-ee-1', name: 'Slam', attackBonus: 8, damage: '2d8 + 5', damageType: 'Bludgeoning', range: '10 ft Melee' }
     ],
+    multiattack: 'The elemental makes two slam attacks.',
     classFeatures: [
       { id: 'feat-ee-1', name: 'Earth Glide', source: 'Elemental Trait', description: 'Can burrow through nonmagical, unworked earth and stone without disturbing the material.' }
     ]
@@ -1609,6 +1716,7 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-fe-1', name: 'Touch', attackBonus: 6, damage: '2d6 + 3', damageType: 'Fire', range: '5 ft Melee', notes: 'Target catches fire taking 1d10 fire damage per turn until put out' }
     ],
+    multiattack: 'The elemental makes two touch attacks.',
     classFeatures: [
       { id: 'feat-fe-1', name: 'Fire Form', source: 'Elemental Trait', description: 'Can move through a space as narrow as 1 inch wide without squeezing. Takes water susceptibility damage.' }
     ]
@@ -1638,7 +1746,8 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     attacks: [
       { id: 'atk-we-1', name: 'Slam', attackBonus: 7, damage: '2d8 + 4', damageType: 'Bludgeoning', range: '5 ft Melee' },
       { id: 'atk-we-2', name: 'Whelm (Recharge 4-6)', attackBonus: 0, damage: '2d8 + 4', damageType: 'Bludgeoning', range: '5 ft Radius', notes: 'DC 15 STR save or grappled, unable to breathe, and suffocating' }
-    ]
+    ],
+    multiattack: 'The elemental makes two slam attacks.'
   },
   {
     id: 'monster-5e-bandit',
@@ -1719,6 +1828,10 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-knt-1', name: 'Greatsword', attackBonus: 5, damage: '2d6 + 3', damageType: 'Slashing', range: '5 ft Melee' },
       { id: 'atk-knt-2', name: 'Heavy Crossbow', attackBonus: 2, damage: '1d10', damageType: 'Piercing', range: '100/400 ft Ranged' }
     ],
+    multiattack: 'The knight makes two melee attacks.',
+    reactions: [
+      { id: 'react-knt-1', name: 'Parry', description: 'The knight adds 2 to its AC against one melee attack that would hit it. To do so, the knight must see the attacker and be wielding a melee weapon.' }
+    ],
     classFeatures: [
       { id: 'feat-knt-1', name: 'Brave', source: 'Humanoid Trait', description: 'Advantage on saving throws against being frightened.' },
       { id: 'feat-knt-2', name: 'Leadership (Recharge 6)', source: 'Humanoid Trait', description: 'For 1 minute, can add 1d4 to attack rolls or saving throws of nearby allies.' }
@@ -1753,8 +1866,722 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'atk-arch-2', name: 'Fireball (9th level)', attackBonus: 0, damage: '14d6', damageType: 'Fire', range: '150 ft', notes: 'DC 17 DEX save' },
       { id: 'atk-arch-3', name: 'Time Stop (1/day)', attackBonus: 0, damage: '0', damageType: 'Force', range: 'Self', notes: 'Takes 1d4+1 consecutive turns' }
     ],
+    reactions: [
+      { id: 'react-arch-1', name: 'Counterspell (3rd level)', description: 'Interrupts a spell being cast within 60 feet.' },
+      { id: 'react-arch-2', name: 'Shield', description: 'Gains +5 AC until the start of its next turn when hit by an attack.' }
+    ],
     classFeatures: [
       { id: 'feat-arch-1', name: 'Magic Resistance', source: 'Humanoid Trait', description: 'Advantage on saving throws against spells and magical effects.' }
+    ]
+  },
+  {
+    id: 'monster-5e-hydra',
+    name: 'Hydra',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 8',
+    level: 8,
+    edition: '5e',
+    background: 'Huge Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 3900,
+    isMonster: true,
+    monsterXpReward: 3900,
+    sizeCategory: 'Huge',
+    hpMax: 172,
+    hpCurrent: 172,
+    armorClass: 15,
+    initiativeBonus: 1,
+    speed: 30,
+    hitDiceTotal: '15d12+75',
+    hitDiceCurrent: 15,
+    abilities: { STR: { score: 20 }, DEX: { score: 12 }, CON: { score: 20 }, INT: { score: 2 }, WIS: { score: 10 }, CHA: { score: 7 } },
+    optionalRules: { hasPowerfulBuild: true },
+    attacks: [
+      { id: 'atk-hyd-1', name: 'Bite', attackBonus: 8, damage: '1d10 + 5', damageType: 'Piercing', range: '10 ft Melee' }
+    ],
+    multiattack: 'The hydra makes as many bite attacks as it has heads (starts with 5).',
+    classFeatures: [
+      { id: 'feat-hyd-1', name: 'Multiple Heads', source: 'Monstrosity Trait', description: 'Gains 1 extra head for each head severed unless fire damage stops regeneration.' },
+      { id: 'feat-hyd-2', name: 'Reactive Heads', source: 'Monstrosity Trait', description: 'Gains an extra reaction per turn for each head beyond one, used for opportunity attacks.' }
+    ]
+  },
+  {
+    id: 'monster-5e-bulette',
+    name: 'Bulette',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 5',
+    level: 6,
+    edition: '5e',
+    background: 'Large Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 1800,
+    isMonster: true,
+    monsterXpReward: 1800,
+    sizeCategory: 'Large',
+    hpMax: 94,
+    hpCurrent: 94,
+    armorClass: 17,
+    initiativeBonus: 0,
+    speed: 40,
+    hitDiceTotal: '9d10+45',
+    hitDiceCurrent: 9,
+    abilities: { STR: { score: 19 }, DEX: { score: 11 }, CON: { score: 21 }, INT: { score: 2 }, WIS: { score: 10 }, CHA: { score: 5 } },
+    optionalRules: { hasPowerfulBuild: true },
+    attacks: [
+      { id: 'atk-bul-1', name: 'Bite', attackBonus: 7, damage: '4d12 + 4', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-bul-2', name: 'Deadly Leap', attackBonus: 0, damage: '3d6 + 4 + 3d6', damageType: 'Bludgeoning + Slashing', range: '15 ft Radius', notes: 'DC 16 STR save or knocked prone & takes 3d6+4 bludgeoning + 3d6 slashing' }
+    ],
+    classFeatures: [
+      { id: 'feat-bul-1', name: 'Standing Leap', source: 'Monstrosity Trait', description: 'Long jump up to 30 feet and high jump up to 15 feet without a running start.' }
+    ]
+  },
+  {
+    id: 'monster-5e-manticore',
+    name: 'Manticore',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 3',
+    level: 5,
+    edition: '5e',
+    background: 'Large Monstrosity',
+    alignment: 'Lawful Evil',
+    experiencePoints: 700,
+    isMonster: true,
+    monsterXpReward: 700,
+    sizeCategory: 'Large',
+    hpMax: 68,
+    hpCurrent: 68,
+    armorClass: 14,
+    initiativeBonus: 3,
+    speed: 30,
+    hitDiceTotal: '8d10+24',
+    hitDiceCurrent: 8,
+    abilities: { STR: { score: 17 }, DEX: { score: 16 }, CON: { score: 17 }, INT: { score: 7 }, WIS: { score: 12 }, CHA: { score: 8 } },
+    attacks: [
+      { id: 'atk-man-1', name: 'Bite', attackBonus: 5, damage: '1d8 + 3', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-man-2', name: 'Claws', attackBonus: 5, damage: '2d4 + 3', damageType: 'Slashing', range: '5 ft Melee' },
+      { id: 'atk-man-3', name: 'Tail Spike Volley', attackBonus: 5, damage: '1d8 + 3', damageType: 'Piercing', range: '100/200 ft Ranged' }
+    ],
+    multiattack: 'The manticore makes three attacks: one with its bite and two with its claws, or three tail spikes.'
+  },
+  {
+    id: 'monster-5e-wyvern',
+    name: 'Wyvern',
+    race: 'Dragon',
+    characterClass: 'Monster',
+    subclass: 'CR 6',
+    level: 7,
+    edition: '5e',
+    background: 'Large Dragon',
+    alignment: 'Unaligned',
+    experiencePoints: 2300,
+    isMonster: true,
+    monsterXpReward: 2300,
+    sizeCategory: 'Large',
+    hpMax: 110,
+    hpCurrent: 110,
+    armorClass: 13,
+    initiativeBonus: 1,
+    speed: 20,
+    hitDiceTotal: '13d10+39',
+    hitDiceCurrent: 13,
+    abilities: { STR: { score: 19 }, DEX: { score: 12 }, CON: { score: 16 }, INT: { score: 5 }, WIS: { score: 12 }, CHA: { score: 6 } },
+    attacks: [
+      { id: 'atk-wyv-1', name: 'Bite', attackBonus: 7, damage: '2d6 + 4', damageType: 'Piercing', range: '10 ft Melee' },
+      { id: 'atk-wyv-2', name: 'Claws', attackBonus: 7, damage: '2d8 + 4', damageType: 'Slashing', range: '5 ft Melee' },
+      { id: 'atk-wyv-3', name: 'Stinger', attackBonus: 7, damage: '2d6 + 4 + 7d6', damageType: 'Piercing + Poison', range: '10 ft Melee', notes: 'DC 15 CON save or 7d6 poison damage (half on save)' }
+    ],
+    multiattack: 'The wyvern makes two attacks: one with its bite and one with its stinger or claws.'
+  },
+  {
+    id: 'monster-5e-gorgon',
+    name: 'Gorgon',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 5',
+    level: 6,
+    edition: '5e',
+    background: 'Large Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 1800,
+    isMonster: true,
+    monsterXpReward: 1800,
+    sizeCategory: 'Large',
+    hpMax: 114,
+    hpCurrent: 114,
+    armorClass: 19,
+    initiativeBonus: 0,
+    speed: 40,
+    hitDiceTotal: '12d10+48',
+    hitDiceCurrent: 12,
+    abilities: { STR: { score: 20 }, DEX: { score: 11 }, CON: { score: 18 }, INT: { score: 2 }, WIS: { score: 12 }, CHA: { score: 7 } },
+    attacks: [
+      { id: 'atk-gor-1', name: 'Gore', attackBonus: 8, damage: '2d12 + 5', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-gor-2', name: 'Petrifying Breath (Recharge 5-6)', attackBonus: 0, damage: '0', damageType: 'Poison', range: '30 ft Cone', notes: 'DC 13 CON save or petrified into solid stone' }
+    ],
+    classFeatures: [
+      { id: 'feat-gor-1', name: 'Trampling Charge', source: 'Monstrosity Trait', description: 'If moving 20 ft straight toward target and hitting with Gore, target DC 16 STR save or knocked prone and Gorgon makes Hooves bonus attack.' }
+    ]
+  },
+  {
+    id: 'monster-5e-basilisk',
+    name: 'Basilisk',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 3',
+    level: 4,
+    edition: '5e',
+    background: 'Medium Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 700,
+    isMonster: true,
+    monsterXpReward: 700,
+    hpMax: 52,
+    hpCurrent: 52,
+    armorClass: 15,
+    initiativeBonus: -1,
+    speed: 20,
+    hitDiceTotal: '8d8+16',
+    hitDiceCurrent: 8,
+    abilities: { STR: { score: 16 }, DEX: { score: 8 }, CON: { score: 15 }, INT: { score: 2 }, WIS: { score: 8 }, CHA: { score: 7 } },
+    attacks: [
+      { id: 'atk-bas-1', name: 'Bite', attackBonus: 5, damage: '2d6 + 3 + 2d6', damageType: 'Piercing + Poison', range: '5 ft Melee' }
+    ],
+    classFeatures: [
+      { id: 'feat-bas-1', name: 'Petrifying Gaze', source: 'Monstrosity Trait', description: 'Creatures starting turn within 30 ft must succeed DC 12 CON save or begin turning to stone (petrified on fail by 5 or more).' }
+    ]
+  },
+  {
+    id: 'monster-5e-balor',
+    name: 'Balor',
+    race: 'Fiend',
+    characterClass: 'Monster',
+    subclass: 'CR 19',
+    level: 19,
+    edition: '5e',
+    background: 'Huge Fiend (Demon)',
+    alignment: 'Chaotic Evil',
+    experiencePoints: 22000,
+    isMonster: true,
+    monsterXpReward: 22000,
+    sizeCategory: 'Huge',
+    hpMax: 262,
+    hpCurrent: 262,
+    armorClass: 19,
+    initiativeBonus: 2,
+    speed: 40,
+    hitDiceTotal: '21d12+126',
+    hitDiceCurrent: 21,
+    abilities: { STR: { score: 26 }, DEX: { score: 15 }, CON: { score: 22 }, INT: { score: 20 }, WIS: { score: 16 }, CHA: { score: 22 } },
+    optionalRules: { hasPowerfulBuild: true },
+    attacks: [
+      { id: 'atk-bal-1', name: 'Longsword', attackBonus: 14, damage: '3d8 + 8 + 3d8', damageType: 'Slashing + Lightning', range: '10 ft Melee' },
+      { id: 'atk-bal-2', name: 'Whip', attackBonus: 14, damage: '2d6 + 8 + 3d6', damageType: 'Slashing + Fire', range: '30 ft Melee', notes: 'Pulls target up to 25 ft toward balor' }
+    ],
+    multiattack: 'The balor makes two attacks: one with its longsword and one with its whip.',
+    classFeatures: [
+      { id: 'feat-bal-1', name: 'Fire Aura', source: 'Fiend Trait', description: 'Creatures touching or hitting within 5 ft take 10 (3d6) fire damage.' },
+      { id: 'feat-bal-2', name: 'Death Throes', source: 'Fiend Trait', description: 'When balor dies, it explodes dealing 70 (20d6) fire damage to creatures within 30 ft (DC 20 DEX save for half).' }
+    ]
+  },
+  {
+    id: 'monster-5e-green-dragon',
+    name: 'Adult Green Dragon',
+    race: 'Dragon',
+    characterClass: 'Monster',
+    subclass: 'CR 15',
+    level: 15,
+    edition: '5e',
+    background: 'Huge Dragon',
+    alignment: 'Lawful Evil',
+    experiencePoints: 13000,
+    isMonster: true,
+    monsterXpReward: 13000,
+    sizeCategory: 'Huge',
+    hpMax: 207,
+    hpCurrent: 207,
+    armorClass: 19,
+    initiativeBonus: 1,
+    speed: 40,
+    hitDiceTotal: '18d12+90',
+    hitDiceCurrent: 18,
+    abilities: { STR: { score: 23 }, DEX: { score: 12 }, CON: { score: 21 }, INT: { score: 18 }, WIS: { score: 15 }, CHA: { score: 17 } },
+    optionalRules: { hasPowerfulBuild: true },
+    attacks: [
+      { id: 'atk-agd-1', name: 'Bite', attackBonus: 11, damage: '2d10 + 6 + 2d6', damageType: 'Piercing + Poison', range: '10 ft Melee' },
+      { id: 'atk-agd-2', name: 'Claw', attackBonus: 11, damage: '2d6 + 6', damageType: 'Slashing', range: '5 ft Melee' },
+      { id: 'atk-agd-3', name: 'Poison Breath (Recharge 5-6)', attackBonus: 0, damage: '16d6', damageType: 'Poison', range: '60 ft Cone', notes: 'DC 18 CON save for half damage' }
+    ],
+    multiattack: 'The dragon can use its Frightful Presence. It then makes three attacks: one with its bite and two with its claws.',
+    legendaryActionsMax: 3,
+    legendaryActionsRemaining: 3,
+    legendaryActions: [
+      { id: 'leg-agd-1', name: 'Detect', cost: 1, description: 'The dragon makes a Wisdom (Perception) check.' },
+      { id: 'leg-agd-2', name: 'Tail Attack', cost: 1, description: 'The dragon makes a tail attack (+11 to hit, 2d8+6 bludgeoning damage).' },
+      { id: 'leg-agd-3', name: 'Wing Attack', cost: 2, description: 'Creatures within 10 ft DC 19 DEX save or take 13 (2d6+6) bludgeoning damage & fall prone.' }
+    ]
+  },
+  {
+    id: 'monster-5e-bugbear',
+    name: 'Bugbear',
+    race: 'Goblinoid',
+    characterClass: 'Monster',
+    subclass: 'CR 1',
+    level: 2,
+    edition: '5e',
+    background: 'Medium Humanoid',
+    alignment: 'Chaotic Evil',
+    experiencePoints: 200,
+    isMonster: true,
+    monsterXpReward: 200,
+    hpMax: 27,
+    hpCurrent: 27,
+    armorClass: 16,
+    initiativeBonus: 2,
+    speed: 30,
+    hitDiceTotal: '5d8+5',
+    hitDiceCurrent: 5,
+    abilities: { STR: { score: 15 }, DEX: { score: 14 }, CON: { score: 13 }, INT: { score: 8 }, WIS: { score: 11 }, CHA: { score: 9 } },
+    attacks: [
+      { id: 'atk-bug-1', name: 'Morningstar', attackBonus: 4, damage: '2d8 + 2', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-bug-2', name: 'Javelin', attackBonus: 4, damage: '1d6 + 2', damageType: 'Piercing', range: '30/120 ft Ranged' }
+    ],
+    classFeatures: [
+      { id: 'feat-bug-1', name: 'Brute', source: 'Goblinoid Trait', description: 'A melee weapon deals one extra die of its damage when the bugbear hits with it.' },
+      { id: 'feat-bug-2', name: 'Surprise Attack', source: 'Goblinoid Trait', description: 'If bugbear surprises a creature, deals extra 2d6 damage on hit in first round.' }
+    ]
+  },
+  {
+    id: 'monster-5e-hobgoblin',
+    name: 'Hobgoblin Warlord',
+    race: 'Goblinoid',
+    characterClass: 'Monster',
+    subclass: 'CR 6',
+    level: 7,
+    edition: '5e',
+    background: 'Medium Humanoid',
+    alignment: 'Lawful Evil',
+    experiencePoints: 2300,
+    isMonster: true,
+    monsterXpReward: 2300,
+    hpMax: 97,
+    hpCurrent: 97,
+    armorClass: 20,
+    initiativeBonus: 2,
+    speed: 30,
+    hitDiceTotal: '15d8+30',
+    hitDiceCurrent: 15,
+    abilities: { STR: { score: 16 }, DEX: { score: 14 }, CON: { score: 14 }, INT: { score: 14 }, WIS: { score: 11 }, CHA: { score: 15 } },
+    attacks: [
+      { id: 'atk-hob-1', name: 'Longsword', attackBonus: 6, damage: '1d8 + 3', damageType: 'Slashing', range: '5 ft Melee' },
+      { id: 'atk-hob-2', name: 'Javelin', attackBonus: 6, damage: '1d6 + 3', damageType: 'Piercing', range: '30/120 ft Ranged' }
+    ],
+    multiattack: 'The hobgoblin warlord makes three melee attacks or two ranged attacks.',
+    classFeatures: [
+      { id: 'feat-hob-1', name: 'Martial Advantage', source: 'Goblinoid Trait', description: 'Deals an extra 10 (3d6) damage to a target it hits if target is within 5 ft of an ally of the warlord.' },
+      { id: 'feat-hob-2', name: 'Leadership (Recharge 6)', source: 'Goblinoid Trait', description: 'For 1 minute, can add 1d4 to attack rolls or saving throws of nearby allies within 30 ft.' }
+    ]
+  },
+  {
+    id: 'monster-5e-medusa',
+    name: 'Medusa',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 6',
+    level: 7,
+    edition: '5e',
+    background: 'Medium Monstrosity',
+    alignment: 'Lawful Evil',
+    experiencePoints: 2300,
+    isMonster: true,
+    monsterXpReward: 2300,
+    hpMax: 127,
+    hpCurrent: 127,
+    armorClass: 15,
+    initiativeBonus: 2,
+    speed: 30,
+    hitDiceTotal: '17d8+51',
+    hitDiceCurrent: 17,
+    abilities: { STR: { score: 10 }, DEX: { score: 15 }, CON: { score: 16 }, INT: { score: 12 }, WIS: { score: 13 }, CHA: { score: 15 } },
+    attacks: [
+      { id: 'atk-med-1', name: 'Snake Hair', attackBonus: 5, damage: '1d4 + 2 + 4d6', damageType: 'Piercing + Poison', range: '5 ft Melee' },
+      { id: 'atk-med-2', name: 'Shortsword', attackBonus: 5, damage: '1d6 + 2', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-med-3', name: 'Longbow', attackBonus: 5, damage: '1d8 + 2 + 2d6', damageType: 'Piercing + Poison', range: '150/600 ft Ranged' }
+    ],
+    multiattack: 'The medusa makes three melee attacks: one with its snake hair and two with its shortsword, or two ranged attacks with its longbow.',
+    classFeatures: [
+      { id: 'feat-med-1', name: 'Petrifying Gaze', source: 'Monstrosity Trait', description: 'When a creature starts its turn within 30 ft of Medusa and can see her, Medusa can force DC 14 CON save. Fail by 5+ = immediate Petrified. Otherwise petrified on 2nd fail.' }
+    ]
+  },
+  {
+    id: 'monster-5e-remorhaz',
+    name: 'Remorhaz',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 11',
+    level: 11,
+    edition: '5e',
+    background: 'Huge Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 7200,
+    isMonster: true,
+    monsterXpReward: 7200,
+    sizeCategory: 'Huge',
+    hpMax: 195,
+    hpCurrent: 195,
+    armorClass: 17,
+    initiativeBonus: 1,
+    speed: 30,
+    hitDiceTotal: '17d12+85',
+    hitDiceCurrent: 17,
+    abilities: { STR: { score: 24 }, DEX: { score: 13 }, CON: { score: 21 }, INT: { score: 4 }, WIS: { score: 10 }, CHA: { score: 5 } },
+    optionalRules: { hasPowerfulBuild: true },
+    attacks: [
+      { id: 'atk-rem-1', name: 'Bite', attackBonus: 11, damage: '6d10 + 7 + 3d6', damageType: 'Piercing + Fire', range: '10 ft Melee', notes: 'Target is grappled (escape DC 17) & Restrained.' }
+    ],
+    classFeatures: [
+      { id: 'feat-rem-1', name: 'Heated Body', source: 'Monstrosity Trait', description: 'A creature that touches the remorhaz or hits it with a melee attack within 5 ft takes 10 (3d6) fire damage.' },
+      { id: 'feat-rem-2', name: 'Swallow Whole', source: 'Monstrosity Trait', description: 'Swallows a creature grappled by it. Swallowed target takes 21 (6d6) acid damage at start of Remorhaz turn, blinded/restrained.' }
+    ]
+  },
+  {
+    id: 'monster-5e-roper',
+    name: 'Roper',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 5',
+    level: 6,
+    edition: '5e',
+    background: 'Large Monstrosity',
+    alignment: 'Neutral Evil',
+    experiencePoints: 1800,
+    isMonster: true,
+    monsterXpReward: 1800,
+    sizeCategory: 'Large',
+    hpMax: 93,
+    hpCurrent: 93,
+    armorClass: 20,
+    initiativeBonus: -1,
+    speed: 10,
+    hitDiceTotal: '11d10+33',
+    hitDiceCurrent: 11,
+    abilities: { STR: { score: 18 }, DEX: { score: 8 }, CON: { score: 17 }, INT: { score: 7 }, WIS: { score: 16 }, CHA: { score: 6 } },
+    attacks: [
+      { id: 'atk-rop-1', name: 'Bite', attackBonus: 7, damage: '4d8 + 4', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-rop-2', name: 'Tendril Grapple', attackBonus: 7, damage: '0', damageType: 'Bludgeoning', range: '50 ft Ranged', notes: 'Target is grappled & restrained. Disadvantage on STR checks.' }
+    ],
+    multiattack: 'The roper makes four tendril attacks, operates reel, and makes one bite attack.',
+    classFeatures: [
+      { id: 'feat-rop-1', name: 'Reel', source: 'Monstrosity Trait', description: 'Pulls each creature grappled by it up to 25 feet straight toward it.' },
+      { id: 'feat-rop-2', name: 'False Appearance', source: 'Monstrosity Trait', description: 'Indistinguishable from an ordinary stalagmite or stalactite while motionless.' }
+    ]
+  },
+  {
+    id: 'monster-5e-iron-golem',
+    name: 'Iron Golem',
+    race: 'Construct',
+    characterClass: 'Monster',
+    subclass: 'CR 16',
+    level: 16,
+    edition: '5e',
+    background: 'Large Construct',
+    alignment: 'Unaligned',
+    experiencePoints: 15000,
+    isMonster: true,
+    monsterXpReward: 15000,
+    sizeCategory: 'Large',
+    hpMax: 210,
+    hpCurrent: 210,
+    armorClass: 20,
+    initiativeBonus: -1,
+    speed: 30,
+    hitDiceTotal: '20d10+100',
+    hitDiceCurrent: 20,
+    abilities: { STR: { score: 24 }, DEX: { score: 9 }, CON: { score: 20 }, INT: { score: 3 }, WIS: { score: 11 }, CHA: { score: 1 } },
+    attacks: [
+      { id: 'atk-iron-1', name: 'Slam', attackBonus: 13, damage: '3d8 + 7', damageType: 'Bludgeoning', range: '5 ft Melee' },
+      { id: 'atk-iron-2', name: 'Sword', attackBonus: 13, damage: '3d10 + 7', damageType: 'Slashing', range: '10 ft Melee' },
+      { id: 'atk-iron-3', name: 'Poison Breath (Recharge 5-6)', attackBonus: 0, damage: '10d8', damageType: 'Poison', range: '15 ft Cone', notes: 'DC 19 CON save for half damage' }
+    ],
+    multiattack: 'The iron golem makes two melee attacks.',
+    classFeatures: [
+      { id: 'feat-iron-1', name: 'Fire Absorption', source: 'Construct Trait', description: 'Subjected to fire damage takes 0 damage and instead regains HP equal to fire damage dealt!' },
+      { id: 'feat-iron-2', name: 'Immutable Form & Magic Resistance', source: 'Construct Trait', description: 'Immune to any spell or effect that would alter its form. Advantage on saving throws against spells.' }
+    ]
+  },
+  {
+    id: 'monster-5e-rust-monster',
+    name: 'Rust Monster',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 1/2',
+    level: 2,
+    edition: '5e',
+    background: 'Medium Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 100,
+    isMonster: true,
+    monsterXpReward: 100,
+    hpMax: 27,
+    hpCurrent: 27,
+    armorClass: 14,
+    initiativeBonus: 1,
+    speed: 40,
+    hitDiceTotal: '5d8+5',
+    hitDiceCurrent: 5,
+    abilities: { STR: { score: 13 }, DEX: { score: 12 }, CON: { score: 13 }, INT: { score: 2 }, WIS: { score: 13 }, CHA: { score: 6 } },
+    attacks: [
+      { id: 'atk-rust-1', name: 'Bite', attackBonus: 3, damage: '1d8 + 1', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-rust-2', name: 'Antennae Rust Touch', attackBonus: 3, damage: '0', damageType: 'Corrosion', range: '5 ft Melee', notes: 'Nonmagical metal armor/shield/weapon takes -1 AC or damage penalty!' }
+    ],
+    classFeatures: [
+      { id: 'feat-rust-1', name: 'Iron Scent', source: 'Monstrosity Trait', description: 'Pinpoint precise location of ferrous metal within 30 feet.' }
+    ]
+  },
+  {
+    id: 'monster-5e-displacer-beast',
+    name: 'Displacer Beast',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 3',
+    level: 4,
+    edition: '5e',
+    background: 'Large Monstrosity',
+    alignment: 'Lawful Evil',
+    experiencePoints: 700,
+    isMonster: true,
+    monsterXpReward: 700,
+    sizeCategory: 'Large',
+    hpMax: 85,
+    hpCurrent: 85,
+    armorClass: 13,
+    initiativeBonus: 2,
+    speed: 40,
+    hitDiceTotal: '10d10+30',
+    hitDiceCurrent: 10,
+    abilities: { STR: { score: 18 }, DEX: { score: 15 }, CON: { score: 16 }, INT: { score: 6 }, WIS: { score: 12 }, CHA: { score: 8 } },
+    attacks: [
+      { id: 'atk-disp-1', name: 'Tentacle', attackBonus: 6, damage: '1d6 + 4 + 1d6', damageType: 'Bludgeoning + Piercing', range: '10 ft Melee' }
+    ],
+    multiattack: 'The displacer beast makes two tentacle attacks.',
+    classFeatures: [
+      { id: 'feat-disp-1', name: 'Displacement Illusion', source: 'Monstrosity Trait', description: 'Projects a magical illusion making it appear near its actual location. Attack rolls against it have disadvantage.' },
+      { id: 'feat-disp-2', name: 'Avoidance', source: 'Monstrosity Trait', description: 'When subjected to effect allowing DEX save for half damage, takes NO damage on success and half on fail.' }
+    ]
+  },
+  {
+    id: 'monster-5e-gibbering-mouther',
+    name: 'Gibbering Mouther',
+    race: 'Aberration',
+    characterClass: 'Monster',
+    subclass: 'CR 2',
+    level: 3,
+    edition: '5e',
+    background: 'Medium Aberration',
+    alignment: 'Neutral Evil',
+    experiencePoints: 450,
+    isMonster: true,
+    monsterXpReward: 450,
+    hpMax: 67,
+    hpCurrent: 67,
+    armorClass: 9,
+    initiativeBonus: -1,
+    speed: 10,
+    hitDiceTotal: '9d8+27',
+    hitDiceCurrent: 9,
+    abilities: { STR: { score: 10 }, DEX: { score: 8 }, CON: { score: 16 }, INT: { score: 3 }, WIS: { score: 10 }, CHA: { score: 6 } },
+    attacks: [
+      { id: 'atk-gib-1', name: 'Bites', attackBonus: 2, damage: '5d6', damageType: 'Piercing', range: '5 ft Melee', notes: 'Target prone DC 10 STR save or swallowed by mouths' },
+      { id: 'atk-gib-2', name: 'Blinding Spittle (Recharge 5-6)', attackBonus: 0, damage: '0', damageType: 'Radiant', range: '15 ft Radius', notes: 'DC 10 DEX save or blinded for 1 minute' }
+    ],
+    multiattack: 'The gibbering mouther makes one bites attack and uses Blinding Spittle if available.',
+    classFeatures: [
+      { id: 'feat-gib-1', name: 'Gibbering Aura', source: 'Aberration Trait', description: 'Creatures starting turn within 20 ft must succeed DC 10 WIS save or spend turn confused (random action d8 table).' },
+      { id: 'feat-gib-2', name: 'Aberrant Ground', source: 'Aberration Trait', description: 'Ground within 10 ft becomes doughlike difficult terrain; DC 10 STR save or speed reduced to 0.' }
+    ]
+  },
+  {
+    id: 'monster-5e-cloaker',
+    name: 'Cloaker',
+    race: 'Aberration',
+    characterClass: 'Monster',
+    subclass: 'CR 8',
+    level: 8,
+    edition: '5e',
+    background: 'Large Aberration',
+    alignment: 'Chaotic Evil',
+    experiencePoints: 3900,
+    isMonster: true,
+    monsterXpReward: 3900,
+    sizeCategory: 'Large',
+    hpMax: 78,
+    hpCurrent: 78,
+    armorClass: 14,
+    initiativeBonus: 2,
+    speed: 10,
+    hitDiceTotal: '12d10+12',
+    hitDiceCurrent: 12,
+    abilities: { STR: { score: 17 }, DEX: { score: 15 }, CON: { score: 12 }, INT: { score: 13 }, WIS: { score: 12 }, CHA: { score: 14 } },
+    attacks: [
+      { id: 'atk-clk-1', name: 'Bite', attackBonus: 6, damage: '2d6 + 3', damageType: 'Piercing', range: '5 ft Melee', notes: 'Attaches to target; cloaker has advantage on bite attacks against attached target' },
+      { id: 'atk-clk-2', name: 'Tail', attackBonus: 6, damage: '1d8 + 3', damageType: 'Slashing', range: '10 ft Melee' }
+    ],
+    multiattack: 'The cloaker makes two attacks: one with its bite and one with its tail.',
+    classFeatures: [
+      { id: 'feat-clk-1', name: 'Damage Transfer', source: 'Aberration Trait', description: 'While attached to a creature, cloaker takes only half damage and attached target takes the other half!' },
+      { id: 'feat-clk-2', name: 'Phantasms (3/Day)', source: 'Aberration Trait', description: 'Magically creates 3 illusory duplicates (Mirror Image effect).' },
+      { id: 'feat-clk-3', name: 'Frightful Moan', source: 'Aberration Trait', description: 'Creatures within 60 ft DC 13 WIS save or Frightened for 1 minute.' }
+    ]
+  },
+  {
+    id: 'monster-5e-shambling-mound',
+    name: 'Shambling Mound',
+    race: 'Plant',
+    characterClass: 'Monster',
+    subclass: 'CR 5',
+    level: 6,
+    edition: '5e',
+    background: 'Large Plant',
+    alignment: 'Unaligned',
+    experiencePoints: 1800,
+    isMonster: true,
+    monsterXpReward: 1800,
+    sizeCategory: 'Large',
+    hpMax: 136,
+    hpCurrent: 136,
+    armorClass: 15,
+    initiativeBonus: -1,
+    speed: 20,
+    hitDiceTotal: '16d10+48',
+    hitDiceCurrent: 16,
+    abilities: { STR: { score: 18 }, DEX: { score: 8 }, CON: { score: 16 }, INT: { score: 5 }, WIS: { score: 10 }, CHA: { score: 5 } },
+    attacks: [
+      { id: 'atk-shm-1', name: 'Slam', attackBonus: 7, damage: '2d8 + 4', damageType: 'Bludgeoning', range: '5 ft Melee', notes: 'Target is grappled (escape DC 14)' },
+      { id: 'atk-shm-2', name: 'Engulf', attackBonus: 0, damage: '2d8 + 4 + 2d8', damageType: 'Bludgeoning + Suffocation', range: '5 ft Melee', notes: 'Engulfs medium target; target is blinded, restrained & suffocating inside mound' }
+    ],
+    multiattack: 'The shambling mound makes two slam attacks. If both hit a Medium or smaller target, target is grappled & Engulfed.',
+    classFeatures: [
+      { id: 'feat-shm-1', name: 'Lightning Absorption', source: 'Plant Trait', description: 'Subjected to lightning damage takes 0 damage and instead regains HP equal to lightning damage dealt!' }
+    ]
+  },
+  {
+    id: 'monster-5e-phase-spider',
+    name: 'Phase Spider',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 3',
+    level: 4,
+    edition: '5e',
+    background: 'Large Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 700,
+    isMonster: true,
+    monsterXpReward: 700,
+    sizeCategory: 'Large',
+    hpMax: 32,
+    hpCurrent: 32,
+    armorClass: 13,
+    initiativeBonus: 2,
+    speed: 30,
+    hitDiceTotal: '5d10+5',
+    hitDiceCurrent: 5,
+    abilities: { STR: { score: 15 }, DEX: { score: 15 }, CON: { score: 12 }, INT: { score: 6 }, WIS: { score: 10 }, CHA: { score: 6 } },
+    attacks: [
+      { id: 'atk-psp-1', name: 'Bite', attackBonus: 4, damage: '1d10 + 2 + 4d8', damageType: 'Piercing + Poison', range: '5 ft Melee', notes: 'DC 11 CON save or take 4d8 poison damage (half on save)' }
+    ],
+    classFeatures: [
+      { id: 'feat-psp-1', name: 'Ethereal Jaunt', source: 'Monstrosity Trait', description: 'Bonus Action: Shifts from Material Plane to Ethereal Plane, or vice versa!' },
+      { id: 'feat-psp-2', name: 'Spider Climb', source: 'Monstrosity Trait', description: 'Can climb difficult surfaces, including upside down on ceilings, without an ability check.' }
+    ]
+  },
+  {
+    id: 'monster-5e-flameskull',
+    name: 'Flameskull',
+    race: 'Undead',
+    characterClass: 'Monster',
+    subclass: 'CR 4',
+    level: 5,
+    edition: '5e',
+    background: 'Tiny Undead',
+    alignment: 'Neutral Evil',
+    experiencePoints: 1100,
+    isMonster: true,
+    monsterXpReward: 1100,
+    hpMax: 40,
+    hpCurrent: 40,
+    armorClass: 13,
+    initiativeBonus: 3,
+    speed: 0,
+    hitDiceTotal: '9d4+18',
+    hitDiceCurrent: 9,
+    abilities: { STR: { score: 1 }, DEX: { score: 17 }, CON: { score: 14 }, INT: { score: 16 }, WIS: { score: 10 }, CHA: { score: 11 } },
+    attacks: [
+      { id: 'atk-fsk-1', name: 'Fire Ray', attackBonus: 5, damage: '3d6', damageType: 'Fire', range: '30 ft Ranged' },
+      { id: 'atk-fsk-2', name: 'Fireball Spell (1/Day)', attackBonus: 0, damage: '8d6', damageType: 'Fire', range: '150 ft (20ft sphere)', notes: 'DC 13 DEX save for half damage' }
+    ],
+    multiattack: 'The flameskull makes two fire ray attacks.',
+    classFeatures: [
+      { id: 'feat-fsk-1', name: 'Rejuvenation', source: 'Undead Trait', description: 'If destroyed, regains all HP in 1 hour unless holy water or Dispel Magic is cast on its remains.' },
+      { id: 'feat-fsk-2', name: 'Magic Resistance', source: 'Undead Trait', description: 'Advantage on saving throws against spells and magical effects.' }
+    ]
+  },
+  {
+    id: 'monster-5e-shadow',
+    name: 'Shadow',
+    race: 'Undead',
+    characterClass: 'Monster',
+    subclass: 'CR 1/2',
+    level: 2,
+    edition: '5e',
+    background: 'Medium Undead',
+    alignment: 'Chaotic Evil',
+    experiencePoints: 100,
+    isMonster: true,
+    monsterXpReward: 100,
+    hpMax: 16,
+    hpCurrent: 16,
+    armorClass: 12,
+    initiativeBonus: 2,
+    speed: 40,
+    hitDiceTotal: '3d8+3',
+    hitDiceCurrent: 3,
+    abilities: { STR: { score: 6 }, DEX: { score: 14 }, CON: { score: 13 }, INT: { score: 6 }, WIS: { score: 10 }, CHA: { score: 8 } },
+    attacks: [
+      { id: 'atk-shd-1', name: 'Strength Drain', attackBonus: 4, damage: '2d6 + 2', damageType: 'Necrotic', range: '5 ft Melee', notes: 'Target STR score reduced by 1d4! Target dies if STR reaches 0.' }
+    ],
+    classFeatures: [
+      { id: 'feat-shd-1', name: 'Strength Drain Mechanic', source: 'Undead Trait', description: 'Reduces target Strength by 1d4. Reduction lasts until target finishes a short/long rest. Target dies if STR is reduced to 0.' },
+      { id: 'feat-shd-2', name: 'Shadow Stealth', source: 'Undead Trait', description: 'While in dim light or darkness, can take the Hide action as a bonus action.' }
+    ]
+  },
+  {
+    id: 'monster-5e-cockatrice',
+    name: 'Cockatrice',
+    race: 'Monstrosity',
+    characterClass: 'Monster',
+    subclass: 'CR 1/2',
+    level: 2,
+    edition: '5e',
+    background: 'Small Monstrosity',
+    alignment: 'Unaligned',
+    experiencePoints: 100,
+    isMonster: true,
+    monsterXpReward: 100,
+    hpMax: 27,
+    hpCurrent: 27,
+    armorClass: 11,
+    initiativeBonus: 1,
+    speed: 20,
+    hitDiceTotal: '6d6+6',
+    hitDiceCurrent: 6,
+    abilities: { STR: { score: 6 }, DEX: { score: 12 }, CON: { score: 12 }, INT: { score: 2 }, WIS: { score: 13 }, CHA: { score: 5 } },
+    attacks: [
+      { id: 'atk-cock-1', name: 'Bite', attackBonus: 3, damage: '1d4 + 1', damageType: 'Piercing', range: '5 ft Melee', notes: 'DC 11 CON save or begins turning to stone (Petrified for 24 hours on fail).' }
+    ],
+    classFeatures: [
+      { id: 'feat-cock-1', name: 'Petrifying Touch', source: 'Monstrosity Trait', description: 'Target hit by bite must succeed DC 11 CON save or be Restrained as it turns to stone. Repeated fail = Petrified.' }
     ]
   }
 ] as Partial<CharacterData>[]).map(m => ({

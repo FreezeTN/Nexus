@@ -659,9 +659,42 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
   return list;
 }
 
+export function getCharacterImmunities(char: CharacterData): ResistanceEntry[] {
+  if (!char) return [];
+
+  const list: ResistanceEntry[] = [];
+  const inventory = char.inventory || [];
+  const equippedItems = inventory.filter(i => i.equipped && !i.stored);
+
+  // 1. Equipped items with immunity
+  for (const item of equippedItems) {
+    if (item.immunity && item.immunity.trim()) {
+      const parts = item.immunity.split(/[,/]/).map(s => s.trim()).filter(Boolean);
+      for (const p of parts) {
+        if (!list.some(r => r.type.toLowerCase() === p.toLowerCase() && r.source === item.name)) {
+          list.push({ type: p, source: item.name });
+        }
+      }
+    }
+  }
+
+  // 2. Active condition effects
+  if (char.conditions && char.conditions.length > 0) {
+    const effects = getConditionEffects(char.conditions);
+    if (effects.immuneToPoison) {
+      if (!list.some(r => r.type.toLowerCase() === 'poison' && r.source === 'Petrified Condition')) {
+        list.push({ type: 'Poison', source: 'Petrified Condition' });
+      }
+    }
+  }
+
+  return list;
+}
+
 export interface AppliedDamageResult {
   originalTotal: number;
   finalTotal: number;
+  immunityNegatedAmount: number;
   resistanceHalvedAmount: number;
   drAbsorbedAmount: number;
   breakdownLogs: string[];
@@ -675,17 +708,43 @@ export function applyResistanceAndDRToDamage(
   let currentDamage = totalDamage;
   const breakdownLogs: string[] = [];
 
+  let immunityNegatedAmount = 0;
   let resistanceHalvedAmount = 0;
   let drAbsorbedAmount = 0;
 
   if (!targetChar || totalDamage <= 0) {
-    return { originalTotal: totalDamage, finalTotal: totalDamage, resistanceHalvedAmount: 0, drAbsorbedAmount: 0, breakdownLogs: [] };
+    return { originalTotal: totalDamage, finalTotal: totalDamage, immunityNegatedAmount: 0, resistanceHalvedAmount: 0, drAbsorbedAmount: 0, breakdownLogs: [] };
   }
 
-  // 1. Check Resistance
-  const resistances = getCharacterResistances(targetChar);
   const dmgTypeLower = (damageType || '').toLowerCase();
 
+  // 1. Check Immunity FIRST (D&D 5e: Immunity reduces damage to 0)
+  const immunities = getCharacterImmunities(targetChar);
+  const matchedImmunity = immunities.find(im => {
+    const imLower = im.type.toLowerCase();
+    if (imLower === 'all') return true;
+    if (dmgTypeLower && imLower.includes(dmgTypeLower)) return true;
+    if (imLower.includes('physical') && ['slashing', 'piercing', 'bludgeoning'].some(p => dmgTypeLower.includes(p))) return true;
+    return false;
+  });
+
+  if (matchedImmunity) {
+    immunityNegatedAmount = currentDamage;
+    currentDamage = 0;
+    breakdownLogs.push(`🚫 Immunity (${matchedImmunity.source}) completely negated all ${totalDamage} ${damageType || ''} damage (0 HP taken).`);
+
+    return {
+      originalTotal: totalDamage,
+      finalTotal: 0,
+      immunityNegatedAmount,
+      resistanceHalvedAmount: 0,
+      drAbsorbedAmount: 0,
+      breakdownLogs
+    };
+  }
+
+  // 2. Check Resistance (Halves damage)
+  const resistances = getCharacterResistances(targetChar);
   const hasResistance = resistances.some(r => {
     const resLower = r.type.toLowerCase();
     if (resLower === 'all') return true;
@@ -702,7 +761,7 @@ export function applyResistanceAndDRToDamage(
     breakdownLogs.push(`🔥 Resistance (${matchedSource}) halved damage from ${totalDamage} to ${currentDamage} HP.`);
   }
 
-  // 2. Check Damage Reduction (DR)
+  // 3. Check Damage Reduction (DR)
   const drInfo = calculateCharacterTotalDR(targetChar);
   if (drInfo.totalDR > 0 && currentDamage > 0) {
     const absorbed = Math.min(currentDamage, drInfo.totalDR);
@@ -714,6 +773,7 @@ export function applyResistanceAndDRToDamage(
   return {
     originalTotal: totalDamage,
     finalTotal: currentDamage,
+    immunityNegatedAmount,
     resistanceHalvedAmount,
     drAbsorbedAmount,
     breakdownLogs
@@ -939,6 +999,7 @@ export interface ConditionEffects {
   grantDisadvantageToAttacker: boolean;
   meleeAutoCrit: boolean;
   damageResistanceAll: boolean;
+  immuneToPoison: boolean;
   halfMaxHp: boolean;
   dead: boolean;
   extraAttackBonus: number;
@@ -965,6 +1026,7 @@ export function getConditionEffects(conditions: string[] = [], exhaustion: numbe
     grantDisadvantageToAttacker: false,
     meleeAutoCrit: false,
     damageResistanceAll: false,
+    immuneToPoison: false,
     halfMaxHp: false,
     dead: false,
     extraAttackBonus: 0,
@@ -1037,6 +1099,7 @@ export function getConditionEffects(conditions: string[] = [], exhaustion: numbe
     effects.autoFailStrDexSaves = true;
     effects.grantAdvantageToAttacker = true;
     effects.damageResistanceAll = true;
+    effects.immuneToPoison = true;
     effects.mechanicalSummary.push("Petrified: Transformed to stone (weight x10), incapacitated, speed 0, auto-fail STR/DEX saves, resistance to all damage, immune to poison/disease");
   }
 

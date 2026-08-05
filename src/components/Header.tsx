@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CharacterData, RuleEdition } from '../types';
 import { getPassivePerception, getProficiencyBonus, formatModifier, convertCharacterEdition, getEffectiveSpeed, getArmorClassBreakdown, getCombinedLevel, getActiveClassChoice, isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
-import { getMonsterPortraitUrl } from '../data/monsterPortraits';
+import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../data/monsterPortraits';
 import { getXpProgressDetails } from '../data/levelProgressionData';
 import { HpOrb, getHpColorClass } from './HpOrb';
 import { StatblockExportModal } from './character/StatblockExportModal';
 import { LevelProgressionModal } from './modals/LevelProgressionModal';
 import { MaxHpInspectorModal } from './modals/MaxHpInspectorModal';
+import { RestModal } from './combat/RestModal';
 import {
   Shield,
   Zap,
@@ -276,7 +277,7 @@ export const Header: React.FC<HeaderProps> = ({
 
     onUpdateCharacter({
       ...activeCharacter,
-      hpCurrent: activeCharacter.hpMax,
+      hpCurrent: effectiveMaxHp,
       hpTemp: 0,
       hitDiceCurrent: parseInt(activeCharacter.hitDiceTotal) || activeCharacter.level,
       deathSavesSuccesses: 0,
@@ -377,8 +378,8 @@ export const Header: React.FC<HeaderProps> = ({
                     : [activeCharacter, ...systemChars.filter((c) => c.id !== activeCharacter.id)];
 
                   const playerChars = dropdownList.filter((c) => !c.isMonster && !c.isVendor);
-                  const monsterChars = isPlayerRole ? [] : dropdownList.filter((c) => c.isMonster);
-                  const merchantChars = isPlayerRole ? [] : dropdownList.filter((c) => c.isVendor && !c.isMonster);
+                  const monsterChars = dropdownList.filter((c) => c.isMonster);
+                  const merchantChars = dropdownList.filter((c) => c.isVendor && !c.isMonster);
 
                   const activePresence = presenceMap[activeCharacter.id];
                   const activeDmIsHere = !!activePresence?.dmActive;
@@ -392,7 +393,9 @@ export const Header: React.FC<HeaderProps> = ({
                           className="w-8 h-8 rounded-lg object-cover border border-amber-500/60 shadow shrink-0"
                           referrerPolicy="no-referrer"
                           onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
+                            const img = e.target as HTMLImageElement;
+                            img.onerror = null;
+                            img.src = generateMonsterSvgPortrait(activeCharacter?.name);
                           }}
                         />
                       )}
@@ -951,39 +954,14 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
       )}
 
-      {/* Rest Confirm Modals */}
+      {/* Rest & Recovery Modal */}
       {showRestModal && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-stone-900 border border-amber-600/50 rounded-2xl p-6 max-w-md w-full shadow-2xl text-stone-100">
-            <div className="flex items-center gap-3 text-amber-400 text-lg font-serif font-bold mb-2">
-              {showRestModal === 'short' ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
-              <span>Take a {showRestModal === 'short' ? 'Short Rest' : 'Long Rest'}?</span>
-            </div>
-            <p className="text-sm text-stone-300 mb-4">
-              {showRestModal === 'short'
-                ? activeCharacter?.optionalRules?.useGrittyRealismResting
-                  ? 'Gritty Realism Short Rest (8 Hours / Overnight): Recharges short-rest class features like Action Surge or Second Wind.'
-                  : 'A Short Rest (at least 1 hour) recharges short-rest class features like Action Surge or Second Wind.'
-                : activeCharacter?.optionalRules?.useGrittyRealismResting
-                  ? 'Gritty Realism Long Rest (7 Days in Sanctuary): Restores all Hit Points, spell slots, death saves, hit dice, and both Short & Long rest features.'
-                  : 'A Long Rest (8 hours) restores all Hit Points, spell slots, death saves, hit dice, and both Short & Long rest features.'}
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowRestModal(null)}
-                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={showRestModal === 'short' ? handleShortRest : handleLongRest}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"
-              >
-                Confirm Rest
-              </button>
-            </div>
-          </div>
-        </div>,
+        <RestModal
+          character={activeCharacter}
+          onClose={() => setShowRestModal(null)}
+          onUpdateCharacter={onUpdateCharacter}
+          initialRestType={showRestModal}
+        />,
         document.body
       )}
 
