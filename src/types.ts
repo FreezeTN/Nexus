@@ -145,6 +145,9 @@ export interface OptionalRulesConfig {
   secondaryClass?: string;          // Secondary Class Name
   secondaryLevel?: number;          // Secondary Class Level
   secondarySubclass?: string;       // Secondary Class Subclass
+  activeClassChoice?: 'primary' | 'secondary'; // Which class is currently Active (earning XP) vs Paused
+  primaryXp?: number;               // Allocated XP for Primary Class
+  secondaryXp?: number;             // Allocated XP for Secondary Class
   useGrittyRealismResting?: boolean;// Gritty Realism Resting (Short rest = 8h, Long rest = 7 days)
   useVariantCritDamage?: boolean;   // Variant Critical Hit Damage (Max initial die + roll second die)
   useMilestoneXp?: boolean;         // Milestone Level Progression (Hide XP threshold progress)
@@ -202,7 +205,9 @@ export interface Feat {
   id: string;
   name: string;
   source?: string;
+  prerequisite?: string;
   description: string;
+  hpMaxBonus?: number;
 }
 
 export interface GearItem {
@@ -222,6 +227,7 @@ export interface GearItem {
   damageReduction?: number; // Damage Reduction (DR) granted by item (e.g., 2, 5)
   resistance?: string; // Damage type resistance granted by item (e.g. Fire, Cold, Slashing, All)
   stealthDisadvantage?: boolean;
+  hpMaxBonus?: number; // Max HP bonus or penalty granted when equipped
   weaponStats?: {
     attackBonus?: string | number;
     damage?: string;
@@ -300,6 +306,7 @@ export interface CharacterData {
 
   // Monster / Encounter creature status
   isMonster?: boolean;
+  challengeRating?: string;
   monsterXpReward?: number; // XP granted to party when defeated
 
   // Optional D&D Rules & Variant Calculations
@@ -319,6 +326,7 @@ export interface CharacterData {
   hpMax: number;
   hpCurrent: number;
   hpTemp: number;
+  maxHpModifier?: number; // Active temp/conditional Max HP modifier (e.g. +5 Aid spell, -10 Vampire Drain)
   hitDiceTotal: string; // e.g. "5d10"
   hitDiceCurrent: number;
   armorClass: number;

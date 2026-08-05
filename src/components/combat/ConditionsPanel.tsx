@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CharacterData } from '../../types';
 import { DND_CONDITIONS, EXHAUSTION_LEVELS } from '../../data/conditionsData';
+import { getConditionEffects } from '../../utils/dndCalculations';
 import { ShieldAlert, Plus, X, AlertCircle, Info, Activity } from 'lucide-react';
 
 interface ConditionsPanelProps {
@@ -122,21 +123,17 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
       )}
 
       {/* Active Rules Tooltip / Alerts */}
-      {activeConditions.length > 0 && (
+      {(activeConditions.length > 0 || exhaustion > 0) && (
         <div className="bg-stone-950/80 border border-stone-800 rounded-xl p-2.5 space-y-1.5 text-xs">
           <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
             <AlertCircle className="w-3.5 h-3.5" /> Mechanical Penalties Active:
           </div>
           <ul className="space-y-1 text-stone-300 list-disc list-inside">
-            {activeConditions.map(condName => {
-              const info = DND_CONDITIONS.find(c => c.name === condName);
-              if (!info) return null;
-              return (
-                <li key={condName} className="text-[11px]">
-                  <strong className="text-amber-200">{info.name}:</strong> {info.summary}
-                </li>
-              );
-            })}
+            {getConditionEffects(activeConditions, exhaustion).mechanicalSummary.map((summaryItem, idx) => (
+              <li key={idx} className="text-[11px] text-amber-200/90 font-sans">
+                {summaryItem}
+              </li>
+            ))}
           </ul>
         </div>
       )}

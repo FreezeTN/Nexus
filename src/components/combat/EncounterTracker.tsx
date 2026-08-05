@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { CharacterData, Party } from '../../types';
-import { getAbilityModifier, formatModifier, isCharacterDead } from '../../utils/dndCalculations';
-import { Crosshair, Swords, Plus, Trash2, ChevronRight, ChevronLeft, Dices, RefreshCw, Copy, UserCheck, Zap, ScrollText, Search, FileText, Check, Clock, MessageSquarePlus, Download, X, Users, Shield } from 'lucide-react';
+import { UserProfile } from '../../lib/firebase';
+import { getAbilityModifier, formatModifier, isCharacterDead, getActiveClassChoice, getSecondaryXp, getEffectiveMaxHp } from '../../utils/dndCalculations';
+import { getLevelFromTotalXp } from '../../data/levelProgressionData';
+import { Crosshair, Swords, Plus, Trash2, ChevronRight, ChevronLeft, Dices, RefreshCw, Copy, UserCheck, Zap, ScrollText, Search, FileText, Check, Clock, MessageSquarePlus, Download, X, Users, Shield, Pencil } from 'lucide-react';
 import { AttackResolver } from './AttackResolver';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 
@@ -20,6 +22,7 @@ export interface Combatant {
   portraitUrl?: string;
   partyId?: string;
   isPartyMember?: boolean;
+  controlledBy?: string;
 }
 
 export interface CombatLogEntry {
@@ -35,33 +38,123 @@ interface EncounterTrackerProps {
   character: CharacterData;
   allCharacters?: CharacterData[];
   parties?: Party[];
+  currentUser?: UserProfile | null;
   onOpenPartyManager?: () => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onUpdateCharacter?: (updated: CharacterData) => void;
+}
+
+export interface SavedEncounterData {
+  combatants: Combatant[];
+  activeTurnIndex: number;
+  roundNumber: number;
+  combatLogs: CombatLogEntry[];
+}
+
+export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
+  const defaultPlayer: Combatant = {
+    id: 'player-' + char.id,
+    name: char.name,
+    initiative: 0,
+    armorClass: char.armorClass || 10,
+    hpCurrent: char.hpCurrent || 10,
+    hpMax: getEffectiveMaxHp(char),
+    type: 'player',
+    isPlayerChar: true,
+    conditions: char.conditions || [],
+    portraitUrl: char.portraitUrl || (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined)
+  };
+
+  const defaultState: SavedEncounterData = {
+    combatants: [defaultPlayer],
+    activeTurnIndex: 0,
+    roundNumber: 1,
+    combatLogs: [
+      {
+        id: 'log-init-1',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        round: 1,
+        category: 'turn',
+        message: `Encounter tracker initialized for ${char.name}.`
+      }
+    ]
+  };
+
+  try {
+    const charKey = char.id || 'default';
+    const raw = localStorage.getItem(`dnd_encounter_state_v1_${charKey}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.combatants) && parsed.combatants.length > 0) {
+        const syncedCombatants = parsed.combatants.map((c: Combatant) => {
+          if (c.isPlayerChar) {
+            return {
+              ...c,
+              name: char.name,
+              hpCurrent: char.hpCurrent,
+              hpMax: getEffectiveMaxHp(char),
+              armorClass: char.armorClass,
+              conditions: char.conditions || [],
+              portraitUrl: char.portraitUrl || (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined)
+            };
+          }
+          return c;
+        });
+
+        return {
+          combatants: syncedCombatants,
+          activeTurnIndex: typeof parsed.activeTurnIndex === 'number' && parsed.activeTurnIndex < syncedCombatants.length ? parsed.activeTurnIndex : 0,
+          roundNumber: typeof parsed.roundNumber === 'number' ? parsed.roundNumber : 1,
+          combatLogs: Array.isArray(parsed.combatLogs) && parsed.combatLogs.length > 0 ? parsed.combatLogs : defaultState.combatLogs
+        };
+      }
+    }
+  } catch (err) {
+    console.error("Error reading encounter state from localStorage:", err);
+  }
+
+  return defaultState;
 }
 
 export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   character,
   allCharacters = [],
   parties = [],
+  currentUser,
   onOpenPartyManager,
   onRoll,
   onUpdateCharacter
 }) => {
-  const [combatants, setCombatants] = useState<Combatant[]>([
-    {
-      id: 'player-' + character.id,
-      name: character.name,
-      initiative: 0,
-      armorClass: character.armorClass || 10,
-      hpCurrent: character.hpCurrent || 10,
-      hpMax: character.hpMax || 10,
-      type: 'player',
-      isPlayerChar: true,
-      conditions: character.conditions || [],
-      portraitUrl: character.portraitUrl || (character.isMonster ? getMonsterPortraitUrl(character.name, character.id) : undefined)
+  const isDmRole = currentUser?.role === 'DM';
+  const [combatants, setCombatants] = useState<Combatant[]>(() => loadSavedEncounter(character).combatants);
+  const [activeTurnIndex, setActiveTurnIndex] = useState<number>(() => loadSavedEncounter(character).activeTurnIndex);
+  const [roundNumber, setRoundNumber] = useState<number>(() => loadSavedEncounter(character).roundNumber);
+  const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>(() => loadSavedEncounter(character).combatLogs);
+
+  // Reload saved encounter if active character ID changes
+  React.useEffect(() => {
+    const saved = loadSavedEncounter(character);
+    setCombatants(saved.combatants);
+    setActiveTurnIndex(saved.activeTurnIndex);
+    setRoundNumber(saved.roundNumber);
+    setCombatLogs(saved.combatLogs);
+  }, [character.id]);
+
+  // Save encounter state to localStorage whenever state updates
+  React.useEffect(() => {
+    const charKey = character.id || 'default';
+    try {
+      const dataToSave: SavedEncounterData = {
+        combatants,
+        activeTurnIndex,
+        roundNumber,
+        combatLogs
+      };
+      localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
+    } catch (err) {
+      console.error("Error saving encounter state to localStorage:", err);
     }
-  ]);
+  }, [combatants, activeTurnIndex, roundNumber, combatLogs, character.id]);
 
   // Keep player combatant HP, AC, conditions and Name synced with global character data
   React.useEffect(() => {
@@ -72,7 +165,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             ...c,
             name: character.name,
             hpCurrent: character.hpCurrent,
-            hpMax: character.hpMax,
+            hpMax: getEffectiveMaxHp(character),
             armorClass: character.armorClass,
             conditions: character.conditions || [],
             portraitUrl: character.portraitUrl || (character.isMonster ? getMonsterPortraitUrl(character.name, character.id) : undefined)
@@ -81,11 +174,25 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         return c;
       })
     );
-  }, [character.hpCurrent, character.hpMax, character.armorClass, character.name, character.conditions, character.portraitUrl, character.isMonster]);
+  }, [
+    character.hpCurrent,
+    character.hpMax,
+    character.feats,
+    character.inventory,
+    character.abilities,
+    character.level,
+    character.maxHpModifier,
+    character.exhaustionLevel,
+    character.armorClass,
+    character.name,
+    character.conditions,
+    character.portraitUrl,
+    character.isMonster
+  ]);
 
-  const [activeTurnIndex, setActiveTurnIndex] = useState<number>(0);
-  const [roundNumber, setRoundNumber] = useState<number>(1);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingMaxHpId, setEditingMaxHpId] = useState<string | null>(null);
+  const [editingMaxHpValue, setEditingMaxHpValue] = useState<number | string>('');
 
   // Combat Log State
   const [showLogModal, setShowLogModal] = useState(false);
@@ -93,16 +200,6 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const [logSearchText, setLogSearchText] = useState('');
   const [customNoteInput, setCustomNoteInput] = useState('');
   const [copiedLog, setCopiedLog] = useState(false);
-
-  const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>([
-    {
-      id: 'log-init-1',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      round: 1,
-      category: 'turn',
-      message: `Encounter tracker initialized for ${character.name}.`
-    }
-  ]);
 
   const activeCombatant = combatants[activeTurnIndex];
 
@@ -194,11 +291,24 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     if (onUpdateCharacter && xpPerParticipant > 0) {
       const isPlayerInParticipants = activeParticipants.some(p => p.isPlayerChar || p.name === character.name);
       if (isPlayerInParticipants) {
-        const currentXp = character.experiencePoints || 0;
-        onUpdateCharacter({
-          ...character,
-          experiencePoints: currentXp + xpPerParticipant
-        });
+        const isDual = !!(character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass);
+        const currentGenXp = character.experiencePoints || 0;
+        const newGenXp = currentGenXp + xpPerParticipant;
+
+        if (!isDual) {
+          const newLevel = getLevelFromTotalXp(newGenXp);
+          onUpdateCharacter({
+            ...character,
+            experiencePoints: newGenXp,
+            ...(newLevel > character.level ? { level: newLevel } : {})
+          });
+        } else {
+          // General XP for dual classing (unallocated until spent in Level Progression Modal)
+          onUpdateCharacter({
+            ...character,
+            experiencePoints: newGenXp
+          });
+        }
       }
     }
 
@@ -242,7 +352,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             ...c,
             initiative: total,
             hpCurrent: character.hpCurrent,
-            hpMax: character.hpMax,
+            hpMax: getEffectiveMaxHp(character),
             armorClass: character.armorClass
           };
         }
@@ -286,14 +396,15 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
       const memInitBonus = (member.initiativeBonus || 0) + (isNaN(memDexMod) ? 0 : memDexMod);
       const rolledInit = Math.floor(Math.random() * 20) + 1 + memInitBonus;
       const portrait = member.portraitUrl || (member.isMonster ? getMonsterPortraitUrl(member.name, member.id) : undefined);
+      const effectiveMax = getEffectiveMaxHp(member);
 
       newCombatants.push({
         id: isPlayerChar ? 'player-' + member.id : 'party-' + member.id + '-' + Date.now(),
         name: member.name,
         initiative: rolledInit,
         armorClass: member.armorClass || 10,
-        hpCurrent: member.hpCurrent || member.hpMax || 10,
-        hpMax: member.hpMax || 10,
+        hpCurrent: member.hpCurrent || effectiveMax || 10,
+        hpMax: effectiveMax || 10,
         type: isPlayerChar ? 'player' : 'ally',
         isPlayerChar,
         partyId: partyToUse.id,
@@ -302,7 +413,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         portraitUrl: portrait
       });
 
-      addedLogDetails.push(`${member.name} (${isPlayerChar ? 'YOU' : 'Ally'}) - Init: ${rolledInit}, AC: ${member.armorClass || 10}, HP: ${member.hpCurrent || member.hpMax || 10}`);
+      addedLogDetails.push(`${member.name} (${isPlayerChar ? 'YOU' : 'Ally'}) - Init: ${rolledInit}, AC: ${member.armorClass || 10}, HP: ${member.hpCurrent || effectiveMax || 10}/${effectiveMax}`);
     });
 
     setCombatants(prev => {
@@ -427,7 +538,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const handleTurnDestroyUndead = (target: Combatant) => {
     const wisScore = character.abilities?.WIS?.score ?? 10;
     const wisMod = Math.floor((wisScore - 10) / 2);
-    const profBonus = character.proficiencyBonus ?? (Math.floor((character.level - 1) / 4) + 2);
+    const profBonus = Math.floor((character.level - 1) / 4) + 2;
     const saveDc = 8 + profBonus + wisMod;
 
     // Determine Cleric Destroy Undead CR threshold
@@ -476,6 +587,48 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
       }
       addLogEntry('ability', `✝️ TURN UNDEAD: Forced ${target.name} to make WIS Save vs DC ${saveDc}`, character.name);
     }
+  };
+
+  // Switch allegiance between Ally, Enemy, and Player (e.g. for Animal Handling or Charm)
+  const handleToggleAllegiance = (targetId: string, newType: 'player' | 'ally' | 'enemy') => {
+    setCombatants(prev => prev.map(c => {
+      if (c.id === targetId) {
+        const oldType = c.type;
+        const newConds = newType === 'ally' && oldType === 'enemy'
+          ? Array.from(new Set([...(c.conditions || []), 'Controlled / Charmed']))
+          : c.conditions;
+        return {
+          ...c,
+          type: newType,
+          conditions: newConds,
+          controlledBy: newType === 'ally' ? character.name : undefined
+        };
+      }
+      return c;
+    }));
+    const target = combatants.find(c => c.id === targetId);
+    if (target) {
+      addLogEntry('ability', `🐾 ALLEGIANCE CHANGED: ${target.name} is now an ${newType.toUpperCase()} (Controlled by ${character.name})!`, character.name);
+    }
+  };
+
+  // Revive a defeated or 0 HP target as an Undead / Controlled Ally
+  const handleReviveAsUndeadAlly = (target: Combatant) => {
+    const revivedHp = target.hpMax || 10;
+    setCombatants(prev => prev.map(c => {
+      if (c.id === target.id) {
+        return {
+          ...c,
+          hpCurrent: revivedHp,
+          type: 'ally',
+          isDefeated: false,
+          controlledBy: character.name,
+          conditions: Array.from(new Set([...(c.conditions || []).filter(cond => cond !== 'Destroyed' && cond !== 'Unconscious'), 'Undead Minion']))
+        };
+      }
+      return c;
+    }));
+    addLogEntry('ability', `🧟 REVIVE UNDEAD: Reanimated ${target.name} as a loyal Undead Ally under ${character.name}'s control (${revivedHp} HP)!`, character.name);
   };
 
   const handleRemoveCombatant = (id: string) => {
@@ -528,6 +681,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     const target = combatants.find(c => c.id === id);
     if (!target) return;
 
+    const wasAtZero = target.hpCurrent <= 0;
     const nextHp = Math.max(0, Math.min(target.hpMax, target.hpCurrent + delta));
 
     setCombatants(prev =>
@@ -535,7 +689,11 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     );
 
     if (delta < 0) {
-      addLogEntry('damage', `${target.name} took ${Math.abs(delta)} damage (${nextHp}/${target.hpMax} HP)`, target.name);
+      if (wasAtZero) {
+        addLogEntry('damage', `💀 ${target.name} took damage at 0 HP! Automatic Death Save Failure added.`, target.name);
+      } else {
+        addLogEntry('damage', `${target.name} took ${Math.abs(delta)} damage (${nextHp}/${target.hpMax} HP)`, target.name);
+      }
     } else if (delta > 0) {
       addLogEntry('heal', `${target.name} healed for ${delta} HP (${nextHp}/${target.hpMax} HP)`, target.name);
     }
@@ -546,11 +704,73 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     }
 
     if (target.isPlayerChar && onUpdateCharacter) {
+      let updatedFailures = character.deathSavesFailures || 0;
+      let updatedSuccesses = character.deathSavesSuccesses || 0;
+      let conds = character.conditions || [];
+
+      if (delta < 0 && wasAtZero) {
+        updatedFailures = Math.min(3, updatedFailures + 1);
+        if (updatedFailures >= 3 && !conds.includes('Dead')) {
+          conds = [...conds, 'Dead'];
+        }
+      } else if (delta > 0 && wasAtZero) {
+        updatedFailures = 0;
+        updatedSuccesses = 0;
+        conds = conds.filter(c => c !== 'Unconscious');
+      }
+
       onUpdateCharacter({
         ...character,
-        hpCurrent: nextHp
+        hpCurrent: nextHp,
+        deathSavesFailures: updatedFailures,
+        deathSavesSuccesses: updatedSuccesses,
+        conditions: conds
       });
     }
+  };
+
+  const handleUpdateCombatantMaxHp = (id: string, newMaxHp: number) => {
+    const validMaxHp = Math.max(1, newMaxHp);
+    const target = combatants.find(c => c.id === id);
+    if (!target) return;
+
+    setCombatants(prev =>
+      prev.map(c => {
+        if (c.id === id) {
+          const updatedHpCurrent = Math.min(c.hpCurrent, validMaxHp);
+          
+          if (c.isPlayerChar || c.type === 'player') {
+            if (c.id === 'player-' + character.id || c.id === character.id) {
+              if (onUpdateCharacter) {
+                onUpdateCharacter({
+                  ...character,
+                  hpMax: validMaxHp,
+                  hpCurrent: updatedHpCurrent
+                });
+              }
+            } else {
+              const matchedChar = allCharacters.find(ch => 'player-' + ch.id === c.id || ch.id === c.id);
+              if (matchedChar && onUpdateCharacter) {
+                onUpdateCharacter({
+                  ...matchedChar,
+                  hpMax: validMaxHp,
+                  hpCurrent: Math.min(matchedChar.hpCurrent, validMaxHp)
+                });
+              }
+            }
+          }
+
+          return {
+            ...c,
+            hpMax: validMaxHp,
+            hpCurrent: updatedHpCurrent
+          };
+        }
+        return c;
+      })
+    );
+
+    addLogEntry('turn', `Updated ${target.name}'s Max HP to ${validMaxHp} HP`, target.name);
   };
 
   const handleToggleCombatantCondition = (combatantId: string, condName: string) => {
@@ -587,11 +807,42 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     addLogEntry('turn', `Round counter reset to Round 1`);
   };
 
+  const handleClearEncounter = () => {
+    if (window.confirm("Are you sure you want to end this encounter? This will clear all added combatants and reset the encounter tracker.")) {
+      const defaultPlayer: Combatant = {
+        id: 'player-' + character.id,
+        name: character.name,
+        initiative: 0,
+        armorClass: character.armorClass || 10,
+        hpCurrent: character.hpCurrent || 10,
+        hpMax: getEffectiveMaxHp(character),
+        type: 'player',
+        isPlayerChar: true,
+        conditions: character.conditions || [],
+        portraitUrl: character.portraitUrl || (character.isMonster ? getMonsterPortraitUrl(character.name, character.id) : undefined)
+      };
+      setCombatants([defaultPlayer]);
+      setActiveTurnIndex(0);
+      setRoundNumber(1);
+      const newLogs: CombatLogEntry[] = [
+        {
+          id: 'log-init-' + Date.now(),
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          round: 1,
+          category: 'turn',
+          message: `Encounter ended and reset for ${character.name}.`
+        }
+      ];
+      setCombatLogs(newLogs);
+    }
+  };
+
   // Add custom user note to log
   const handleAddCustomNote = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!customNoteInput.trim()) return;
-    addLogEntry('note', customNoteInput.trim(), character.name);
+    const author = isDmRole ? 'DM' : character.name;
+    addLogEntry('note', customNoteInput.trim(), author);
     setCustomNoteInput('');
   };
 
@@ -671,6 +922,15 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           >
             <Plus className="w-3.5 h-3.5 text-amber-500" />
             <span>+ Add Target</span>
+          </button>
+
+          <button
+            onClick={handleClearEncounter}
+            className="flex items-center gap-1 text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800/80 px-2.5 py-1.5 rounded-xl font-bold transition shadow"
+            title="End encounter & clear all added combatants"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span>End Encounter</span>
           </button>
         </div>
       </div>
@@ -792,6 +1052,12 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                 <div>
                   <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-2">
                     <span>{c.name}</span>
+                    {c.controlledBy && (
+                      <span className="text-[10px] bg-purple-950/90 text-purple-200 border border-purple-600/70 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1">
+                        <span>🎮 Master:</span>
+                        <strong className="text-purple-300">{c.controlledBy}</strong>
+                      </span>
+                    )}
                     {c.isPlayerChar && (
                       <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono font-bold">
                         YOU
@@ -805,7 +1071,49 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                   </div>
                   <div className="text-[11px] text-stone-400 font-mono flex items-center gap-3 mt-0.5 flex-wrap">
                     <span>AC: <strong className="text-stone-200">{c.armorClass}</strong></span>
-                    <span>HP: <strong className={c.hpCurrent === 0 ? 'text-rose-500 font-bold' : 'text-emerald-400'}>{c.hpCurrent}/{c.hpMax}</strong></span>
+                    <div className="flex items-center gap-1">
+                      <span>HP: <strong className={c.hpCurrent === 0 ? 'text-rose-500 font-bold' : 'text-emerald-400'}>{c.hpCurrent}</strong> / </span>
+                      {editingMaxHpId === c.id ? (
+                        <input
+                          type="number"
+                          value={editingMaxHpValue}
+                          onChange={(e) => setEditingMaxHpValue(e.target.value)}
+                          onBlur={() => {
+                            const val = parseInt(String(editingMaxHpValue), 10);
+                            if (!isNaN(val) && val > 0) {
+                              handleUpdateCombatantMaxHp(c.id, val);
+                            }
+                            setEditingMaxHpId(null);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const val = parseInt(String(editingMaxHpValue), 10);
+                              if (!isNaN(val) && val > 0) {
+                                handleUpdateCombatantMaxHp(c.id, val);
+                              }
+                              setEditingMaxHpId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingMaxHpId(null);
+                            }
+                          }}
+                          autoFocus
+                          className="w-16 bg-stone-900 border border-amber-500 text-amber-200 font-mono text-xs rounded px-1 text-center font-bold focus:outline-none"
+                          title="Enter new Max HP and press Enter"
+                        />
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setEditingMaxHpId(c.id);
+                            setEditingMaxHpValue(c.hpMax);
+                          }}
+                          className="text-stone-200 font-bold hover:text-amber-300 hover:underline flex items-center gap-0.5 cursor-pointer bg-stone-900/60 hover:bg-stone-800 px-1 py-0.5 rounded border border-stone-800 transition"
+                          title="Click to edit Max HP for this combatant / player character"
+                        >
+                          <span>{c.hpMax}</span>
+                          <Pencil className="w-2.5 h-2.5 text-amber-400 opacity-70 hover:opacity-100" />
+                        </button>
+                      )}
+                    </div>
                     {c.type === 'enemy' && (
                       <span className="text-amber-400 font-bold">
                         XP: {(c.monsterXpReward ?? 450).toLocaleString()}
@@ -842,7 +1150,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                       title="Add/Toggle Condition on Combatant"
                     >
                       <option value="">+ Condition</option>
-                      {['Poisoned', 'Prone', 'Restrained', 'Blinded', 'Frightened', 'Invisible', 'Stunned', 'Paralyzed', 'Unconscious'].map(condName => (
+                      {['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious', 'Surprised'].map(condName => (
                         <option key={condName} value={condName}>
                           {(c.conditions || []).includes(condName) ? `✓ ${condName}` : condName}
                         </option>
@@ -854,36 +1162,38 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
 
               {/* Right HP controls & Actions */}
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded-lg p-1 text-xs font-mono">
-                  <button
-                    onClick={() => handleAdjustHp(c.id, -5)}
-                    className="px-1.5 py-0.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 rounded font-bold"
-                    title="-5 HP"
-                  >
-                    -5
-                  </button>
-                  <button
-                    onClick={() => handleAdjustHp(c.id, -1)}
-                    className="px-1.5 py-0.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 rounded font-bold"
-                    title="-1 HP"
-                  >
-                    -1
-                  </button>
-                  <button
-                    onClick={() => handleAdjustHp(c.id, 1)}
-                    className="px-1.5 py-0.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded font-bold"
-                    title="+1 HP"
-                  >
-                    +1
-                  </button>
-                  <button
-                    onClick={() => handleAdjustHp(c.id, 5)}
-                    className="px-1.5 py-0.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded font-bold"
-                    title="+5 HP"
-                  >
-                    +5
-                  </button>
-                </div>
+                {isDmRole && (
+                  <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded-lg p-1 text-xs font-mono">
+                    <button
+                      onClick={() => handleAdjustHp(c.id, -5)}
+                      className="px-1.5 py-0.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 rounded font-bold"
+                      title="-5 HP"
+                    >
+                      -5
+                    </button>
+                    <button
+                      onClick={() => handleAdjustHp(c.id, -1)}
+                      className="px-1.5 py-0.5 bg-rose-950/80 hover:bg-rose-900 text-rose-300 rounded font-bold"
+                      title="-1 HP"
+                    >
+                      -1
+                    </button>
+                    <button
+                      onClick={() => handleAdjustHp(c.id, 1)}
+                      className="px-1.5 py-0.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded font-bold"
+                      title="+1 HP"
+                    >
+                      +1
+                    </button>
+                    <button
+                      onClick={() => handleAdjustHp(c.id, 5)}
+                      className="px-1.5 py-0.5 bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 rounded font-bold"
+                      title="+5 HP"
+                    >
+                      +5
+                    </button>
+                  </div>
+                )}
 
                 {/* Clone Target Button */}
                 <button
@@ -894,6 +1204,36 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                   <Copy className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline font-sans">Clone</span>
                 </button>
+
+                {/* Allegiance / Control Switcher (Ally, Enemy, Player) */}
+                <select
+                  value={c.type}
+                  onChange={(e) => handleToggleAllegiance(c.id, e.target.value as 'player' | 'ally' | 'enemy')}
+                  className={`text-[11px] font-bold rounded-lg px-2 py-1 border focus:outline-none transition cursor-pointer ${
+                    c.type === 'player'
+                      ? 'bg-amber-950/80 text-amber-300 border-amber-600/50'
+                      : c.type === 'ally'
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-600/50'
+                      : 'bg-rose-950/80 text-rose-300 border-rose-600/50'
+                  }`}
+                  title="Change Combat Allegiance (e.g. Animal Handling, Charm Person, or Dominate)"
+                >
+                  <option value="ally">🛡️ Ally</option>
+                  <option value="enemy">⚔️ Enemy</option>
+                  <option value="player">👑 Player</option>
+                </select>
+
+                {/* Revive as Undead Minion Button for 0 HP or Defeated combatants */}
+                {(c.hpCurrent <= 0 || c.isDefeated) && (
+                  <button
+                    onClick={() => handleReviveAsUndeadAlly(c)}
+                    className="p-1.5 bg-purple-950 hover:bg-purple-900 border border-purple-600 text-purple-200 rounded-lg transition flex items-center gap-1 text-[11px] font-bold shadow"
+                    title="Animate / Revive Undead: Reanimate target as a loyal Undead Ally"
+                  >
+                    <span>🧟</span>
+                    <span className="hidden sm:inline font-sans">Animate Undead</span>
+                  </button>
+                )}
 
                 {c.type === 'enemy' && (
                   c.isDefeated ? (
@@ -1016,7 +1356,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               <form onSubmit={handleAddCustomNote} className="flex items-center gap-2 pt-1">
                 <input
                   type="text"
-                  placeholder="Add custom DM or player note to log..."
+                  placeholder={isDmRole ? "Add custom note as DM..." : `Add custom note as ${character.name}...`}
                   value={customNoteInput}
                   onChange={(e) => setCustomNoteInput(e.target.value)}
                   className="flex-1 bg-stone-950 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
@@ -1065,7 +1405,11 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                             {log.category}
                           </span>
                           {log.actor && (
-                            <span className="font-serif font-bold text-stone-200">
+                            <span className={`font-serif font-bold ${
+                              log.actor === 'DM'
+                                ? 'text-purple-300 bg-purple-950/80 border border-purple-600/50 px-1.5 py-0.2 rounded text-[11px] font-mono'
+                                : 'text-stone-200'
+                            }`}>
                               {log.actor}
                             </span>
                           )}

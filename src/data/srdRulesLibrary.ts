@@ -532,44 +532,6 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     wealth: { cp: 4, sp: 18, ep: 0, gp: 5, pp: 0 }
   },
   {
-    id: 'monster-5e-ogre',
-    name: 'Ogre',
-    race: 'Giant',
-    characterClass: 'Monster',
-    subclass: 'CR 2',
-    level: 4,
-    edition: '5e',
-    background: 'Large Giant',
-    alignment: 'Chaotic Evil',
-    experiencePoints: 450,
-    isMonster: true,
-    monsterXpReward: 450,
-    hpMax: 59,
-    hpCurrent: 59,
-    armorClass: 11,
-    initiativeBonus: -1,
-    speed: 40,
-    hitDiceTotal: '7d10+21',
-    hitDiceCurrent: 7,
-    abilities: {
-      STR: { score: 19 },
-      DEX: { score: 8 },
-      CON: { score: 16 },
-      INT: { score: 5 },
-      WIS: { score: 7 },
-      CHA: { score: 7 }
-    },
-    savingThrowProficiencies: [],
-    skills: make5eSkills(),
-    attacks: [
-      { id: 'atk-ogre-1', name: 'Greatclub', attackBonus: 6, damage: '2d8 + 4', damageType: 'Bludgeoning', range: '5 ft Melee' },
-      { id: 'atk-ogre-2', name: 'Javelin', attackBonus: 6, damage: '2d6 + 4', damageType: 'Piercing', range: '30/120 ft' }
-    ],
-    classFeatures: [],
-    inventory: [{ id: 'i-ogre-1', name: 'Greatclub', quantity: 1, weight: 10, equipped: true }, { id: 'i-ogre-2', name: 'Hide Armor Scraps', quantity: 1, weight: 15, equipped: true }],
-    wealth: { cp: 110, sp: 45, ep: 0, gp: 12, pp: 0 }
-  },
-  {
     id: 'monster-5e-minotaur',
     name: 'Minotaur',
     race: 'Monstrosity',
@@ -651,49 +613,6 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     ],
     inventory: [{ id: 'i-rdrag-1', name: 'Dragon Hoard Treasures', quantity: 1, weight: 500, equipped: true }],
     wealth: { cp: 12000, sp: 25000, ep: 0, gp: 8500, pp: 320 }
-  },
-  {
-    id: 'monster-5e-tarrasque',
-    name: 'The Tarrasque',
-    race: 'Monstrosity (Titan)',
-    characterClass: 'Monster',
-    subclass: 'CR 30 (Apex)',
-    level: 30,
-    edition: '5e',
-    background: 'Gargantuan Monstrosity',
-    alignment: 'Unaligned',
-    experiencePoints: 155000,
-    isMonster: true,
-    monsterXpReward: 155000,
-    hpMax: 676,
-    hpCurrent: 676,
-    armorClass: 25,
-    initiativeBonus: 0,
-    speed: 40,
-    hitDiceTotal: '33d20+330',
-    hitDiceCurrent: 33,
-    abilities: {
-      STR: { score: 30 },
-      DEX: { score: 11 },
-      CON: { score: 30 },
-      INT: { score: 3 },
-      WIS: { score: 11 },
-      CHA: { score: 11 }
-    },
-    savingThrowProficiencies: ['INT', 'WIS', 'CHA'],
-    skills: make5eSkills(),
-    attacks: [
-      { id: 'atk-tar-1', name: 'Bite', attackBonus: 19, damage: '4d12 + 10', damageType: 'Piercing', range: '10 ft Melee', notes: 'Target is grappled (escape DC 20)' },
-      { id: 'atk-tar-2', name: 'Claw', attackBonus: 19, damage: '4d8 + 10', damageType: 'Slashing', range: '15 ft Melee' },
-      { id: 'atk-tar-3', name: 'Horns', attackBonus: 19, damage: '4d10 + 10', damageType: 'Piercing', range: '10 ft Melee' },
-      { id: 'atk-tar-4', name: 'Tail Strike', attackBonus: 19, damage: '4d6 + 10', damageType: 'Bludgeoning', range: '20 ft Melee' }
-    ],
-    classFeatures: [
-      { id: 'trait-tar-1', name: 'Reflective Carapace', source: 'Tarrasque Trait', description: 'Any time the tarrasque is targeted by a Magic Missile spell, a line spell, or a spell that requires a ranged attack roll, roll a d6. On a 1 to 5, the tarrasque is unaffected. On a 6, the spell is reflected back at the caster.' },
-      { id: 'trait-tar-2', name: 'Legendary Resistance (3/Day)', source: 'Tarrasque Trait', description: 'If the tarrasque fails a saving throw, it can choose to succeed instead.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' }
-    ],
-    inventory: [],
-    wealth: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 }
   },
 
   // ----------------------- 3.5E MONSTERS -----------------------

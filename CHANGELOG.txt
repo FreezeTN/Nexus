@@ -1,0 +1,149 @@
+================================================================================
+    PEN & PAPER TTRPG VAULT & COMBAT ENGINE - DETAILED DEVELOPMENT JOURNEY
+================================================================================
+
+PROJECT: Pen & Paper D&D Vault (Multi-System TTRPG Character Sheet & DM Companion)
+FRAMEWORK: React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons
+BACKEND: Firebase Firestore, Firebase Authentication, Cloud Sync
+
+================================================================================
+CHRONOLOGICAL DEVELOPMENT MILESTONES
+================================================================================
+
+--------------------------------------------------------------------------------
+MILESTONE 1: APPLICATION FOUNDATION & INITIAL 5-SHEET SCAFFOLD
+--------------------------------------------------------------------------------
+* Initial Project Setup:
+  - Configured Vite + React 18 with TypeScript strict typing and Tailwind CSS.
+  - Formulated primary tabbed layout (`App.tsx` and `Navigation.tsx`) supporting 5 core sheets:
+    1. Sheet 1: Stats & Class Features
+    2. Sheet 2: Combat & Actions
+    3. Sheet 3: Equipment, Inventory & Wealth
+    4. Sheet 4: Spellcasting & Spell Slots
+    5. Sheet 5: Personality, Backstory & Campaign Journal
+  - Established initial state schema in `src/types.ts` (`CharacterData`, `Item`, `Spell`, `ClassFeature`, `Party`).
+  - Styled dark TTRPG visual aesthetic featuring stone grays (`stone-900`/`stone-950`) and warm amber/gold accents (`amber-500`/`amber-600`).
+
+--------------------------------------------------------------------------------
+MILESTONE 2: D&D 5e MATHEMATICAL UTILITIES & PROGRESSION ENGINE
+--------------------------------------------------------------------------------
+* Core Calculations Module (`src/utils/dndCalculations.ts`):
+  - Ability Score Modifier formula: `Math.floor((score - 10) / 2)`.
+  - Level & Proficiency Bonus calculation matrix based on total experience points (XP).
+  - Passive Perception calculation (`10 + WIS modifier + Proficiency Bonus` if proficient/expert).
+  - Armor Class (AC) calculation incorporating equipped armor types (Light, Medium, Heavy), shield bonuses, DEX modifier caps, and unarmored defense rules (Barbarian/Monk).
+  - Skill Check & Saving Throw modifier resolvers with support for Half-Proficiency (Jack of All Trades) and Expertise (2x Proficiency).
+
+* Level Progression Engine (`src/data/levelProgressionData.ts`):
+  - Complete Level 1–20 XP milestone mapping.
+  - Class-specific hit dice definitions, proficiency scaling, and spell slot progression tables (Full Casters, Half Casters, Pact Magic/Warlocks).
+
+--------------------------------------------------------------------------------
+MILESTONE 3: DYNAMIC VISUAL WIDGETS & INTERACTIVE ROLLERS
+--------------------------------------------------------------------------------
+* Animated Liquid HP Orb Component (`src/components/HpOrb.tsx`):
+  - Built standalone SVG visual widget depicting a dynamic liquid sphere for Hit Point tracking.
+  - Fluid wave animation keyframes adjusting height based on current/max HP ratio.
+  - Reactive color state transitions:
+    - High HP (>70%): Emerald green liquid.
+    - Medium HP (30%–70%): Warm amber liquid.
+    - Low HP (<30%): Deep rose/red liquid.
+    - Zero HP (0%): Dark blood-red liquid with pulsing danger overlay.
+  - Integrated quick HP modifier controls (+1, -1, +5, -5, Temp HP input, Healing).
+  - Death Saving Throw interface integrated directly into the orb when HP reaches 0 (3 Successes / 3 Failures with critical failure/success buttons).
+
+* Polyhedral Dice Rolling Engine (`src/components/DiceRoller.tsx`):
+  - Interactive 3D/Modal dice roller supporting standard TTRPG polyhedra (d4, d6, d8, d10, d12, d20, d100).
+  - Rolling modes: Normal, Advantage (roll twice, take higher), and Disadvantage (roll twice, take lower).
+  - Multi-dice combination support (e.g., 2d6 + 3) with animated result reveals and rolling log history.
+
+--------------------------------------------------------------------------------
+MILESTONE 4: ADVANCED CHARACTER PROGRESSION & MAX HP INSPECTOR
+--------------------------------------------------------------------------------
+* Level Progression & Multiclassing Modal (`src/components/modals/LevelProgressionModal.tsx`):
+  - Interactive level-up wizard allowing users to increase character levels.
+  - Choice between rolling for new Hit Points or taking the standard class average.
+  - Ability Score Improvement (ASI) vs. Feat selection interface.
+  - Multiclassing support with primary and secondary class XP tracking (`getSecondaryXp`).
+  - Class feature unlock matrix automatically offering new features at key level milestones.
+
+* Max HP Inspector Modal (`src/components/modals/MaxHpInspectorModal.tsx`):
+  - Breakdown inspector component explaining exactly how Maximum Hit Points are calculated:
+    - Base Level 1 HP + Con Modifier.
+    - Level-up HP gains across all levels.
+    - Feat bonuses (e.g., Tough Feat providing +2 HP per level).
+    - Custom DM overrides & temporary hit point buffers.
+  - Direct edit inputs allowing DMs or players to apply permanent HP overrides or curse/buff modifiers.
+
+--------------------------------------------------------------------------------
+MILESTONE 5: MULTI-SYSTEM TTRPG EXPANSION & COMPENDIUM LIBRARY
+--------------------------------------------------------------------------------
+* Multi-Ruleset Switcher Architecture:
+  - System toggle supporting multiple tabletop RPG rulesets:
+    1. D&D 5th Edition (5e) - Core default.
+    2. D&D 3.5 Edition (3.5e) - Flat-Footed AC, Touch AC, Base Attack Bonus (BAB) matrix, and Grapple score calculator.
+    3. Shadowrun System (`src/components/shadowrun/`) - Matrix attributes (Data Processing, Firewall, Attack, Sleeper), Cyberware/Bioware inventory with live Essence cost tracking, Adept Powers list, and Nuyen currency converter.
+    4. Pathfinder 2e & Call of Cthulhu ruleset UI theme overlays.
+
+* Reference Library & Ruleset Compendium:
+  - Sheet 6 (`Sheet6UserGuide.tsx`): Quick reference guide, keyboard shortcuts, and character creation walk-through.
+  - Sheet 7 (`Sheet7Compendium.tsx`): Fully searchable D&D 5e/3.5e rules compendium containing combat actions reference, status condition dictionary, spell lookup table, and equipment database.
+
+--------------------------------------------------------------------------------
+MILESTONE 6: FIREBASE BACKEND, USER AUTHENTICATION & ROLE ENGINE
+--------------------------------------------------------------------------------
+* Cloud Backend Integration (`src/lib/firebase.ts`):
+  - Firebase Authentication supporting Google Single Sign-On and Guest accounts via `AuthModal.tsx`.
+  - User Profile roles: Dungeon Master (DM) vs. Player permissions.
+  - Firestore document synchronization (`users/{uid}/characters` and `parties/{partyId}`) for cloud character saves and campaign persistence.
+
+--------------------------------------------------------------------------------
+MILESTONE 7: MULTIPLAYER SESSIONS & PARTY MANAGER
+--------------------------------------------------------------------------------
+* Live Session Lobby System (`src/components/modals/SessionLobbyModal.tsx`):
+  - Real-time session room creation generating 6-character room codes.
+  - Live member presence list showing connected players and their active character badges.
+  - Character Sheet locking engine allowing DMs to lock/unlock character sheets during active play.
+
+* Party Roster Manager (`src/components/modals/PartyManagerModal.tsx`):
+  - Aggregate party overview displaying total party HP, passive perception, armor class, and spell slots.
+  - Live synchronization across party members during combat encounters.
+
+--------------------------------------------------------------------------------
+MILESTONE 8: ADVANCED COMBAT ENCOUNTER TRACKER & ATTACK RESOLVER
+--------------------------------------------------------------------------------
+* Full Encounter & Initiative Tracker (`src/components/combat/EncounterTracker.tsx`):
+  - Initiative-sorted combatant list with turn order indicators and round counter.
+  - Automated initiative rolling taking DEX modifiers and tie-breakers into account.
+  - Minion / Mob Cloning tool ("Clone Target") for rapid monster group creation.
+  - Built-in status condition manager featuring 14 core D&D 5e conditions (Blinded, Charmed, Deafened, Frightened, Grappled, Incapacitated, Invisible, Paralyzed, Petrified, Poisoned, Prone, Restrained, Stunned, Unconscious).
+  - Turn Undead & Destroy Undead special action resolvers with WIS save DCs and CR threshold validation.
+
+* Rest & Recovery Engine (`src/components/combat/RestModal.tsx`):
+  - Short Rest modal with Hit Dice rolling, CON modifier additions, and HP restoration log.
+  - Long Rest modal restoring 100% HP, resetting spent Hit Dice, and refreshing spell slot pools.
+
+* Interactive Attack & Damage Resolver (`src/components/combat/AttackResolver.tsx`):
+  - Interactive d20 attack calculator supporting natural 20 critical hits, natural 1 fumbles, advantage/disadvantage toggles, and proficiency modifiers.
+  - Multi-damage type selector (Slashing, Piercing, Bludgeoning, Fire, Cold, Lightning, Thunder, Acid, Poison, Necrotic, Radiant, Force, Psychic).
+  - Target Selection Modal (`SpellTargetModal.tsx`) applying calculated damage or healing directly to combatants or party members.
+
+--------------------------------------------------------------------------------
+MILESTONE 9: ROLE ACCESS CONTROL REFINEMENTS & NAVIGATION ANCHORING
+--------------------------------------------------------------------------------
+* Combat Log Author Tagging:
+  - Custom log entries in Encounter Tracker now automatically tag the author's identity.
+  - Entries submitted while signed in as Dungeon Master display a stylized purple "DM" badge.
+  - Entries submitted by players display their active Character Name.
+
+* DM-Restricted Combatant Quick HP Controls:
+  - Restricted quick HP adjustment buttons (-5, -1, +1, +5) in Encounter Tracker strictly to DM users (`currentUser.role === 'DM'`).
+  - Hidden from standard Player views to streamline player UI and prevent accidental state overwrites.
+
+* Pre-Login Sticky Navigation Fix:
+  - Resolved scrolling issue where `Navigation.tsx` stayed fixed/sticky over the landing menu when unauthenticated.
+  - Dynamic positioning applied: navigation operates in relative layout mode when logged out or on the main menu, and transitions to sticky top anchoring (`top-[108px] z-30`) only when signed in with an active character sheet.
+
+================================================================================
+                    END OF DETAILED DEVELOPMENT CHANGELOG
+================================================================================

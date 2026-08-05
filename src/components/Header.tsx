@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CharacterData, RuleEdition } from '../types';
-import { getPassivePerception, getProficiencyBonus, formatModifier, convertCharacterEdition, getEffectiveSpeed, getArmorClassBreakdown } from '../utils/dndCalculations';
+import { getPassivePerception, getProficiencyBonus, formatModifier, convertCharacterEdition, getEffectiveSpeed, getArmorClassBreakdown, getCombinedLevel, getActiveClassChoice, isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
 import { getMonsterPortraitUrl } from '../data/monsterPortraits';
 import { getXpProgressDetails } from '../data/levelProgressionData';
 import { HpOrb, getHpColorClass } from './HpOrb';
 import { StatblockExportModal } from './character/StatblockExportModal';
 import { LevelProgressionModal } from './modals/LevelProgressionModal';
+import { MaxHpInspectorModal } from './modals/MaxHpInspectorModal';
 import {
   Shield,
   Zap,
@@ -38,8 +39,15 @@ import {
   RefreshCw,
   ChevronRight,
   TrendingUp,
-  Users
+  Users,
+  User,
+  Crown,
+  Sword,
+  Cloud,
+  Lock,
+  Pencil
 } from 'lucide-react';
+import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -51,6 +59,8 @@ interface HeaderProps {
   activeCharacter: CharacterData;
   partiesCount?: number;
   onOpenPartyManager?: () => void;
+  onOpenSessionLobby?: () => void;
+  activeSession?: GameSession | null;
   onSelectCharacter: (id: string) => void;
   onCreateNewCharacter: (category?: 'character' | 'monster' | 'vendor') => void;
   onDeleteCharacter: (id: string) => void;
@@ -60,6 +70,9 @@ interface HeaderProps {
   onRollInitiative: () => void;
   onSystemChange?: (system: RuleEdition) => void;
   edition?: RuleEdition;
+  currentUser?: UserProfile | null;
+  onOpenAuthModal?: () => void;
+  presenceMap?: Record<string, CharacterPresence>;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -67,6 +80,8 @@ export const Header: React.FC<HeaderProps> = ({
   activeCharacter,
   partiesCount = 0,
   onOpenPartyManager,
+  onOpenSessionLobby,
+  activeSession,
   onSelectCharacter,
   onCreateNewCharacter,
   onDeleteCharacter,
@@ -75,7 +90,10 @@ export const Header: React.FC<HeaderProps> = ({
   onImportJson,
   onRollInitiative,
   onSystemChange,
-  edition
+  edition,
+  currentUser,
+  onOpenAuthModal,
+  presenceMap = {}
 }) => {
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -86,6 +104,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
   const [hpDelta, setHpDelta] = useState<string>('');
+  const [showMaxHpInspector, setShowMaxHpInspector] = useState<boolean>(false);
+  const effectiveMaxHp = getEffectiveMaxHp(activeCharacter);
 
   const xpProgressDetails = getXpProgressDetails(activeCharacter.experiencePoints || 0, activeCharacter.level || 1);
 
@@ -130,38 +150,95 @@ export const Header: React.FC<HeaderProps> = ({
   const speedInfo = getEffectiveSpeed(activeCharacter);
 
   const handleApplyHpChange = (type: 'heal' | 'damage' | 'temp') => {
-    const amount = parseInt(hpDelta) || 0;
-    if (amount <= 0) return;
+    const amount = parseInt(hpDelta) || (type === 'heal' || type === 'damage' ? 1 : 0);
+    if (amount <= 0 && type !== 'temp') return;
 
     let { hpCurrent, hpMax, hpTemp } = activeCharacter;
 
     if (type === 'heal') {
-      hpCurrent = Math.min(hpMax, hpCurrent + amount);
+      const wasAtZero = activeCharacter.hpCurrent <= 0;
+      hpCurrent = Math.min(effectiveMaxHp, hpCurrent + amount);
+      let deathSavesSuccesses = activeCharacter.deathSavesSuccesses || 0;
+      let deathSavesFailures = activeCharacter.deathSavesFailures || 0;
+      let conditions = activeCharacter.conditions || [];
+
+      if (wasAtZero && amount > 0) {
+        deathSavesSuccesses = 0;
+        deathSavesFailures = 0;
+        conditions = conditions.filter(c => c !== 'Unconscious');
+      }
+
+      onUpdateCharacter({
+        ...activeCharacter,
+        hpCurrent,
+        hpTemp,
+        deathSavesSuccesses,
+        deathSavesFailures,
+        conditions
+      });
+      setHpDelta('');
     } else if (type === 'damage') {
+      const wasAtZero = activeCharacter.hpCurrent <= 0;
+      let damageToHp = amount;
+
       if (hpTemp > 0) {
         if (amount <= hpTemp) {
           hpTemp -= amount;
+          damageToHp = 0;
         } else {
-          const remainder = amount - hpTemp;
+          damageToHp = amount - hpTemp;
           hpTemp = 0;
-          hpCurrent = Math.max(0, hpCurrent - remainder);
+          hpCurrent = Math.max(0, hpCurrent - damageToHp);
         }
       } else {
         hpCurrent = Math.max(0, hpCurrent - amount);
       }
+
+      let deathSavesFailures = activeCharacter.deathSavesFailures || 0;
+      let conditions = activeCharacter.conditions || [];
+
+      // Receiving a hit while at 0 HP automatically adds a failed death save
+      if (wasAtZero && amount > 0) {
+        deathSavesFailures = Math.min(3, deathSavesFailures + 1);
+      }
+
+      const isNowDead = deathSavesFailures >= 3;
+      if (isNowDead) {
+        if (!conditions.includes('Dead')) {
+          conditions = [...conditions, 'Dead'];
+        }
+      } else if (hpCurrent <= 0) {
+        if (!conditions.includes('Unconscious')) {
+          conditions = [...conditions, 'Unconscious'];
+        }
+      }
+
+      onUpdateCharacter({
+        ...activeCharacter,
+        hpCurrent,
+        hpTemp,
+        deathSavesFailures,
+        conditions
+      });
+      setHpDelta('');
     } else if (type === 'temp') {
       hpTemp = amount;
+      onUpdateCharacter({
+        ...activeCharacter,
+        hpCurrent,
+        hpTemp
+      });
+      setHpDelta('');
     }
-
-    onUpdateCharacter({
-      ...activeCharacter,
-      hpCurrent,
-      hpTemp
-    });
-    setHpDelta('');
   };
 
   const handleShortRest = () => {
+    if (isCharacterDead(activeCharacter)) {
+      alert(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life.`);
+      setShowRestModal(null);
+      return;
+    }
+
     // Reset short rest features
     const updatedFeatures = activeCharacter.classFeatures.map(cf => {
       if (cf.recharge === 'Short Rest' && cf.usesMax !== undefined) {
@@ -178,6 +255,12 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const handleLongRest = () => {
+    if (isCharacterDead(activeCharacter)) {
+      alert(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life. Magic such as Revivify, Raise Dead, or manual HP edit is required.`);
+      setShowRestModal(null);
+      return;
+    }
+
     // Reset HP, spell slots, death saves, short and long rest features
     const updatedFeatures = activeCharacter.classFeatures.map(cf => {
       if ((cf.recharge === 'Short Rest' || cf.recharge === 'Long Rest') && cf.usesMax !== undefined) {
@@ -275,83 +358,137 @@ export const Header: React.FC<HeaderProps> = ({
               </div>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
-              {(() => {
-                const activePortrait = activeCharacter.portraitUrl || (activeCharacter.isMonster ? getMonsterPortraitUrl(activeCharacter.name, activeCharacter.id) : undefined);
-                const systemChars = characters.filter((c) => (c.edition || '5e') === currentEdition);
-                const dropdownList = systemChars.some((c) => c.id === activeCharacter.id)
-                  ? systemChars
-                  : [activeCharacter, ...systemChars.filter((c) => c.id !== activeCharacter.id)];
+              {!currentUser ? (
+                <button
+                  onClick={onOpenAuthModal}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow transition cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5" /> Sign In to Select Character
+                </button>
+              ) : (
+                (() => {
+                  const isPlayerRole = currentUser.role === 'Player';
+                  const currentUserId = currentUser.uid || 'guest_player';
 
-                const playerChars = dropdownList.filter((c) => !c.isMonster && !c.isVendor);
-                const monsterChars = dropdownList.filter((c) => c.isMonster);
-                const merchantChars = dropdownList.filter((c) => c.isVendor && !c.isMonster);
+                  const activePortrait = activeCharacter.portraitUrl || (activeCharacter.isMonster ? getMonsterPortraitUrl(activeCharacter.name, activeCharacter.id) : undefined);
+                  const systemChars = characters.filter((c) => (c.edition || '5e') === currentEdition);
+                  const dropdownList = systemChars.some((c) => c.id === activeCharacter.id)
+                    ? systemChars
+                    : [activeCharacter, ...systemChars.filter((c) => c.id !== activeCharacter.id)];
 
-                return (
-                  <div className="flex items-center gap-2">
-                    {activePortrait && (
-                      <img
-                        src={activePortrait}
-                        alt={activeCharacter.name}
-                        className="w-8 h-8 rounded-lg object-cover border border-amber-500/60 shadow shrink-0"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
-                      />
-                    )}
-                    <select
-                      value={activeCharacter.id}
-                      onChange={(e) => onSelectCharacter(e.target.value)}
-                      className="bg-stone-800 border border-stone-700 hover:border-theme-accent rounded-lg px-3 py-1 font-serif text-lg font-bold text-theme-text focus:outline-none focus:ring-2 focus:ring-theme-accent"
-                    >
-                      {playerChars.length > 0 && (
-                        <optgroup label="🧙 Player Characters">
-                          {playerChars.map((char) => {
-                            const secClassStr = (char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass)
-                              ? ` / ${char.optionalRules.secondaryClass} Lv.${char.optionalRules.secondaryLevel || 1}`
-                              : '';
-                            return (
+                  const playerChars = dropdownList.filter((c) => !c.isMonster && !c.isVendor);
+                  const monsterChars = isPlayerRole ? [] : dropdownList.filter((c) => c.isMonster);
+                  const merchantChars = isPlayerRole ? [] : dropdownList.filter((c) => c.isVendor && !c.isMonster);
+
+                  const activePresence = presenceMap[activeCharacter.id];
+                  const activeDmIsHere = !!activePresence?.dmActive;
+
+                  return (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {activePortrait && (
+                        <img
+                          src={activePortrait}
+                          alt={activeCharacter.name}
+                          className="w-8 h-8 rounded-lg object-cover border border-amber-500/60 shadow shrink-0"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <select
+                        value={activeCharacter.id}
+                        onChange={(e) => onSelectCharacter(e.target.value)}
+                        className="bg-stone-800 border border-stone-700 hover:border-theme-accent rounded-lg px-3 py-1 font-serif text-lg font-bold text-theme-text focus:outline-none focus:ring-2 focus:ring-theme-accent max-w-[260px] sm:max-w-none truncate"
+                      >
+                        {playerChars.length > 0 && (
+                          <optgroup label="🧙 Player Characters">
+                            {playerChars.map((char) => {
+                              const isDual = char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass;
+                              const secClassStr = isDual
+                                ? ` / ${char.optionalRules?.secondaryClass} Lv.${char.optionalRules?.secondaryLevel || 1}`
+                                : '';
+                              const statusTag = isCharacterDead(char) ? ' 💀 [DEAD]' : char.hpCurrent <= 0 ? ' 💤 [UNCONSCIOUS]' : '';
+
+                              const presence = presenceMap[char.id];
+                              const activeUserId = presence?.activeUserId;
+                              const activeUserName = presence?.activeUserName || 'Player';
+                              const isLockedByOtherPlayer = isPlayerRole && !!activeUserId && activeUserId !== currentUserId;
+                              const isCharDmActive = !!presence?.dmActive;
+
+                              let lockOrActiveLabel = '';
+                              if (isLockedByOtherPlayer) {
+                                lockOrActiveLabel = ` [🔒 Active: ${activeUserName}]`;
+                              } else if (activeUserId && activeUserId !== currentUserId) {
+                                lockOrActiveLabel = ` [Active: ${activeUserName}]`;
+                              }
+
+                              if (isCharDmActive) {
+                                lockOrActiveLabel += ' [👑 DM Active]';
+                              }
+
+                              return (
+                                <option 
+                                  key={char.id} 
+                                  value={char.id}
+                                  disabled={isLockedByOtherPlayer}
+                                >
+                                  {char.name} ({char.race} {char.characterClass || 'Runner'} Lv.{char.level}{secClassStr}){statusTag}{lockOrActiveLabel}
+                                </option>
+                              );
+                            })}
+                          </optgroup>
+                        )}
+
+                        {monsterChars.length > 0 && (
+                          <optgroup label="👹 Monsters & Encounter Creatures">
+                            {monsterChars.map((char) => (
                               <option key={char.id} value={char.id}>
-                                {char.name} ({char.race} {char.characterClass || 'Runner'} Lv.{char.level}{secClassStr})
+                                {char.name} ({char.race} Lvl {char.level}) [MONSTER]
                               </option>
-                            );
-                          })}
-                        </optgroup>
+                            ))}
+                          </optgroup>
+                        )}
+
+                        {merchantChars.length > 0 && (
+                          <optgroup label="🏪 Merchants & Shopkeepers">
+                            {merchantChars.map((char) => (
+                              <option key={char.id} value={char.id}>
+                                {char.name} ({char.race} {char.characterClass || 'Merchant'}) [Merchant - {char.vendorMargin || 120}%]
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
+
+                      {activeDmIsHere && (
+                        <span 
+                          className="px-2.5 py-1 bg-purple-950/90 text-purple-200 border border-purple-500/80 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-lg shadow-purple-950/50 animate-pulse cursor-default"
+                          title={`DM ${activePresence?.dmUserName || ''} is active on this character`}
+                        >
+                          <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                          <span>DM Active</span>
+                          {activePresence?.dmUserName && (
+                            <span className="text-[10px] opacity-80 font-mono hidden sm:inline">({activePresence.dmUserName})</span>
+                          )}
+                        </span>
                       )}
+                    </div>
+                  );
+                })()
+              )}
 
-                      {monsterChars.length > 0 && (
-                        <optgroup label="👹 Monsters & Encounter Creatures">
-                          {monsterChars.map((char) => (
-                            <option key={char.id} value={char.id}>
-                              {char.name} ({char.race} Lvl {char.level}) [MONSTER]
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
+              {currentUser && (
+                <button
+                  onClick={() => onCreateNewCharacter()}
+                  className="p-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-amber-400 border border-stone-700 rounded-lg transition cursor-pointer"
+                  title="Create New Character"
+                >
+                  <PlusCircle className="w-5 h-5" />
+                </button>
+              )}
 
-                      {merchantChars.length > 0 && (
-                        <optgroup label="🏪 Merchants & Shopkeepers">
-                          {merchantChars.map((char) => (
-                            <option key={char.id} value={char.id}>
-                              {char.name} ({char.race} {char.characterClass || 'Merchant'}) [Merchant - {char.vendorMargin || 120}%]
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </div>
-                );
-              })()}
-
-              <button
-                onClick={() => onCreateNewCharacter()}
-                className="p-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-amber-400 border border-stone-700 rounded-lg transition cursor-pointer"
-                title="Create New Character"
-              >
-                <PlusCircle className="w-5 h-5" />
-              </button>
-
-              {onOpenPartyManager && (
+              {currentUser && onOpenPartyManager && (
                 <button
                   onClick={onOpenPartyManager}
                   className="px-2.5 py-1.5 bg-purple-950/80 hover:bg-purple-900/90 active:scale-95 text-purple-200 border border-purple-600/60 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
@@ -367,21 +504,49 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              <button
-                onClick={() => setShowConvertModal(true)}
-                className="p-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-cyan-400 border border-stone-700 rounded-lg transition cursor-pointer"
-                title={`Convert ${activeCharacter.name} to another TRPG system`}
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
+              {currentUser && onOpenAuthModal && (
+                <button
+                  onClick={onOpenAuthModal}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
+                    currentUser.role === 'DM'
+                      ? 'bg-purple-950/90 hover:bg-purple-900 text-purple-200 border-purple-500/80'
+                      : 'bg-indigo-950/90 hover:bg-indigo-900 text-indigo-200 border-indigo-500/80'
+                  }`}
+                  title={`Account: ${currentUser.displayName} (${currentUser.role})`}
+                >
+                  {currentUser.role === 'DM' ? (
+                    <Crown className="w-4 h-4 text-purple-400" />
+                  ) : (
+                    <Sword className="w-4 h-4 text-indigo-400" />
+                  )}
+                  <span className="hidden md:inline max-w-[100px] truncate">{currentUser.displayName}</span>
+                  <span className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded ${
+                    currentUser.role === 'DM' ? 'bg-purple-800/80 text-purple-100' : 'bg-indigo-800/80 text-indigo-100'
+                  }`}>
+                    {currentUser.role}
+                  </span>
+                </button>
+              )}
 
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                className="p-1.5 bg-stone-800 hover:bg-rose-950/80 hover:border-rose-600 active:scale-95 text-stone-400 hover:text-rose-300 border border-stone-700 rounded-lg transition cursor-pointer"
-                title={`Delete ${activeCharacter.name}`}
-              >
-                <Trash2 className="w-5 h-5" />
-              </button>
+              {currentUser && (
+                <>
+                  <button
+                    onClick={() => setShowConvertModal(true)}
+                    className="p-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-cyan-400 border border-stone-700 rounded-lg transition cursor-pointer"
+                    title={`Convert ${activeCharacter.name} to another TRPG system`}
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </button>
+
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    className="p-1.5 bg-stone-800 hover:bg-rose-950/80 hover:border-rose-600 active:scale-95 text-stone-400 hover:text-rose-300 border border-stone-700 rounded-lg transition cursor-pointer"
+                    title={`Delete ${activeCharacter.name}`}
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -417,70 +582,111 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {activeCharacter.isVendor && (
-            <div className="bg-theme-dark border border-theme-accent px-3 py-1.5 rounded-lg text-theme-text font-bold flex items-center gap-1.5 shadow-md">
-              <Store className="w-4 h-4 text-theme-accent" />
-              <span>Merchant Vendor ({activeCharacter.vendorMargin || 120}% Margin)</span>
-            </div>
+          {currentUser && (
+            <>
+              {activeCharacter.isVendor && (
+                <div className="bg-theme-dark border border-theme-accent px-3 py-1.5 rounded-lg text-theme-text font-bold flex items-center gap-1.5 shadow-md">
+                  <Store className="w-4 h-4 text-theme-accent" />
+                  <span>Merchant Vendor ({activeCharacter.vendorMargin || 120}% Margin)</span>
+                </div>
+              )}
+              <div className="bg-stone-800/80 px-3 py-1.5 rounded-lg border border-stone-700 flex items-center gap-1.5 flex-wrap">
+                <span className="text-theme-accent font-bold">Class:</span>
+                <span>{activeCharacter.characterClass} ({activeCharacter.subclass || 'None'})</span>
+                {activeCharacter.optionalRules?.useMulticlassing && activeCharacter.optionalRules?.secondaryClass && (
+                  <span className="text-theme-light font-semibold bg-theme-dark border border-theme-accent px-1.5 py-0.5 rounded text-[11px]">
+                    / {activeCharacter.optionalRules.secondaryClass}
+                    {activeCharacter.optionalRules.secondarySubclass ? ` (${activeCharacter.optionalRules.secondarySubclass})` : ''}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setShowLevelModal(true)}
+                className="bg-stone-800/90 hover:bg-stone-700/90 border border-amber-600/50 hover:border-amber-400 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 text-xs text-stone-100 shadow-md group"
+                title="Click to open Level Progression, Dual-Class Active Class Selector & Advancement Table"
+              >
+                <TrendingUp className="w-4 h-4 text-amber-400 group-hover:scale-110 transition" />
+                <span className="text-amber-300 font-bold">Level:</span>
+                {activeCharacter.optionalRules?.useMulticlassing && activeCharacter.optionalRules?.secondaryClass ? (
+                  <div className="flex items-center gap-1.5 font-sans">
+                    <span className="font-mono font-extrabold text-amber-200 text-sm bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/40">
+                      Comb. Lvl {getCombinedLevel(activeCharacter)}
+                    </span>
+                    <span className="text-[11px] text-stone-300">
+                      ({activeCharacter.characterClass} {activeCharacter.level} / {activeCharacter.optionalRules.secondaryClass} {activeCharacter.optionalRules.secondaryLevel || 1})
+                    </span>
+                    <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 px-1 rounded border border-amber-500/40">
+                      {getActiveClassChoice(activeCharacter) === 'primary' ? `${activeCharacter.characterClass} Active` : `${activeCharacter.optionalRules.secondaryClass} Active`}
+                    </span>
+                  </div>
+                ) : (
+                  <span className="font-mono font-bold text-sm text-stone-100">{activeCharacter.level}</span>
+                )}
+                {xpProgressDetails.canLevelUp && (
+                  <span className="px-1.5 py-0.5 bg-emerald-500 text-stone-950 font-mono font-bold text-[10px] rounded-full animate-pulse ml-1">
+                    LEVEL UP!
+                  </span>
+                )}
+              </button>
+            </>
           )}
-          <div className="bg-stone-800/80 px-3 py-1.5 rounded-lg border border-stone-700 flex items-center gap-1.5 flex-wrap">
-            <span className="text-theme-accent font-bold">Class:</span>
-            <span>{activeCharacter.characterClass} ({activeCharacter.subclass || 'None'})</span>
-            {activeCharacter.optionalRules?.useMulticlassing && activeCharacter.optionalRules?.secondaryClass && (
-              <span className="text-theme-light font-semibold bg-theme-dark border border-theme-accent px-1.5 py-0.5 rounded text-[11px]">
-                / {activeCharacter.optionalRules.secondaryClass}
-                {activeCharacter.optionalRules.secondarySubclass ? ` (${activeCharacter.optionalRules.secondarySubclass})` : ''}
-              </span>
-            )}
-          </div>
-          <button
-            onClick={() => setShowLevelModal(true)}
-            className="bg-stone-800/90 hover:bg-stone-700/90 border border-amber-600/50 hover:border-amber-400 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 text-xs text-stone-100 shadow-md group"
-            title="Click to open Level Progression & Character Advancement Table"
-          >
-            <TrendingUp className="w-4 h-4 text-amber-400 group-hover:scale-110 transition" />
-            <span className="text-amber-300 font-bold">Level:</span>
-            <span className="font-mono font-bold text-sm text-stone-100">{activeCharacter.level}</span>
-            {activeCharacter.optionalRules?.useMulticlassing && activeCharacter.optionalRules?.secondaryClass && (
-              <span className="text-amber-200 font-semibold text-[11px]">
-                (+{activeCharacter.optionalRules.secondaryLevel || 1} {activeCharacter.optionalRules.secondaryClass})
-              </span>
-            )}
-            {xpProgressDetails.canLevelUp && (
-              <span className="px-1.5 py-0.5 bg-emerald-500 text-stone-950 font-mono font-bold text-[10px] rounded-full animate-pulse ml-1">
-                LEVEL UP!
-              </span>
-            )}
-          </button>
         </div>
 
         {/* Right: Rest, Export, Import Action Controls */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowRestModal('short')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-200 border border-amber-600/30 rounded-lg text-xs font-semibold transition"
-            title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Short Rest: 8 Hours' : 'Standard Short Rest: 1 Hour'}
-          >
-            <Sun className="w-4 h-4 text-amber-400" />
-            <span>Short Rest</span>
-            {activeCharacter?.optionalRules?.useGrittyRealismResting && (
-              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">8h</span>
-            )}
-          </button>
+          {currentUser && (
+            <>
+              <button
+                onClick={() => setShowRestModal('short')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-200 border border-amber-600/30 rounded-lg text-xs font-semibold transition"
+                title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Short Rest: 8 Hours' : 'Standard Short Rest: 1 Hour'}
+              >
+                <Sun className="w-4 h-4 text-amber-400" />
+                <span>Short Rest</span>
+                {activeCharacter?.optionalRules?.useGrittyRealismResting && (
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">8h</span>
+                )}
+              </button>
 
-          <button
-            onClick={() => setShowRestModal('long')}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40 rounded-lg text-xs font-semibold transition"
-            title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Long Rest: 7 Days' : 'Standard Long Rest: 8 Hours'}
-          >
-            <Moon className="w-4 h-4 text-amber-300" />
-            <span>Long Rest</span>
-            {activeCharacter?.optionalRules?.useGrittyRealismResting && (
-              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">7d</span>
-            )}
-          </button>
+              <button
+                onClick={() => setShowRestModal('long')}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40 rounded-lg text-xs font-semibold transition"
+                title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Long Rest: 7 Days' : 'Standard Long Rest: 8 Hours'}
+              >
+                <Moon className="w-4 h-4 text-amber-300" />
+                <span>Long Rest</span>
+                {activeCharacter?.optionalRules?.useGrittyRealismResting && (
+                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">7d</span>
+                )}
+              </button>
 
-          <div className="h-5 w-px bg-stone-800 my-auto" />
+              {onOpenSessionLobby && (
+                <button
+                  onClick={onOpenSessionLobby}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow ${
+                    activeSession
+                      ? 'bg-amber-950/90 hover:bg-amber-900 border border-amber-500 text-amber-200 animate-pulse'
+                      : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-amber-300'
+                  }`}
+                  title="Open Multiplayer Campaign Session Lobby & 6-Digit Room Code"
+                >
+                  <Users className={`w-4 h-4 ${activeSession ? 'text-emerald-400' : 'text-amber-400'}`} />
+                  {activeSession ? (
+                    <>
+                      <span>Room: <strong className="font-mono text-amber-300">{activeSession.code}</strong></span>
+                      <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono font-extrabold">
+                        {activeSession.members?.length || 1} Live
+                      </span>
+                    </>
+                  ) : (
+                    <span>Session Lobby</span>
+                  )}
+                </button>
+              )}
+
+              <div className="h-5 w-px bg-stone-800 my-auto" />
+            </>
+          )}
 
           <button
             onClick={handleTriggerInstall}
@@ -499,47 +705,59 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          <button
-            onClick={() => setShowStatblockModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition shadow"
-            title="Open Printable Statblock & JSON Backup Manager"
-          >
-            <BookOpen className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline font-serif font-bold">Statblock & Backup</span>
-          </button>
+          {currentUser && (
+            <>
+              <button
+                onClick={() => setShowStatblockModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition shadow"
+                title="Open Printable Statblock & JSON Backup Manager"
+              >
+                <BookOpen className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline font-serif font-bold">Statblock & Backup</span>
+              </button>
 
-          <button
-            onClick={onExportJson}
-            className="p-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg border border-stone-700 transition"
-            title="Export Character JSON"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+              <button
+                onClick={onExportJson}
+                className="p-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg border border-stone-700 transition"
+                title="Export Character JSON"
+              >
+                <Download className="w-4 h-4" />
+              </button>
 
-          <label
-            className="p-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg border border-stone-700 transition cursor-pointer"
-            title="Import Character JSON"
-          >
-            <Upload className="w-4 h-4" />
-            <input type="file" accept=".json" onChange={onImportJson} className="hidden" />
-          </label>
+              <label
+                className="p-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg border border-stone-700 transition cursor-pointer"
+                title="Import Character JSON"
+              >
+                <Upload className="w-4 h-4" />
+                <input type="file" accept=".json" onChange={onImportJson} className="hidden" />
+              </label>
+            </>
+          )}
         </div>
       </div>
 
       {/* Vitals & Combat Quick Status Strip */}
-      <div className="bg-stone-950/80 border-t border-stone-800 py-2.5 px-4">
+      {currentUser && (
+        <div className="bg-stone-950/80 border-t border-stone-800 py-2.5 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* Quick HP Status with Animated Orb below Rest options */}
           <div className="flex items-center gap-3 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
-            <HpOrb hpCurrent={activeCharacter.hpCurrent} hpMax={activeCharacter.hpMax} size="sm" showLabel={false} />
+            <HpOrb hpCurrent={activeCharacter.hpCurrent} hpMax={effectiveMaxHp} size="sm" showLabel={false} />
             <div>
               <div className="text-[10px] uppercase font-bold text-stone-400">Hit Points</div>
               <div className="font-mono text-sm font-bold flex items-center gap-1">
-                <span className={getHpColorClass((activeCharacter.hpCurrent / Math.max(1, activeCharacter.hpMax)) * 100)}>
+                <span className={getHpColorClass((activeCharacter.hpCurrent / Math.max(1, effectiveMaxHp)) * 100)}>
                   {activeCharacter.hpCurrent}
                 </span>
                 <span className="text-stone-500 font-normal">/</span>
-                <span className="text-stone-200">{activeCharacter.hpMax}</span>
+                <button
+                  onClick={() => setShowMaxHpInspector(true)}
+                  className="text-stone-200 hover:text-amber-300 font-mono font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer bg-stone-900/60 hover:bg-stone-800 px-1.5 py-0.5 rounded border border-stone-800 transition"
+                  title="Click to inspect Max HP breakdown (Base, Feats, Equipped Items, Spells/Drain)"
+                >
+                  <span>{effectiveMaxHp}</span>
+                  <Pencil className="w-2.5 h-2.5 text-amber-400 opacity-70 hover:opacity-100" />
+                </button>
                 {activeCharacter.hpTemp > 0 && (
                   <span className="text-cyan-400 text-xs ml-1 font-semibold">
                     (+{activeCharacter.hpTemp} Temp)
@@ -731,6 +949,7 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* Rest Confirm Modals */}
       {showRestModal && createPortal(
@@ -988,6 +1207,16 @@ export const Header: React.FC<HeaderProps> = ({
         <LevelProgressionModal
           character={activeCharacter}
           onClose={() => setShowLevelModal(false)}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* Max HP Inspector Modal */}
+      {showMaxHpInspector && onUpdateCharacter && (
+        <MaxHpInspectorModal
+          isOpen={showMaxHpInspector}
+          onClose={() => setShowMaxHpInspector(false)}
+          character={activeCharacter}
           onUpdateCharacter={onUpdateCharacter}
         />
       )}

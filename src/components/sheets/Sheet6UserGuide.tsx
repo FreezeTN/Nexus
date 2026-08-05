@@ -88,6 +88,11 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
           detail: 'Level 1: Max Hit Die + CON Mod. Subsequent Levels (Average): Floor(Hit Die / 2) + 1 + CON Mod. Rolled Mode: Rolled die result + CON Mod.'
         },
         {
+          name: 'Hit Point Maximum Breakdown Inspector',
+          action: 'Click Max HP in Header or Combat Sheet',
+          detail: 'Opens the Max HP Breakdown inspector showing Effective Max HP calculated from Base HP, Feat bonuses (e.g. Tough), Equipped Item bonuses (e.g. Ring of Vitality), active modifiers (Spells like Aid or Life Drain), and Level 4+ Exhaustion halving.'
+        },
+        {
           name: 'Carrying Capacity & Encumbrance',
           action: 'STR × 15 lbs',
           detail: 'Max Carrying Capacity = STR × 15 lbs. Push / Drag / Lift Capacity = STR × 30 lbs.'
@@ -130,6 +135,16 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
           name: 'Initiative Roll',
           action: '⚡ Init Roll Button in Header',
           detail: 'Rolls a d20 + your DEX initiative modifier and logs the result directly to the Floating Dice Roller.'
+        },
+        {
+          name: 'DM Active Presence Indicator',
+          action: '👑 DM Active Header Banner',
+          detail: 'Displays a live crown indicator whenever a Dungeon Master is actively managing or viewing this character sheet in real time.'
+        },
+        {
+          name: 'Death Saving Throws & Stabilization',
+          action: 'Combat Sheet Death Save Tracker',
+          detail: 'When at 0 HP, roll death saving throws. 3 Successes (or a Natural 20) automatically restores 1 HP so the character can act again and resets death saves. Taking damage while at 0 HP automatically adds 1 Death Save Failure (3 Failures = Character Death).'
         }
       ]
     },
@@ -156,9 +171,9 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
           detail: 'Complete 18 standard 5e skills list (Acrobatics, Athletics, Stealth, Perception, etc.). Radio/box toggles Proficiency or Expertise (+2x Prof Bonus).'
         },
         {
-          name: 'Class Features & Feats',
+          name: 'Class Features & Feats with Max HP Grants',
           action: '"+ Add Feature / Feat" Buttons',
-          detail: 'Add custom racial traits, class features (e.g. Action Surge, Second Wind), or feats with custom source tags and descriptions.'
+          detail: 'Add custom racial traits, class features (e.g. Action Surge, Second Wind), or feats with custom source tags and optional Max HP bonuses (e.g., +10 HP for Tough feat).'
         }
       ]
     },
@@ -214,9 +229,9 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
           detail: 'Track copper, silver, electrum, gold, and platinum pieces with automatic total gold value conversion.'
         },
         {
-          name: 'Inventory Items & Merchant Mode',
-          action: '"+ Add Item" Button',
-          detail: 'Track quantity, unit weight, equipped status, and notes. Toggle Merchant/Vendor mode to apply price margins for trading.'
+          name: 'Inventory Items, DR & Max HP Bonuses',
+          action: '"+ Add Item" / Item Editor',
+          detail: 'Track quantity, unit weight, equipped status, Damage Reduction (DR), Damage Resistance type, and custom Max HP bonus/penalty fields for items.'
         },
         {
           name: 'Encumbrance Calculator',

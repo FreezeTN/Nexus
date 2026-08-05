@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Attack, CharacterData, Party } from '../../types';
+import { UserProfile } from '../../lib/firebase';
 import { ShadowrunCombatPanel } from '../shadowrun/ShadowrunCombatPanel';
 import { COMBAT_CHEAT_SHEET, CombatRule } from '../../data/dndRulesData';
-import { formatModifier, getAbilityModifier, get35eTouchAC, get35eFlatFootedAC, get35eGrapple, getEffectiveSpeed, OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, getArmorClassBreakdown, isHealingItem, isHealingSpell, getHealingExpression, rollHealing, isCharacterDead, isReviveSpell } from '../../utils/dndCalculations';
+import { formatModifier, getAbilityModifier, get35eTouchAC, get35eFlatFootedAC, get35eGrapple, getEffectiveSpeed, OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, getArmorClassBreakdown, isHealingItem, isHealingSpell, getHealingExpression, rollHealing, isCharacterDead, isReviveSpell, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { HpOrb } from '../HpOrb';
 import { ConditionsPanel } from '../combat/ConditionsPanel';
 import { RestModal } from '../combat/RestModal';
 import { EncounterTracker } from '../combat/EncounterTracker';
+import { MaxHpInspectorModal } from '../modals/MaxHpInspectorModal';
+import { SpellTargetModal } from '../modals/SpellTargetModal';
 import {
   Swords,
   Shield,
@@ -25,13 +28,17 @@ import {
   Crosshair,
   Scale,
   Flame,
-  Moon
+  Moon,
+  Pencil,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 interface Sheet2Props {
   character: CharacterData;
   allCharacters?: CharacterData[];
   parties?: Party[];
+  currentUser?: UserProfile | null;
   onOpenPartyManager?: () => void;
   onUpdateCharacter: (updated: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
@@ -42,6 +49,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   character,
   allCharacters = [],
   parties = [],
+  currentUser,
   onOpenPartyManager,
   onUpdateCharacter,
   onRoll,
@@ -49,8 +57,12 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
 }) => {
   const [cheatCategory, setCheatCategory] = useState<'All' | 'Action' | 'Bonus Action' | 'Reaction' | 'Maneuver' | 'Condition'>('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showCheatSheet, setShowCheatSheet] = useState(false);
   const [showAddAttackModal, setShowAddAttackModal] = useState(false);
   const [showRestModal, setShowRestModal] = useState(false);
+  const [showMaxHpInspector, setShowMaxHpInspector] = useState(false);
+  const [targetModalSpell, setTargetModalSpell] = useState<any | null>(null);
+  const effectiveMaxHp = getEffectiveMaxHp(character);
 
   // Optional Rules Combat State
   const [isFlankingActive, setIsFlankingActive] = useState(false);
@@ -69,7 +81,25 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   const handleToggleDeathSuccess = (index: number) => {
     const current = character.deathSavesSuccesses;
     const next = current === index + 1 ? index : index + 1;
-    onUpdateCharacter({ ...character, deathSavesSuccesses: next });
+    let updatedHpCurrent = character.hpCurrent;
+    let updatedSuccesses = next;
+    let updatedFailures = character.deathSavesFailures;
+    let conds = character.conditions || [];
+
+    if (next >= 3) {
+      updatedHpCurrent = Math.max(1, updatedHpCurrent || 1);
+      updatedSuccesses = 0;
+      updatedFailures = 0;
+      conds = conds.filter(c => c !== 'Unconscious' && c !== 'Dead');
+    }
+
+    onUpdateCharacter({
+      ...character,
+      hpCurrent: updatedHpCurrent,
+      deathSavesSuccesses: updatedSuccesses,
+      deathSavesFailures: updatedFailures,
+      conditions: conds
+    });
   };
 
   const handleToggleDeathFailure = (index: number) => {
@@ -94,29 +124,40 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     let updatedSuccesses = character.deathSavesSuccesses;
     let updatedFailures = character.deathSavesFailures;
     let updatedHpCurrent = character.hpCurrent;
+    let conds = character.conditions || [];
 
     if (d20 === 20) {
-      label += ' - NAT 20! Regain 1 HP!';
-      updatedHpCurrent = Math.max(1, updatedHpCurrent);
+      label += ' - NAT 20! Regain 1 HP & Stabilized!';
+      updatedHpCurrent = Math.max(1, updatedHpCurrent || 1);
       updatedSuccesses = 0;
       updatedFailures = 0;
+      conds = conds.filter(c => c !== 'Unconscious' && c !== 'Dead');
     } else if (d20 === 1) {
       label += ' - NAT 1! 2 Failures!';
       updatedFailures = Math.min(3, updatedFailures + 2);
     } else if (d20 >= 10) {
       label += ' - Success!';
       updatedSuccesses = Math.min(3, updatedSuccesses + 1);
+      if (updatedSuccesses >= 3) {
+        label += ' 🌟 3 Successes! Regained 1 HP & Stabilized!';
+        updatedHpCurrent = Math.max(1, updatedHpCurrent || 1);
+        updatedSuccesses = 0;
+        updatedFailures = 0;
+        conds = conds.filter(c => c !== 'Unconscious' && c !== 'Dead');
+      }
     } else {
       label += ' - Failure!';
       updatedFailures = Math.min(3, updatedFailures + 1);
     }
 
     const isNowDead = updatedFailures >= 3;
-    const conds = character.conditions || [];
 
     if (isNowDead) {
       updatedHpCurrent = 0;
       label += ' 💀 3 Failures - CHARACTER DIED!';
+      if (!conds.includes('Dead')) {
+        conds = [...conds, 'Dead'];
+      }
     }
 
     onUpdateCharacter({
@@ -124,9 +165,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
       hpCurrent: updatedHpCurrent,
       deathSavesSuccesses: updatedSuccesses,
       deathSavesFailures: updatedFailures,
-      conditions: isNowDead
-        ? (conds.includes('Dead') ? conds : [...conds, 'Dead'])
-        : conds
+      conditions: conds
     });
 
     onRoll(label, 20, 1, 0, 'normal');
@@ -134,13 +173,17 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
 
   // Add Attack Handler
   const handleAddAttack = () => {
-    if (!attackName.trim()) return;
+    if (!attackName.trim()) {
+      alert('Please enter a Weapon / Spell Name before saving.');
+      return;
+    }
+    const finalType = attackDamageType === 'Custom' ? 'Slashing' : (attackDamageType || 'Slashing');
     const newAttack: Attack = {
       id: 'atk-' + Date.now(),
       name: attackName,
       attackBonus: attackBonus,
-      damage: attackDamage,
-      damageType: attackDamageType,
+      damage: attackDamage || '1d8',
+      damageType: finalType,
       range: attackRange,
       notes: attackNotes
     };
@@ -176,7 +219,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
 
     const expr = getHealingExpression(item);
     const { totalHeal, breakdown } = rollHealing(expr);
-    const newHp = Math.min(character.hpMax, character.hpCurrent + totalHeal);
+    const newHp = Math.min(effectiveMaxHp, character.hpCurrent + totalHeal);
     const hpGained = newHp - character.hpCurrent;
 
     const updatedInventory = character.inventory.map(i => {
@@ -214,7 +257,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     if (isReviveSpell(spell)) {
       const expr = spell.damage || getHealingExpression(spell) || '1d8 + 3';
       const { totalHeal } = rollHealing(expr);
-      const reviveHp = Math.min(character.hpMax, Math.max(1, totalHeal || 1));
+      const reviveHp = Math.min(effectiveMaxHp, Math.max(1, totalHeal || 1));
       const cleanedConditions = (character.conditions || []).filter(c => c !== 'Dead');
 
       onUpdateCharacter({
@@ -242,7 +285,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
 
       const expr = getHealingExpression(spell) || '1d8 + 3';
       const { totalHeal, breakdown } = rollHealing(expr);
-      const newHp = Math.min(character.hpMax, character.hpCurrent + totalHeal);
+      const newHp = Math.min(effectiveMaxHp, character.hpCurrent + totalHeal);
       const gained = newHp - character.hpCurrent;
 
       onUpdateCharacter({
@@ -257,19 +300,45 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
       return;
     }
 
-    // Non-healing spell slot deduction
-    if (spell.level > 0) {
+    // Open Target & Status Effect Application Modal for Buffs/Debuffs/Utility Spells
+    setTargetModalSpell(spell);
+  };
+
+  const handleConfirmCastSpellTarget = (spellToCast: any, selectedTargetIds: string[], condName: string) => {
+    // Deduct spell slot for caster
+    const updatedSlots = spellToCast.level > 0
+      ? character.spellSlots.map(s => s.level === spellToCast.level ? { ...s, current: Math.max(0, s.current - 1) } : s)
+      : character.spellSlots;
+
+    const availableTargets = allCharacters.length > 0 ? allCharacters : [character];
+    const targetList = availableTargets.filter(c => selectedTargetIds.includes(c.id));
+    const targetNamesStr = targetList.map(c => c.name).join(', ') || character.name;
+
+    targetList.forEach(target => {
+      const currentConds = target.conditions || [];
+      const updatedConds = currentConds.includes(condName) ? currentConds : [...currentConds, condName];
+
+      onUpdateCharacter({
+        ...target,
+        ...(target.id === character.id ? { spellSlots: updatedSlots } : {}),
+        conditions: updatedConds
+      });
+    });
+
+    if (targetList.length === 0) {
       onUpdateCharacter({
         ...character,
-        spellSlots: character.spellSlots.map(s => s.level === spell.level ? { ...s, current: Math.max(0, s.current - 1) } : s)
+        spellSlots: updatedSlots
       });
     }
 
-    if (spell.damage) {
-      onRollDamage(`Cast ${spell.name} Damage`, spell.damage);
+    if (spellToCast.damage) {
+      onRollDamage(`✨ Cast ${spellToCast.name} on ${targetNamesStr} (Damage: ${spellToCast.damage}) - Applied '${condName}'!`, spellToCast.damage);
     } else {
-      onRollDamage(`Cast ${spell.name}`, '1d20');
+      onRollDamage(`✨ Cast ${spellToCast.name} on ${targetNamesStr} - Applied '${condName}' status!`, '1d20');
     }
+
+    setTargetModalSpell(null);
   };
 
   // Class Feature Activation / Roll Handler
@@ -281,7 +350,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     if (nameLower.includes('turn undead') || nameLower.includes('destroy undead') || descLower.includes('turn undead')) {
       const wisScore = character.abilities?.WIS?.score ?? 10;
       const wisMod = Math.floor((wisScore - 10) / 2);
-      const profBonus = character.proficiencyBonus ?? (Math.floor((character.level - 1) / 4) + 2);
+      const profBonus = Math.floor((character.level - 1) / 4) + 2;
       const saveDc = 8 + profBonus + wisMod;
 
       let destroyCrText = 'None (Turn Undead only)';
@@ -312,7 +381,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     if (nameLower.includes('second wind') || descLower.includes('regain 1d10')) {
       const expr = `1d10 + ${character.level}`;
       const { totalHeal, breakdown } = rollHealing(expr);
-      const newHp = Math.min(character.hpMax, character.hpCurrent + totalHeal);
+      const newHp = Math.min(effectiveMaxHp, character.hpCurrent + totalHeal);
       const hpGained = newHp - character.hpCurrent;
 
       const updatedFeatures = character.classFeatures.map(f => {
@@ -511,9 +580,9 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
               <div className="text-2xl font-serif font-extrabold flex items-center gap-1">
                 <span
                   className={
-                    (character.hpCurrent / Math.max(1, character.hpMax)) >= 0.75
+                    (character.hpCurrent / Math.max(1, effectiveMaxHp)) >= 0.75
                       ? 'text-emerald-400 font-mono font-extrabold'
-                      : (character.hpCurrent / Math.max(1, character.hpMax)) >= 0.49
+                      : (character.hpCurrent / Math.max(1, effectiveMaxHp)) >= 0.49
                       ? 'text-amber-400 font-mono font-extrabold'
                       : 'text-rose-500 font-mono font-extrabold animate-pulse'
                   }
@@ -521,7 +590,14 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
                   {character.hpCurrent}
                 </span>
                 <span className="text-stone-600 text-sm font-sans">/</span>
-                <span className="text-stone-200">{character.hpMax}</span>
+                <button
+                  onClick={() => setShowMaxHpInspector(true)}
+                  className="text-stone-200 hover:text-amber-300 font-mono text-2xl font-extrabold hover:underline inline-flex items-center gap-1 cursor-pointer bg-stone-900/50 hover:bg-stone-800 px-1.5 py-0.5 rounded border border-stone-800/80 transition"
+                  title="Click to inspect & edit Max HP breakdown (Base, Feats, Equipped Items, Spells/Drain)"
+                >
+                  <span>{effectiveMaxHp}</span>
+                  <Pencil className="w-3.5 h-3.5 text-amber-400/80 hover:text-amber-300" />
+                </button>
                 {character.hpTemp > 0 && (
                   <span className="text-cyan-400 text-xs font-sans"> (+{character.hpTemp} Temp)</span>
                 )}
@@ -623,6 +699,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
         character={character}
         allCharacters={allCharacters}
         parties={parties}
+        currentUser={currentUser}
         onOpenPartyManager={onOpenPartyManager}
         onRoll={onRoll}
         onUpdateCharacter={onUpdateCharacter}
@@ -1043,79 +1120,96 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
       {/* SECTION 3: Cheat Sheet: Maneuvers & Actions */}
       <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 pb-3">
-          <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-lg">
-            <BookMarked className="w-5 h-5 text-amber-500" />
+          <button
+            onClick={() => setShowCheatSheet(!showCheatSheet)}
+            className="flex items-center gap-2 text-amber-300 font-serif font-bold text-lg hover:text-amber-200 transition text-left"
+          >
+            <BookMarked className="w-5 h-5 text-amber-500 shrink-0" />
             <span>Cheat Sheet: Combat Actions & Maneuvers</span>
-          </div>
+            <span className="text-xs font-sans font-normal text-stone-400 bg-stone-950 px-2.5 py-0.5 rounded-full border border-stone-800 ml-1">
+              {showCheatSheet ? 'Click to Hide' : 'Click to View Rules'}
+            </span>
+            {showCheatSheet ? (
+              <ChevronUp className="w-4 h-4 text-stone-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-stone-400" />
+            )}
+          </button>
 
           {/* Search bar */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search actions, maneuvers..."
-              className="w-full bg-stone-950 border border-stone-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-
-        {/* Filter Category Chips */}
-        <div className="flex overflow-x-auto gap-1.5 pb-1 text-xs">
-          {(['All', 'Action', 'Bonus Action', 'Reaction', 'Maneuver', 'Condition'] as const).map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCheatCategory(cat)}
-              className={`px-3 py-1 rounded-lg font-semibold whitespace-nowrap transition ${
-                cheatCategory === cat
-                  ? 'bg-amber-600 text-white shadow'
-                  : 'bg-stone-800 text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              {cat}s
-            </button>
-          ))}
-        </div>
-
-        {/* Rules Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
-          {filteredCheatRules.length === 0 ? (
-            <div className="col-span-full text-center text-stone-500 py-6 text-xs italic">
-              No combat rules or maneuvers found matching search.
+          {showCheatSheet && (
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search actions, maneuvers..."
+                className="w-full bg-stone-950 border border-stone-700 rounded-xl pl-9 pr-3 py-1.5 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"
+              />
             </div>
-          ) : (
-            filteredCheatRules.map((rule) => (
-              <div
-                key={rule.id}
-                className="bg-stone-950 border border-stone-800 rounded-xl p-3 text-xs flex flex-col justify-between gap-1.5"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-serif font-bold text-amber-200">{rule.name}</span>
-                  <span
-                    className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold uppercase ${
-                      rule.category === 'Action'
-                        ? 'bg-blue-950 text-blue-300 border border-blue-800'
-                        : rule.category === 'Bonus Action'
-                        ? 'bg-purple-950 text-purple-300 border border-purple-800'
-                        : rule.category === 'Reaction'
-                        ? 'bg-amber-950 text-amber-300 border border-amber-800'
-                        : rule.category === 'Maneuver'
-                        ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
-                        : 'bg-rose-950 text-rose-300 border border-rose-800'
-                    }`}
-                  >
-                    {rule.category}
-                  </span>
-                </div>
-                <div className="text-stone-300 font-medium">{rule.summary}</div>
-                <div className="text-stone-400 text-[11px] leading-relaxed pt-1 border-t border-stone-900">
-                  {rule.description}
-                </div>
-              </div>
-            ))
           )}
         </div>
+
+        {showCheatSheet && (
+          <>
+            {/* Filter Category Chips */}
+            <div className="flex overflow-x-auto gap-1.5 pb-1 text-xs">
+              {(['All', 'Action', 'Bonus Action', 'Reaction', 'Maneuver', 'Condition'] as const).map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCheatCategory(cat)}
+                  className={`px-3 py-1 rounded-lg font-semibold whitespace-nowrap transition ${
+                    cheatCategory === cat
+                      ? 'bg-amber-600 text-white shadow'
+                      : 'bg-stone-800 text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  {cat}s
+                </button>
+              ))}
+            </div>
+
+            {/* Rules Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
+              {filteredCheatRules.length === 0 ? (
+                <div className="col-span-full text-center text-stone-500 py-6 text-xs italic">
+                  No combat rules or maneuvers found matching search.
+                </div>
+              ) : (
+                filteredCheatRules.map((rule) => (
+                  <div
+                    key={rule.id}
+                    className="bg-stone-950 border border-stone-800 rounded-xl p-3 text-xs flex flex-col justify-between gap-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-serif font-bold text-amber-200">{rule.name}</span>
+                      <span
+                        className={`text-[9px] px-2 py-0.5 rounded font-mono font-bold uppercase ${
+                          rule.category === 'Action'
+                            ? 'bg-blue-950 text-blue-300 border border-blue-800'
+                            : rule.category === 'Bonus Action'
+                            ? 'bg-purple-950 text-purple-300 border border-purple-800'
+                            : rule.category === 'Reaction'
+                            ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                            : rule.category === 'Maneuver'
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                            : 'bg-rose-950 text-rose-300 border border-rose-800'
+                        }`}
+                      >
+                        {rule.category}
+                      </span>
+                    </div>
+                    <div className="text-stone-300 font-medium">{rule.summary}</div>
+                    <div className="text-stone-400 text-[11px] leading-relaxed pt-1 border-t border-stone-900">
+                      {rule.description}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* MODAL: Add Attack */}
@@ -1166,7 +1260,9 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
                   <select
                     value={OFFICIAL_DAMAGE_TYPES.some(d => d.name.toLowerCase() === attackDamageType.toLowerCase()) ? OFFICIAL_DAMAGE_TYPES.find(d => d.name.toLowerCase() === attackDamageType.toLowerCase())?.name : 'Custom'}
                     onChange={(e) => {
-                      if (e.target.value !== 'Custom') {
+                      if (e.target.value === 'Custom') {
+                        setAttackDamageType('Custom');
+                      } else {
                         setAttackDamageType(e.target.value);
                       }
                     }}
@@ -1184,7 +1280,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
                     <input
                       type="text"
                       value={attackDamageType === 'Custom' ? '' : attackDamageType}
-                      onChange={(e) => setAttackDamageType(e.target.value)}
+                      onChange={(e) => setAttackDamageType(e.target.value || 'Custom')}
                       placeholder="Type custom damage element..."
                       className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-100 mt-1"
                     />
@@ -1240,6 +1336,27 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
           onClose={() => setShowRestModal(false)}
           onUpdateCharacter={onUpdateCharacter}
           onRoll={onRoll}
+        />
+      )}
+
+      {/* Max HP Inspector Modal */}
+      {showMaxHpInspector && onUpdateCharacter && (
+        <MaxHpInspectorModal
+          isOpen={showMaxHpInspector}
+          onClose={() => setShowMaxHpInspector(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* Target & Status Effect Spell Modal */}
+      {targetModalSpell && (
+        <SpellTargetModal
+          spell={targetModalSpell}
+          caster={character}
+          allCharacters={allCharacters}
+          onClose={() => setTargetModalSpell(null)}
+          onConfirmCast={handleConfirmCastSpellTarget}
         />
       )}
     </div>

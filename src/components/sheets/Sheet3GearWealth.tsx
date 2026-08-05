@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CharacterData, GearItem, Attack } from '../../types';
+import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { ShadowrunMatrixRiggingPanel } from '../shadowrun/ShadowrunMatrixRiggingPanel';
-import { getCarryingCapacity, getTotalWeight, getTotalWealthInGold, getEncumbranceDetails, getWeightBreakdown, OFFICIAL_DAMAGE_TYPES, recalculateCharacterAC, isHealingItem, getHealingExpression, rollHealing } from '../../utils/dndCalculations';
+import { getCarryingCapacity, getTotalWeight, getTotalWealthInGold, getEncumbranceDetails, getWeightBreakdown, OFFICIAL_DAMAGE_TYPES, recalculateCharacterAC, isHealingItem, getHealingExpression, rollHealing, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import {
   Coins,
   Package,
@@ -92,6 +93,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   const [itemNotes, setItemNotes] = useState('');
   const [itemDamageReduction, setItemDamageReduction] = useState<number>(0);
   const [itemResistance, setItemResistance] = useState<string>('');
+  const [itemHpMaxBonus, setItemHpMaxBonus] = useState<number>(0);
 
   // Item Type & Specific Parameters
   const [itemType, setItemType] = useState<'Armor' | 'Weapon' | 'Misc'>('Misc');
@@ -245,7 +247,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
     }
     const expr = getHealingExpression(item);
     const { totalHeal, breakdown } = rollHealing(expr);
-    const newHp = Math.min(character.hpMax, character.hpCurrent + totalHeal);
+    const newHp = Math.min(getEffectiveMaxHp(character), character.hpCurrent + totalHeal);
     const hpGained = newHp - character.hpCurrent;
 
     const updatedInventory = character.inventory.map(i => {
@@ -265,8 +267,12 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   };
 
   const handleAddItem = () => {
-    if (!itemName.trim()) return;
+    if (!itemName.trim()) {
+      alert('Please enter an Item Name before saving.');
+      return;
+    }
     const parsedPrice = itemCostGp !== '' ? Math.max(0, parseFloat(itemCostGp) || 0) : undefined;
+    const finalDamageType = weaponDamageType === 'Custom' ? 'Slashing' : (weaponDamageType || 'Slashing');
     
     let finalNotes = itemNotes;
     if (itemType === 'Armor' && !finalNotes) {
@@ -293,11 +299,12 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
       armorType: itemType === 'Armor' ? itemArmorType : undefined,
       damageReduction: itemDamageReduction > 0 ? itemDamageReduction : undefined,
       resistance: itemResistance.trim() ? itemResistance.trim() : undefined,
+      hpMaxBonus: itemHpMaxBonus !== 0 ? itemHpMaxBonus : undefined,
       stealthDisadvantage: itemType === 'Armor' ? stealthDisadvantage : undefined,
       weaponStats: itemType === 'Weapon' ? {
         attackBonus: weaponAttackBonus,
         damage: weaponDamage,
-        damageType: weaponDamageType,
+        damageType: finalDamageType,
         range: weaponRange,
         notes: weaponNotes
       } : undefined
@@ -311,7 +318,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
         name: newItem.name,
         attackBonus: parsedAtkBonus,
         damage: weaponDamage || '1d8',
-        damageType: weaponDamageType || 'Slashing',
+        damageType: finalDamageType,
         range: weaponRange || '5 ft Melee',
         notes: weaponNotes || finalNotes
       };
@@ -326,6 +333,30 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
 
     onUpdateCharacter(recalculateCharacterAC(updatedChar));
 
+    // Auto-add new custom item to Compendium
+    try {
+      saveCustomCompendiumEntry({
+        id: 'comp-item-' + newItem.id,
+        name: newItem.name,
+        category: 'items',
+        edition: character.edition || '5e',
+        description: newItem.notes || `Custom item added by player/DM: ${newItem.name}`,
+        source: `${character.name}'s Custom Creation`,
+        isCustom: true,
+        tags: [itemType, character.edition || '5e', 'Custom'],
+        itemData: {
+          type: itemType.toLowerCase() as any,
+          cost: itemCostGp ? `${itemCostGp} gp` : '1 gp',
+          weight: itemWeight,
+          damage: weaponDamage,
+          damageType: weaponDamageType,
+          armorClass: itemArmorAc
+        }
+      });
+    } catch (e) {
+      console.error('Failed to auto-add item to compendium', e);
+    }
+
     // Reset fields
     setItemName('');
     setItemQty(1);
@@ -337,29 +368,41 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
     setItemNotes('');
     setItemDamageReduction(0);
     setItemResistance('');
+    setItemHpMaxBonus(0);
     setItemType('Misc');
     setShowAddItemModal(false);
   };
 
   const handleSaveEditedItem = () => {
-    if (!editingItem || !editingItem.name.trim()) return;
+    if (!editingItem) return;
+    if (!editingItem.name.trim()) {
+      alert('Please enter an Item Name.');
+      return;
+    }
 
     const updatedInventory = character.inventory.map(i => i.id === editingItem.id ? editingItem : i);
     let updatedAttacks = [...(character.attacks || [])];
 
-    if (editingItem.itemType === 'Weapon' && editingItem.weaponStats) {
-      const parsedAtkBonus = parseInt(String(editingItem.weaponStats.attackBonus || '0').replace(/[^0-9-]/g, '')) || 0;
+    if (editingItem.itemType === 'Weapon') {
+      const stats = editingItem.weaponStats || {
+        attackBonus: '+5',
+        damage: '1d8',
+        damageType: 'Slashing',
+        range: '5 ft Melee'
+      };
+      const parsedAtkBonus = parseInt(String(stats.attackBonus || '0').replace(/[^0-9-]/g, '')) || 0;
       const atkId = 'atk-' + editingItem.id;
       const existingAtkIdx = updatedAttacks.findIndex(a => a.id === atkId || a.name.toLowerCase() === editingItem.name.toLowerCase());
+      const finalDmgType = stats.damageType === 'Custom' ? 'Slashing' : (stats.damageType || 'Slashing');
 
       const weaponAtk: Attack = {
         id: atkId,
         name: editingItem.name,
         attackBonus: parsedAtkBonus,
-        damage: editingItem.weaponStats.damage || '1d8',
-        damageType: editingItem.weaponStats.damageType || 'Slashing',
-        range: editingItem.weaponStats.range || '5 ft Melee',
-        notes: editingItem.weaponStats.notes || editingItem.notes
+        damage: stats.damage || '1d8',
+        damageType: finalDmgType,
+        range: stats.range || '5 ft Melee',
+        notes: stats.notes || editingItem.notes
       };
 
       if (existingAtkIdx >= 0) {
@@ -1355,9 +1398,10 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                         type="text"
                         value={weaponDamage}
                         onChange={(e) => setWeaponDamage(e.target.value)}
-                        placeholder="e.g. 1d8 + 3 or 2d6 + 4"
+                        placeholder="e.g. 1d8 + 3 or 1d8 + 3 Slashing + 1d6 Fire"
                         className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-amber-200 font-mono font-bold"
                       />
+                      <span className="text-[10px] text-stone-400 block mt-0.5">Supports multi-damage (e.g. 1d8 + 3 Slashing + 1d6 Fire)</span>
                     </div>
                   </div>
 
@@ -1365,14 +1409,31 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                     <div>
                       <label className="block text-stone-400 mb-1">Damage Type</label>
                       <select
-                        value={weaponDamageType}
-                        onChange={(e) => setWeaponDamageType(e.target.value)}
-                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
+                        value={OFFICIAL_DAMAGE_TYPES.some(d => d.name.toLowerCase() === weaponDamageType.toLowerCase()) ? OFFICIAL_DAMAGE_TYPES.find(d => d.name.toLowerCase() === weaponDamageType.toLowerCase())?.name : 'Custom'}
+                        onChange={(e) => {
+                          if (e.target.value === 'Custom') {
+                            setWeaponDamageType('Custom');
+                          } else {
+                            setWeaponDamageType(e.target.value);
+                          }
+                        }}
+                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-medium"
                       >
                         {OFFICIAL_DAMAGE_TYPES.map(d => (
-                          <option key={d.name} value={d.name}>{d.name}</option>
+                          <option key={d.name} value={d.name}>{d.icon} {d.name}</option>
                         ))}
+                        <option value="Custom">✨ Custom / Dual / Multi...</option>
                       </select>
+
+                      {(!OFFICIAL_DAMAGE_TYPES.some(d => d.name.toLowerCase() === weaponDamageType.toLowerCase()) || weaponDamageType === 'Custom') && (
+                        <input
+                          type="text"
+                          value={weaponDamageType === 'Custom' ? '' : weaponDamageType}
+                          onChange={(e) => setWeaponDamageType(e.target.value || 'Custom')}
+                          placeholder="e.g. Slashing / Fire or Piercing + Poison"
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-amber-200 mt-1 font-mono text-xs"
+                        />
+                      )}
                     </div>
 
                     <div>
@@ -1482,7 +1543,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                   <Shield className="w-4 h-4 text-cyan-400" /> Defense & Combat Stats (DR & Resistance)
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-stone-300 text-xs mb-1 font-semibold">Damage Reduction (DR)</label>
                     <input
@@ -1506,6 +1567,18 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                       className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-orange-300 font-mono font-bold text-xs"
                     />
                     <span className="text-[10px] text-stone-500 block mt-0.5">Halves incoming damage of this type</span>
+                  </div>
+
+                  <div>
+                    <label className="block text-rose-300 text-xs mb-1 font-semibold">Max HP Bonus / Penalty</label>
+                    <input
+                      type="number"
+                      value={itemHpMaxBonus}
+                      onChange={(e) => setItemHpMaxBonus(parseInt(e.target.value) || 0)}
+                      placeholder="e.g. +10 or -5"
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-rose-300 font-mono font-bold text-xs"
+                    />
+                    <span className="text-[10px] text-stone-500 block mt-0.5">Applies while item is equipped</span>
                   </div>
                 </div>
               </div>
@@ -1647,13 +1720,116 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                 </label>
               </div>
 
+              {/* Weapon Specific Parameters in Edit Modal */}
+              {editingItem.itemType === 'Weapon' && (
+                <div className="p-3 bg-stone-950/80 border border-rose-600/40 rounded-xl space-y-3">
+                  <div className="text-rose-300 font-bold flex items-center gap-1.5 text-xs">
+                    <Swords className="w-4 h-4 text-rose-400" /> Weapon Combat Parameters
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-stone-400 mb-1">Attack Bonus</label>
+                      <input
+                        type="text"
+                        value={editingItem.weaponStats?.attackBonus ?? '+5'}
+                        onChange={(e) => setEditingItem({
+                          ...editingItem,
+                          weaponStats: {
+                            ...(editingItem.weaponStats || { damage: '1d8', damageType: 'Slashing', range: '5 ft Melee' }),
+                            attackBonus: e.target.value
+                          }
+                        })}
+                        placeholder="e.g. +5 or 5"
+                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-amber-300 font-mono font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-stone-400 mb-1">Damage Expression</label>
+                      <input
+                        type="text"
+                        value={editingItem.weaponStats?.damage ?? '1d8 + 3'}
+                        onChange={(e) => setEditingItem({
+                          ...editingItem,
+                          weaponStats: {
+                            ...(editingItem.weaponStats || { attackBonus: '+5', damageType: 'Slashing', range: '5 ft Melee' }),
+                            damage: e.target.value
+                          }
+                        })}
+                        placeholder="e.g. 1d8 + 3 or 1d8 + 3 Slashing + 1d6 Fire"
+                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-amber-200 font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="block text-stone-400 mb-1">Damage Type</label>
+                      <select
+                        value={OFFICIAL_DAMAGE_TYPES.some(d => d.name.toLowerCase() === (editingItem.weaponStats?.damageType || 'Slashing').toLowerCase()) ? OFFICIAL_DAMAGE_TYPES.find(d => d.name.toLowerCase() === (editingItem.weaponStats?.damageType || 'Slashing').toLowerCase())?.name : 'Custom'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditingItem({
+                            ...editingItem,
+                            weaponStats: {
+                              ...(editingItem.weaponStats || { attackBonus: '+5', damage: '1d8', range: '5 ft Melee' }),
+                              damageType: val
+                            }
+                          });
+                        }}
+                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-medium"
+                      >
+                        {OFFICIAL_DAMAGE_TYPES.map(d => (
+                          <option key={d.name} value={d.name}>{d.icon} {d.name}</option>
+                        ))}
+                        <option value="Custom">✨ Custom / Dual / Multi...</option>
+                      </select>
+
+                      {(!OFFICIAL_DAMAGE_TYPES.some(d => d.name.toLowerCase() === (editingItem.weaponStats?.damageType || 'Slashing').toLowerCase()) || editingItem.weaponStats?.damageType === 'Custom') && (
+                        <input
+                          type="text"
+                          value={editingItem.weaponStats?.damageType === 'Custom' ? '' : (editingItem.weaponStats?.damageType || '')}
+                          onChange={(e) => setEditingItem({
+                            ...editingItem,
+                            weaponStats: {
+                              ...(editingItem.weaponStats || { attackBonus: '+5', damage: '1d8', range: '5 ft Melee' }),
+                              damageType: e.target.value || 'Custom'
+                            }
+                          })}
+                          placeholder="e.g. Slashing / Fire or Piercing + Poison"
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-amber-200 mt-1 font-mono text-xs"
+                        />
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-stone-400 mb-1">Range</label>
+                      <input
+                        type="text"
+                        value={editingItem.weaponStats?.range ?? '5 ft Melee'}
+                        onChange={(e) => setEditingItem({
+                          ...editingItem,
+                          weaponStats: {
+                            ...(editingItem.weaponStats || { attackBonus: '+5', damage: '1d8', damageType: 'Slashing' }),
+                            range: e.target.value
+                          }
+                        })}
+                        placeholder="e.g. 5 ft Melee or 20/60 ft"
+                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Item Defensive Properties: Damage Reduction & Resistance */}
               <div className="p-3 bg-stone-950/80 border border-cyan-600/40 rounded-xl space-y-3">
                 <div className="text-cyan-300 font-bold flex items-center gap-1.5 text-xs">
                   <Shield className="w-4 h-4 text-cyan-400" /> Defense & Combat Stats (DR & Resistance)
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-stone-300 text-xs mb-1 font-semibold">Damage Reduction (DR)</label>
                     <input
@@ -1680,6 +1856,20 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                       })}
                       placeholder="e.g. Fire, Cold, Slashing, All"
                       className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-orange-300 font-mono font-bold text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-rose-300 text-xs mb-1 font-semibold">Max HP Bonus / Penalty</label>
+                    <input
+                      type="number"
+                      value={editingItem.hpMaxBonus || 0}
+                      onChange={(e) => setEditingItem({
+                        ...editingItem,
+                        hpMaxBonus: parseInt(e.target.value) || 0
+                      })}
+                      placeholder="e.g. +10 or -5"
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-rose-300 font-mono font-bold text-xs"
                     />
                   </div>
                 </div>

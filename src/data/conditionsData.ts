@@ -119,6 +119,78 @@ export const DND_CONDITIONS: ConditionInfo[] = [
     description: 'An unconscious creature is incapacitated, can’t move or speak, and is unaware of surroundings. Drops held items and falls prone. Auto-fails STR and DEX saves. Attacks against it have advantage, and hits within 5 ft are critical hits.',
     colorClass: 'border-red-700 bg-red-950 text-red-200',
     badgeClass: 'bg-red-950 text-red-200 border-red-500 font-bold'
+  },
+  {
+    id: 'bless',
+    name: 'Bless',
+    summary: '✨ Spell Buff: +1d4 (~+2) bonus to attack rolls and saving throws.',
+    description: 'You bless targets. Whenever a target makes an attack roll or saving throw before the spell ends, the target can roll a d4 and add the number rolled to the attack roll or saving throw.',
+    colorClass: 'border-cyan-500/50 bg-cyan-950/40 text-cyan-200',
+    badgeClass: 'bg-cyan-900/90 text-cyan-200 border-cyan-400 font-bold'
+  },
+  {
+    id: 'bane',
+    name: 'Bane',
+    summary: '💀 Spell Debuff: -1d4 (~-2) penalty to attack rolls and saving throws.',
+    description: 'Targets must subtract a d4 from all attack rolls and saving throws made before the spell ends.',
+    colorClass: 'border-purple-600/50 bg-purple-950/40 text-purple-200',
+    badgeClass: 'bg-purple-900/90 text-purple-200 border-purple-500 font-bold'
+  },
+  {
+    id: 'shield',
+    name: 'Shield',
+    summary: '🛡️ Spell Reaction: +5 bonus to AC until start of next turn.',
+    description: 'An invisible barrier of magical force appears and protects you. You have a +5 bonus to AC until the start of your next turn.',
+    colorClass: 'border-blue-500/50 bg-blue-950/40 text-blue-200',
+    badgeClass: 'bg-blue-900/90 text-blue-200 border-blue-400 font-bold'
+  },
+  {
+    id: 'haste',
+    name: 'Haste',
+    summary: '⚡ Spell Buff: +2 AC, double speed, advantage on DEX saves & extra attack.',
+    description: 'Target’s speed is doubled, it gains a +2 bonus to AC, advantage on DEX saving throws, and an additional action on each of its turns.',
+    colorClass: 'border-amber-400/50 bg-amber-950/40 text-amber-200',
+    badgeClass: 'bg-amber-800/90 text-amber-100 border-amber-400 font-bold'
+  },
+  {
+    id: 'guidance',
+    name: 'Guidance',
+    summary: '✨ Spell Cantrip: +1d4 (~+2) bonus to one attack roll or ability check.',
+    description: 'Target touches a willing creature. Once before the spell ends, the target can roll a d4 and add the number rolled to one attack roll or ability check.',
+    colorClass: 'border-teal-500/50 bg-teal-950/40 text-teal-200',
+    badgeClass: 'bg-teal-900/90 text-teal-200 border-teal-400 font-bold'
+  },
+  {
+    id: 'bardic-inspiration',
+    name: 'Bardic Inspiration',
+    summary: '🎵 Class Buff: +1d6 (~+3) bonus to attack roll, check, or save.',
+    description: 'Add a Bardic Inspiration die (+1d6/d8/d10/d12) to one attack roll, ability check, or saving throw.',
+    colorClass: 'border-emerald-500/50 bg-emerald-950/40 text-emerald-200',
+    badgeClass: 'bg-emerald-900/90 text-emerald-200 border-emerald-400 font-bold'
+  },
+  {
+    id: 'archery-style',
+    name: 'Archery Style',
+    summary: '🏹 Fighting Style: +2 bonus to ranged attack rolls.',
+    description: 'You gain a +2 bonus to attack rolls you make with ranged weapons.',
+    colorClass: 'border-lime-500/50 bg-lime-950/40 text-lime-200',
+    badgeClass: 'bg-lime-900/90 text-lime-200 border-lime-400 font-bold'
+  },
+  {
+    id: 'cover-half',
+    name: 'Cover: Half',
+    summary: '🛡️ Cover (+2 AC & DEX Saves): Obstacle blocks at least half of body.',
+    description: 'A target with half cover has a +2 bonus to Armor Class and Dexterity saving throws.',
+    colorClass: 'border-stone-500/50 bg-stone-900/50 text-stone-200',
+    badgeClass: 'bg-stone-800 text-stone-200 border-stone-500'
+  },
+  {
+    id: 'cover-three-quarters',
+    name: 'Cover: 3/4',
+    summary: '🛡️ Cover (+5 AC & DEX Saves): Obstacle blocks at least 3/4 of body.',
+    description: 'A target with three-quarters cover has a +5 bonus to Armor Class and Dexterity saving throws.',
+    colorClass: 'border-stone-600/70 bg-stone-950/70 text-stone-100',
+    badgeClass: 'bg-stone-900 text-stone-100 border-stone-400 font-bold'
   }
 ];
 

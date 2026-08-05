@@ -26,10 +26,15 @@ export function playDiceSound() {
       webkitAudioContext?: typeof AudioContext;
     };
     const AudioContextClass = windowAudio.AudioContext || windowAudio.webkitAudioContext;
-    if (!AudioContextClass) return;
+    if (!AudioContextClass || typeof AudioContextClass !== 'function') return;
 
     if (!audioCtx) {
-      audioCtx = new AudioContextClass();
+      try {
+        audioCtx = new AudioContextClass();
+      } catch (e) {
+        console.warn('Could not instantiate AudioContext:', e);
+        return;
+      }
     }
     if (audioCtx.state === 'suspended') {
       audioCtx.resume();

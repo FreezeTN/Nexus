@@ -106,18 +106,131 @@ export function getSpellAttackBonus(char: CharacterData): number {
   return profBonus + abilityMod;
 }
 
-export function getEffectiveLevel(char: CharacterData): number {
-  if (char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryLevel) {
-    return char.level + Math.max(1, char.optionalRules.secondaryLevel);
+export function getCombinedLevel(char: CharacterData): number {
+  if (char.optionalRules?.useMulticlassing) {
+    const secLvl = char.optionalRules.secondaryLevel || 1;
+    return char.level + Math.max(1, secLvl);
   }
   return char.level;
+}
+
+export function getEffectiveLevel(char: CharacterData): number {
+  return getCombinedLevel(char);
+}
+
+export function getActiveClassChoice(char: CharacterData): 'primary' | 'secondary' {
+  return char.optionalRules?.activeClassChoice || 'primary';
+}
+
+export function getPrimaryXp(char: CharacterData): number {
+  if (!char.optionalRules?.useMulticlassing || !char.optionalRules?.secondaryClass) {
+    return char.experiencePoints || 0;
+  }
+  if (char.optionalRules?.primaryXp !== undefined) {
+    return char.optionalRules.primaryXp;
+  }
+  const secXp = char.optionalRules?.secondaryXp ?? 0;
+  return Math.max(0, (char.experiencePoints || 0) - secXp);
+}
+
+export function getSecondaryXp(char: CharacterData): number {
+  if (char.optionalRules?.secondaryXp !== undefined) {
+    return char.optionalRules.secondaryXp;
+  }
+  const secLevel = char.optionalRules?.secondaryLevel || 1;
+  // Approximation of minimum XP threshold for secondary level
+  const thresholds = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
+  return thresholds[secLevel] || 0;
+}
+
+export function getRequiredLevelForSpellSlotLevel(slotLevel: number, char: CharacterData): number {
+  const cls = (char.characterClass || '').toLowerCase();
+  const secCls = (char.optionalRules?.secondaryClass || '').toLowerCase();
+
+  const isHalfCaster = cls.includes('paladin') || cls.includes('ranger') || secCls.includes('paladin') || secCls.includes('ranger');
+  const isArtificer = cls.includes('artificer') || secCls.includes('artificer');
+  const isThirdCaster = cls.includes('knight') || cls.includes('trickster') || secCls.includes('knight') || secCls.includes('trickster');
+
+  if (isHalfCaster) {
+    if (slotLevel === 1) return 2;
+    if (slotLevel === 2) return 5;
+    if (slotLevel === 3) return 9;
+    if (slotLevel === 4) return 13;
+    if (slotLevel === 5) return 17;
+    return 20;
+  }
+
+  if (isArtificer) {
+    if (slotLevel === 1) return 1;
+    if (slotLevel === 2) return 5;
+    if (slotLevel === 3) return 9;
+    if (slotLevel === 4) return 13;
+    if (slotLevel === 5) return 17;
+    return 20;
+  }
+
+  if (isThirdCaster) {
+    if (slotLevel === 1) return 3;
+    if (slotLevel === 2) return 7;
+    if (slotLevel === 3) return 13;
+    if (slotLevel === 4) return 19;
+    return 20;
+  }
+
+  // Full Caster / Warlock / Standard
+  return Math.max(1, (slotLevel * 2) - 1);
+}
+
+export function getMaxUnlockedSpellSlotLevel(char: CharacterData): number {
+  if (!char.isSpellcaster && (!char.spellSlots || char.spellSlots.length === 0)) {
+    return 0;
+  }
+
+  const effectiveLevel = getCombinedLevel(char);
+  let maxSlotByLevel = 0;
+
+  for (let lvl = 1; lvl <= 9; lvl++) {
+    if (effectiveLevel >= getRequiredLevelForSpellSlotLevel(lvl, char)) {
+      maxSlotByLevel = lvl;
+    } else {
+      break;
+    }
+  }
+
+  // If character has custom spell slots already granted, check the highest level slot with max > 0
+  let maxExistingSlotLevel = 0;
+  if (char.spellSlots && char.spellSlots.length > 0) {
+    char.spellSlots.forEach(s => {
+      if (s.max > 0 && s.level > maxExistingSlotLevel) {
+        maxExistingSlotLevel = s.level;
+      }
+    });
+  }
+
+  return Math.max(maxSlotByLevel, maxExistingSlotLevel);
+}
+
+export function getUnallocatedXp(char: CharacterData): number {
+  if (!char.optionalRules?.useMulticlassing || !char.optionalRules?.secondaryClass) {
+    return 0;
+  }
+  const totalGenXp = char.experiencePoints || 0;
+  const pXp = getPrimaryXp(char);
+  const sXp = getSecondaryXp(char);
+  return Math.max(0, totalGenXp - (pXp + sXp));
 }
 
 export function getEffectiveClassTitle(char: CharacterData): string {
   if (char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass) {
     const secLvl = char.optionalRules.secondaryLevel || 1;
     const secSub = char.optionalRules.secondarySubclass ? ` (${char.optionalRules.secondarySubclass})` : '';
-    return `${char.characterClass} ${char.level} / ${char.optionalRules.secondaryClass}${secSub} ${secLvl}`;
+    const combLvl = getCombinedLevel(char);
+    const activeChoice = getActiveClassChoice(char);
+    
+    const priTag = activeChoice === 'primary' ? 'Active' : 'Paused';
+    const secTag = activeChoice === 'secondary' ? 'Active' : 'Paused';
+    
+    return `${char.characterClass} ${char.level} [${priTag}] / ${char.optionalRules.secondaryClass}${secSub} ${secLvl} [${secTag}] (Total Lvl ${combLvl})`;
   }
   return `${char.characterClass} ${char.level}`;
 }
@@ -812,6 +925,405 @@ export function getEncumbranceDetails(char: CharacterData): EncumbranceDetails {
   };
 }
 
+export interface ConditionEffects {
+  speedZero: boolean;
+  speedMultiplier: number;
+  incapacitated: boolean;
+  autoFailStrDexSaves: boolean;
+  disadvantageDexSaves: boolean;
+  disadvantageAllSaves: boolean;
+  disadvantageAbilityChecks: boolean;
+  disadvantageAttackRolls: boolean;
+  advantageAttackRolls: boolean;
+  grantAdvantageToAttacker: boolean;
+  grantDisadvantageToAttacker: boolean;
+  meleeAutoCrit: boolean;
+  damageResistanceAll: boolean;
+  halfMaxHp: boolean;
+  dead: boolean;
+  extraAttackBonus: number;
+  extraAttackBonusItems: string[];
+  acBonus: number;
+  acBonusItems: string[];
+  mechanicalSummary: string[];
+}
+
+export function getConditionEffects(conditions: string[] = [], exhaustion: number = 0, isRanged: boolean = false): ConditionEffects {
+  const cSet = new Set(conditions.map(c => c.toLowerCase()));
+
+  const effects: ConditionEffects = {
+    speedZero: false,
+    speedMultiplier: 1,
+    incapacitated: false,
+    autoFailStrDexSaves: false,
+    disadvantageDexSaves: false,
+    disadvantageAllSaves: false,
+    disadvantageAbilityChecks: false,
+    disadvantageAttackRolls: false,
+    advantageAttackRolls: false,
+    grantAdvantageToAttacker: false,
+    grantDisadvantageToAttacker: false,
+    meleeAutoCrit: false,
+    damageResistanceAll: false,
+    halfMaxHp: false,
+    dead: false,
+    extraAttackBonus: 0,
+    extraAttackBonusItems: [],
+    acBonus: 0,
+    acBonusItems: [],
+    mechanicalSummary: []
+  };
+
+  if (exhaustion >= 1) effects.disadvantageAbilityChecks = true;
+  if (exhaustion >= 2) effects.speedMultiplier = 0.5;
+  if (exhaustion >= 3) {
+    effects.disadvantageAttackRolls = true;
+    effects.disadvantageAllSaves = true;
+  }
+  if (exhaustion >= 4) effects.halfMaxHp = true;
+  if (exhaustion >= 5) effects.speedZero = true;
+  if (exhaustion >= 6) effects.dead = true;
+
+  // --- STANDARD D&D 5E CONDITIONS ---
+  if (cSet.has('blinded')) {
+    effects.disadvantageAttackRolls = true;
+    effects.grantAdvantageToAttacker = true;
+    effects.disadvantageAbilityChecks = true;
+    effects.mechanicalSummary.push("Blinded: Auto-fail sight checks, disadvantage on attack rolls, enemy attacks have advantage");
+  }
+
+  if (cSet.has('charmed')) {
+    effects.mechanicalSummary.push("Charmed: Cannot attack charmer, charmer has advantage on social ability checks against you");
+  }
+
+  if (cSet.has('deafened')) {
+    effects.mechanicalSummary.push("Deafened: Auto-fail hearing checks");
+  }
+
+  if (cSet.has('frightened')) {
+    effects.disadvantageAttackRolls = true;
+    effects.disadvantageAbilityChecks = true;
+    effects.mechanicalSummary.push("Frightened: Disadvantage on attack rolls & ability checks while source of fear is in sight; cannot move closer");
+  }
+
+  if (cSet.has('grappled')) {
+    effects.speedZero = true;
+    effects.mechanicalSummary.push("Grappled: Speed reduced to 0");
+  }
+
+  if (cSet.has('incapacitated')) {
+    effects.incapacitated = true;
+    effects.mechanicalSummary.push("Incapacitated: Cannot take actions or reactions");
+  }
+
+  if (cSet.has('invisible')) {
+    effects.advantageAttackRolls = true;
+    effects.grantDisadvantageToAttacker = true;
+    effects.mechanicalSummary.push("Invisible: Advantage on your attacks, enemy attacks against you have disadvantage");
+  }
+
+  if (cSet.has('paralyzed')) {
+    effects.incapacitated = true;
+    effects.speedZero = true;
+    effects.autoFailStrDexSaves = true;
+    effects.grantAdvantageToAttacker = true;
+    effects.meleeAutoCrit = true;
+    effects.mechanicalSummary.push("Paralyzed: Incapacitated, speed 0, auto-fail STR/DEX saves, enemy attacks have advantage & hits within 5ft auto-crit");
+  }
+
+  if (cSet.has('petrified')) {
+    effects.incapacitated = true;
+    effects.speedZero = true;
+    effects.autoFailStrDexSaves = true;
+    effects.grantAdvantageToAttacker = true;
+    effects.damageResistanceAll = true;
+    effects.mechanicalSummary.push("Petrified: Transformed to stone (weight x10), incapacitated, speed 0, auto-fail STR/DEX saves, resistance to all damage, immune to poison/disease");
+  }
+
+  if (cSet.has('poisoned')) {
+    effects.disadvantageAttackRolls = true;
+    effects.disadvantageAbilityChecks = true;
+    effects.mechanicalSummary.push("Poisoned: Disadvantage on attack rolls and ability checks");
+  }
+
+  if (cSet.has('prone')) {
+    effects.disadvantageAttackRolls = true;
+    effects.mechanicalSummary.push("Prone: Disadvantage on your attacks; incoming melee attacks (5ft) have advantage, incoming ranged attacks have disadvantage");
+  }
+
+  if (cSet.has('restrained')) {
+    effects.speedZero = true;
+    effects.disadvantageAttackRolls = true;
+    effects.grantAdvantageToAttacker = true;
+    effects.disadvantageDexSaves = true;
+    effects.mechanicalSummary.push("Restrained: Speed 0, disadvantage on your attacks & DEX saves, enemy attacks have advantage");
+  }
+
+  if (cSet.has('stunned')) {
+    effects.incapacitated = true;
+    effects.speedZero = true;
+    effects.autoFailStrDexSaves = true;
+    effects.grantAdvantageToAttacker = true;
+    effects.mechanicalSummary.push("Stunned: Incapacitated, speed 0, auto-fail STR/DEX saves, enemy attacks have advantage");
+  }
+
+  if (cSet.has('unconscious')) {
+    effects.incapacitated = true;
+    effects.speedZero = true;
+    effects.autoFailStrDexSaves = true;
+    effects.grantAdvantageToAttacker = true;
+    effects.meleeAutoCrit = true;
+    effects.mechanicalSummary.push("Unconscious: Incapacitated, drops held items, falls prone, speed 0, auto-fail STR/DEX saves, enemy attacks have advantage & hits within 5ft auto-crit");
+  }
+
+  // --- SPELL BUFFS & TACTICAL EFFECTS ---
+  if (cSet.has('bless')) {
+    effects.extraAttackBonus += 2;
+    effects.extraAttackBonusItems.push('Bless (+1d4 / ~+2)');
+    effects.mechanicalSummary.push("Bless: +1d4 to attack rolls & saving throws");
+  }
+
+  if (cSet.has('bane')) {
+    effects.extraAttackBonus -= 2;
+    effects.extraAttackBonusItems.push('Bane (-1d4 / ~-2)');
+    effects.mechanicalSummary.push("Bane: -1d4 to attack rolls & saving throws");
+  }
+
+  if (cSet.has('guidance')) {
+    effects.extraAttackBonus += 2;
+    effects.extraAttackBonusItems.push('Guidance (+1d4 / ~+2)');
+    effects.mechanicalSummary.push("Guidance: +1d4 bonus to check / attack roll");
+  }
+
+  if (cSet.has('bardic inspiration')) {
+    effects.extraAttackBonus += 3;
+    effects.extraAttackBonusItems.push('Bardic Inspiration (+1d6 / ~+3)');
+    effects.mechanicalSummary.push("Bardic Inspiration: +1d6 to attack roll, ability check, or save");
+  }
+
+  if (cSet.has('guided strike') || cSet.has("war god's blessing") || cSet.has('guided strike (+10)')) {
+    effects.extraAttackBonus += 10;
+    effects.extraAttackBonusItems.push('Guided Strike (+10)');
+    effects.mechanicalSummary.push("Guided Strike: +10 bonus to attack roll");
+  }
+
+  if (cSet.has('archery') || cSet.has('archery style') || cSet.has('archery fighting style')) {
+    effects.extraAttackBonus += 2;
+    effects.extraAttackBonusItems.push('Archery Style (+2)');
+    effects.mechanicalSummary.push("Archery Style: +2 to ranged attack rolls");
+  }
+
+  if (cSet.has('precision attack')) {
+    effects.extraAttackBonus += 4;
+    effects.extraAttackBonusItems.push('Precision Attack (+1d8 / ~+4)');
+    effects.mechanicalSummary.push("Precision Attack: +1d8 to attack roll");
+  }
+
+  if (cSet.has('magic weapon') || cSet.has('magic weapon (+1)')) {
+    effects.extraAttackBonus += 1;
+    effects.extraAttackBonusItems.push('Magic Weapon (+1)');
+  }
+  if (cSet.has('magic weapon (+2)')) {
+    effects.extraAttackBonus += 2;
+    effects.extraAttackBonusItems.push('Magic Weapon (+2)');
+  }
+  if (cSet.has('magic weapon (+3)')) {
+    effects.extraAttackBonus += 3;
+    effects.extraAttackBonusItems.push('Magic Weapon (+3)');
+  }
+
+  if (cSet.has('shield')) {
+    effects.acBonus += 5;
+    effects.acBonusItems.push('Shield (+5 AC)');
+    effects.mechanicalSummary.push("Shield Spell: +5 bonus to AC");
+  }
+
+  if (cSet.has('haste')) {
+    effects.acBonus += 2;
+    effects.speedMultiplier *= 2;
+    effects.acBonusItems.push('Haste (+2 AC)');
+    effects.advantageAttackRolls = true;
+    effects.mechanicalSummary.push("Haste: +2 AC, double speed, advantage on DEX saves & attack rolls");
+  }
+
+  if (cSet.has('shield of faith')) {
+    effects.acBonus += 2;
+    effects.acBonusItems.push('Shield of Faith (+2 AC)');
+    effects.mechanicalSummary.push("Shield of Faith: +2 bonus to AC");
+  }
+
+  if (cSet.has('cover: half') || cSet.has('half cover')) {
+    effects.acBonus += 2;
+    effects.acBonusItems.push('Half Cover (+2 AC)');
+    effects.mechanicalSummary.push("Half Cover: +2 AC & DEX saving throws");
+  }
+
+  if (cSet.has('cover: 3/4') || cSet.has('cover: three-quarters') || cSet.has('three-quarters cover') || cSet.has('3/4 cover')) {
+    effects.acBonus += 5;
+    effects.acBonusItems.push('3/4 Cover (+5 AC)');
+    effects.mechanicalSummary.push("3/4 Cover: +5 AC & DEX saving throws");
+  }
+
+  if (cSet.has('faerie fire')) {
+    effects.grantAdvantageToAttacker = true;
+    effects.mechanicalSummary.push("Faerie Fire: Attacks against target have Advantage");
+  }
+
+  if (cSet.has('reckless attack')) {
+    effects.advantageAttackRolls = true;
+    effects.grantAdvantageToAttacker = true;
+    effects.mechanicalSummary.push("Reckless Attack: Advantage on your attacks; incoming attacks against you have Advantage");
+  }
+
+  if (cSet.has('true strike') || cSet.has('vow of enmity') || cSet.has('guiding bolt')) {
+    effects.grantAdvantageToAttacker = true;
+    effects.advantageAttackRolls = true;
+  }
+
+  if (exhaustion > 0) {
+    effects.mechanicalSummary.push(`Exhaustion Lvl ${exhaustion}: ${
+      exhaustion === 1 ? 'Disadvantage on ability checks' :
+      exhaustion === 2 ? 'Speed halved' :
+      exhaustion === 3 ? 'Disadvantage on attack rolls & saving throws' :
+      exhaustion === 4 ? 'Hit point maximum halved' :
+      exhaustion === 5 ? 'Speed reduced to 0' :
+      'Dead'
+    }`);
+  }
+
+  return effects;
+}
+
+export interface MaxHpBreakdown {
+  baseMaxHp: number;
+  featBonus: number;
+  equippedItemBonus: number;
+  tempModifier: number;
+  exhaustionHalved: boolean;
+  effectiveMaxHp: number;
+  details: string[];
+}
+
+export function getMaxHpBreakdown(char: CharacterData): MaxHpBreakdown {
+  const baseMaxHp = char.hpMax || 10;
+  let featBonus = 0;
+  let equippedItemBonus = 0;
+  const tempModifier = char.maxHpModifier || 0;
+  const details: string[] = [`Base Max HP: ${baseMaxHp}`];
+
+  // Calculate Feat Bonuses (e.g. Tough feat: +2 HP per level)
+  if (char.feats && char.feats.length > 0) {
+    char.feats.forEach(feat => {
+      if (feat.hpMaxBonus) {
+        featBonus += feat.hpMaxBonus;
+        details.push(`Feat (${feat.name}): ${feat.hpMaxBonus > 0 ? '+' : ''}${feat.hpMaxBonus} Max HP`);
+      } else if (feat.name.toLowerCase().includes('tough')) {
+        const toughValue = 2 * (char.level || 1);
+        featBonus += toughValue;
+        details.push(`Feat (${feat.name}): +${toughValue} Max HP (+2/level)`);
+      }
+    });
+  }
+
+  // Calculate Equipped Item Bonuses / Penalties
+  if (char.inventory && char.inventory.length > 0) {
+    char.inventory.forEach(item => {
+      if (item.equipped && !item.stored) {
+        let itemBonus = item.hpMaxBonus || 0;
+        
+        // Auto-detect from item name or notes if explicit hpMaxBonus not set
+        if (itemBonus === 0 && (item.notes || item.name)) {
+          const text = `${item.name} ${item.notes || ''}`;
+          const match = text.match(/(?:max\s*hp|hit\s*point\s*maximum)\s*([+-]\d+)|([+-]\d+)\s*(?:max\s*hp|hit\s*point\s*maximum)/i);
+          if (match) {
+            const parsed = parseInt(match[1] || match[2], 10);
+            if (!isNaN(parsed)) {
+              itemBonus = parsed;
+            }
+          }
+        }
+
+        if (itemBonus !== 0) {
+          const totalItemBonus = itemBonus * (item.quantity || 1);
+          equippedItemBonus += totalItemBonus;
+          details.push(`Equipped Item (${item.name}): ${totalItemBonus > 0 ? '+' : ''}${totalItemBonus} Max HP`);
+        }
+      }
+    });
+  }
+
+  // Active Spell / Drain / Curse Modifier
+  if (tempModifier !== 0) {
+    details.push(`Active Max HP Modifier (Spell/Drain/Curse): ${tempModifier > 0 ? '+' : ''}${tempModifier} Max HP`);
+  }
+
+  let subtotal = baseMaxHp + featBonus + equippedItemBonus + tempModifier;
+  subtotal = Math.max(1, subtotal);
+
+  const exhaustion = char.exhaustionLevel || 0;
+  let exhaustionHalved = false;
+  if (exhaustion >= 4) {
+    exhaustionHalved = true;
+    details.push(`Exhaustion Lvl ${exhaustion}: Hit Point Maximum Halved`);
+  }
+
+  const effectiveMaxHp = exhaustionHalved ? Math.max(1, Math.floor(subtotal / 2)) : subtotal;
+
+  return {
+    baseMaxHp,
+    featBonus,
+    equippedItemBonus,
+    tempModifier,
+    exhaustionHalved,
+    effectiveMaxHp,
+    details
+  };
+}
+
+export function getEffectiveMaxHp(char: CharacterData): number {
+  return getMaxHpBreakdown(char).effectiveMaxHp;
+}
+
+export interface SavingThrowDetails {
+  bonus: number;
+  autoFail: boolean;
+  disadvantage: boolean;
+  reason?: string;
+}
+
+export function getSavingThrowDetails(
+  abilityName: AbilityName,
+  char: CharacterData
+): SavingThrowDetails {
+  const bonus = getSavingThrowBonus(abilityName, char.abilities, char.savingThrowProficiencies || [], getEffectiveLevel(char));
+  const exhaustion = char.exhaustionLevel || 0;
+  const effects = getConditionEffects(char.conditions || [], exhaustion);
+
+  let autoFail = false;
+  let disadvantage = false;
+  const reasons: string[] = [];
+
+  if (effects.autoFailStrDexSaves && (abilityName === 'STR' || abilityName === 'DEX')) {
+    autoFail = true;
+    reasons.push(`Auto-Fail STR/DEX saves due to active condition`);
+  }
+  if (effects.disadvantageAllSaves) {
+    disadvantage = true;
+    reasons.push(`Disadvantage on saving throws from Exhaustion Lvl ${exhaustion}`);
+  }
+  if (effects.disadvantageDexSaves && abilityName === 'DEX') {
+    disadvantage = true;
+    reasons.push(`Disadvantage on DEX saves due to Restrained`);
+  }
+
+  return {
+    bonus,
+    autoFail,
+    disadvantage,
+    reason: reasons.length > 0 ? reasons.join('; ') : undefined
+  };
+}
+
 export interface SpeedDetails {
   baseSpeed: number;
   effectiveSpeed: number;
@@ -823,22 +1335,36 @@ export interface SpeedDetails {
 
 export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
   const baseSpeed = char.speed ?? 30;
+  const conditions = char.conditions || [];
+  const exhaustion = char.exhaustionLevel || 0;
+  const effects = getConditionEffects(conditions, exhaustion);
+
   const encumbrance = getEncumbranceDetails(char);
-  const speedPenalty = encumbrance.speedPenalty;
   const reasons: string[] = [];
 
-  if (encumbrance.speedPenalty > 0) {
+  let effectiveSpeed = baseSpeed;
+
+  if (effects.speedZero) {
+    effectiveSpeed = 0;
+    reasons.push('Speed reduced to 0 by active condition(s) / exhaustion');
+  } else if (effects.speedMultiplier < 1) {
+    effectiveSpeed = Math.floor(effectiveSpeed * effects.speedMultiplier);
+    reasons.push(`Speed halved (${effects.speedMultiplier}x) by Exhaustion Lvl ${exhaustion}`);
+  }
+
+  if (effectiveSpeed > 0 && encumbrance.speedPenalty > 0) {
+    effectiveSpeed = Math.max(0, effectiveSpeed - encumbrance.speedPenalty);
     reasons.push(`${encumbrance.status} (-${encumbrance.speedPenalty} ft)`);
   }
 
-  const effectiveSpeed = Math.max(0, baseSpeed - speedPenalty);
+  const speedPenalty = baseSpeed - effectiveSpeed;
 
   return {
     baseSpeed,
     effectiveSpeed,
     speedPenalty,
     isModified: speedPenalty > 0,
-    status: encumbrance.status,
+    status: effects.speedZero ? 'Speed 0 (Condition)' : encumbrance.status,
     reasons,
   };
 }
@@ -1000,10 +1526,11 @@ export function rollCompoundDamage(
     damageExpr = '1d8';
   }
 
-  // Normalize expression (remove extra spaces)
-  const normalized = damageExpr.trim();
-  // Split on '+' or '-' keeping track of terms
-  const terms = normalized.split(/(?=[+-])/).map(t => t.trim()).filter(Boolean);
+  // Remove parenthetical notes like (Versatile 1d10 + 5) or (2d6 on crit) before splitting terms
+  const cleanedExpr = damageExpr.replace(/\(.*?\)/g, '').trim();
+
+  // Normalize expression and split on '+' or '-' keeping track of terms
+  const terms = cleanedExpr.split(/(?=[+-])/).map(t => t.trim()).filter(Boolean);
 
   const effectiveCrit = isCrit && canCrit;
   const rolledParts: RolledDamagePart[] = [];
@@ -1013,10 +1540,10 @@ export function rollCompoundDamage(
     const isNegative = rawTerm.startsWith('-');
     const termClean = rawTerm.replace(/^[+-]\s*/, '').trim();
 
-    // Check if term is a dice expression, e.g., "1d8 slashing" or "2d6 fire" or "1d8"
-    const diceMatch = termClean.match(/^(\d+)d(\d+)(?:\s+([a-zA-Z]+))?/i);
-    // Check if term is a flat modifier, e.g., "3 slashing" or "3"
-    const flatMatch = termClean.match(/^(\d+)(?:\s+([a-zA-Z]+))?$/i);
+    // Check if term is a dice expression, e.g., "1d8 slashing" or "2d6 fire" or "1d8 slashing / fire"
+    const diceMatch = termClean.match(/^(\d+)d(\d+)(?:\s+(.+))?/i);
+    // Check if term is a flat modifier, e.g., "5 slashing" or "5" or "5 Slashing / Magic"
+    const flatMatch = termClean.match(/^(\d+)(?:\s+(.+))?/i);
 
     if (diceMatch) {
       let diceCount = parseInt(diceMatch[1], 10) || 1;

@@ -8,7 +8,7 @@ import {
   getMinXpForLevel,
   getNextLevelXpThreshold
 } from '../../data/levelProgressionData';
-import { getAbilityModifier, formatModifier, getProficiencyBonus } from '../../utils/dndCalculations';
+import { getAbilityModifier, formatModifier, getProficiencyBonus, getCombinedLevel, getActiveClassChoice, getPrimaryXp, getSecondaryXp, getUnallocatedXp } from '../../utils/dndCalculations';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import {
   TrendingUp,
@@ -22,7 +22,8 @@ import {
   Dices,
   Info,
   ArrowUpRight,
-  HelpCircle
+  HelpCircle,
+  Star
 } from 'lucide-react';
 
 interface LevelProgressionModalProps {
@@ -38,15 +39,134 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'table' | 'wizard' | 'award'>('table');
 
-  // XP Progress Calculations
-  const xpDetails = getXpProgressDetails(character.experiencePoints, character.level);
-  const calculatedLevelFromXp = getLevelFromTotalXp(character.experiencePoints);
+  const isDualClass = !!(character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass);
+  const activeChoiceInRules = getActiveClassChoice(character);
+  const [selectedClassKey, setSelectedClassKey] = useState<'primary' | 'secondary'>(activeChoiceInRules);
+
+  const totalGenXp = character.experiencePoints || 0;
+  const primaryXp = getPrimaryXp(character);
+  const secondaryXp = getSecondaryXp(character);
+  const unallocatedXp = getUnallocatedXp(character);
+
+  const activeClassName = selectedClassKey === 'primary'
+    ? character.characterClass
+    : (character.optionalRules?.secondaryClass || 'Secondary Class');
+
+  const activeClassLevel = selectedClassKey === 'primary'
+    ? character.level
+    : (character.optionalRules?.secondaryLevel || 1);
+
+  const activeClassXp = selectedClassKey === 'primary'
+    ? (isDualClass ? primaryXp : totalGenXp)
+    : secondaryXp;
+
+  // XP Progress Calculations for Selected Class
+  const xpDetails = getXpProgressDetails(activeClassXp, activeClassLevel);
+  const calculatedLevelFromXp = getLevelFromTotalXp(activeClassXp);
 
   // Wizard State
-  const [targetLevel, setTargetLevel] = useState<number>(() => Math.min(20, character.level + 1));
+  const [targetLevel, setTargetLevel] = useState<number>(() => Math.min(20, activeClassLevel + 1));
   const [hpMethod, setHpMethod] = useState<'average' | 'roll'>('average');
   const [rolledHpDie, setRolledHpDie] = useState<number | null>(null);
   const [customHpGain, setCustomHpGain] = useState<number | null>(null);
+
+  // Switch selected class
+  const handleSelectClass = (key: 'primary' | 'secondary') => {
+    setSelectedClassKey(key);
+    const lvl = key === 'primary' ? character.level : (character.optionalRules?.secondaryLevel || 1);
+    setTargetLevel(Math.min(20, lvl + 1));
+    setRolledHpDie(null);
+  };
+
+  const handleToggleActiveClassInRules = (key: 'primary' | 'secondary') => {
+    handleSelectClass(key);
+    onUpdateCharacter({
+      ...character,
+      optionalRules: {
+        ...character.optionalRules,
+        activeClassChoice: key
+      }
+    });
+  };
+
+  // Dual-Class XP Allocation Handlers
+  const handleAllocateXp = (targetClass: 'primary' | 'secondary', amount: number) => {
+    const currentUnallocated = getUnallocatedXp(character);
+    const allocAmount = Math.min(amount, currentUnallocated);
+    if (allocAmount <= 0) return;
+
+    if (targetClass === 'primary') {
+      const currentPx = getPrimaryXp(character);
+      const newPx = currentPx + allocAmount;
+      const newLvl = getLevelFromTotalXp(newPx);
+      const autoLvlUp = newLvl > character.level;
+
+      onUpdateCharacter({
+        ...character,
+        optionalRules: {
+          ...character.optionalRules,
+          primaryXp: newPx,
+          secondaryXp: getSecondaryXp(character)
+        },
+        ...(autoLvlUp ? { level: newLvl } : {})
+      });
+
+      if (autoLvlUp) {
+        setSelectedClassKey('primary');
+        setTargetLevel(newLvl);
+        setActiveTab('wizard');
+      }
+    } else {
+      const currentSx = getSecondaryXp(character);
+      const newSx = currentSx + allocAmount;
+      const secLvl = character.optionalRules?.secondaryLevel || 1;
+      const newLvl = getLevelFromTotalXp(newSx);
+      const autoLvlUp = newLvl > secLvl;
+
+      onUpdateCharacter({
+        ...character,
+        optionalRules: {
+          ...character.optionalRules,
+          primaryXp: getPrimaryXp(character),
+          secondaryXp: newSx,
+          ...(autoLvlUp ? { secondaryLevel: newLvl } : {})
+        }
+      });
+
+      if (autoLvlUp) {
+        setSelectedClassKey('secondary');
+        setTargetLevel(newLvl);
+        setActiveTab('wizard');
+      }
+    }
+  };
+
+  const handleSplitUnallocatedEqually = () => {
+    const currentUnallocated = getUnallocatedXp(character);
+    if (currentUnallocated <= 0) return;
+    const half = Math.floor(currentUnallocated / 2);
+    const remainder = currentUnallocated - half * 2;
+
+    const currentPx = getPrimaryXp(character);
+    const currentSx = getSecondaryXp(character);
+
+    const newPx = currentPx + half + remainder;
+    const newSx = currentSx + half;
+
+    const pLvl = getLevelFromTotalXp(newPx);
+    const sLvl = getLevelFromTotalXp(newSx);
+
+    onUpdateCharacter({
+      ...character,
+      optionalRules: {
+        ...character.optionalRules,
+        primaryXp: newPx,
+        secondaryXp: newSx,
+        ...(sLvl > (character.optionalRules?.secondaryLevel || 1) ? { secondaryLevel: sLvl } : {})
+      },
+      ...(pLvl > character.level ? { level: pLvl } : {})
+    });
+  };
 
   // ASI State
   const [selectedAsiType, setSelectedAsiType] = useState<'ability' | 'feat'>('ability');
@@ -65,7 +185,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
   const [awardAmount, setAwardAmount] = useState<number>(500);
   const [awardReason, setAwardReason] = useState<string>('Encounter Victory');
 
-  const hitDieMeta = getClassHitDie(character.characterClass);
+  const hitDieMeta = getClassHitDie(activeClassName);
   const conMod = getAbilityModifier(character.abilities.CON?.score || 10);
   const averageGainPerLevel = Math.max(1, hitDieMeta.averageHp + conMod);
 
@@ -109,46 +229,90 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
       updatedFeats.push({
         id: 'feat-' + Date.now(),
         name: selectedFeatName.trim(),
-        description: selectedFeatDesc.trim() || 'Custom feat unlocked at Level ' + targetLevel
+        description: selectedFeatDesc.trim() || `Custom feat unlocked at Level ${targetLevel} (${activeClassName})`
       });
     }
 
-    // Adjust XP to min XP threshold of new level if character's XP was lower
     const minXpNeeded = getMinXpForLevel(targetLevel);
-    const newXp = Math.max(character.experiencePoints, minXpNeeded);
 
-    const updatedChar: CharacterData = {
-      ...character,
-      level: targetLevel,
-      hpMax: newMaxHp,
-      hpCurrent: newCurrentHp,
-      hitDiceTotal: newHitDiceTotal,
-      hitDiceCurrent: Math.min(targetLevel, character.hitDiceCurrent + 1),
-      experiencePoints: newXp,
-      abilities: updatedAbilities,
-      feats: updatedFeats
-    };
+    if (selectedClassKey === 'secondary') {
+      const currentSecXp = getSecondaryXp(character);
+      const newSecXp = Math.max(currentSecXp, minXpNeeded);
+      const pXp = getPrimaryXp(character);
+      const newGenXp = Math.max(character.experiencePoints || 0, newSecXp + pXp);
 
-    onUpdateCharacter(updatedChar);
-    alert(`🎉 Level Up Complete! ${character.name} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
+      const updatedChar: CharacterData = {
+        ...character,
+        hpMax: newMaxHp,
+        hpCurrent: newCurrentHp,
+        hitDiceTotal: newHitDiceTotal,
+        abilities: updatedAbilities,
+        feats: updatedFeats,
+        experiencePoints: newGenXp,
+        optionalRules: {
+          ...character.optionalRules,
+          secondaryLevel: targetLevel,
+          secondaryXp: newSecXp,
+          primaryXp: pXp
+        }
+      };
+
+      onUpdateCharacter(updatedChar);
+      alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
+    } else {
+      const currentPriXp = getPrimaryXp(character);
+      const newPriXp = Math.max(currentPriXp, minXpNeeded);
+      const sXp = isDualClass ? getSecondaryXp(character) : 0;
+      const newGenXp = Math.max(character.experiencePoints || 0, newPriXp + sXp);
+
+      const updatedChar: CharacterData = {
+        ...character,
+        level: targetLevel,
+        hpMax: newMaxHp,
+        hpCurrent: newCurrentHp,
+        hitDiceTotal: newHitDiceTotal,
+        hitDiceCurrent: Math.min(targetLevel, character.hitDiceCurrent + 1),
+        experiencePoints: newGenXp,
+        abilities: updatedAbilities,
+        feats: updatedFeats,
+        ...(isDualClass ? {
+          optionalRules: {
+            ...character.optionalRules,
+            primaryXp: newPriXp,
+            secondaryXp: sXp
+          }
+        } : {})
+      };
+
+      onUpdateCharacter(updatedChar);
+      alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
+    }
     onClose();
   };
 
   const handleAwardXp = (amount: number) => {
-    const newTotalXp = character.experiencePoints + amount;
-    const newCalculatedLevel = getLevelFromTotalXp(newTotalXp);
-    const autoLevelUp = newCalculatedLevel > character.level;
+    const newTotalGenXp = (character.experiencePoints || 0) + amount;
 
-    const updated = {
-      ...character,
-      experiencePoints: newTotalXp
-    };
+    if (!isDualClass) {
+      const newCalculatedLevel = getLevelFromTotalXp(newTotalGenXp);
+      const autoLevelUp = newCalculatedLevel > character.level;
 
-    onUpdateCharacter(updated);
+      onUpdateCharacter({
+        ...character,
+        experiencePoints: newTotalGenXp,
+        ...(autoLevelUp ? { level: newCalculatedLevel } : {})
+      });
 
-    if (autoLevelUp) {
-      setTargetLevel(newCalculatedLevel);
-      setActiveTab('wizard');
+      if (autoLevelUp) {
+        setTargetLevel(newCalculatedLevel);
+        setActiveTab('wizard');
+      }
+    } else {
+      // General XP for dual classing (unallocated until spent)
+      onUpdateCharacter({
+        ...character,
+        experiencePoints: newTotalGenXp
+      });
     }
   };
 
@@ -177,13 +341,20 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                 <h3 className="text-xl font-serif font-bold text-amber-200">
                   {character.name}
                 </h3>
-                <span className="text-xs bg-amber-950 text-amber-300 border border-amber-600/50 font-mono font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                  <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-                  Level {character.level} {character.characterClass}
-                </span>
+                {isDualClass ? (
+                  <span className="text-xs bg-amber-900/80 text-amber-200 border border-amber-400/60 font-mono font-extrabold px-3 py-1 rounded-full flex items-center gap-1 shadow">
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                    Combined Level {getCombinedLevel(character)}
+                  </span>
+                ) : (
+                  <span className="text-xs bg-amber-950 text-amber-300 border border-amber-600/50 font-mono font-bold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                    Level {character.level} {character.characterClass}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-stone-400 mt-0.5">
-                D&D 5e Character Advancement • Total XP: <strong className="text-amber-300 font-mono">{character.experiencePoints.toLocaleString()}</strong>
+                D&D 5e Character Advancement • Viewing: <strong className="text-amber-300 font-mono">{activeClassName} (Lv. {activeClassLevel})</strong>
               </p>
             </div>
           </div>
@@ -198,7 +369,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                 className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-emerald-500/20 animate-pulse"
               >
                 <Sparkles className="w-4 h-4" />
-                <span>Level Up Available! (Lv {calculatedLevelFromXp})</span>
+                <span>Level Up Available! ({activeClassName} Lv {calculatedLevelFromXp})</span>
               </button>
             )}
 
@@ -212,14 +383,134 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
           </div>
         </div>
 
+        {/* Dual Class XP Pool & Allocator Banner */}
+        {isDualClass && (
+          <div className="bg-stone-950/95 border-b border-stone-800 p-4 px-6 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-serif font-bold text-amber-200">Dual Class XP Pool:</span>
+                <span className="text-xs font-mono text-stone-300 bg-stone-900 border border-stone-700 px-2 py-0.5 rounded-lg">
+                  General XP: <strong className="text-amber-300">{totalGenXp.toLocaleString()} XP</strong>
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded-lg border ${
+                  unallocatedXp > 0
+                    ? 'bg-amber-950/90 text-amber-300 border-amber-500/60 animate-pulse'
+                    : 'bg-stone-900 text-stone-400 border-stone-800'
+                }`}>
+                  Unallocated XP: {unallocatedXp.toLocaleString()} XP
+                </span>
+
+                {unallocatedXp > 0 && (
+                  <button
+                    onClick={handleSplitUnallocatedEqually}
+                    className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-lg text-[11px] font-mono font-bold transition flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Split 50/50</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Class Cards with XP Allocation Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              {/* Primary Class Card */}
+              <div className={`p-3 rounded-xl border transition ${
+                selectedClassKey === 'primary' ? 'bg-amber-950/30 border-amber-500/60' : 'bg-stone-900/60 border-stone-800'
+              }`}>
+                <div className="flex items-center justify-between mb-1">
+                  <button
+                    onClick={() => handleSelectClass('primary')}
+                    className="text-xs font-bold font-serif text-amber-300 hover:underline flex items-center gap-1.5"
+                  >
+                    <span>{character.characterClass} (Lv. {character.level})</span>
+                    {selectedClassKey === 'primary' && <span className="text-[10px] bg-amber-500 text-stone-950 font-sans px-1.5 py-0.2 rounded font-extrabold">SELECTED</span>}
+                  </button>
+                  <span className="text-xs font-mono font-bold text-stone-200">
+                    {primaryXp.toLocaleString()} XP Allocated
+                  </span>
+                </div>
+
+                {unallocatedXp > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2 border-t border-stone-800/80">
+                    <span className="text-[10px] text-stone-400 font-mono">Spend XP:</span>
+                    {[100, 500, 1000].map(amt => (
+                      <button
+                        key={amt}
+                        disabled={unallocatedXp < amt}
+                        onClick={() => handleAllocateXp('primary', amt)}
+                        className="px-2 py-0.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-600/40 rounded text-[10px] font-mono font-bold disabled:opacity-30 transition"
+                      >
+                        +{amt.toLocaleString()}
+                      </button>
+                    ))}
+                    <button
+                      disabled={unallocatedXp <= 0}
+                      onClick={() => handleAllocateXp('primary', unallocatedXp)}
+                      className="px-2 py-0.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded text-[10px] font-mono font-extrabold disabled:opacity-30 transition"
+                    >
+                      All ({unallocatedXp.toLocaleString()})
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Secondary Class Card */}
+              <div className={`p-3 rounded-xl border transition ${
+                selectedClassKey === 'secondary' ? 'bg-amber-950/30 border-amber-500/60' : 'bg-stone-900/60 border-stone-800'
+              }`}>
+                <div className="flex items-center justify-between mb-1">
+                  <button
+                    onClick={() => handleSelectClass('secondary')}
+                    className="text-xs font-bold font-serif text-amber-300 hover:underline flex items-center gap-1.5"
+                  >
+                    <span>{character.optionalRules?.secondaryClass || 'Secondary'} (Lv. {character.optionalRules?.secondaryLevel || 1})</span>
+                    {selectedClassKey === 'secondary' && <span className="text-[10px] bg-amber-500 text-stone-950 font-sans px-1.5 py-0.2 rounded font-extrabold">SELECTED</span>}
+                  </button>
+                  <span className="text-xs font-mono font-bold text-stone-200">
+                    {secondaryXp.toLocaleString()} XP Allocated
+                  </span>
+                </div>
+
+                {unallocatedXp > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap mt-2 pt-2 border-t border-stone-800/80">
+                    <span className="text-[10px] text-stone-400 font-mono">Spend XP:</span>
+                    {[100, 500, 1000].map(amt => (
+                      <button
+                        key={amt}
+                        disabled={unallocatedXp < amt}
+                        onClick={() => handleAllocateXp('secondary', amt)}
+                        className="px-2 py-0.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-600/40 rounded text-[10px] font-mono font-bold disabled:opacity-30 transition"
+                      >
+                        +{amt.toLocaleString()}
+                      </button>
+                    ))}
+                    <button
+                      disabled={unallocatedXp <= 0}
+                      onClick={() => handleAllocateXp('secondary', unallocatedXp)}
+                      className="px-2 py-0.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded text-[10px] font-mono font-extrabold disabled:opacity-30 transition"
+                    >
+                      All ({unallocatedXp.toLocaleString()})
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Level XP Quick Progress Bar */}
         <div className="bg-stone-950/90 border-b border-stone-800 p-4 px-6">
           <div className="flex items-center justify-between text-xs font-mono mb-1.5">
             <span className="text-stone-400 flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-amber-400" /> Next Level Threshold (Level {character.level + 1}):
+              <Zap className="w-3.5 h-3.5 text-amber-400" /> {activeClassName} Next Level Threshold (Level {activeClassLevel + 1}):
             </span>
             <span className="text-amber-300 font-bold">
-              {character.experiencePoints.toLocaleString()} / {xpDetails.nextLevelXp ? xpDetails.nextLevelXp.toLocaleString() : 'MAX'} XP
+              {activeClassXp.toLocaleString()} / {xpDetails.nextLevelXp ? xpDetails.nextLevelXp.toLocaleString() : 'MAX'} XP
               {xpDetails.nextLevelXp ? ` (${xpDetails.percentage}%)` : ''}
             </span>
           </div>
@@ -233,7 +524,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
             <div className="flex justify-between items-center text-[11px] text-stone-400 mt-1 font-mono">
               <span>Current Level Min: {xpDetails.currentMinXp.toLocaleString()} XP</span>
               <span className="text-amber-300 font-semibold">
-                {xpDetails.neededForNext > 0 ? `${xpDetails.neededForNext.toLocaleString()} XP remaining to level up` : 'Threshold reached!'}
+                {xpDetails.neededForNext > 0 ? `${xpDetails.neededForNext.toLocaleString()} XP remaining for ${activeClassName} level up` : 'Threshold reached!'}
               </span>
             </div>
           )}

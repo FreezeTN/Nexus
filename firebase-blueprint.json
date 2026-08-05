@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
+    },
+    "Character": {
+      "collection": "characters",
+      "fields": {
+        "id": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "name": { "type": "string" },
+        "edition": { "type": "string" },
+        "level": { "type": "number" },
+        "data": { "type": "map" },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "Party": {
+      "collection": "parties",
+      "fields": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "dmId": { "type": "string" },
+        "code": { "type": "string" },
+        "memberIds": { "type": "array" },
+        "createdAt": { "type": "string" }
+      }
+    }
+  },
+  "securityIntents": [
+    {
+      "entity": "User",
+      "action": "read",
+      "scope": "authenticated"
+    },
+    {
+      "entity": "User",
+      "action": "write",
+      "scope": "owner",
+      "ownerField": "uid"
+    },
+    {
+      "entity": "Character",
+      "action": "read",
+      "scope": "authenticated"
+    },
+    {
+      "entity": "Character",
+      "action": "write",
+      "scope": "owner",
+      "ownerField": "ownerId"
+    },
+    {
+      "entity": "Party",
+      "action": "read",
+      "scope": "authenticated"
+    },
+    {
+      "entity": "Party",
+      "action": "write",
+      "scope": "authenticated"
+    }
+  ]
+}

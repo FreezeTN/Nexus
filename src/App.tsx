@@ -11,16 +11,38 @@ import { Sheet3GearWealth } from './components/sheets/Sheet3GearWealth';
 import { Sheet4Spells } from './components/sheets/Sheet4Spells';
 import { Sheet5DescriptionNotes } from './components/sheets/Sheet5DescriptionNotes';
 import { Sheet6UserGuide } from './components/sheets/Sheet6UserGuide';
+import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
 import { MainMenu } from './components/MainMenu';
 import { NewCharacterModal } from './components/modals/NewCharacterModal';
 import { PartyManagerModal } from './components/modals/PartyManagerModal';
-import { convertCharacterEdition, formatModifier, recalculateCharacterAC } from './utils/dndCalculations';
+import { SessionLobbyModal } from './components/modals/SessionLobbyModal';
+import { AuthModal } from './components/modals/AuthModal';
+import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
+import { onAuthStateChanged } from 'firebase/auth';
+import { Crown } from 'lucide-react';
+import { 
+  auth, 
+  getUserProfile, 
+  UserProfile, 
+  saveCharacterToCloud, 
+  loadUserCharactersFromCloud, 
+  deleteCharacterFromCloud,
+  subscribeToCharacterPresence,
+  updateCharacterPresence,
+  CharacterPresence,
+  UserRole,
+  GameSession,
+  subscribeToGameSession
+} from './lib/firebase';
 
 const STORAGE_KEY_CHARACTERS = 'dnd_app_characters_v4';
 const STORAGE_KEY_ACTIVE = 'dnd_app_active_id_v4';
 const STORAGE_KEY_PARTIES = 'dnd_app_parties_v1';
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
   const [characters, setCharacters] = useState<CharacterData[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_CHARACTERS);
@@ -64,6 +86,47 @@ export default function App() {
   const [newCharCategory, setNewCharCategory] = useState<'character' | 'monster' | 'vendor'>('character');
   const [previewTheme, setPreviewTheme] = useState<RuleEdition | null>(null);
 
+  // Session Lobby & Room Code State
+  const [activeSessionCode, setActiveSessionCode] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionFromUrl = urlParams.get('session');
+      if (sessionFromUrl) return sessionFromUrl.toUpperCase();
+      return localStorage.getItem('dnd_app_session_code_v1') || null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [activeSession, setActiveSession] = useState<GameSession | null>(null);
+  const [showSessionModal, setShowSessionModal] = useState<boolean>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.has('session');
+    } catch (e) {
+      return false;
+    }
+  });
+
+  // Subscribe to real-time session changes
+  useEffect(() => {
+    if (!activeSessionCode) {
+      setActiveSession(null);
+      localStorage.removeItem('dnd_app_session_code_v1');
+      return;
+    }
+
+    localStorage.setItem('dnd_app_session_code_v1', activeSessionCode);
+    const unsubscribe = subscribeToGameSession(activeSessionCode, (session) => {
+      if (!session || session.status === 'closed') {
+        setActiveSession(null);
+      } else {
+        setActiveSession(session);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [activeSessionCode]);
+
   // Party Management State
   const [parties, setParties] = useState<Party[]>(() => {
     try {
@@ -98,6 +161,10 @@ export default function App() {
   }, [parties]);
 
   const handleOpenNewCharacterModal = (category: 'character' | 'monster' | 'vendor' = 'character') => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      return;
+    }
     setNewCharCategory(category);
     setShowNewCharacterModal(true);
   };
@@ -109,16 +176,85 @@ export default function App() {
   const activeCharacter = characters.find(c => c.id === activeCharacterId) || characters[0] || SAMPLE_CHARACTERS[0];
   const currentSystemTheme: RuleEdition = previewTheme || activeCharacter.edition || '5e';
 
+  // Firebase Auth & Cloud Sync Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const profile = await getUserProfile(firebaseUser.uid);
+        setCurrentUser(profile);
+
+        // Fetch user characters from cloud
+        try {
+          const cloudChars = await loadUserCharactersFromCloud(firebaseUser.uid);
+          if (cloudChars && cloudChars.length > 0) {
+            setCharacters(prev => {
+              const cloudIds = new Set(cloudChars.map(c => c.id));
+              return [...cloudChars, ...prev.filter(c => !cloudIds.has(c.id))];
+            });
+          }
+        } catch (err) {
+          console.error('Failed to load user cloud characters:', err);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentSystemTheme);
   }, [currentSystemTheme]);
 
-  // Sync previewTheme when active character selection changes
+  // Character Presence & Role Sync
+  const [presenceMap, setPresenceMap] = useState<Record<string, CharacterPresence>>({});
+  const prevActiveCharIdRef = React.useRef<string | null>(null);
+
+  // Subscribe to real-time character presence (Firestore + local tab broadcast)
   useEffect(() => {
-    if (activeCharacter?.edition) {
-      setPreviewTheme(activeCharacter.edition);
+    const unsub = subscribeToCharacterPresence((updatedMap) => {
+      setPresenceMap(updatedMap);
+    });
+    return () => unsub();
+  }, []);
+
+  // Sync active presence whenever activeCharacterId or currentUser changes, with periodic heartbeat
+  useEffect(() => {
+    if (!activeCharacterId) return;
+
+    const currentInfo = {
+      uid: currentUser?.uid || 'guest_player',
+      displayName: currentUser?.displayName || 'Guest Adventurer',
+      role: (currentUser?.role || 'Player') as UserRole
+    };
+
+    const prevId = prevActiveCharIdRef.current || undefined;
+    updateCharacterPresence(activeCharacterId, currentInfo, prevId);
+    prevActiveCharIdRef.current = activeCharacterId;
+
+    // Send heartbeat every 45 seconds to keep presence fresh
+    const heartbeatInterval = setInterval(() => {
+      updateCharacterPresence(activeCharacterId, {
+        uid: currentUser?.uid || 'guest_player',
+        displayName: currentUser?.displayName || 'Guest Adventurer',
+        role: (currentUser?.role || 'Player') as UserRole
+      });
+    }, 45000);
+
+    return () => clearInterval(heartbeatInterval);
+  }, [activeCharacterId, currentUser]);
+
+  // Ensure Player role users are not active on monsters or merchants
+  useEffect(() => {
+    const isPlayer = !currentUser || currentUser.role === 'Player';
+    if (isPlayer && activeCharacter && (activeCharacter.isMonster || activeCharacter.isVendor)) {
+      const firstPlayerChar = characters.find(c => !c.isMonster && !c.isVendor);
+      if (firstPlayerChar) {
+        setActiveCharacterId(firstPlayerChar.id);
+      }
     }
-  }, [activeCharacterId]);
+  }, [currentUser, activeCharacter, characters]);
 
   // Save to LocalStorage whenever characters state updates
   useEffect(() => {
@@ -137,35 +273,35 @@ export default function App() {
     }
   }, [activeCharacterId]);
 
+  // When not logged in at all, automatically force activeTab to Main Menu ('menu') if on any character sheet tab
+  useEffect(() => {
+    if (!currentUser && activeTab !== 'menu' && activeTab !== 'sheet6') {
+      setActiveTab('menu');
+    }
+  }, [currentUser, activeTab]);
+
   const handleUpdateCharacter = (updated: CharacterData) => {
     let finalChar = updated;
 
     // Permanent Death Mechanics for non-monsters (Player Characters & Merchants)
     if (!finalChar.isMonster) {
       const prevChar = characters.find(c => c.id === finalChar.id);
-      const wasDead = prevChar ? ((prevChar.deathSavesFailures >= 3) || (prevChar.conditions || []).includes('Dead')) : false;
+      const wasDead = prevChar ? (isCharacterDead(prevChar)) : false;
 
-      if (finalChar.deathSavesFailures >= 3) {
-        // Failed 3 death saves: Permanent Death! Set HP to 0 and add "Dead" condition
-        const conds = finalChar.conditions || [];
-        const hasDeadCond = conds.includes('Dead');
-        finalChar = {
-          ...finalChar,
-          hpCurrent: 0,
-          deathSavesFailures: 3,
-          conditions: hasDeadCond ? conds : [...conds, 'Dead']
-        };
-      } else if (wasDead && finalChar.hpCurrent > 0) {
-        // Character was dead, but HP was restored (> 0 HP via revive or manual HP edit): Bring back to life!
-        const cleanedConds = (finalChar.conditions || []).filter(c => c !== 'Dead');
-        finalChar = {
-          ...finalChar,
-          deathSavesFailures: 0,
-          deathSavesSuccesses: 0,
-          conditions: cleanedConds
-        };
-      } else if (wasDead && finalChar.hpCurrent <= 0) {
-        // Still dead: maintain 0 HP and "Dead" condition
+      if (finalChar.hpCurrent > 0) {
+        // Character has positive HP (> 0 HP via revive or manual HP edit/heal).
+        // If they were dead or had death save failures / Dead / Unconscious conditions, bring them back to life!
+        if (wasDead || finalChar.deathSavesFailures >= 3 || (finalChar.conditions || []).includes('Dead')) {
+          const cleanedConds = (finalChar.conditions || []).filter(c => c !== 'Dead' && c !== 'Unconscious');
+          finalChar = {
+            ...finalChar,
+            deathSavesFailures: 0,
+            deathSavesSuccesses: 0,
+            conditions: cleanedConds
+          };
+        }
+      } else if (finalChar.deathSavesFailures >= 3 || (finalChar.conditions || []).includes('Dead') || wasDead) {
+        // Failed 3 death saves or marked dead with 0 HP: Set HP to 0 and add "Dead" condition
         const conds = finalChar.conditions || [];
         const hasDeadCond = conds.includes('Dead');
         finalChar = {
@@ -175,12 +311,25 @@ export default function App() {
           conditions: hasDeadCond ? conds : [...conds, 'Dead']
         };
       }
+    } else {
+      if (finalChar.hpCurrent > 0 && (finalChar.conditions || []).some(c => c === 'Dead' || c === 'Destroyed' || c === 'Unconscious')) {
+        const cleanedConds = (finalChar.conditions || []).filter(c => c !== 'Dead' && c !== 'Destroyed' && c !== 'Unconscious');
+        finalChar = {
+          ...finalChar,
+          conditions: cleanedConds
+        };
+      }
     }
 
     const recalculated = recalculateCharacterAC(finalChar);
     setCharacters(prev => prev.map(c => c.id === recalculated.id ? recalculated : c));
     if (recalculated.id === activeCharacterId && recalculated.edition) {
       setPreviewTheme(recalculated.edition);
+    }
+
+    // Cloud sync if authenticated
+    if (currentUser?.uid) {
+      saveCharacterToCloud(currentUser.uid, recalculated);
     }
   };
 
@@ -199,13 +348,17 @@ export default function App() {
     if (matching) {
       setActiveCharacterId(matching.id);
     }
-    // No automatic conversion — conversion is strictly manual via the Convert Ruleset modal
   };
 
   const handleCreateNewCharacter = (newChar: CharacterData) => {
     setCharacters(prev => [newChar, ...prev]);
     setActiveCharacterId(newChar.id);
     setShowNewCharacterModal(false);
+
+    // Cloud sync if authenticated
+    if (currentUser?.uid) {
+      saveCharacterToCloud(currentUser.uid, newChar);
+    }
   };
 
   const handleDeleteCharacter = (idToDelete: string) => {
@@ -220,6 +373,11 @@ export default function App() {
       }
       return remaining;
     });
+
+    // Cloud sync deletion if authenticated
+    if (currentUser?.uid) {
+      deleteCharacterFromCloud(idToDelete);
+    }
   };
 
   // Export JSON
@@ -336,12 +494,24 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 font-sans selection:bg-amber-600 selection:text-stone-950 transition-colors duration-300" data-theme={currentSystemTheme}>
+      {/* Top DM Active Banner Indicator */}
+      {presenceMap[activeCharacter.id]?.dmActive && (
+        <div className="bg-purple-950/90 border-b border-purple-600/60 text-purple-200 px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 shadow-lg animate-pulse">
+          <Crown className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
+          <span>
+            <strong>DM Active:</strong> A Dungeon Master ({presenceMap[activeCharacter.id]?.dmUserName || 'DM'}) is currently active on this character.
+          </span>
+        </div>
+      )}
+
       {/* Top Banner Header */}
       <Header
         characters={characters}
         activeCharacter={activeCharacter}
         partiesCount={parties.length}
         onOpenPartyManager={() => setShowPartyModal(true)}
+        onOpenSessionLobby={() => setShowSessionModal(true)}
+        activeSession={activeSession}
         onSelectCharacter={handleSelectCharacter}
         onCreateNewCharacter={handleOpenNewCharacterModal}
         onDeleteCharacter={handleDeleteCharacter}
@@ -351,6 +521,9 @@ export default function App() {
         onRollInitiative={handleRollInitiative}
         onSystemChange={handleSystemChange}
         edition={currentSystemTheme}
+        currentUser={currentUser}
+        onOpenAuthModal={() => setShowAuthModal(true)}
+        presenceMap={presenceMap}
       />
 
       {/* 5 Sheets Navigation Tab Bar */}
@@ -359,6 +532,7 @@ export default function App() {
         onTabChange={setActiveTab}
         isSpellcaster={activeCharacter.isSpellcaster}
         edition={currentSystemTheme}
+        currentUser={currentUser}
       />
 
       {/* Main Content Body */}
@@ -372,12 +546,16 @@ export default function App() {
             onEnterGame={() => setActiveTab('sheet1')}
             onSystemChange={handleSystemChange}
             edition={currentSystemTheme}
+            currentUser={currentUser}
+            presenceMap={presenceMap}
+            onOpenAuthModal={() => setShowAuthModal(true)}
           />
         )}
 
         {activeTab === 'sheet1' && (
           <Sheet1StatsFeatures
             character={activeCharacter}
+            currentUser={currentUser}
             onUpdateCharacter={handleUpdateCharacter}
             onRoll={handleRoll}
           />
@@ -388,6 +566,7 @@ export default function App() {
             character={activeCharacter}
             allCharacters={characters}
             parties={parties}
+            currentUser={currentUser}
             onOpenPartyManager={() => setShowPartyModal(true)}
             onUpdateCharacter={handleUpdateCharacter}
             onRoll={handleRoll}
@@ -406,6 +585,8 @@ export default function App() {
         {activeTab === 'sheet4' && (
           <Sheet4Spells
             character={activeCharacter}
+            allCharacters={characters}
+            currentUser={currentUser}
             onUpdateCharacter={handleUpdateCharacter}
             onRoll={handleRoll}
             onRollDamage={handleRollDamage}
@@ -421,6 +602,16 @@ export default function App() {
 
         {activeTab === 'sheet6' && (
           <Sheet6UserGuide edition={currentSystemTheme} />
+        )}
+
+        {activeTab === 'sheet7' && (
+          <Sheet7Compendium
+            activeCharacter={activeCharacter}
+            onUpdateCharacter={handleUpdateCharacter}
+            onAddMonsterToRoster={(monster) => {
+              setCharacters(prev => [...prev, monster]);
+            }}
+          />
         )}
       </main>
 
@@ -455,6 +646,31 @@ export default function App() {
           handleSelectCharacter(charId);
           setShowPartyModal(false);
         }}
+        currentUser={currentUser}
+        presenceMap={presenceMap}
+        onUpdateCharacter={handleUpdateCharacter}
+      />
+
+      {/* Session Lobby & Room Code Modal */}
+      <SessionLobbyModal
+        isOpen={showSessionModal}
+        onClose={() => setShowSessionModal(false)}
+        currentUser={currentUser}
+        activeSession={activeSession}
+        activeCharacter={activeCharacter}
+        allCharacters={characters}
+        presenceMap={presenceMap}
+        onSessionChange={(code) => setActiveSessionCode(code)}
+        onSelectCharacter={handleSelectCharacter}
+        onOpenAuthModal={() => setShowAuthModal(true)}
+      />
+
+      {/* User Account & Role Modal */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUser={currentUser}
+        onUserChange={setCurrentUser}
       />
     </div>
   );

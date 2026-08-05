@@ -1,27 +1,82 @@
-import React from 'react';
-import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Radio } from 'lucide-react';
+import React, { useRef, useEffect, useState } from 'react';
+import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight } from 'lucide-react';
 import { RuleEdition } from '../types';
+import { UserProfile } from '../lib/firebase';
 
-export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6';
+export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7';
 
 interface NavigationProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
   isSpellcaster: boolean;
   edition?: RuleEdition;
+  currentUser?: UserProfile | null;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
   activeTab,
   onTabChange,
   isSpellcaster,
-  edition = '5e'
+  edition = '5e',
+  currentUser
 }) => {
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
   const isCthulhu = edition === 'cthulhu';
 
-  const tabs = [
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  const checkScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
+
+    const maxScroll = scrollWidth - clientWidth;
+    if (maxScroll > 0) {
+      setScrollProgress(Math.min(100, Math.max(0, (scrollLeft / maxScroll) * 100)));
+    } else {
+      setScrollProgress(0);
+    }
+  };
+
+  useEffect(() => {
+    checkScroll();
+    window.addEventListener('resize', checkScroll);
+    return () => window.removeEventListener('resize', checkScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const activeEl = scrollRef.current.querySelector<HTMLElement>('[data-active="true"]');
+    if (activeEl) {
+      activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+    checkScroll();
+  }, [activeTab]);
+
+  const handleScroll = (direction: 'left' | 'right') => {
+    if (!scrollRef.current) return;
+    const distance = 260;
+    scrollRef.current.scrollBy({
+      left: direction === 'left' ? -distance : distance,
+      behavior: 'smooth'
+    });
+  };
+
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!scrollRef.current) return;
+    const value = parseFloat(e.target.value);
+    const { scrollWidth, clientWidth } = scrollRef.current;
+    const maxScroll = scrollWidth - clientWidth;
+    scrollRef.current.scrollLeft = (value / 100) * maxScroll;
+    setScrollProgress(value);
+  };
+
+  const allTabs = [
     {
       id: 'menu' as TabId,
       title: 'Main Menu',
@@ -137,46 +192,114 @@ export const Navigation: React.FC<NavigationProps> = ({
         ? 'Call of Cthulhu 7e Rulebook'
         : 'App Functions & Interactive Help',
       icon: BookOpen
+    },
+    {
+      id: 'sheet7' as TabId,
+      title: 'Compendium',
+      description: 'Dynamic SRD & Custom Library for Monsters, Spells, Items, Classes, Feats & Features',
+      icon: Library,
+      badge: 'SRD'
     }
   ];
 
-  return (
-    <nav className="bg-stone-950 border-b border-stone-800 sticky top-[108px] z-30 shadow-md">
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 flex items-center justify-between sm:justify-start overflow-x-auto scrollbar-none gap-1.5 sm:gap-2 py-1.5">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
+  // When not logged in at all, only Main Menu and User Guide are visible
+  const tabs = currentUser
+    ? allTabs
+    : allTabs.filter(t => t.id === 'menu' || t.id === 'sheet6');
 
-          return (
-            <button
-              key={tab.id}
-              onClick={() => onTabChange(tab.id)}
-              className={`flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border transition whitespace-nowrap text-left shrink-0 ${
-                isActive
-                  ? 'bg-theme-dark border-theme-strong text-theme-text shadow-md font-medium shadow-theme-glow'
-                  : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
-              }`}
-            >
-              <div
-                className={`p-1.5 rounded-lg transition-colors ${
-                  isActive ? 'bg-theme-accent text-stone-950 font-bold' : 'bg-stone-800 text-stone-400'
+  return (
+    <nav className={`bg-stone-950 border-b border-stone-800 ${currentUser ? 'sticky top-[108px] z-30 shadow-md' : 'relative z-10'}`}>
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 relative flex items-center">
+        {/* Left Scroll Button */}
+        <button
+          onClick={() => handleScroll('left')}
+          disabled={!canScrollLeft}
+          title="Scroll Left"
+          className={`hidden sm:flex items-center justify-center p-1.5 mr-1 rounded-lg border transition shrink-0 ${
+            canScrollLeft
+              ? 'bg-stone-900 border-amber-500/40 text-amber-300 hover:bg-stone-800 hover:text-amber-200 shadow-sm cursor-pointer'
+              : 'bg-stone-950/50 border-stone-800/50 text-stone-700 opacity-40 cursor-not-allowed'
+          }`}
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+
+        {/* Scrollable Tabs Container */}
+        <div
+          ref={scrollRef}
+          onScroll={checkScroll}
+          className="flex-1 flex items-center overflow-x-auto scrollbar-thin scrollbar-thumb-amber-800/40 scrollbar-track-stone-900 gap-1.5 sm:gap-2 py-2 px-0.5"
+        >
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+
+            return (
+              <button
+                key={tab.id}
+                data-active={isActive ? "true" : "false"}
+                onClick={() => onTabChange(tab.id)}
+                className={`flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border transition whitespace-nowrap text-left shrink-0 ${
+                  isActive
+                    ? 'bg-theme-dark border-theme-strong text-theme-text shadow-md font-medium shadow-theme-glow ring-1 ring-amber-500/30'
+                    : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
                 }`}
               >
-                <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs sm:text-sm font-serif font-bold leading-tight">
-                  {tab.title}
-                </span>
-                {tab.badge && (
-                  <span className="text-[9px] bg-purple-900/80 text-purple-200 px-1 py-0.2 rounded font-bold">
-                    {tab.badge}
+                <div
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    isActive ? 'bg-theme-accent text-stone-950 font-bold' : 'bg-stone-800 text-stone-400'
+                  }`}
+                >
+                  <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm font-serif font-bold leading-tight">
+                    {tab.title}
                   </span>
-                )}
-              </div>
-            </button>
-          );
-        })}
+                  {tab.badge && (
+                    <span className="text-[9px] bg-purple-900/80 text-purple-200 px-1 py-0.2 rounded font-bold">
+                      {tab.badge}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Right Scroll Button */}
+        <button
+          onClick={() => handleScroll('right')}
+          disabled={!canScrollRight}
+          title="Scroll Right"
+          className={`hidden sm:flex items-center justify-center p-1.5 ml-1 rounded-lg border transition shrink-0 ${
+            canScrollRight
+              ? 'bg-stone-900 border-amber-500/40 text-amber-300 hover:bg-stone-800 hover:text-amber-200 shadow-sm cursor-pointer'
+              : 'bg-stone-950/50 border-stone-800/50 text-stone-700 opacity-40 cursor-not-allowed'
+          }`}
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* Horizontal Sheet Slider Bar */}
+      <div className="max-w-7xl mx-auto px-4 pb-1.5 pt-0.5 flex items-center gap-2 text-[10px] text-stone-500 border-t border-stone-900/80">
+        <span className="font-mono text-stone-400 shrink-0 select-none flex items-center gap-1">
+          <ChevronLeft className="w-3 h-3 text-amber-500/70" /> Slide Sheets <ChevronRight className="w-3 h-3 text-amber-500/70" />
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="0.5"
+          value={scrollProgress}
+          onChange={handleSliderChange}
+          className="w-full h-1.5 bg-stone-900 rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 focus:outline-none"
+          title="Slide across character sheets"
+        />
+        <span className="font-mono text-stone-400 shrink-0 text-[10px]">
+          {Math.round(scrollProgress)}%
+        </span>
       </div>
     </nav>
   );

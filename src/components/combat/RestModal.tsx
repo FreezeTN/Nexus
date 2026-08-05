@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CharacterData } from '../../types';
-import { getAbilityModifier, isCharacterDead } from '../../utils/dndCalculations';
+import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { Flame, Moon, Heart, Sparkles, Wand2, X, RefreshCw, Dices } from 'lucide-react';
 
 interface RestModalProps {
@@ -20,12 +20,15 @@ export const RestModal: React.FC<RestModalProps> = ({
   const [diceToSpend, setDiceToSpend] = useState<number>(1);
   const [restLog, setRestLog] = useState<string | null>(null);
 
+  const effectiveMaxHp = getEffectiveMaxHp(character);
+
   // Parse Hit Die string (e.g. "5d10" -> count: 5, sides: 10)
   const hitDieMatch = character.hitDiceTotal.match(/(\d+)d(\d+)/i);
   const maxHitDice = hitDieMatch ? parseInt(hitDieMatch[1]) : character.level;
   const dieSides = hitDieMatch ? parseInt(hitDieMatch[2]) : 8;
 
-  const conMod = getAbilityModifier(character.abilities.constitution);
+  const conScore = character.abilities?.CON?.score ?? 10;
+  const conMod = Math.floor((conScore - 10) / 2);
 
   // Execute Short Rest
   const handlePerformShortRest = () => {
@@ -49,7 +52,7 @@ export const RestModal: React.FC<RestModalProps> = ({
       totalHpRecovered += Math.max(1, roll + conMod); // min 1 HP per die
     }
 
-    const newHp = Math.min(character.hpMax, character.hpCurrent + totalHpRecovered);
+    const newHp = Math.min(effectiveMaxHp, character.hpCurrent + totalHpRecovered);
     const newHitDice = Math.max(0, character.hitDiceCurrent - countToSpend);
 
     // Reset Short Rest Features
@@ -82,7 +85,7 @@ export const RestModal: React.FC<RestModalProps> = ({
     }
 
     // Recover all HP
-    const newHp = character.hpMax;
+    const newHp = effectiveMaxHp;
 
     // Recover Hit Dice (up to half total or full max)
     const recoveredHdCount = Math.max(1, Math.floor(maxHitDice / 2));
@@ -171,7 +174,7 @@ export const RestModal: React.FC<RestModalProps> = ({
                 <span>CON Modifier: <strong className="text-emerald-400">{conMod >= 0 ? `+${conMod}` : conMod}</strong></span>
               </div>
               <div className="flex justify-between items-center text-stone-300">
-                <span>Current HP: <strong className="text-rose-400">{character.hpCurrent} / {character.hpMax}</strong></span>
+                <span>Current HP: <strong className="text-rose-400">{character.hpCurrent} / {effectiveMaxHp}</strong></span>
                 <span>Hit Dice Left: <strong className="text-amber-400">{character.hitDiceCurrent} / {maxHitDice}</strong></span>
               </div>
             </div>
@@ -217,7 +220,7 @@ export const RestModal: React.FC<RestModalProps> = ({
                 <Sparkles className="w-4 h-4" /> Long Rest Benefits (8 Hours):
               </div>
               <ul className="list-disc list-inside space-y-1 text-stone-300 text-[11px]">
-                <li>Restore HP to maximum (<strong className="text-rose-400">{character.hpMax} HP</strong>).</li>
+                <li>Restore HP to maximum (<strong className="text-rose-400">{effectiveMaxHp} HP</strong>).</li>
                 <li>Restore Hit Dice count by +{Math.max(1, Math.floor(maxHitDice / 2))} (up to {maxHitDice}).</li>
                 <li>Fully restore all Spell Slots & Class Feature charges.</li>
                 <li>Reset Death Save successes/failures and clear 1 Exhaustion level.</li>

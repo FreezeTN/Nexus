@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CharacterData, Party } from '../../types';
-import { Users, Plus, Shield, Heart, Eye, Trash2, Edit3, Check, Swords, UserPlus, UserMinus, Sparkles, X, ChevronRight, Crown } from 'lucide-react';
-import { getPassivePerception } from '../../utils/dndCalculations';
+import { Users, Plus, Shield, Heart, Eye, Trash2, Edit3, Check, Swords, UserPlus, UserMinus, Sparkles, X, ChevronRight, Crown, Lock, Pencil } from 'lucide-react';
+import { getPassivePerception, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
+import { UserProfile, CharacterPresence } from '../../lib/firebase';
 
 interface PartyManagerModalProps {
   isOpen: boolean;
@@ -12,6 +13,9 @@ interface PartyManagerModalProps {
   onUpdateParties: (parties: Party[]) => void;
   onSelectCharacter?: (charId: string) => void;
   onAddPartyToEncounter?: (party: Party) => void;
+  onUpdateCharacter?: (updated: CharacterData) => void;
+  currentUser?: UserProfile | null;
+  presenceMap?: Record<string, CharacterPresence>;
 }
 
 export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
@@ -22,8 +26,13 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
   activeCharacterId,
   onUpdateParties,
   onSelectCharacter,
-  onAddPartyToEncounter
+  onAddPartyToEncounter,
+  onUpdateCharacter,
+  currentUser,
+  presenceMap = {}
 }) => {
+  const isPlayerRole = !currentUser || currentUser.role === 'Player';
+  const currentUserId = currentUser?.uid || 'guest_player';
   const [selectedPartyId, setSelectedPartyId] = useState<string>(
     parties[0]?.id || ''
   );
@@ -41,6 +50,10 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
 
   // Delete Confirmation State
   const [confirmDeletePartyId, setConfirmDeletePartyId] = useState<string | null>(null);
+
+  // Edit Char Max HP State
+  const [editingHpCharId, setEditingHpCharId] = useState<string | null>(null);
+  const [editingMaxHpVal, setEditingMaxHpVal] = useState<string>('');
 
   React.useEffect(() => {
     if (isOpen && (!selectedPartyId || !parties.some(p => p.id === selectedPartyId))) {
@@ -131,7 +144,7 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
     ? allCharacters.filter(c => currentParty.characterIds.includes(c.id))
     : [];
 
-  const totalPartyHp = partyMembers.reduce((acc, c) => acc + (c.hpMax || 0), 0);
+  const totalPartyHp = partyMembers.reduce((acc, c) => acc + (getEffectiveMaxHp(c) || 0), 0);
   const currentPartyHp = partyMembers.reduce((acc, c) => acc + (c.hpCurrent || 0), 0);
   const avgLevel = partyMembers.length
     ? Math.round((partyMembers.reduce((acc, c) => acc + (c.level || 1), 0) / partyMembers.length) * 10) / 10
@@ -442,7 +455,9 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
                           <div
                             key={char.id}
                             className={`bg-stone-950 border rounded-xl p-3.5 flex flex-col justify-between gap-3 shadow transition ${
-                              isActive
+                              isCharacterDead(char)
+                                ? 'border-rose-900/80 bg-rose-950/20'
+                                : isActive
                                 ? 'border-amber-500/80 shadow-amber-950/40'
                                 : 'border-stone-800 hover:border-stone-700'
                             }`}
@@ -450,15 +465,20 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2.5">
                                 {char.portraitUrl ? (
-                                  <img src={char.portraitUrl} alt={char.name} className="w-10 h-10 rounded-full object-cover border border-amber-500/50 shadow" />
+                                  <img src={char.portraitUrl} alt={char.name} className={`w-10 h-10 rounded-full object-cover border shadow ${isCharacterDead(char) ? 'border-rose-600/70 grayscale' : 'border-amber-500/50'}`} />
                                 ) : (
-                                  <div className="w-10 h-10 rounded-full bg-stone-800 border border-amber-500/30 text-amber-300 font-bold flex items-center justify-center font-serif text-sm">
+                                  <div className={`w-10 h-10 rounded-full border text-amber-300 font-bold flex items-center justify-center font-serif text-sm ${isCharacterDead(char) ? 'bg-rose-950 border-rose-800 text-rose-300' : 'bg-stone-800 border-amber-500/30'}`}>
                                     {char.name[0]}
                                   </div>
                                 )}
                                 <div>
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="font-serif font-bold text-stone-100 text-sm">{char.name}</span>
+                                    {isCharacterDead(char) && (
+                                      <span className="text-[9px] font-mono font-bold bg-rose-950 text-rose-200 border border-rose-600/60 px-1.5 py-0.5 rounded animate-pulse shadow">
+                                        DEAD 💀
+                                      </span>
+                                    )}
                                     {isActive && (
                                       <span className="text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded border border-amber-500/40">
                                         Active
@@ -484,7 +504,61 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
                             <div className="grid grid-cols-3 gap-2 text-center bg-stone-900/80 p-2 rounded-lg border border-stone-800/80 text-[11px] font-mono">
                               <div>
                                 <span className="text-stone-500 block text-[9px]">HP</span>
-                                <span className="font-bold text-emerald-300">{char.hpCurrent}/{char.hpMax}</span>
+                                {editingHpCharId === char.id ? (
+                                  <div className="flex items-center justify-center gap-1">
+                                    <input
+                                      type="number"
+                                      value={editingMaxHpVal}
+                                      onChange={(e) => setEditingMaxHpVal(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          const val = parseInt(editingMaxHpVal, 10);
+                                          if (!isNaN(val) && val > 0 && onUpdateCharacter) {
+                                            onUpdateCharacter({
+                                              ...char,
+                                              hpMax: val,
+                                              hpCurrent: Math.min(char.hpCurrent, val)
+                                            });
+                                          }
+                                          setEditingHpCharId(null);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingHpCharId(null);
+                                        }
+                                      }}
+                                      className="w-12 bg-stone-950 border border-amber-500 text-amber-200 text-xs px-1 text-center rounded font-mono focus:outline-none"
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const val = parseInt(editingMaxHpVal, 10);
+                                        if (!isNaN(val) && val > 0 && onUpdateCharacter) {
+                                          onUpdateCharacter({
+                                            ...char,
+                                            hpMax: val,
+                                            hpCurrent: Math.min(char.hpCurrent, val)
+                                          });
+                                        }
+                                        setEditingHpCharId(null);
+                                      }}
+                                      className="text-emerald-400 font-bold hover:text-emerald-300 text-[10px] px-1"
+                                      title="Save Max HP"
+                                    >
+                                      ✓
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setEditingHpCharId(char.id);
+                                      setEditingMaxHpVal(String(getEffectiveMaxHp(char)));
+                                    }}
+                                    className="font-bold text-emerald-300 hover:text-amber-300 hover:underline inline-flex items-center justify-center gap-0.5 cursor-pointer"
+                                    title="Click to edit Max HP for this player character"
+                                  >
+                                    <span>{char.hpCurrent}/{getEffectiveMaxHp(char)}</span>
+                                    <Pencil className="w-2.5 h-2.5 text-amber-400/70" />
+                                  </button>
+                                )}
                               </div>
                               <div>
                                 <span className="text-stone-500 block text-[9px]">AC</span>
@@ -497,17 +571,38 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
                             </div>
 
                             {/* Actions */}
-                            {onSelectCharacter && !isActive && (
-                              <button
-                                onClick={() => {
-                                  onSelectCharacter(char.id);
-                                  onClose();
-                                }}
-                                className="w-full py-1 bg-stone-900 hover:bg-stone-800 text-amber-300 border border-stone-800 hover:border-amber-600/40 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1"
-                              >
-                                <ChevronRight className="w-3.5 h-3.5" /> Switch to {char.name}
-                              </button>
-                            )}
+                            {onSelectCharacter && !isActive && (() => {
+                              const presence = presenceMap[char.id];
+                              const activeUserId = presence?.activeUserId;
+                              const activeUserName = presence?.activeUserName || 'Player';
+                              const isLockedForPlayer = isPlayerRole && !!activeUserId && activeUserId !== currentUserId;
+
+                              return (
+                                <button
+                                  disabled={isLockedForPlayer}
+                                  onClick={() => {
+                                    if (isLockedForPlayer) return;
+                                    onSelectCharacter(char.id);
+                                    onClose();
+                                  }}
+                                  className={`w-full py-1 ${
+                                    isLockedForPlayer
+                                      ? 'bg-stone-900 text-stone-500 border border-stone-800 cursor-not-allowed'
+                                      : 'bg-stone-900 hover:bg-stone-800 text-amber-300 border border-stone-800 hover:border-amber-600/40 cursor-pointer'
+                                  } rounded-lg text-xs font-bold transition flex items-center justify-center gap-1`}
+                                >
+                                  {isLockedForPlayer ? (
+                                    <>
+                                      <Lock className="w-3 h-3 text-red-400" /> In Use by {activeUserName}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ChevronRight className="w-3.5 h-3.5" /> Switch to {char.name}
+                                    </>
+                                  )}
+                                </button>
+                              );
+                            })()}
                           </div>
                         );
                       })}

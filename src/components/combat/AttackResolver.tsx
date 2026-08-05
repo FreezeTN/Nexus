@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CharacterData, Attack, Spell } from '../../types';
 import { Combatant } from './EncounterTracker';
-import { getSpellAttackBonus, getSpellSaveDC, formatModifier, rollCompoundDamage, RolledDamagePart, applyResistanceAndDRToDamage, calculateCharacterTotalDR, getCharacterResistances } from '../../utils/dndCalculations';
+import { getSpellAttackBonus, getSpellSaveDC, formatModifier, rollCompoundDamage, RolledDamagePart, applyResistanceAndDRToDamage, calculateCharacterTotalDR, getCharacterResistances, getConditionEffects } from '../../utils/dndCalculations';
 import { playDiceSound } from '../../utils/diceAudio';
 import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2 } from 'lucide-react';
 
@@ -141,8 +141,16 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   const activeDamageExpr = selectedSpell
     ? extractSpellDamage(selectedSpell)
     : selectedAttack
-    ? (selectedAttack.damageType ? `${selectedAttack.damage} ${selectedAttack.damageType}` : selectedAttack.damage)
+    ? (selectedAttack.damageType && !selectedAttack.damage.toLowerCase().includes(selectedAttack.damageType.split('/')[0].trim().toLowerCase())
+        ? `${selectedAttack.damage} ${selectedAttack.damageType}`
+        : selectedAttack.damage)
     : customDamageExpr;
+
+  const activeAttackRange = selectedSpell
+    ? selectedSpell.range || '60 ft'
+    : selectedAttack
+    ? selectedAttack.range || '5 ft'
+    : '5 ft';
 
   // Selected Target Object
   const targetCombatant = combatants.find(c => c.id === selectedTargetId);
@@ -153,26 +161,53 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   // Mechanical Condition Evaluation
   const attackerConditions = character.conditions || [];
   const targetConditions = targetCombatant?.conditions || [];
+  const attackerExhaustion = character.exhaustionLevel || 0;
+
+  const isRanged = activeAttackRange.toLowerCase().includes('range') || (selectedAttack?.range ? (parseInt(selectedAttack.range) > 5) : false);
+  const attackerEffects = getConditionEffects(attackerConditions, attackerExhaustion, isRanged);
+  const targetEffects = getConditionEffects(targetConditions, 0, false);
 
   const advantageSources: string[] = [];
   const disadvantageSources: string[] = [];
 
   // Attacker condition influences
-  if (attackerConditions.includes('Invisible')) advantageSources.push('Attacker is Invisible (+Advantage)');
-  if (attackerConditions.includes('Poisoned')) disadvantageSources.push('Attacker is Poisoned (-Disadvantage)');
-  if (attackerConditions.includes('Prone')) disadvantageSources.push('Attacker is Prone (-Disadvantage)');
-  if (attackerConditions.includes('Blinded')) disadvantageSources.push('Attacker is Blinded (-Disadvantage)');
-  if (attackerConditions.includes('Restrained')) disadvantageSources.push('Attacker is Restrained (-Disadvantage)');
-  if (attackerConditions.includes('Frightened')) disadvantageSources.push('Attacker is Frightened (-Disadvantage)');
+  if (attackerEffects.advantageAttackRolls) {
+    if (attackerConditions.includes('Invisible')) advantageSources.push('Attacker is Invisible (+Advantage)');
+    if (attackerConditions.includes('Haste')) advantageSources.push('Attacker is Hasted (+Advantage)');
+    if (attackerConditions.includes('Reckless Attack')) advantageSources.push('Attacker is Reckless (+Advantage)');
+  }
+  if (attackerEffects.disadvantageAttackRolls) {
+    if (attackerConditions.includes('Poisoned')) disadvantageSources.push('Attacker is Poisoned (-Disadvantage)');
+    if (attackerConditions.includes('Prone')) disadvantageSources.push('Attacker is Prone (-Disadvantage)');
+    if (attackerConditions.includes('Blinded')) disadvantageSources.push('Attacker is Blinded (-Disadvantage)');
+    if (attackerConditions.includes('Restrained')) disadvantageSources.push('Attacker is Restrained (-Disadvantage)');
+    if (attackerConditions.includes('Frightened')) disadvantageSources.push('Attacker is Frightened (-Disadvantage)');
+    if (attackerExhaustion >= 3) disadvantageSources.push('Attacker has Exhaustion Lvl 3+ (-Disadvantage)');
+  }
 
   // Target condition influences
-  if (targetConditions.includes('Restrained')) advantageSources.push('Target is Restrained (+Advantage)');
-  if (targetConditions.includes('Blinded')) advantageSources.push('Target is Blinded (+Advantage)');
-  if (targetConditions.includes('Stunned')) advantageSources.push('Target is Stunned (+Advantage)');
-  if (targetConditions.includes('Paralyzed')) advantageSources.push('Target is Paralyzed (+Advantage / Auto-Crit on hit)');
-  if (targetConditions.includes('Unconscious')) advantageSources.push('Target is Unconscious (+Advantage / Auto-Crit on hit)');
-  if (targetConditions.includes('Prone')) advantageSources.push('Target is Prone (+Advantage in melee)');
-  if (targetConditions.includes('Invisible')) disadvantageSources.push('Target is Invisible (-Disadvantage)');
+  if (targetEffects.grantAdvantageToAttacker) {
+    if (targetConditions.includes('Restrained')) advantageSources.push('Target is Restrained (+Advantage)');
+    if (targetConditions.includes('Blinded')) advantageSources.push('Target is Blinded (+Advantage)');
+    if (targetConditions.includes('Stunned')) advantageSources.push('Target is Stunned (+Advantage)');
+    if (targetConditions.includes('Paralyzed')) advantageSources.push('Target is Paralyzed (+Advantage / Auto-Crit on hit within 5ft)');
+    if (targetConditions.includes('Unconscious')) advantageSources.push('Target is Unconscious (+Advantage / Auto-Crit on hit within 5ft)');
+    if (targetConditions.includes('Petrified')) advantageSources.push('Target is Petrified (+Advantage)');
+    if (targetConditions.includes('Faerie Fire')) advantageSources.push('Target is outlined in Faerie Fire (+Advantage)');
+  }
+  if (targetEffects.grantDisadvantageToAttacker) {
+    if (targetConditions.includes('Invisible')) disadvantageSources.push('Target is Invisible (-Disadvantage)');
+  }
+
+  // Prone target rule: Melee/5ft = Advantage, Ranged = Disadvantage
+  if (targetConditions.includes('Prone')) {
+    const isMeleeOr5ft = activeAttackRange.toLowerCase().includes('melee') || activeAttackRange.toLowerCase().includes('5 ft') || activeAttackRange.toLowerCase().includes('5ft');
+    if (isMeleeOr5ft) {
+      advantageSources.push('Target is Prone & Attack is Melee/5ft (+Advantage)');
+    } else {
+      disadvantageSources.push('Target is Prone & Attack is Ranged (-Disadvantage)');
+    }
+  }
 
   const recommendedRollMode: 'normal' | 'advantage' | 'disadvantage' =
     advantageSources.length > 0 && disadvantageSources.length === 0
@@ -187,6 +222,20 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
       setRollMode(recommendedRollMode);
     }
   }, [selectedTargetId, attackerConditions.join(','), targetConditions.join(','), recommendedRollMode, rollMode]);
+
+  // Auto-sync extra attack bonus from active conditions (e.g. Bless +2, Archery +2, Bane -2)
+  React.useEffect(() => {
+    setExtraBonus(attackerEffects.extraAttackBonus);
+  }, [selectedAttackId, selectedTargetId, attackerConditions.join(','), attackerEffects.extraAttackBonus]);
+
+  // Auto-sync target cover bonus if target has cover conditions
+  React.useEffect(() => {
+    if (targetConditions.some(c => c.toLowerCase().includes('3/4 cover') || c.toLowerCase().includes('three-quarters'))) {
+      setCoverBonus(5);
+    } else if (targetConditions.some(c => c.toLowerCase().includes('half cover') || c.toLowerCase().includes('cover: half'))) {
+      setCoverBonus(2);
+    }
+  }, [selectedTargetId, targetConditions.join(',')]);
 
   // Execute Attack Roll vs Target AC
   const handleRollAttack = () => {
@@ -208,9 +257,10 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     const totalBonus = activeAttackBonus + extraBonus;
     const totalAttack = finalD20 + totalBonus;
 
-    // Auto-crit if attacker gets nat 20 or target is incapacitated in melee
-    const isParalyzedOrUnconscious = targetConditions.includes('Paralyzed') || targetConditions.includes('Unconscious');
-    const isCrit = canCrit && (finalD20 === 20 || (isParalyzedOrUnconscious && finalD20 + totalBonus >= effectiveTargetAc));
+    // Auto-crit if attacker gets nat 20 or target is Paralyzed / Unconscious in melee (within 5ft)
+    const isMeleeOr5ft = activeAttackRange.toLowerCase().includes('melee') || activeAttackRange.toLowerCase().includes('5 ft') || activeAttackRange.toLowerCase().includes('5ft');
+    const isParalyzedOrUnconscious = targetEffects.meleeAutoCrit;
+    const isCrit = canCrit && (finalD20 === 20 || (isParalyzedOrUnconscious && isMeleeOr5ft && finalD20 + totalBonus >= effectiveTargetAc));
     const isNat1 = finalD20 === 1;
 
     // Nat 20 auto-hits; Nat 1 auto-misses; otherwise compare total vs effective target AC
@@ -255,7 +305,7 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     setRolledDamage(null);
   };
 
-  // Roll Compound Damage (doubles ALL damage dice on Crits, handles multi-source damage like 1d8 slashing + 1d6 fire, and applies DR/Resistance)
+  // Roll Compound Damage (doubles ALL damage dice on Crits, handles multi-source damage, applies Petrified resistance & DR)
   const handleRollDamage = () => {
     if (!lastResult) return;
     playDiceSound();
@@ -266,13 +316,19 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     let finalTotal = result.totalDamage;
     let finalBreakdown = result.breakdown;
 
+    // Petrified Target: Resistance to ALL damage types
+    if (targetEffects.damageResistanceAll) {
+      finalTotal = Math.floor(finalTotal / 2);
+      finalBreakdown = `${finalBreakdown} | Petrified: [Halved by Resistance to All Damage]`;
+    }
+
     // Apply DR and Resistance if the target is the active player character
     if (targetCombatant?.id === character.id || !targetCombatant) {
       const activeType = result.parts[0]?.damageType || 'Slashing';
-      const appliedRes = applyResistanceAndDRToDamage(result.totalDamage, activeType, character);
+      const appliedRes = applyResistanceAndDRToDamage(finalTotal, activeType, character);
       finalTotal = appliedRes.finalTotal;
       if (appliedRes.breakdownLogs.length > 0) {
-        finalBreakdown = `${result.breakdown} | Defense: [${appliedRes.breakdownLogs.join('; ')}]`;
+        finalBreakdown = `${finalBreakdown} | Defense: [${appliedRes.breakdownLogs.join('; ')}]`;
       }
     }
 
@@ -529,6 +585,16 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
             </div>
           </div>
 
+          {/* Attacker Incapacitated Warning */}
+          {attackerEffects.incapacitated && (
+            <div className="bg-rose-950/80 border border-rose-500 p-2.5 rounded-xl text-xs space-y-1 font-mono text-rose-200">
+              <strong className="text-rose-400 font-bold block flex items-center gap-1">
+                <span>🚫 ATTACKER INCAPACITATED</span>
+              </strong>
+              <span>Attacker is Incapacitated / Paralyzed / Petrified / Stunned / Unconscious and cannot take Actions or Reactions.</span>
+            </div>
+          )}
+
           {/* Active Conditions Mechanical Impact */}
           {(advantageSources.length > 0 || disadvantageSources.length > 0) && (
             <div className="bg-amber-950/40 border border-amber-600/40 p-2.5 rounded-xl text-xs space-y-1 font-mono">
@@ -550,7 +616,15 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
           )}
 
           <div>
-            <label className="block text-stone-400 text-xs font-bold mb-1">Extra Attack Bonus (e.g. Bless +1)</label>
+            <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
+              <label className="block text-stone-400 text-xs font-bold">Extra Attack Bonus (e.g. Bless +2)</label>
+              {attackerEffects.extraAttackBonusItems.length > 0 && (
+                <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-950/90 border border-cyan-500/50 px-2 py-0.5 rounded flex items-center gap-1 shadow">
+                  <Sparkles className="w-3 h-3 text-cyan-400" />
+                  Auto-applied: {attackerEffects.extraAttackBonusItems.join(', ')}
+                </span>
+              )}
+            </div>
             <input
               type="number"
               value={extraBonus}

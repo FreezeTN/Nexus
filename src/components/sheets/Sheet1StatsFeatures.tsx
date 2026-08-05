@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AbilityName, CharacterData, ClassFeature, Feat, Skill } from '../../types';
+import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { ShadowrunStatsPanel } from '../shadowrun/ShadowrunStatsPanel';
 import { ShadowrunSkillsPanel } from '../shadowrun/ShadowrunSkillsPanel';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
@@ -14,7 +15,12 @@ import {
   get35eFortSave,
   get35eRefSave,
   get35eWillSave,
-  recalculateCharacterAC
+  recalculateCharacterAC,
+  getCombinedLevel,
+  getActiveClassChoice,
+  getPrimaryXp,
+  getSecondaryXp,
+  getUnallocatedXp
 } from '../../utils/dndCalculations';
 import {
   Shield,
@@ -32,6 +38,8 @@ import {
   Store,
   Skull,
   Settings,
+  Lock,
+  Crown,
   Scale,
   Swords,
   Crosshair,
@@ -79,12 +87,14 @@ const INDEFINITE_MADNESS_TABLE = [
 
 interface Sheet1Props {
   character: CharacterData;
+  currentUser?: { role?: string; displayName?: string } | null;
   onUpdateCharacter: (updated: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
 }
 
 export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   character,
+  currentUser,
   onUpdateCharacter,
   onRoll
 }) => {
@@ -105,6 +115,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   const [newFeatName, setNewFeatName] = useState('');
   const [newFeatSource, setNewFeatSource] = useState('');
   const [newFeatDesc, setNewFeatDesc] = useState('');
+  const [newFeatHpMaxBonus, setNewFeatHpMaxBonus] = useState<number>(0);
 
   // Official Compendium Tab state
   const [featureModalTab, setFeatureModalTab] = useState<'official' | 'custom'>('official');
@@ -112,7 +123,16 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   const [featureSearch, setFeatureSearch] = useState('');
   const [featSearch, setFeatSearch] = useState('');
 
-  const handleAddOfficialFeature = (featObj: ClassFeature) => {
+  const isDmRole = currentUser?.role === 'DM';
+  const effectiveCharacterLevel = getCombinedLevel(character);
+
+  const handleAddOfficialFeature = (featObj: ClassFeature & { reqLevel?: number }) => {
+    const reqLevel = featObj.reqLevel || 1;
+    if (reqLevel > effectiveCharacterLevel && !isDmRole) {
+      alert(`🔒 Perk Locked: "${featObj.name}" requires Level ${reqLevel} (Your Level: ${effectiveCharacterLevel}). Class features unlock automatically as you level up. Ask your DM to grant early!`);
+      return;
+    }
+
     const updatedFeatures = [
       ...character.classFeatures,
       {
@@ -204,6 +224,23 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
       ...character,
       classFeatures: [...character.classFeatures, newFeature]
     });
+
+    try {
+      saveCustomCompendiumEntry({
+        id: 'comp-feat-' + newFeature.id,
+        name: newFeature.name,
+        category: 'features',
+        edition: character.edition || '5e',
+        description: newFeature.description,
+        source: newFeature.source || `${character.characterClass} Feature`,
+        isCustom: true,
+        tags: [character.characterClass, character.edition || '5e', 'Custom'],
+        featureData: newFeature
+      });
+    } catch (e) {
+      console.error('Failed to auto-add feature to compendium', e);
+    }
+
     setNewFeatureName('');
     setNewFeatureSource('');
     setNewFeatureDesc('');
@@ -225,15 +262,34 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
       id: 'feat-' + Date.now(),
       name: newFeatName,
       source: newFeatSource || 'Feat',
-      description: newFeatDesc
+      description: newFeatDesc,
+      hpMaxBonus: newFeatHpMaxBonus !== 0 ? newFeatHpMaxBonus : undefined
     };
     onUpdateCharacter({
       ...character,
       feats: [...character.feats, newFeat]
     });
+
+    try {
+      saveCustomCompendiumEntry({
+        id: 'comp-feat-' + newFeat.id,
+        name: newFeat.name,
+        category: 'feats',
+        edition: character.edition || '5e',
+        description: newFeat.description,
+        source: newFeat.source || 'Custom Feat',
+        isCustom: true,
+        tags: [character.edition || '5e', 'Custom'],
+        featData: newFeat
+      });
+    } catch (e) {
+      console.error('Failed to auto-add feat to compendium', e);
+    }
+
     setNewFeatName('');
     setNewFeatSource('');
     setNewFeatDesc('');
+    setNewFeatHpMaxBonus(0);
     setShowAddFeatModal(false);
   };
 
@@ -293,55 +349,112 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                   {character.name}
                 </h2>
                 {/* Level Quick Adjustment */}
-                <div className="flex items-center gap-1.5 bg-amber-950 border border-amber-600/50 px-3 py-1 rounded-full text-xs text-amber-300 font-sans font-bold flex-wrap">
-                  <span>Level</span>
-                  <button
-                    onClick={() => onUpdateCharacter({ ...character, level: Math.max(1, character.level - 1) })}
-                    className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
-                    title="Decrease Primary Level"
-                  >
-                    -
-                  </button>
-                  <span className="font-mono text-sm px-1 text-amber-100">{character.level}</span>
-                  <button
-                    onClick={() => onUpdateCharacter({ ...character, level: character.level + 1 })}
-                    className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
-                    title="Increase Primary Level"
-                  >
-                    +
-                  </button>
+                <div className="flex items-center gap-1.5 bg-amber-950 border border-amber-600/50 px-3 py-1.5 rounded-2xl text-xs text-amber-300 font-sans font-bold flex-wrap shadow-md">
+                  {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass ? (
+                    <span className="font-mono font-extrabold text-amber-200 bg-amber-900/80 px-2 py-0.5 rounded-lg border border-amber-400/50">
+                      Comb. Lvl {getCombinedLevel(character)}
+                    </span>
+                  ) : (
+                    <span>Level</span>
+                  )}
+
+                  {/* Primary Class Controls */}
+                  <div className="flex items-center gap-1 bg-stone-900/80 px-2 py-0.5 rounded-xl border border-stone-800">
+                    <span className="text-[11px] text-stone-300 font-serif font-bold">
+                      {character.characterClass}:
+                    </span>
+                    <button
+                      onClick={() => onUpdateCharacter({ ...character, level: Math.max(1, character.level - 1) })}
+                      className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
+                      title="Decrease Primary Level"
+                    >
+                      -
+                    </button>
+                    <span className="font-mono text-sm px-0.5 text-amber-100">{character.level}</span>
+                    <button
+                      onClick={() => onUpdateCharacter({ ...character, level: character.level + 1 })}
+                      className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
+                      title="Increase Primary Level"
+                    >
+                      +
+                    </button>
+                  </div>
 
                   {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass && (
-                    <div className="flex items-center gap-1 border-l border-amber-700/60 pl-2 ml-1 text-amber-200">
-                      <span>/ {character.optionalRules.secondaryClass}</span>
-                      <button
-                        onClick={() => onUpdateCharacter({
-                          ...character,
-                          optionalRules: {
-                            ...character.optionalRules,
-                            secondaryLevel: Math.max(1, (character.optionalRules?.secondaryLevel || 1) - 1)
-                          }
-                        })}
-                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
-                        title="Decrease Secondary Level"
-                      >
-                        -
-                      </button>
-                      <span className="font-mono text-sm px-1 text-amber-100">{character.optionalRules.secondaryLevel || 1}</span>
-                      <button
-                        onClick={() => onUpdateCharacter({
-                          ...character,
-                          optionalRules: {
-                            ...character.optionalRules,
-                            secondaryLevel: (character.optionalRules?.secondaryLevel || 1) + 1
-                          }
-                        })}
-                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
-                        title="Increase Secondary Level"
-                      >
-                        +
-                      </button>
-                    </div>
+                    <>
+                      {/* Secondary Class Controls */}
+                      <div className="flex items-center gap-1 bg-stone-900/80 px-2 py-0.5 rounded-xl border border-stone-800">
+                        <span className="text-[11px] text-stone-300 font-serif font-bold">
+                          {character.optionalRules.secondaryClass}:
+                        </span>
+                        <button
+                          onClick={() => onUpdateCharacter({
+                            ...character,
+                            optionalRules: {
+                              ...character.optionalRules,
+                              secondaryLevel: Math.max(1, (character.optionalRules?.secondaryLevel || 1) - 1)
+                            }
+                          })}
+                          className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
+                          title="Decrease Secondary Level"
+                        >
+                          -
+                        </button>
+                        <span className="font-mono text-sm px-0.5 text-amber-100">{character.optionalRules.secondaryLevel || 1}</span>
+                        <button
+                          onClick={() => onUpdateCharacter({
+                            ...character,
+                            optionalRules: {
+                              ...character.optionalRules,
+                              secondaryLevel: (character.optionalRules?.secondaryLevel || 1) + 1
+                            }
+                          })}
+                          className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
+                          title="Increase Secondary Level"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {/* Active Class Switcher */}
+                      <div className="flex items-center gap-1 bg-stone-950 p-1 rounded-xl border border-amber-500/40 ml-1">
+                        <span className="text-[10px] text-stone-400 font-mono font-bold px-1">Active:</span>
+                        <button
+                          onClick={() => onUpdateCharacter({
+                            ...character,
+                            optionalRules: {
+                              ...character.optionalRules,
+                              activeClassChoice: 'primary'
+                            }
+                          })}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition font-mono ${
+                            getActiveClassChoice(character) === 'primary'
+                              ? 'bg-amber-500 text-stone-950 shadow font-extrabold'
+                              : 'bg-stone-900 text-stone-400 hover:text-stone-200'
+                          }`}
+                          title="Set Primary Class as Active (earns XP & levels up)"
+                        >
+                          {character.characterClass} {getActiveClassChoice(character) === 'primary' ? '★ Active' : '⏸ Paused'}
+                        </button>
+                        <button
+                          onClick={() => onUpdateCharacter({
+                            ...character,
+                            optionalRules: {
+                              ...character.optionalRules,
+                              activeClassChoice: 'secondary'
+                            }
+                          })}
+                          className={`px-2 py-0.5 rounded-lg text-[10px] font-bold transition font-mono ${
+                            getActiveClassChoice(character) === 'secondary'
+                              ? 'bg-amber-500 text-stone-950 shadow font-extrabold'
+                              : 'bg-stone-900 text-stone-400 hover:text-stone-200'
+                          }`}
+                          title="Set Secondary Class as Active (earns XP & levels up)"
+                        >
+                          {character.optionalRules.secondaryClass} {getActiveClassChoice(character) === 'secondary' ? '★ Active' : '⏸ Paused'}
+                        </button>
+                      </div>
+                    </>
                   )}
                 </div>
 
@@ -363,26 +476,52 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                     <span>Merchant / Vendor ({character.vendorMargin || 120}%)</span>
                   </div>
                 )}
-              </div>
+                           <div className="text-xs text-stone-400 mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <span><strong>Race:</strong> {character.race}</span>
+                  <span>
+                    <strong>Class:</strong> {character.characterClass} ({character.subclass || 'None'})
+                    {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass && (
+                      <span className="text-amber-300 font-semibold ml-1.5 bg-amber-950/80 border border-amber-600/50 px-2 py-0.5 rounded text-[11px] inline-flex items-center gap-1">
+                        <span>/ {character.optionalRules.secondaryClass}</span>
+                        {character.optionalRules.secondarySubclass && (
+                          <span>({character.optionalRules.secondarySubclass})</span>
+                        )}
+                        <span className="font-mono text-amber-200">Lvl {character.optionalRules.secondaryLevel || 1}</span>
+                        <span className="font-mono font-extrabold text-amber-400 text-[10px]">
+                          (Comb. Lvl {getCombinedLevel(character)})
+                        </span>
+                      </span>
+                    )}
+                  </span>
+                  <span><strong>Background:</strong> {character.background}</span>
+                  <span><strong>Alignment:</strong> {character.alignment}</span>
 
-              <div className="text-xs text-stone-400 mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                <span><strong>Race:</strong> {character.race}</span>
-                <span>
-                  <strong>Class:</strong> {character.characterClass} ({character.subclass || 'None'})
-                  {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass && (
-                    <span className="text-amber-300 font-semibold ml-1 bg-amber-950/80 border border-amber-600/50 px-2 py-0.5 rounded text-[11px] inline-flex items-center gap-1">
-                      <span>/ {character.optionalRules.secondaryClass}</span>
-                      {character.optionalRules.secondarySubclass && (
-                        <span>({character.optionalRules.secondarySubclass})</span>
+                  {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass ? (
+                    <div className="flex flex-wrap items-center gap-2 font-mono text-xs w-full mt-1 pt-2 border-t border-stone-800/80">
+                      <span className="text-stone-300 bg-stone-900/90 border border-stone-800 px-2.5 py-1 rounded-lg">
+                        General XP Pool: <strong className="text-amber-300">{character.experiencePoints.toLocaleString()} XP</strong>
+                      </span>
+                      <span className="text-stone-300 bg-stone-900/90 border border-stone-800 px-2.5 py-1 rounded-lg">
+                        {character.characterClass}: <strong className="text-stone-200">{getPrimaryXp(character).toLocaleString()} XP</strong>
+                      </span>
+                      <span className="text-stone-300 bg-stone-900/90 border border-stone-800 px-2.5 py-1 rounded-lg">
+                        {character.optionalRules.secondaryClass}: <strong className="text-stone-200">{getSecondaryXp(character).toLocaleString()} XP</strong>
+                      </span>
+                      {getUnallocatedXp(character) > 0 && (
+                        <button
+                          onClick={() => setShowLevelProgressionModal(true)}
+                          className="text-amber-200 font-bold bg-amber-900/90 border border-amber-500/80 px-2.5 py-1 rounded-lg hover:bg-amber-800 transition flex items-center gap-1.5 animate-pulse shadow-sm"
+                          title="Click to allocate general XP to your classes"
+                        >
+                          <Star className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{getUnallocatedXp(character).toLocaleString()} Unallocated XP (Spend)</span>
+                        </button>
                       )}
-                      <span className="font-mono text-amber-200">Lvl {character.optionalRules.secondaryLevel || 1}</span>
-                    </span>
+                    </div>
+                  ) : (
+                    <span><strong>XP:</strong> {character.experiencePoints.toLocaleString()}</span>
                   )}
-                </span>
-                <span><strong>Background:</strong> {character.background}</span>
-                <span><strong>Alignment:</strong> {character.alignment}</span>
-
-                <span><strong>XP:</strong> {character.experiencePoints.toLocaleString()}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -896,7 +1035,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
 
               {/* Multiclass Configuration Sub-panel */}
               {character.optionalRules?.useMulticlassing && (
-                <div className="pt-2 border-t border-stone-800 grid grid-cols-1 sm:grid-cols-3 gap-3 bg-stone-950 p-3 rounded-lg border border-amber-600/30">
+                <div className="pt-2 border-t border-stone-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 bg-stone-950 p-3.5 rounded-lg border border-amber-600/30">
                   <div>
                     <label className="block text-xs font-serif font-bold text-amber-300 mb-1">Secondary Class</label>
                     <select
@@ -947,6 +1086,41 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                       })}
                       placeholder="e.g. Assassin"
                       className="w-full bg-stone-900 border border-stone-700 text-stone-200 rounded px-2.5 py-1 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-serif font-bold text-amber-300 mb-1">Currently Active Class</label>
+                    <select
+                      value={getActiveClassChoice(character)}
+                      onChange={(e) => onUpdateCharacter({
+                        ...character,
+                        optionalRules: {
+                          ...character.optionalRules,
+                          activeClassChoice: e.target.value as 'primary' | 'secondary'
+                        }
+                      })}
+                      className="w-full bg-stone-900 border border-amber-500/70 text-amber-200 font-bold rounded px-2.5 py-1 text-xs"
+                    >
+                      <option value="primary">★ {character.characterClass} (Primary - Active)</option>
+                      <option value="secondary">★ {character.optionalRules?.secondaryClass || 'Secondary'} (Secondary - Active)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-serif font-bold text-amber-300 mb-1">Secondary XP</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={getSecondaryXp(character)}
+                      onChange={(e) => onUpdateCharacter({
+                        ...character,
+                        optionalRules: {
+                          ...character.optionalRules,
+                          secondaryXp: Math.max(0, parseInt(e.target.value) || 0)
+                        }
+                      })}
+                      className="w-full bg-stone-900 border border-stone-700 font-mono font-bold text-stone-200 rounded px-2.5 py-1 text-xs text-center"
                     />
                   </div>
                 </div>
@@ -1806,25 +1980,52 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 <div className="space-y-2">
                   {(character.edition === '3.5e' ? OFFICIAL_35E_CLASS_FEATURES : OFFICIAL_5E_CLASS_FEATURES)
                     .filter(f => f.name.toLowerCase().includes(featureSearch.toLowerCase()) || f.description.toLowerCase().includes(featureSearch.toLowerCase()) || f.className.toLowerCase().includes(featureSearch.toLowerCase()))
-                    .map((feat) => (
-                      <div key={feat.id} className="bg-stone-950/80 border border-stone-800 hover:border-amber-600/50 rounded-xl p-3 text-xs space-y-1.5 transition">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-serif font-bold text-amber-200 text-sm">{feat.name}</span>
-                            <span className="ml-2 text-[10px] text-amber-400 bg-amber-950/80 border border-amber-800/50 px-2 py-0.5 rounded-full">
-                              {feat.source}
-                            </span>
+                    .map((feat) => {
+                      const reqLevel = (feat as any).reqLevel || 1;
+                      const isLocked = reqLevel > effectiveCharacterLevel;
+
+                      return (
+                        <div key={feat.id} className={`p-3 rounded-xl border text-xs space-y-1.5 transition ${
+                          isLocked ? 'bg-stone-950/40 border-stone-800/80 opacity-80' : 'bg-stone-950/80 border-stone-800 hover:border-amber-600/50'
+                        }`}>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="font-serif font-bold text-amber-200 text-sm">{feat.name}</span>
+                              <span className="ml-2 text-[10px] text-amber-400 bg-amber-950/80 border border-amber-800/50 px-2 py-0.5 rounded-full">
+                                {feat.source}
+                              </span>
+                              {isLocked && (
+                                <span className="ml-1.5 text-[10px] text-amber-400 font-mono bg-amber-950/90 border border-amber-600/50 px-1.5 py-0.2 rounded inline-flex items-center gap-1">
+                                  <Lock className="w-2.5 h-2.5 text-amber-400" /> Req. Lvl {reqLevel}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => handleAddOfficialFeature(feat)}
+                              className={`px-3 py-1 rounded-lg font-bold text-[11px] shadow transition flex items-center gap-1 ${
+                                isLocked && !isDmRole
+                                  ? 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
+                                  : isLocked && isDmRole
+                                    ? 'bg-purple-900 hover:bg-purple-800 text-purple-200 border border-purple-500/60'
+                                    : 'bg-amber-700 hover:bg-amber-600 text-white'
+                              }`}
+                              title={
+                                isLocked && !isDmRole
+                                  ? `🔒 Unlocks at Level ${reqLevel}. Ask your DM to grant early.`
+                                  : isLocked && isDmRole
+                                    ? `👑 DM Grant: Manually grant Level ${reqLevel} feature early`
+                                    : '+ Add to Sheet'
+                              }
+                            >
+                              {isLocked && isDmRole && <Crown className="w-3 h-3 text-amber-400" />}
+                              {isLocked && !isDmRole && <Lock className="w-3 h-3 text-amber-500/80" />}
+                              <span>{isLocked && !isDmRole ? `Lvl ${reqLevel} Req.` : isLocked && isDmRole ? 'Grant (DM)' : '+ Add to Sheet'}</span>
+                            </button>
                           </div>
-                          <button
-                            onClick={() => handleAddOfficialFeature(feat)}
-                            className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-white rounded-lg font-bold text-[11px] shadow transition"
-                          >
-                            + Add to Sheet
-                          </button>
+                          <p className="text-stone-300 text-xs leading-relaxed">{feat.description}</p>
                         </div>
-                        <p className="text-stone-300 text-xs leading-relaxed">{feat.description}</p>
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
               </div>
             ) : (
@@ -1988,11 +2189,22 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                   />
                 </div>
                 <div>
+                  <label className="block text-stone-400 mb-1">Max HP Bonus (Optional)</label>
+                  <input
+                    type="number"
+                    value={newFeatHpMaxBonus}
+                    onChange={(e) => setNewFeatHpMaxBonus(parseInt(e.target.value) || 0)}
+                    placeholder="e.g. +10 (Tough auto-applies)"
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-rose-300 font-mono font-bold"
+                  />
+                  <span className="text-[10px] text-stone-500 block mt-0.5">Static HP grant from this feat (or leave 0 for non-HP feats)</span>
+                </div>
+                <div>
                   <label className="block text-stone-400 mb-1">Description</label>
                   <textarea
                     value={newFeatDesc}
                     onChange={(e) => setNewFeatDesc(e.target.value)}
-                    rows={4}
+                    rows={3}
                     placeholder="Feat benefits..."
                     className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
                   />

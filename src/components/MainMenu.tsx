@@ -1,6 +1,7 @@
 import React from 'react';
 import { CharacterData, RuleEdition } from '../types';
 import { getMonsterPortraitUrl } from '../data/monsterPortraits';
+import { isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
 import {
   Shield,
   Plus,
@@ -13,9 +14,13 @@ import {
   Folder,
   User,
   Store,
-  ChevronDown
+  ChevronDown,
+  Lock,
+  Crown,
+  UserCheck
 } from 'lucide-react';
 import { HpOrb } from './HpOrb';
+import { UserProfile, CharacterPresence } from '../lib/firebase';
 
 interface MainMenuProps {
   characters: CharacterData[];
@@ -25,6 +30,9 @@ interface MainMenuProps {
   onEnterGame: () => void;
   onSystemChange?: (system: RuleEdition) => void;
   edition?: RuleEdition;
+  currentUser?: UserProfile | null;
+  presenceMap?: Record<string, CharacterPresence>;
+  onOpenAuthModal?: () => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -34,7 +42,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onCreateNewCharacter,
   onEnterGame,
   onSystemChange,
-  edition
+  edition,
+  currentUser,
+  presenceMap = {},
+  onOpenAuthModal
 }) => {
   const currentEdition = edition || activeCharacter.edition || '5e';
   const activeSystem = currentEdition === 'shadowrun'
@@ -90,24 +101,48 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       playBtnLabel: string;
     }
   ) => {
+    const isPlayerRole = !currentUser || currentUser.role === 'Player';
+    const currentUserId = currentUser?.uid || 'guest_player';
+
     const playerChars = systemChars.filter(c => !c.isMonster && !c.isVendor);
-    const monsterChars = systemChars.filter(c => c.isMonster);
-    const merchantChars = systemChars.filter(c => c.isVendor && !c.isMonster);
+    const monsterChars = isPlayerRole ? [] : systemChars.filter(c => c.isMonster);
+    const merchantChars = isPlayerRole ? [] : systemChars.filter(c => c.isVendor && !c.isMonster);
 
     const renderCard = (char: CharacterData) => {
       const isActive = char.id === activeCharacter.id;
       const sr = char.shadowrun;
       const isSR = char.edition === 'shadowrun';
       const displayPortrait = char.portraitUrl || (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined);
+      const isDead = isCharacterDead(char);
+      const isUnconscious = !isDead && (char.hpCurrent !== undefined && char.hpCurrent <= 0);
+
+      const presence = presenceMap[char.id];
+      const activeUserId = presence?.activeUserId;
+      const activeUserName = presence?.activeUserName || 'Player';
+      const isLockedForPlayer = isPlayerRole && !!activeUserId && activeUserId !== currentUserId;
+      const isDmActiveOnChar = !!presence?.dmActive && char.id !== activeCharacter.id;
+      const dmUserName = presence?.dmUserName || 'DM';
+
+      const handleCardClick = () => {
+        if (isLockedForPlayer) {
+          alert(`🔒 ${char.name} is currently active in another session by ${activeUserName}. Players cannot select active characters of other players.`);
+          return;
+        }
+        onSelectCharacter(char.id);
+      };
 
       return (
         <div
           key={char.id}
-          onClick={() => onSelectCharacter(char.id)}
-          className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between space-y-3 cursor-pointer group ${
-            isActive
-              ? `${systemTheme.accentBg} ${systemTheme.accentBorder} shadow-lg ring-1 ring-amber-500/40`
-              : 'bg-stone-950/80 border-stone-800 hover:border-stone-700 hover:bg-stone-950'
+          onClick={handleCardClick}
+          className={`p-4 rounded-2xl border text-left transition flex flex-col justify-between space-y-3 group ${
+            isLockedForPlayer
+              ? 'bg-stone-950/60 border-red-900/40 opacity-80 cursor-not-allowed'
+              : isDead
+              ? 'bg-rose-950/20 border-rose-900/80 hover:border-rose-700 hover:bg-rose-950/40 shadow-rose-950/30 cursor-pointer'
+              : isActive
+              ? `${systemTheme.accentBg} ${systemTheme.accentBorder} shadow-lg ring-1 ring-amber-500/40 cursor-pointer`
+              : 'bg-stone-950/80 border-stone-800 hover:border-stone-700 hover:bg-stone-950 cursor-pointer'
           }`}
         >
           <div className="flex items-center gap-3">
@@ -115,24 +150,47 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               <img
                 src={displayPortrait}
                 alt={char.name}
-                className="w-12 h-12 rounded-xl object-cover border border-stone-700 shrink-0 shadow"
+                className={`w-12 h-12 rounded-xl object-cover border shrink-0 shadow ${isDead ? 'border-rose-600/70 grayscale' : 'border-stone-700'}`}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
             ) : (
-              <div className="w-12 h-12 rounded-xl bg-stone-900 border border-stone-800 flex items-center justify-center text-stone-300 shrink-0 font-serif font-bold text-lg shadow">
+              <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shrink-0 font-serif font-bold text-lg shadow ${isDead ? 'bg-rose-950 border-rose-800 text-rose-300' : 'bg-stone-900 border-stone-800 text-stone-300'}`}>
                 {char.name.charAt(0)}
               </div>
             )}
 
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1 flex-wrap">
-                <h4 className={`font-serif font-bold text-base truncate transition ${isActive ? systemTheme.accentText : 'text-stone-100 group-hover:text-amber-300'}`}>
+                <h4 className={`font-serif font-bold text-base truncate transition ${isDead ? 'text-rose-300' : isActive ? systemTheme.accentText : 'text-stone-100 group-hover:text-amber-300'}`}>
                   {char.name}
                 </h4>
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                  {isDmActiveOnChar && (
+                    <span className="text-[9px] bg-purple-950/90 text-purple-200 border border-purple-500/80 font-bold px-1.5 py-0.5 rounded font-mono flex items-center gap-0.5 animate-pulse shadow" title={`DM ${dmUserName} is active`}>
+                      <Crown className="w-2.5 h-2.5 text-amber-400 fill-amber-400" />
+                      DM ACTIVE
+                    </span>
+                  )}
+                  {isLockedForPlayer && (
+                    <span className="text-[9px] bg-red-950 text-red-200 border border-red-600/80 font-bold px-1.5 py-0.5 rounded font-mono flex items-center gap-0.5 shadow">
+                      <Lock className="w-2.5 h-2.5 text-red-400" />
+                      IN USE ({activeUserName})
+                    </span>
+                  )}
+                  {isDead && (
+                    <span className="text-[9px] bg-rose-950 text-rose-200 border border-rose-600/70 font-black px-1.5 py-0.5 rounded font-mono flex items-center gap-0.5 animate-pulse shadow">
+                      <Skull className="w-2.5 h-2.5 text-rose-400" />
+                      DEAD 💀
+                    </span>
+                  )}
+                  {isUnconscious && (
+                    <span className="text-[9px] bg-amber-950 text-amber-300 border border-amber-600/50 font-bold px-1.5 py-0.5 rounded font-mono flex items-center gap-0.5">
+                      UNCONSCIOUS 💤
+                    </span>
+                  )}
                   {char.isMonster && (
                     <span className="text-[9px] bg-red-950 text-red-300 border border-red-600/50 font-bold px-1.5 py-0.5 rounded font-mono flex items-center gap-0.5">
                       <Skull className="w-2.5 h-2.5 text-red-400" />
@@ -178,17 +236,28 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           )}
 
           <div className="flex items-center justify-between pt-2 border-t border-stone-800 text-xs">
-            <HpOrb hpCurrent={char.hpCurrent} hpMax={char.hpMax} size="sm" showLabel={true} />
+            <HpOrb hpCurrent={char.hpCurrent} hpMax={getEffectiveMaxHp(char)} size="sm" showLabel={true} />
 
             <button
+              disabled={isLockedForPlayer}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isLockedForPlayer) {
+                  alert(`🔒 ${char.name} is currently active by ${activeUserName}.`);
+                  return;
+                }
                 onSelectCharacter(char.id);
                 onEnterGame();
               }}
-              className={`px-3 py-1 ${systemTheme.primaryBtn} rounded-lg font-bold text-[11px] transition flex items-center gap-1 shadow`}
+              className={`px-3 py-1 ${
+                isLockedForPlayer
+                  ? 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
+                  : isDead
+                  ? 'bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-600/60 shadow-rose-950'
+                  : systemTheme.primaryBtn
+              } rounded-lg font-bold text-[11px] transition flex items-center gap-1 shadow`}
             >
-              <span>{isSR ? 'Enter Matrix' : systemTheme.playBtnLabel}</span>
+              <span>{isLockedForPlayer ? 'Locked 🔒' : isDead ? 'Play (Dead 💀)' : (isSR ? 'Enter Matrix' : systemTheme.playBtnLabel)}</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -196,7 +265,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       );
     };
 
-    const foldersConfig = [
+    const allFolders = [
       {
         key: 'characters',
         categoryType: 'character' as const,
@@ -229,9 +298,40 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       }
     ];
 
+    const foldersConfig = isPlayerRole ? allFolders.filter(f => f.key === 'characters') : allFolders;
+
     const activeFolders = activeFolderTab === 'all'
       ? foldersConfig
       : foldersConfig.filter(f => f.key === activeFolderTab);
+
+    if (!currentUser) {
+      return (
+        <div className="bg-stone-900/90 border border-amber-500/30 rounded-3xl p-8 text-center space-y-6 max-w-2xl mx-auto shadow-2xl my-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h3 className="font-serif font-bold text-2xl text-amber-200">
+              Adventurer Account Required
+            </h3>
+            <p className="text-stone-300 text-sm max-w-lg mx-auto leading-relaxed">
+              No characters or data are accessible while logged out. Please sign in or enter Guest Mode to select, view, or create characters.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+            {onOpenAuthModal && (
+              <button
+                onClick={onOpenAuthModal}
+                className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+              >
+                <UserCheck className="w-5 h-5" /> Sign In / Account & Roles
+              </button>
+            )}
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-6">
@@ -248,7 +348,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
             }`}
           >
-            📁 All Folders ({systemChars.length})
+            📁 All Folders ({isPlayerRole ? playerChars.length : systemChars.length})
           </button>
           <button
             onClick={() => setActiveFolderTab('characters')}
@@ -260,26 +360,30 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           >
             🧙 Characters ({playerChars.length})
           </button>
-          <button
-            onClick={() => setActiveFolderTab('monsters')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
-              activeFolderTab === 'monsters'
-                ? 'bg-red-600 text-stone-950 shadow-md'
-                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
-            }`}
-          >
-            👹 Monsters ({monsterChars.length})
-          </button>
-          <button
-            onClick={() => setActiveFolderTab('merchants')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
-              activeFolderTab === 'merchants'
-                ? 'bg-cyan-600 text-stone-950 shadow-md'
-                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
-            }`}
-          >
-            🏪 Merchants ({merchantChars.length})
-          </button>
+          {!isPlayerRole && (
+            <>
+              <button
+                onClick={() => setActiveFolderTab('monsters')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
+                  activeFolderTab === 'monsters'
+                    ? 'bg-red-600 text-stone-950 shadow-md'
+                    : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+              >
+                👹 Monsters ({monsterChars.length})
+              </button>
+              <button
+                onClick={() => setActiveFolderTab('merchants')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
+                  activeFolderTab === 'merchants'
+                    ? 'bg-cyan-600 text-stone-950 shadow-md'
+                    : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+              >
+                🏪 Merchants ({merchantChars.length})
+              </button>
+            </>
+          )}
         </div>
 
         {/* Folder Sections */}
@@ -375,21 +479,33 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-            <button
-              onClick={() => onCreateNewCharacter('character')}
-              className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Create Character</span>
-            </button>
+            {currentUser ? (
+              <>
+                <button
+                  onClick={() => onCreateNewCharacter('character')}
+                  className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                >
+                  <Plus className="w-5 h-5" />
+                  <span>Create Character</span>
+                </button>
 
-            <button
-              onClick={onEnterGame}
-              className="px-5 py-3 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-2xl transition flex items-center justify-center gap-2 font-bold"
-            >
-              <span>Open Active Sheet</span>
-              <ChevronRight className="w-5 h-5 text-amber-400" />
-            </button>
+                <button
+                  onClick={onEnterGame}
+                  className="px-5 py-3 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-2xl transition flex items-center justify-center gap-2 font-bold cursor-pointer"
+                >
+                  <span>Open Active Sheet</span>
+                  <ChevronRight className="w-5 h-5 text-amber-400" />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={onOpenAuthModal}
+                className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+              >
+                <Lock className="w-5 h-5" />
+                <span>Sign In / Enter Guest Mode</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -465,7 +581,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div>
               <h3 className="font-serif font-bold text-lg text-cyan-200">Shadowrun</h3>
               <p className="text-xs text-stone-400 mt-1">
-                Cyberware, Decking, Rigging, Matrix Overwatch, and Cyberpunk Neon Cyan UI.
+                Futuristic cyberpunk RPG featuring cyberware, decking, rigging, and Matrix operations.
               </p>
             </div>
 
@@ -502,7 +618,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div>
               <h3 className="font-serif font-bold text-lg text-purple-200">Pathfinder 2e</h3>
               <p className="text-xs text-stone-400 mt-1">
-                3-Action tactical combat system & Royal Amethyst Purple UI.
+                Tactical fantasy RPG powered by a versatile 3-action economy and rich character customization.
               </p>
             </div>
 
@@ -539,7 +655,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <div>
               <h3 className="font-serif font-bold text-lg text-emerald-200">Call of Cthulhu</h3>
               <p className="text-xs text-stone-400 mt-1">
-                Sanity tracking, d100 skill checks & Eldritch Emerald UI.
+                Investigation and horror RPG featuring sanity tracking, percentile (d100) skill checks, and eldritch mystery.
               </p>
             </div>
 

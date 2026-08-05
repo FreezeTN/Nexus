@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { AbilityName, CharacterData, Spell } from '../../types';
+import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { ShadowrunSpellsComplexForms } from '../shadowrun/ShadowrunSpellsComplexForms';
-import { getSpellSaveDC, getSpellAttackBonus, getAbilityModifier, formatModifier, OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, isHealingSpell, getHealingExpression, rollHealing, isCharacterDead, isReviveSpell } from '../../utils/dndCalculations';
+import { getSpellSaveDC, getSpellAttackBonus, getAbilityModifier, formatModifier, OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, isHealingSpell, getHealingExpression, rollHealing, isCharacterDead, isReviveSpell, getMaxUnlockedSpellSlotLevel, getRequiredLevelForSpellSlotLevel, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { PRESET_5E_SPELLS } from '../../data/presetSpells';
+import { SpellTargetModal, getAutoConditionForSpell } from '../modals/SpellTargetModal';
 import {
   Wand2,
   Sparkles,
@@ -25,11 +27,15 @@ import {
   ChevronUp,
   RefreshCw,
   Sun,
-  Filter
+  Filter,
+  Lock,
+  Crown
 } from 'lucide-react';
 
 interface Sheet4Props {
   character: CharacterData;
+  allCharacters?: CharacterData[];
+  currentUser?: { role?: string; displayName?: string } | null;
   onUpdateCharacter: (updated: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage: (label: string, expression: string) => void;
@@ -74,6 +80,8 @@ export const getRecommendedPreparedSpellsCount = (character: CharacterData): num
 
 export const Sheet4Spells: React.FC<Sheet4Props> = ({
   character,
+  allCharacters = [],
+  currentUser,
   onUpdateCharacter,
   onRoll,
   onRollDamage
@@ -94,6 +102,7 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
   // Add & Edit Spell Modal
   const [showSpellModal, setShowSpellModal] = useState(false);
   const [editingSpellId, setEditingSpellId] = useState<string | null>(null);
+  const [targetModalSpell, setTargetModalSpell] = useState<Spell | null>(null);
 
   // Form Fields
   const [spellName, setSpellName] = useState('');
@@ -133,8 +142,19 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
     });
   };
 
+  const isDmRole = currentUser?.role === 'DM';
+  const maxUnlockedLevel = getMaxUnlockedSpellSlotLevel(character);
+
   // Spell Slot Handlers
   const handleSlotChange = (level: number, type: 'current' | 'max', delta: number) => {
+    if (type === 'max' && delta > 0) {
+      const reqLvl = getRequiredLevelForSpellSlotLevel(level, character);
+      if (level > maxUnlockedLevel && !isDmRole) {
+        alert(`🔒 Perk Locked: Level ${level} Spell Slots unlock at Character Level ${reqLvl}. Only a DM can grant higher-level spell slots prior to level unlock!`);
+        return;
+      }
+    }
+
     const updatedSlots = character.spellSlots.map(slot => {
       if (slot.level === level) {
         if (type === 'current') {
@@ -215,7 +235,7 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
     if (isReviveSpell(spell)) {
       const expr = spell.damage || getHealingExpression(spell) || '1d8 + 3';
       const { totalHeal } = rollHealing(expr);
-      const reviveHp = Math.min(character.hpMax, Math.max(1, totalHeal || 1));
+      const reviveHp = Math.min(getEffectiveMaxHp(character), Math.max(1, totalHeal || 1));
       const cleanedConditions = (character.conditions || []).filter(c => c !== 'Dead');
 
       onUpdateCharacter({
@@ -247,7 +267,8 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
 
       const expr = spell.damage || getHealingExpression(spell) || '1d8 + 3';
       const { totalHeal, breakdown } = rollHealing(expr);
-      const newHp = Math.min(character.hpMax, character.hpCurrent + totalHeal);
+      const effectiveMax = getEffectiveMaxHp(character);
+      const newHp = Math.min(effectiveMax, character.hpCurrent + totalHeal);
       const gained = newHp - character.hpCurrent;
 
       onUpdateCharacter({
@@ -261,21 +282,50 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
       if (onRollDamage) {
         onRollDamage(`Cast ${spell.name} (Heal ${breakdown}) - Restored +${gained} HP!`, expr);
       } else {
-        alert(`Cast "${spell.name}"! Healed ${totalHeal} HP (${breakdown}). Current HP: ${newHp}/${character.hpMax}`);
+        alert(`Cast "${spell.name}"! Healed ${totalHeal} HP (${breakdown}). Current HP: ${newHp}/${effectiveMax}`);
       }
       return;
     }
 
-    // Non-healing spell slot deduction
-    if (spell.level > 0) {
-      handleSlotChange(spell.level, 'current', -1);
+    // Open Target & Status Effect Application Modal for Buffs/Debuffs/Utility & Targeted Spells
+    setTargetModalSpell(spell);
+  };
+
+  const handleConfirmCastSpellTarget = (spellToCast: Spell, selectedTargetIds: string[], condName: string) => {
+    // Deduct spell slot for caster
+    const updatedSlots = spellToCast.level > 0
+      ? character.spellSlots.map(s => s.level === spellToCast.level ? { ...s, current: Math.max(0, s.current - 1) } : s)
+      : character.spellSlots;
+
+    const availableTargets = allCharacters.length > 0 ? allCharacters : [character];
+    const targetList = availableTargets.filter(c => selectedTargetIds.includes(c.id));
+    const targetNamesStr = targetList.map(c => c.name).join(', ') || character.name;
+
+    targetList.forEach(target => {
+      const currentConds = target.conditions || [];
+      const updatedConds = currentConds.includes(condName) ? currentConds : [...currentConds, condName];
+
+      onUpdateCharacter({
+        ...target,
+        ...(target.id === character.id ? { spellSlots: updatedSlots } : {}),
+        conditions: updatedConds
+      });
+    });
+
+    if (targetList.length === 0) {
+      onUpdateCharacter({
+        ...character,
+        spellSlots: updatedSlots
+      });
     }
 
-    if (spell.damage) {
-      onRollDamage?.(`Cast ${spell.name} Damage (${spell.damageType || 'Magical'})`, spell.damage);
-    } else {
-      alert(`Cast "${spell.name}"! ${spell.level > 0 ? `Expended Level ${spell.level} spell slot.` : 'Cantrip cast.'}`);
+    if (spellToCast.damage && onRollDamage) {
+      onRollDamage(`✨ Cast ${spellToCast.name} on ${targetNamesStr} (Damage: ${spellToCast.damage}) - Applied '${condName}'!`, spellToCast.damage);
+    } else if (onRollDamage) {
+      onRollDamage(`✨ Cast ${spellToCast.name} on ${targetNamesStr} - Applied '${condName}' status!`, '1d20');
     }
+
+    setTargetModalSpell(null);
   };
 
   const handleDeleteSpell = (spellId: string) => {
@@ -373,6 +423,23 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
         ...character,
         spells: [...character.spells, newSpell]
       });
+
+      // Auto-add new spell to Compendium
+      try {
+        saveCustomCompendiumEntry({
+          id: 'comp-spell-' + newSpell.id,
+          name: newSpell.name,
+          category: 'spells',
+          edition: character.edition || '5e',
+          description: newSpell.description,
+          source: `${character.name}'s Spellbook`,
+          isCustom: true,
+          tags: [`Level ${newSpell.level}`, newSpell.school, 'Custom'],
+          spellData: newSpell
+        });
+      } catch (e) {
+        console.error('Failed to auto-add spell to compendium', e);
+      }
     }
 
     setShowSpellModal(false);
@@ -517,47 +584,80 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
         <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((lvl) => {
             const slot = character.spellSlots.find(s => s.level === lvl) || { level: lvl, max: 0, current: 0 };
+            const isUnlocked = lvl <= maxUnlockedLevel || slot.max > 0;
+            const reqCharLvl = getRequiredLevelForSpellSlotLevel(lvl, character);
 
             return (
               <div
                 key={lvl}
                 className={`p-2 rounded-xl border text-center transition ${
-                  slot.max > 0 ? 'bg-stone-950 border-purple-500/40' : 'bg-stone-950/40 border-stone-800 opacity-60'
+                  slot.max > 0
+                    ? 'bg-stone-950 border-purple-500/40 shadow-inner'
+                    : isUnlocked
+                      ? 'bg-stone-950/60 border-stone-800'
+                      : 'bg-stone-950/30 border-stone-900 opacity-60'
                 }`}
               >
-                <div className="text-[10px] font-mono font-bold text-purple-300">Lvl {lvl}</div>
+                <div className="flex items-center justify-center gap-1 text-[10px] font-mono font-bold text-purple-300">
+                  <span>Lvl {lvl}</span>
+                  {!isUnlocked && <Lock className="w-2.5 h-2.5 text-amber-500/80" />}
+                </div>
+
+                {!isUnlocked && (
+                  <div className="text-[9px] font-mono text-amber-500/70 my-0.5">
+                    Req. Lvl {reqCharLvl}
+                  </div>
+                )}
+
                 <div className="text-lg font-serif font-extrabold text-amber-100 my-0.5">
                   {slot.current} / {slot.max}
                 </div>
 
                 <div className="flex items-center justify-center gap-1 mt-1">
                   <button
+                    disabled={slot.max === 0}
                     onClick={() => handleSlotChange(lvl, 'current', -1)}
-                    className="w-5 h-5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded font-bold text-xs"
+                    className="w-5 h-5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded font-bold text-xs disabled:opacity-30"
                     title="Expend 1 Slot"
                   >
                     -
                   </button>
                   <button
+                    disabled={slot.max === 0}
                     onClick={() => handleSlotChange(lvl, 'current', 1)}
-                    className="w-5 h-5 bg-purple-900 hover:bg-purple-800 text-purple-100 rounded font-bold text-xs"
+                    className="w-5 h-5 bg-purple-900 hover:bg-purple-800 text-purple-100 rounded font-bold text-xs disabled:opacity-30"
                     title="Recover 1 Slot"
                   >
                     +
                   </button>
                   <button
+                    disabled={slot.max === 0}
                     onClick={() => handleSlotChange(lvl, 'max', -1)}
-                    className="w-4.5 h-4.5 px-1 bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-stone-200 text-[10px] font-mono rounded transition"
+                    className="w-4.5 h-4.5 px-1 bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-stone-200 text-[10px] font-mono rounded transition disabled:opacity-30"
                     title="Decrease Max Slots"
                   >
                     M-
                   </button>
                   <button
                     onClick={() => handleSlotChange(lvl, 'max', 1)}
-                    className="w-4.5 h-4.5 px-1 bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-stone-200 text-[10px] font-mono rounded transition"
-                    title="Increase Max Slots"
+                    className={`h-5 px-1 rounded text-[10px] font-mono font-bold transition flex items-center justify-center gap-0.5 ${
+                      !isUnlocked && !isDmRole
+                        ? 'bg-stone-800 text-stone-500 cursor-not-allowed border border-stone-700/50'
+                        : !isUnlocked && isDmRole
+                          ? 'bg-purple-900/90 hover:bg-purple-800 text-purple-200 border border-purple-500/60'
+                          : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                    }`}
+                    title={
+                      !isUnlocked && !isDmRole
+                        ? `🔒 Unlocks at Character Level ${reqCharLvl}. Ask DM to grant early.`
+                        : !isUnlocked && isDmRole
+                          ? `👑 DM Grant: Manually grant Level ${lvl} spell slot`
+                          : "Increase Max Slots"
+                    }
                   >
-                    M+
+                    {!isUnlocked && isDmRole && <Crown className="w-2.5 h-2.5 text-amber-400" />}
+                    {!isUnlocked && !isDmRole && <Lock className="w-2.5 h-2.5 text-amber-500/80" />}
+                    <span>M+</span>
                   </button>
                 </div>
               </div>
@@ -1288,6 +1388,16 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {targetModalSpell && (
+        <SpellTargetModal
+          spell={targetModalSpell}
+          caster={character}
+          allCharacters={allCharacters}
+          onClose={() => setTargetModalSpell(null)}
+          onConfirmCast={handleConfirmCastSpellTarget}
+        />
       )}
     </div>
   );
