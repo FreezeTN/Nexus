@@ -575,7 +575,14 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
                               const presence = presenceMap[char.id];
                               const activeUserId = presence?.activeUserId;
                               const activeUserName = presence?.activeUserName || 'Player';
-                              const isLockedForPlayer = isPlayerRole && !!activeUserId && activeUserId !== currentUserId;
+                              const activeUserRole = presence?.activeUserRole;
+                              const dmUserId = presence?.dmUserId;
+
+                              const isLockedForPlayer = isPlayerRole && 
+                                !!activeUserId && 
+                                activeUserId !== currentUserId && 
+                                activeUserId !== dmUserId && 
+                                activeUserRole !== 'DM';
 
                               return (
                                 <button

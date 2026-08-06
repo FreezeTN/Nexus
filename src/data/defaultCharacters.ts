@@ -140,12 +140,12 @@ export const SAMPLE_CHARACTERS: CharacterData[] = [
     },
 
     inventory: [
-      { id: 'inv-1', name: 'Plate Armor', quantity: 1, weight: 65, equipped: true, isMagic: false, costGp: 1500, notes: 'AC 18, Disadvantage on Stealth' },
-      { id: 'inv-2', name: 'Longsword +1', quantity: 1, weight: 3, equipped: true, isMagic: true, costGp: 500, notes: '+1 to attack & damage rolls' },
-      { id: 'inv-3', name: 'Handaxe', quantity: 2, weight: 2, equipped: true, isMagic: false, costGp: 5 },
-      { id: 'inv-4', name: 'Backpack & Bedroll', quantity: 1, weight: 7, equipped: false, isMagic: false, costGp: 3 },
-      { id: 'inv-5', name: 'Rations (1 day)', quantity: 5, weight: 2, equipped: false, isMagic: false, costGp: 0.5 },
-      { id: 'inv-6', name: 'Potion of Healing', quantity: 3, weight: 0.5, equipped: false, isMagic: true, costGp: 50, notes: 'Regains 2d4 + 2 HP' }
+      { id: 'inv-1', name: 'Plate Armor', quantity: 1, weight: 65, equipped: true, isMagic: false, costGp: 1500, itemType: 'Armor', armorAc: 18, armorType: 'Heavy', stealthDisadvantage: true, notes: 'AC 18, Disadvantage on Stealth' },
+      { id: 'inv-2', name: 'Longsword +1', quantity: 1, weight: 3, equipped: true, isMagic: true, costGp: 500, itemType: 'Weapon', weaponStats: { attackBonus: '+1', damage: '1d8+1', damageType: 'Slashing', range: '5 ft Melee', notes: 'Versatile (1d10)' }, notes: '+1 to attack & damage rolls' },
+      { id: 'inv-3', name: 'Handaxe', quantity: 2, weight: 2, equipped: true, isMagic: false, costGp: 5, itemType: 'Weapon', weaponStats: { attackBonus: '+0', damage: '1d6', damageType: 'Slashing', range: '20/60 ft Thrown', notes: 'Light' } },
+      { id: 'inv-4', name: 'Backpack & Bedroll', quantity: 1, weight: 7, equipped: false, isMagic: false, costGp: 3, itemType: 'Misc' },
+      { id: 'inv-5', name: 'Rations (1 day)', quantity: 5, weight: 2, equipped: false, isMagic: false, costGp: 0.5, itemType: 'Misc' },
+      { id: 'inv-6', name: 'Potion of Healing', quantity: 3, weight: 0.5, equipped: false, isMagic: true, costGp: 50, itemType: 'Misc', notes: 'Regains 2d4 + 2 HP' }
     ],
 
     isSpellcaster: false,

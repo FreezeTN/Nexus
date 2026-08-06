@@ -1002,6 +1002,8 @@ export interface ConditionEffects {
   immuneToPoison: boolean;
   halfMaxHp: boolean;
   dead: boolean;
+  ethereal: boolean;
+  etherealSight: boolean;
   extraAttackBonus: number;
   extraAttackBonusItems: string[];
   acBonus: number;
@@ -1029,6 +1031,8 @@ export function getConditionEffects(conditions: string[] = [], exhaustion: numbe
     immuneToPoison: false,
     halfMaxHp: false,
     dead: false,
+    ethereal: false,
+    etherealSight: false,
     extraAttackBonus: 0,
     extraAttackBonusItems: [],
     acBonus: 0,
@@ -1137,6 +1141,16 @@ export function getConditionEffects(conditions: string[] = [], exhaustion: numbe
     effects.grantAdvantageToAttacker = true;
     effects.meleeAutoCrit = true;
     effects.mechanicalSummary.push("Unconscious: Incapacitated, drops held items, falls prone, speed 0, auto-fail STR/DEX saves, enemy attacks have advantage & hits within 5ft auto-crit");
+  }
+
+  if (cSet.has('ethereal')) {
+    effects.ethereal = true;
+    effects.mechanicalSummary.push("Ethereal: Phased into Border Ethereal; untargetable/immune to Material attacks (except Force damage or Ethereal Sight); can pass through solid material.");
+  }
+
+  if (cSet.has('ethereal sight') || cSet.has('ethereal-sight')) {
+    effects.etherealSight = true;
+    effects.mechanicalSummary.push("Ethereal Sight: Sees 60ft into Ethereal Plane from Material Plane (and vice versa).");
   }
 
   // --- SPELL BUFFS & TACTICAL EFFECTS ---

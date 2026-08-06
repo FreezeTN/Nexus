@@ -11,6 +11,7 @@ interface NavigationProps {
   isSpellcaster: boolean;
   edition?: RuleEdition;
   currentUser?: UserProfile | null;
+  hasActiveCharacter?: boolean;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -18,7 +19,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   onTabChange,
   isSpellcaster,
   edition = '5e',
-  currentUser
+  currentUser,
+  hasActiveCharacter = true
 }) => {
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
@@ -190,7 +192,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         ? 'Pathfinder 2e System Reference'
         : isCthulhu
         ? 'Call of Cthulhu 7e Rulebook'
-        : 'App Functions & Interactive Help',
+        : 'User Manual, Audio Options & Release Changelog',
       icon: BookOpen
     },
     {
@@ -202,10 +204,18 @@ export const Navigation: React.FC<NavigationProps> = ({
     }
   ];
 
-  // When not logged in at all, only Main Menu and User Guide are visible
-  const tabs = currentUser
-    ? allTabs
-    : allTabs.filter(t => t.id === 'menu' || t.id === 'sheet6');
+  // Filter tabs: if not logged in, only menu & guide; if no active character selected, hide character sheet tabs
+  const tabs = allTabs.filter(t => {
+    if (!currentUser) {
+      return t.id === 'menu' || t.id === 'sheet6';
+    }
+    if (!hasActiveCharacter) {
+      // Hide character sheets (sheet1 - sheet5) when no character is selected
+      const characterSheets = ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5'];
+      if (characterSheets.includes(t.id)) return false;
+    }
+    return true;
+  });
 
   return (
     <nav className={`bg-stone-950 border-b border-stone-800 ${currentUser ? 'sticky top-[108px] z-30 shadow-md' : 'relative z-10'}`}>

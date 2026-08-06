@@ -7,6 +7,7 @@ import { Crosshair, Swords, Plus, Trash2, ChevronRight, ChevronLeft, Dices, Refr
 import { AttackResolver } from './AttackResolver';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS, getEnvironmentalTraitStatus } from '../../utils/environmentRules';
+import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound } from '../../utils/diceAudio';
 
 export interface Combatant {
   id: string;
@@ -135,6 +136,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const [roundNumber, setRoundNumber] = useState<number>(() => loadSavedEncounter(character).roundNumber);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>(() => loadSavedEncounter(character).combatLogs);
   const [encounterEnvironment, setEncounterEnvironment] = useState<EncounterEnvironment>(() => loadSavedEncounter(character).encounterEnvironment || 'terrestrial');
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   // Reload saved encounter if active character ID changes
   React.useEffect(() => {
@@ -648,6 +650,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
 
   const handleNextTurn = () => {
     if (combatants.length === 0) return;
+    playInitiativeTurnSound();
     let nextIdx = 0;
     let nextRound = roundNumber;
     if (activeTurnIndex >= combatants.length - 1) {
@@ -696,12 +699,18 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     );
 
     if (delta < 0) {
+      if (nextHp === 0) {
+        playDeathSound();
+      } else {
+        playDamageAppliedSound();
+      }
       if (wasAtZero) {
         addLogEntry('damage', `💀 ${target.name} took damage at 0 HP! Automatic Death Save Failure added.`, target.name);
       } else {
         addLogEntry('damage', `${target.name} took ${Math.abs(delta)} damage (${nextHp}/${target.hpMax} HP)`, target.name);
       }
     } else if (delta > 0) {
+      playHealSound();
       addLogEntry('heal', `${target.name} healed for ${delta} HP (${nextHp}/${target.hpMax} HP)`, target.name);
     }
 
@@ -815,33 +824,32 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   };
 
   const handleClearEncounter = () => {
-    if (window.confirm("Are you sure you want to end this encounter? This will clear all added combatants and reset the encounter tracker.")) {
-      const defaultPlayer: Combatant = {
-        id: 'player-' + character.id,
-        name: character.name,
-        initiative: 0,
-        armorClass: character.armorClass || 10,
-        hpCurrent: character.hpCurrent || 10,
-        hpMax: getEffectiveMaxHp(character),
-        type: 'player',
-        isPlayerChar: true,
-        conditions: character.conditions || [],
-        portraitUrl: character.portraitUrl || (character.isMonster ? getMonsterPortraitUrl(character.name, character.id) : undefined)
-      };
-      setCombatants([defaultPlayer]);
-      setActiveTurnIndex(0);
-      setRoundNumber(1);
-      const newLogs: CombatLogEntry[] = [
-        {
-          id: 'log-init-' + Date.now(),
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          round: 1,
-          category: 'turn',
-          message: `Encounter ended and reset for ${character.name}.`
-        }
-      ];
-      setCombatLogs(newLogs);
-    }
+    const defaultPlayer: Combatant = {
+      id: 'player-' + character.id,
+      name: character.name,
+      initiative: 0,
+      armorClass: character.armorClass || 10,
+      hpCurrent: character.hpCurrent || 10,
+      hpMax: getEffectiveMaxHp(character),
+      type: 'player',
+      isPlayerChar: true,
+      conditions: character.conditions || [],
+      portraitUrl: character.portraitUrl || (character.isMonster ? getMonsterPortraitUrl(character.name, character.id) : undefined)
+    };
+    setCombatants([defaultPlayer]);
+    setActiveTurnIndex(0);
+    setRoundNumber(1);
+    const newLogs: CombatLogEntry[] = [
+      {
+        id: 'log-init-' + Date.now(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        round: 1,
+        category: 'turn',
+        message: `Encounter ended and reset for ${character.name}.`
+      }
+    ];
+    setCombatLogs(newLogs);
+    setShowEndConfirm(false);
   };
 
   // Add custom user note to log
@@ -1055,11 +1063,74 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   };
 
   const handleTriggerPhaseSpiderJaunt = () => {
-    addLogEntry(
-      'ability',
-      '✨ PHASE SPIDER ETHEREAL JAUNT: Shifts between the Material Plane and the Ethereal Plane as a Bonus Action!',
-      'Phase Spider'
-    );
+    const phaseSpiderCombatant = combatants.find(c => c.name.toLowerCase().includes('phase'));
+    if (phaseSpiderCombatant) {
+      handleToggleCombatantCondition(phaseSpiderCombatant.id, 'Ethereal');
+    } else {
+      addLogEntry(
+        'ability',
+        '🌌 PHASE SPIDER ETHEREAL JAUNT: Shifts between the Material Plane and the Ethereal Plane as a Bonus Action!',
+        'Phase Spider'
+      );
+    }
+  };
+
+  const handleTriggerGhostEtherealness = () => {
+    const ghost = combatants.find(c => c.name.toLowerCase().includes('ghost'));
+    if (ghost) {
+      handleToggleCombatantCondition(ghost.id, 'Ethereal');
+    } else {
+      addLogEntry('ability', '🌌 GHOST ETHEREALNESS: Action to enter the Border Ethereal from the Material Plane, or vice versa!', 'Ghost');
+    }
+  };
+
+  const handleTriggerGhostPossession = () => {
+    addLogEntry('ability', '👻 GHOST POSSESSION: Target humanoid within 5ft must pass DC 13 CHA save or ghost possesses target body!', 'Ghost');
+  };
+
+  const handleTriggerNightmareStride = () => {
+    const nightmare = combatants.find(c => c.name.toLowerCase().includes('nightmare'));
+    if (nightmare) {
+      handleToggleCombatantCondition(nightmare.id, 'Ethereal');
+    }
+    addLogEntry('ability', '🌌 NIGHTMARE ETHEREAL STRIDE: Nightmare and up to 3 willing riders touch-teleport into/out of the Border Ethereal!', 'Nightmare');
+  };
+
+  const handleTriggerSuccubusEtherealness = () => {
+    const succubus = combatants.find(c => c.name.toLowerCase().includes('succubus') || c.name.toLowerCase().includes('incubus'));
+    if (succubus) {
+      handleToggleCombatantCondition(succubus.id, 'Ethereal');
+    } else {
+      addLogEntry('ability', '🌌 SUCCUBUS / INCUBUS ETHEREALNESS: Action to enter the Border Ethereal from Material Plane, or vice versa.', 'Succubus');
+    }
+  };
+
+  const handleTriggerNightHagEtherealness = () => {
+    const hag = combatants.find(c => c.name.toLowerCase().includes('hag'));
+    if (hag) {
+      handleToggleCombatantCondition(hag.id, 'Ethereal');
+    }
+    addLogEntry('ability', '🌌 NIGHT HAG ETHEREALNESS: Touches Heartstone to shift between Material and Border Ethereal Planes!', 'Night Hag');
+  };
+
+  const handleTriggerNightHagNightmareHaunting = () => {
+    const drainRoll = Math.floor(Math.random() * 10) + 1;
+    if (onRoll) {
+      onRoll(`💤 Night Hag Nightmare Haunting (${drainRoll} HP Max Drain)`, 10, 1, 0, 'normal');
+    }
+    addLogEntry('ability', `💤 NIGHT HAG NIGHTMARE HAUNTING: Touches sleeping Material target while on Ethereal Plane. Target loses rest benefits & max HP reduced by ${drainRoll}!`, 'Night Hag');
+  };
+
+  const handleTriggerEtherealFilcherJaunt = () => {
+    const filcher = combatants.find(c => c.name.toLowerCase().includes('filcher'));
+    if (filcher) {
+      handleToggleCombatantCondition(filcher.id, 'Ethereal');
+    }
+    addLogEntry('ability', '🌌 ETHEREAL FILCHER ETHEREAL JAUNT: Snatches item/gold with 4 hands and shifts into Border Ethereal to flee!', 'Ethereal Filcher');
+  };
+
+  const handleTriggerBlinkDogTeleport = () => {
+    addLogEntry('ability', '✨ BLINK DOG TELEPORT: Bonus Action - Teleports 40ft, phasing briefly through the Border Ethereal!', 'Blink Dog');
   };
 
   const handleTriggerFlameskullFireball = () => {
@@ -1187,14 +1258,32 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             <span>+ Add Target</span>
           </button>
 
-          <button
-            onClick={handleClearEncounter}
-            className="flex items-center gap-1 text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800/80 px-2.5 py-1.5 rounded-xl font-bold transition shadow"
-            title="End encounter & clear all added combatants"
-          >
-            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-            <span>End Encounter</span>
-          </button>
+          {showEndConfirm ? (
+            <div className="flex items-center gap-1.5 bg-rose-950/90 border border-rose-800 p-1 rounded-xl animate-fadeIn">
+              <span className="text-[11px] text-rose-200 font-bold px-1.5">End encounter?</span>
+              <button
+                onClick={handleClearEncounter}
+                className="text-xs bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded-lg font-bold transition shadow"
+              >
+                Yes, End
+              </button>
+              <button
+                onClick={() => setShowEndConfirm(false)}
+                className="text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 px-2 py-1 rounded-lg font-bold transition"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowEndConfirm(true)}
+              className="flex items-center gap-1 text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800/80 px-2.5 py-1.5 rounded-xl font-bold transition shadow"
+              title="End encounter & clear all added combatants"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+              <span>End Encounter</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1219,7 +1308,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
 
             {/* Quick Trigger Buttons for Environment Features */}
             <div className="flex items-center gap-2 flex-wrap">
-              {encounterEnvironment === 'underwater' && (
+              {encounterEnvironment === 'underwater' && combatants.some(c => c.name.toLowerCase().includes('aboleth')) && (
                 <button
                   onClick={handleTriggerAbolethMucousCloud}
                   className="flex items-center gap-1.5 bg-cyan-500 hover:bg-cyan-400 text-stone-950 font-bold text-xs px-3 py-1.5 rounded-lg transition shadow"
@@ -1262,6 +1351,12 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         const showCloaker = hasMonster('cloaker');
         const showShambling = hasMonster('shambling') || hasMonster('mound');
         const showPhaseSpider = hasMonster('phase spider') || hasMonster('phase');
+        const showGhost = hasMonster('ghost');
+        const showNightmare = hasMonster('nightmare');
+        const showSuccubus = hasMonster('succubus') || hasMonster('incubus');
+        const showNightHag = hasMonster('hag') || hasMonster('night hag');
+        const showEtherealFilcher = hasMonster('filcher') || hasMonster('ethereal filcher');
+        const showBlinkDog = hasMonster('blink dog');
         const showFlameskull = hasMonster('flameskull');
         const showShadow = hasMonster('shadow');
         const showCockatrice = hasMonster('cockatrice');
@@ -1270,7 +1365,8 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         const hasAnySpecialMonster =
           showBeholder || showMedusa || showRemorhaz || showRoper || showIronGolem ||
           showRustMonster || showMindFlayer || showVampire || showGibbering || showCloaker ||
-          showShambling || showPhaseSpider || showFlameskull || showShadow || showCockatrice || showAboleth;
+          showShambling || showPhaseSpider || showGhost || showNightmare || showSuccubus || showNightHag ||
+          showEtherealFilcher || showBlinkDog || showFlameskull || showShadow || showCockatrice || showAboleth;
 
         return (
           <div className="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2">
@@ -1427,9 +1523,87 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                   <button
                     onClick={handleTriggerPhaseSpiderJaunt}
                     className="px-2.5 py-1 bg-violet-950 hover:bg-violet-900 border border-violet-600/50 text-violet-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
-                    title="Trigger Phase Spider Ethereal Jaunt"
+                    title="Toggle Phase Spider Ethereal Jaunt (Shift Plane)"
                   >
-                    <span>✨</span> Phase Spider Jaunt
+                    <span>🌌</span> Phase Spider Jaunt
+                  </button>
+                )}
+
+                {showGhost && (
+                  <>
+                    <button
+                      onClick={handleTriggerGhostEtherealness}
+                      className="px-2.5 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-600/50 text-indigo-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Toggle Ghost Etherealness Plane Shift"
+                    >
+                      <span>🌌</span> Ghost Etherealness
+                    </button>
+                    <button
+                      onClick={handleTriggerGhostPossession}
+                      className="px-2.5 py-1 bg-purple-950 hover:bg-purple-900 border border-purple-600/50 text-purple-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Ghost Possession (DC 13 CHA)"
+                    >
+                      <span>👻</span> Ghost Possession
+                    </button>
+                  </>
+                )}
+
+                {showNightmare && (
+                  <button
+                    onClick={handleTriggerNightmareStride}
+                    className="px-2.5 py-1 bg-rose-950 hover:bg-rose-900 border border-rose-600/50 text-rose-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Nightmare Ethereal Stride"
+                  >
+                    <span>🌌</span> Nightmare Stride
+                  </button>
+                )}
+
+                {showSuccubus && (
+                  <button
+                    onClick={handleTriggerSuccubusEtherealness}
+                    className="px-2.5 py-1 bg-pink-950 hover:bg-pink-900 border border-pink-600/50 text-pink-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Toggle Succubus/Incubus Etherealness"
+                  >
+                    <span>🌌</span> Succubus Etherealness
+                  </button>
+                )}
+
+                {showNightHag && (
+                  <>
+                    <button
+                      onClick={handleTriggerNightHagEtherealness}
+                      className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 border border-emerald-600/50 text-emerald-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Toggle Night Hag Heartstone Etherealness"
+                    >
+                      <span>🌌</span> Night Hag Etherealness
+                    </button>
+                    <button
+                      onClick={handleTriggerNightHagNightmareHaunting}
+                      className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-600 text-purple-300 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                      title="Trigger Night Hag Nightmare Haunting (1d10 Max HP Drain)"
+                    >
+                      <span>💤</span> Nightmare Haunting
+                    </button>
+                  </>
+                )}
+
+                {showEtherealFilcher && (
+                  <button
+                    onClick={handleTriggerEtherealFilcherJaunt}
+                    className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-600/50 text-cyan-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Ethereal Filcher Grab & Vanish"
+                  >
+                    <span>🌌</span> Filcher Snatch & Vanish
+                  </button>
+                )}
+
+                {showBlinkDog && (
+                  <button
+                    onClick={handleTriggerBlinkDogTeleport}
+                    className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+                    title="Trigger Blink Dog Phase Teleport"
+                  >
+                    <span>✨</span> Blink Dog Teleport
                   </button>
                 )}
 
@@ -1670,21 +1844,28 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                     )}
                     
                     {/* Active Condition Badges */}
-                    {(c.conditions || []).map(cond => (
-                      <span
-                        key={cond}
-                        className="bg-amber-950/80 text-amber-300 border border-amber-600/40 text-[10px] px-1.5 py-0.2 rounded-md inline-flex items-center gap-1 font-bold"
-                      >
-                        <span>{cond}</span>
-                        <button
-                          onClick={() => handleToggleCombatantCondition(c.id, cond)}
-                          className="hover:text-amber-100 font-bold"
-                          title={`Remove ${cond}`}
+                    {(c.conditions || []).map(cond => {
+                      const isEtherealCond = cond === 'Ethereal';
+                      return (
+                        <span
+                          key={cond}
+                          className={`${
+                            isEtherealCond
+                              ? 'bg-purple-950 text-purple-200 border border-purple-500/60 shadow-sm shadow-purple-900/50'
+                              : 'bg-amber-950/80 text-amber-300 border border-amber-600/40'
+                          } text-[10px] px-1.5 py-0.2 rounded-md inline-flex items-center gap-1 font-bold`}
                         >
-                          ×
-                        </button>
-                      </span>
-                    ))}
+                          <span>{cond}</span>
+                          <button
+                            onClick={() => handleToggleCombatantCondition(c.id, cond)}
+                            className="hover:text-amber-100 font-bold"
+                            title={`Remove ${cond}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
 
                     {/* Quick Add Condition Dropdown */}
                     <select
@@ -1699,12 +1880,26 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                       title="Add/Toggle Condition on Combatant"
                     >
                       <option value="">+ Condition</option>
-                      {['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious', 'Surprised'].map(condName => (
+                      {['Ethereal', 'Ethereal Sight', 'Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible', 'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious', 'Surprised'].map(condName => (
                         <option key={condName} value={condName}>
                           {(c.conditions || []).includes(condName) ? `✓ ${condName}` : condName}
                         </option>
                       ))}
                     </select>
+
+                    {/* Quick Plane Shift Toggle */}
+                    <button
+                      onClick={() => handleToggleCombatantCondition(c.id, 'Ethereal')}
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-bold transition flex items-center gap-1 ${
+                        (c.conditions || []).includes('Ethereal')
+                          ? 'bg-purple-900 hover:bg-purple-800 text-purple-100 border border-purple-500'
+                          : 'bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                      title={(c.conditions || []).includes('Ethereal') ? 'Shift back to Material Plane' : 'Shift into Border Ethereal Plane'}
+                    >
+                      <span>🌌</span>
+                      <span>{(c.conditions || []).includes('Ethereal') ? 'Plane: Ethereal' : 'Plane: Material'}</span>
+                    </button>
                   </div>
                 </div>
               </div>

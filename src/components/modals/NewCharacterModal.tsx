@@ -10,6 +10,7 @@ interface NewCharacterModalProps {
   initialEdition?: RuleEdition;
   initialIsMonster?: boolean;
   initialIsVendor?: boolean;
+  enabledSystems?: RuleEdition[];
 }
 
 // System-tailored Races / Metatypes / Ancestries / Origins
@@ -178,9 +179,14 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   onCreate,
   initialEdition = '5e',
   initialIsMonster = false,
-  initialIsVendor = false
+  initialIsVendor = false,
+  enabledSystems
 }) => {
-  const [edition, setEdition] = useState<RuleEdition>(initialEdition);
+  const startEdition = (enabledSystems && enabledSystems.length > 0 && !enabledSystems.includes(initialEdition))
+    ? enabledSystems[0]
+    : initialEdition;
+
+  const [edition, setEdition] = useState<RuleEdition>(startEdition);
   const initialRaces = RACE_OPTIONS_BY_SYSTEM[initialEdition] || RACE_OPTIONS_BY_SYSTEM['5e'];
   const initialClasses = CLASS_OPTIONS_BY_SYSTEM[initialEdition] || CLASS_OPTIONS_BY_SYSTEM['5e'];
   const initialClass = initialClasses[0];
@@ -541,7 +547,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                   desc: 'Sanity Tracking, d100 Skills, Eldritch Emerald Theme.',
                   color: 'border-emerald-500 bg-emerald-950/60 text-emerald-200'
                 },
-              ].map((sys) => (
+              ].filter(sys => !enabledSystems || enabledSystems.includes(sys.id)).map((sys) => (
                 <button
                   key={sys.id}
                   type="button"

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CharacterData, GearItem, Attack } from '../../types';
+import { CollapsibleBox } from '../common/CollapsibleBox';
 import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { PRESET_DND_ITEMS } from '../../data/presetItems';
 import { ShadowrunMatrixRiggingPanel } from '../shadowrun/ShadowrunMatrixRiggingPanel';
@@ -28,7 +29,11 @@ import {
   Swords,
   Heart,
   Maximize2,
-  Zap
+  Zap,
+  Search,
+  X,
+  Target,
+  Filter
 } from 'lucide-react';
 
 interface Sheet3Props {
@@ -44,6 +49,113 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
 }) => {
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [editingItem, setEditingItem] = useState<GearItem | null>(null);
+
+  // Search & Category Filter State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'weapon_melee' | 'weapon_ranged' | 'armor' | 'magic' | 'misc'>('all');
+
+  // Dynamic Item Categorization Engine
+  const getItemCategory = (item: GearItem): 'Weapon' | 'Armor' | 'Magic' | 'Misc' => {
+    // 1. Explicit itemType if set
+    if (item.itemType === 'Armor') return 'Armor';
+    if (item.itemType === 'Weapon') return 'Weapon';
+
+    // 2. Stats presence checks
+    if (item.armorAc !== undefined || item.armorType !== undefined || item.stealthDisadvantage !== undefined) {
+      return 'Armor';
+    }
+    if (item.weaponStats !== undefined && (item.weaponStats.damage || item.weaponStats.attackBonus || item.weaponStats.range)) {
+      return 'Weapon';
+    }
+
+    const name = item.name.toLowerCase();
+    const notes = (item.notes || '').toLowerCase();
+
+    // 3. Name or notes keyword matching for Armor & Shield
+    if (
+      name.includes('armor') || name.includes('armour') || name.includes('plate') ||
+      name.includes('mail') || name.includes('leather') || name.includes('padded') ||
+      name.includes('hide') || name.includes('chain') || name.includes('breastplate') ||
+      name.includes('splint') || name.includes('scale') || name.includes('shield') ||
+      name.includes('cuirass') || name.includes('buckler') || name.includes('helm') ||
+      name.includes('gauntlet') || name.includes('bracer') || name.includes('greave') ||
+      notes.includes('ac ') || notes.includes('armor class') || notes.includes('shield')
+    ) {
+      return 'Armor';
+    }
+
+    // 4. Name or notes keyword matching for Weapons
+    if (
+      name.includes('sword') || name.includes('longsword') || name.includes('shortsword') ||
+      name.includes('greatsword') || name.includes('rapier') || name.includes('scimitar') ||
+      name.includes('axe') || name.includes('handaxe') || name.includes('battleaxe') || name.includes('greataxe') ||
+      name.includes('dagger') || name.includes('bow') || name.includes('crossbow') ||
+      name.includes('mace') || name.includes('hammer') || name.includes('warhammer') ||
+      name.includes('spear') || name.includes('halberd') || name.includes('pike') ||
+      name.includes('glaive') || name.includes('staff') || name.includes('quarterstaff') ||
+      name.includes('club') || name.includes('sickle') || name.includes('whip') ||
+      name.includes('lance') || name.includes('dart') || name.includes('sling') ||
+      name.includes('javelin') || name.includes('rifle') || name.includes('pistol') ||
+      name.includes('musket') || name.includes('flail') || name.includes('morningstar') ||
+      name.includes('trident') || name.includes('scythe') || name.includes('firearm') ||
+      notes.includes('finesse') || notes.includes('versatile') || notes.includes('reach') ||
+      notes.includes('ammunition') || notes.includes('melee weapon') || notes.includes('ranged weapon')
+    ) {
+      return 'Weapon';
+    }
+
+    if (item.isMagic || item.attuned) {
+      return 'Magic';
+    }
+
+    return 'Misc';
+  };
+
+  const isRangedWeapon = (item: GearItem): boolean => {
+    if (getItemCategory(item) !== 'Weapon') return false;
+    const range = (item.weaponStats?.range || '').toLowerCase();
+    const name = item.name.toLowerCase();
+    const notes = (item.notes || '').toLowerCase();
+
+    if (
+      range.includes('ranged') ||
+      range.includes('/') ||
+      range.includes('60') ||
+      range.includes('80') ||
+      range.includes('100') ||
+      range.includes('150') ||
+      range.includes('300') ||
+      (range.includes('ft') && !range.includes('5 ft melee'))
+    ) {
+      return true;
+    }
+
+    if (
+      name.includes('bow') ||
+      name.includes('crossbow') ||
+      name.includes('dart') ||
+      name.includes('sling') ||
+      name.includes('rifle') ||
+      name.includes('pistol') ||
+      name.includes('musket') ||
+      name.includes('javelin') ||
+      name.includes('blowgun') ||
+      name.includes('firearm')
+    ) {
+      return true;
+    }
+
+    if (notes.includes('ranged') || notes.includes('ammunition') || notes.includes('thrown')) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const isMeleeWeapon = (item: GearItem): boolean => {
+    if (getItemCategory(item) !== 'Weapon') return false;
+    return !isRangedWeapon(item);
+  };
 
   // Drag and drop inventory reordering state
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -204,6 +316,14 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
 
   // Inventory item actions
   const handleToggleEquipped = (itemId: string) => {
+    const itemToToggle = character.inventory.find(i => i.id === itemId);
+    if (!itemToToggle) return;
+
+    if (!itemToToggle.equipped && character.activeTransformation && character.activeTransformation.form.hasHands === false) {
+      alert(`❌ Cannot equip weapons or gear in this form! Your active transformation (${character.activeTransformation.form.name}) lacks hands/humanoid anatomy.`);
+      return;
+    }
+
     const updated = character.inventory.map(item => {
       if (item.id === itemId) {
         const isEquippedNow = !item.equipped;
@@ -472,6 +592,53 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   const vendorMultiplier = vendorMargin / 100;
   const totalGearRetailVal = Math.round((totalGearBaseVal * vendorMultiplier) * 100) / 100;
 
+  // Category Counts for Filter Badges
+  const countAll = character.inventory.length;
+  const countMelee = character.inventory.filter(i => getItemCategory(i) === 'Weapon' && isMeleeWeapon(i)).length;
+  const countRanged = character.inventory.filter(i => getItemCategory(i) === 'Weapon' && isRangedWeapon(i)).length;
+  const countArmor = character.inventory.filter(i => getItemCategory(i) === 'Armor').length;
+  const countMagic = character.inventory.filter(i => i.isMagic || i.attuned || getItemCategory(i) === 'Magic').length;
+  const countMisc = character.inventory.filter(i => getItemCategory(i) === 'Misc' && !i.isMagic && !i.attuned).length;
+
+  // Filtered Inventory Mapping
+  const filteredInventory = character.inventory
+    .map((item, originalIndex) => ({ item, originalIndex }))
+    .filter(({ item }) => {
+      // 1. Category Filter
+      if (categoryFilter === 'weapon_melee' && (getItemCategory(item) !== 'Weapon' || !isMeleeWeapon(item))) {
+        return false;
+      }
+      if (categoryFilter === 'weapon_ranged' && (getItemCategory(item) !== 'Weapon' || !isRangedWeapon(item))) {
+        return false;
+      }
+      if (categoryFilter === 'armor' && getItemCategory(item) !== 'Armor') {
+        return false;
+      }
+      if (categoryFilter === 'magic' && !item.isMagic && !item.attuned && getItemCategory(item) !== 'Magic') {
+        return false;
+      }
+      if (categoryFilter === 'misc' && (getItemCategory(item) !== 'Misc' || item.isMagic || item.attuned)) {
+        return false;
+      }
+
+      // 2. Search Query Filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const nameMatch = item.name.toLowerCase().includes(q);
+        const notesMatch = item.notes ? item.notes.toLowerCase().includes(q) : false;
+        const typeMatch = item.itemType ? item.itemType.toLowerCase().includes(q) : false;
+        const armorMatch = item.armorType ? item.armorType.toLowerCase().includes(q) : false;
+        const dmgMatch = item.weaponStats?.damage ? item.weaponStats.damage.toLowerCase().includes(q) : false;
+        const dmgTypeMatch = item.weaponStats?.damageType ? item.weaponStats.damageType.toLowerCase().includes(q) : false;
+        const resistMatch = item.resistance ? item.resistance.toLowerCase().includes(q) : false;
+        const immuneMatch = item.immunity ? item.immunity.toLowerCase().includes(q) : false;
+
+        return nameMatch || notesMatch || typeMatch || armorMatch || dmgMatch || dmgTypeMatch || resistMatch || immuneMatch;
+      }
+
+      return true;
+    });
+
   if (character.edition === 'shadowrun') {
     const sr = character.shadowrun || {
       bod: 5, agi: 5, rea: 4, str: 4, wil: 4, log: 3, int: 4, cha: 3, edg: 3, edgCurrent: 3, ess: 6.0, mag: 0, res: 0,
@@ -533,24 +700,46 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
               </div>
 
               {/* Quick adjustment buttons */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {[
-                  { label: '-¥5k', val: -5000, cls: 'bg-rose-950/80 border-rose-600/60 text-rose-200 hover:bg-rose-900' },
-                  { label: '-¥1k', val: -1000, cls: 'bg-rose-950/60 border-rose-700/50 text-rose-300 hover:bg-rose-900' },
-                  { label: '-¥100', val: -100, cls: 'bg-rose-950/40 border-rose-800/40 text-rose-300 hover:bg-rose-900' },
-                  { label: '+¥100', val: 100, cls: 'bg-cyan-950/40 border-cyan-800/40 text-cyan-300 hover:bg-cyan-900' },
-                  { label: '+¥1k', val: 1000, cls: 'bg-cyan-950/60 border-cyan-700/50 text-cyan-300 hover:bg-cyan-900' },
-                  { label: '+¥5k', val: 5000, cls: 'bg-cyan-950/80 border-cyan-600/60 text-cyan-200 hover:bg-cyan-900' },
-                  { label: '+¥10k', val: 10000, cls: 'bg-emerald-950/80 border-emerald-600/60 text-emerald-200 hover:bg-emerald-900' },
-                ].map((btn) => (
-                  <button
-                    key={btn.label}
-                    onClick={() => handleAdjustNuyen(btn.val)}
-                    className={`px-2.5 py-2 rounded-lg border text-xs font-mono font-bold transition ${btn.cls}`}
-                  >
-                    {btn.label}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2">
+                {/* Top Row: Positive (+) buttons */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { label: '+¥100', val: 100, cls: 'bg-cyan-950 border-cyan-800/80 text-cyan-400 hover:bg-cyan-900' },
+                    { label: '+¥1k', val: 1000, cls: 'bg-cyan-950 border-cyan-700 text-cyan-300 hover:bg-cyan-900' },
+                    { label: '+¥5k', val: 5000, cls: 'bg-cyan-900 border-cyan-600 text-cyan-200 hover:bg-cyan-800' },
+                    { label: '+¥10k', val: 10000, cls: 'bg-emerald-950 border-emerald-700 text-emerald-300 hover:bg-emerald-900' },
+                    { label: '+¥50k', val: 50000, cls: 'bg-emerald-900 border-emerald-600 text-emerald-200 hover:bg-emerald-800' },
+                    { label: '+¥100k', val: 100000, cls: 'bg-emerald-800 border-emerald-500 text-emerald-100 hover:bg-emerald-700' },
+                  ].map((btn) => (
+                    <button
+                      key={btn.label}
+                      onClick={() => handleAdjustNuyen(btn.val)}
+                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition shadow-sm ${btn.cls}`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Bottom Row: Negative (-) buttons */}
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { label: '-¥100', val: -100, cls: 'bg-rose-950 border-rose-800/80 text-rose-400 hover:bg-rose-900' },
+                    { label: '-¥1k', val: -1000, cls: 'bg-rose-950 border-rose-700 text-rose-300 hover:bg-rose-900' },
+                    { label: '-¥5k', val: -5000, cls: 'bg-rose-900 border-rose-600 text-rose-200 hover:bg-rose-800' },
+                    { label: '-¥10k', val: -10000, cls: 'bg-rose-900 border-rose-500 text-rose-200 hover:bg-rose-800' },
+                    { label: '-¥50k', val: -50000, cls: 'bg-rose-800 border-rose-500 text-rose-100 hover:bg-rose-700' },
+                    { label: '-¥100k', val: -100000, cls: 'bg-rose-700 border-rose-400 text-white hover:bg-rose-600' },
+                  ].map((btn) => (
+                    <button
+                      key={btn.label}
+                      onClick={() => handleAdjustNuyen(btn.val)}
+                      className={`px-2.5 py-1.5 rounded-lg border text-xs font-mono font-bold transition shadow-sm ${btn.cls}`}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -706,26 +895,22 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
       )}
 
       {/* SECTION 1: Wealth & Coin Pouch */}
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 pb-2">
-          <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-lg">
-            <Coins className="w-5 h-5 text-amber-500" />
-            <span>Wealth & Coin Pouch</span>
-          </div>
+      <CollapsibleBox
+        title="Wealth & Coin Pouch"
+        icon={<Coins className="w-5 h-5 text-amber-500" />}
+        storageKey="sheet3_wealth"
+        headerExtra={
           <div className="flex items-center gap-2 text-xs font-mono">
-            <div className="bg-stone-950 border border-stone-800 text-stone-400 px-2.5 py-1 rounded-xl">
+            <div className="bg-stone-950 border border-stone-800 text-stone-400 px-2 py-0.5 rounded-lg hidden sm:block">
               Coins: <strong className="text-amber-300">{totalGoldVal} GP</strong>
             </div>
-            <div className="bg-stone-950 border border-amber-600/40 text-amber-200 px-2.5 py-1 rounded-xl">
-              Gear Value: <strong className="text-amber-300">{totalGearBaseVal} GP</strong>
-            </div>
-            <div className="bg-amber-950 border border-amber-500/50 text-amber-100 px-3 py-1 rounded-xl font-bold">
-              Total Net Worth: ~{(totalGoldVal + totalGearBaseVal).toLocaleString()} GP
+            <div className="bg-amber-950 border border-amber-500/50 text-amber-100 px-2.5 py-0.5 rounded-lg font-bold">
+              Net Worth: ~{(totalGoldVal + totalGearBaseVal).toLocaleString()} GP
             </div>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        }
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
           {/* Copper */}
           <div className="bg-stone-950 border border-amber-900/40 p-3 rounded-xl text-center">
             <div className="text-[10px] uppercase font-mono font-bold text-amber-700 mb-1">Copper (CP)</div>
@@ -786,260 +971,437 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
             />
           </div>
         </div>
-      </div>
+      </CollapsibleBox>
 
       {/* SECTION 2: Attunement Slots & Weight Capacity */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Attunement Tracker */}
-        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-xl flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-purple-950/80 border border-purple-500/40 rounded-xl">
-              <Sparkles className="w-5 h-5 text-purple-300" />
+        <CollapsibleBox
+          title="Magic Item Attunement"
+          icon={<Sparkles className="w-5 h-5 text-purple-300" />}
+          storageKey="sheet3_attunement"
+          headerExtra={
+            <div className="font-mono text-sm font-extrabold text-purple-300">
+              {attunedItemsCount} / 3 <span className="text-[10px] text-stone-500 font-normal">Slots Used</span>
             </div>
-            <div>
-              <div className="text-xs font-serif font-bold text-amber-200">Magic Item Attunement</div>
-              <div className="text-[11px] text-stone-400">Maximum 3 magic items attuned</div>
-            </div>
+          }
+        >
+          <div className="pt-2 text-xs text-stone-400 space-y-2">
+            <p className="text-[11px] text-stone-300">
+              Maximum 3 magic items attuned simultaneously in 5e rules.
+            </p>
+            {attunedItemsCount > 0 ? (
+              <div className="space-y-1">
+                {character.inventory.filter(i => i.attuned).map(item => (
+                  <div key={item.id} className="text-[11px] text-purple-300 font-semibold bg-purple-950/40 border border-purple-800/40 px-2 py-1 rounded flex items-center justify-between">
+                    <span>✨ {item.name}</span>
+                    <span className="text-[10px] text-stone-400 font-mono">Attuned</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-stone-500 italic">No magic items currently attuned.</p>
+            )}
           </div>
-          <div className="text-right">
-            <div className="font-mono text-xl font-extrabold text-purple-300">
-              {attunedItemsCount} / 3
-            </div>
-            <div className="text-[10px] text-stone-500 font-mono">Slots Used</div>
-          </div>
-        </div>
+        </CollapsibleBox>
 
         {/* Encumbrance / Weight Capacity */}
-        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-xl space-y-3">
-          <div className="flex items-center justify-between text-xs flex-wrap gap-2">
-            <span className="flex items-center gap-1.5 font-serif font-bold text-amber-200">
-              <Weight className="w-4 h-4 text-amber-500" />
-              <span>Weight & Carrying Capacity</span>
+        <CollapsibleBox
+          title="Weight & Carrying Capacity"
+          icon={<Weight className="w-5 h-5 text-amber-500" />}
+          storageKey="sheet3_encumbrance"
+          headerExtra={
+            <div className="flex items-center gap-2">
               {encumbranceInfo.isVariant && (
-                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono font-bold flex items-center gap-1">
-                  <Scale className="w-3 h-3 text-amber-400" /> VARIANT RULE
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono font-bold hidden sm:flex items-center gap-1">
+                  <Scale className="w-3 h-3 text-amber-400" /> VARIANT
                 </span>
               )}
-            </span>
-            <span className={`font-mono font-bold ${
-              encumbranceInfo.status === 'Over Capacity' || encumbranceInfo.status === 'Heavily Encumbered'
-                ? 'text-rose-400'
-                : encumbranceInfo.status === 'Encumbered'
-                ? 'text-amber-400'
-                : 'text-stone-300'
-            }`}>
-              {encumbranceInfo.totalWeight.toFixed(1)} / {encumbranceInfo.maxCapacity} lbs
-            </span>
-          </div>
-
-          {/* Weight Counting Mode Selector */}
-          <div className="flex items-center justify-between gap-2 bg-stone-950 p-2 rounded-xl border border-stone-800 text-[11px] flex-wrap">
-            <span className="text-stone-400 font-medium">Weight Mode:</span>
-            <div className="flex items-center gap-1 text-[10px]">
-              <button
-                type="button"
-                onClick={() => handleWeightModeChange('carried_only')}
-                className={`px-2 py-1 rounded font-bold transition ${
-                  weightBreakdown.mode === 'carried_only'
-                    ? 'bg-amber-600 text-stone-950 shadow'
-                    : 'bg-stone-900 text-stone-400 hover:text-stone-200'
-                }`}
-                title="Equipped + Backpack items count (Default - Stored items in Stash/Camp excluded)"
-              >
-                Backpack & Equipped (Default)
-              </button>
-              <button
-                type="button"
-                onClick={() => handleWeightModeChange('equipped_only')}
-                className={`px-2 py-1 rounded font-bold transition ${
-                  weightBreakdown.mode === 'equipped_only'
-                    ? 'bg-amber-600 text-stone-950 shadow'
-                    : 'bg-stone-900 text-stone-400 hover:text-stone-200'
-                }`}
-                title="Only actively equipped items contribute to carried weight"
-              >
-                Equipped Only
-              </button>
-              <button
-                type="button"
-                onClick={() => handleWeightModeChange('all_items')}
-                className={`px-2 py-1 rounded font-bold transition ${
-                  weightBreakdown.mode === 'all_items'
-                    ? 'bg-amber-600 text-stone-950 shadow'
-                    : 'bg-stone-900 text-stone-400 hover:text-stone-200'
-                }`}
-                title="All items in inventory count toward weight including stored camp items"
-              >
-                All Items (Inc. Stored)
-              </button>
-            </div>
-          </div>
-
-          {/* Size & Powerful Build Config Bar */}
-          <div className="flex items-center justify-between gap-2 bg-stone-950/80 p-2 rounded-xl border border-amber-900/40 text-[11px] flex-wrap">
-            <div className="flex items-center gap-2">
-              <span className="text-stone-400 font-medium flex items-center gap-1">
-                <Maximize2 className="w-3.5 h-3.5 text-amber-500" /> Size:
-              </span>
-              <select
-                value={character.sizeCategory || 'Medium'}
-                onChange={(e) => onUpdateCharacter({ ...character, sizeCategory: e.target.value as any })}
-                className="bg-stone-900 border border-stone-700 text-amber-300 font-bold rounded px-2 py-0.5 text-[11px]"
-              >
-                <option value="Fine">Fine (1/8 Capacity)</option>
-                <option value="Diminutive">Diminutive (1/4 Capacity)</option>
-                <option value="Tiny">Tiny (1/2 Capacity)</option>
-                <option value="Small">Small ({character.edition === '3.5e' ? '3/4' : 'x1'} Capacity)</option>
-                <option value="Medium">Medium (Standard x1)</option>
-                <option value="Large">Large (x2 Capacity)</option>
-                <option value="Huge">Huge (x4 Capacity)</option>
-                <option value="Gargantuan">Gargantuan (x8 Capacity)</option>
-                <option value="Colossal">Colossal (x16 Capacity)</option>
-              </select>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => onUpdateCharacter({
-                ...character,
-                optionalRules: {
-                  ...character.optionalRules,
-                  hasPowerfulBuild: !encumbranceInfo.hasPowerfulBuild
-                }
-              })}
-              className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition flex items-center gap-1.5 ${
-                encumbranceInfo.hasPowerfulBuild
-                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 ring-1 ring-amber-500/30'
-                  : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
-              }`}
-              title="Counts as one size category larger for carrying capacity and push/drag/lift weight"
-            >
-              <Zap className={`w-3 h-3 ${encumbranceInfo.hasPowerfulBuild ? 'text-amber-400 fill-amber-400' : 'text-stone-500'}`} />
-              Powerful Build {encumbranceInfo.hasPowerfulBuild ? '(Active +1 Tier)' : '(Off)'}
-            </button>
-          </div>
-
-          {/* Weight Subtotals Chips */}
-          <div className="grid grid-cols-3 gap-2 text-[10px] font-mono text-center">
-            <div className={`p-1.5 rounded-lg border transition ${
-              weightBreakdown.mode === 'equipped_only' || weightBreakdown.mode === 'carried_only' || weightBreakdown.mode === 'all_items'
-                ? 'bg-amber-950/60 border-amber-500/60 ring-1 ring-amber-500/30'
-                : 'bg-stone-950/60 border-stone-800 opacity-60'
-            }`}>
-              <div className="text-amber-400/90 font-sans font-bold">Equipped</div>
-              <div className="text-amber-200 font-bold text-xs">{weightBreakdown.equippedWeight.toFixed(1)} lbs</div>
-            </div>
-            <div className={`p-1.5 rounded-lg border transition ${
-              weightBreakdown.mode === 'carried_only' || weightBreakdown.mode === 'all_items'
-                ? 'bg-amber-950/60 border-amber-500/60 ring-1 ring-amber-500/30'
-                : 'bg-stone-950/60 border-stone-800 opacity-60'
-            }`}>
-              <div className="text-amber-400/90 font-sans font-bold">In Backpack</div>
-              <div className="text-amber-200 font-bold text-xs">{weightBreakdown.carriedWeight.toFixed(1)} lbs</div>
-            </div>
-            <div className={`p-1.5 rounded-lg border transition ${
-              weightBreakdown.mode === 'all_items'
-                ? 'bg-amber-950/60 border-amber-500/60 ring-1 ring-amber-500/30'
-                : 'bg-blue-950/30 border-blue-600/40 opacity-70'
-            }`}>
-              <div className="text-blue-300/90 font-sans font-bold flex items-center justify-center gap-1">
-                <Archive className="w-3 h-3 text-blue-400" /> Stored (Ignored)
-              </div>
-              <div className="text-blue-200 font-bold text-xs">{weightBreakdown.storedWeight.toFixed(1)} lbs</div>
-            </div>
-          </div>
-
-          {/* Progress Bar */}
-          <div className="w-full bg-stone-950 rounded-full h-3 border border-stone-800 overflow-hidden relative">
-            <div
-              className={`h-full transition-all ${
-                encumbranceInfo.status === 'Over Capacity'
-                  ? 'bg-rose-600'
-                  : encumbranceInfo.status === 'Heavily Encumbered'
-                  ? 'bg-rose-500'
+              <span className={`font-mono text-xs font-bold ${
+                encumbranceInfo.status === 'Over Capacity' || encumbranceInfo.status === 'Heavily Encumbered'
+                  ? 'text-rose-400'
                   : encumbranceInfo.status === 'Encumbered'
-                  ? 'bg-amber-500'
-                  : 'bg-emerald-600'
-              }`}
-              style={{ width: `${Math.min(100, (encumbranceInfo.totalWeight / encumbranceInfo.maxCapacity) * 100)}%` }}
-            />
-          </div>
-
-          {/* Threshold Indicators & Status */}
-          {encumbranceInfo.isVariant ? (
-            <div className="space-y-1 pt-1">
-              <div className="flex justify-between text-[10px] font-mono text-stone-400">
-                <span>Encumbered: {encumbranceInfo.encumberedThreshold} lbs</span>
-                <span>Heavy: {encumbranceInfo.heavilyEncumberedThreshold} lbs</span>
-                <span>Max: {encumbranceInfo.maxCapacity} lbs</span>
-              </div>
-
-              {encumbranceInfo.status !== 'Normal' && (
-                <div className={`text-[11px] p-2 rounded-lg font-bold flex items-center justify-between gap-2 border ${
-                  encumbranceInfo.status === 'Over Capacity'
-                    ? 'bg-rose-950/80 border-rose-600 text-rose-300'
-                    : encumbranceInfo.status === 'Heavily Encumbered'
-                    ? 'bg-rose-950/60 border-rose-700/60 text-rose-300'
-                    : 'bg-amber-950/60 border-amber-600/50 text-amber-300'
-                }`}>
-                  <div className="flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
-                    <span>
-                      STATUS: <strong>{encumbranceInfo.status.toUpperCase()}</strong>
-                      {encumbranceInfo.speedPenalty > 0 && ` (-${encumbranceInfo.speedPenalty} ft Speed)`}
-                    </span>
-                  </div>
-                  {encumbranceInfo.hasDisadvantage && (
-                    <span className="text-[10px] bg-rose-900/80 text-rose-200 border border-rose-500 px-1.5 py-0.5 rounded font-mono font-bold">
-                      DISADVANTAGE ON CHECKS & SAVES
-                    </span>
-                  )}
-                </div>
-              )}
+                  ? 'text-amber-400'
+                  : 'text-amber-300'
+              }`}>
+                {encumbranceInfo.totalWeight.toFixed(1)} / {encumbranceInfo.maxCapacity} lbs
+              </span>
             </div>
-          ) : (
-            isEncumbered && (
-              <div className="text-[10px] text-rose-400 flex items-center gap-1 font-bold">
-                <ShieldAlert className="w-3.5 h-3.5" /> OVER CAPACITY! Speed reduced by 10 ft.
+          }
+        >
+          <div className="space-y-3 pt-2">
+            {/* Weight Counting Mode Selector */}
+            <div className="flex items-center justify-between gap-2 bg-stone-950 p-2 rounded-xl border border-stone-800 text-[11px] flex-wrap">
+              <span className="text-stone-400 font-medium">Weight Mode:</span>
+              <div className="flex items-center gap-1 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => handleWeightModeChange('carried_only')}
+                  className={`px-2 py-1 rounded font-bold transition ${
+                    weightBreakdown.mode === 'carried_only'
+                      ? 'bg-amber-600 text-stone-950 shadow'
+                      : 'bg-stone-900 text-stone-400 hover:text-stone-200'
+                  }`}
+                  title="Equipped + Backpack items count (Default - Stored items in Stash/Camp excluded)"
+                >
+                  Backpack & Equipped (Default)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleWeightModeChange('equipped_only')}
+                  className={`px-2 py-1 rounded font-bold transition ${
+                    weightBreakdown.mode === 'equipped_only'
+                      ? 'bg-amber-600 text-stone-950 shadow'
+                      : 'bg-stone-900 text-stone-400 hover:text-stone-200'
+                  }`}
+                  title="Only actively equipped items contribute to carried weight"
+                >
+                  Equipped Only
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleWeightModeChange('all_items')}
+                  className={`px-2 py-1 rounded font-bold transition ${
+                    weightBreakdown.mode === 'all_items'
+                      ? 'bg-amber-600 text-stone-950 shadow'
+                      : 'bg-stone-900 text-stone-400 hover:text-stone-200'
+                  }`}
+                  title="All items in inventory count toward weight including stored camp items"
+                >
+                  All Items (Inc. Stored)
+                </button>
               </div>
-            )
-          )}
+            </div>
 
-          {/* Push / Drag / Lift Capacity Footer */}
-          <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 bg-stone-950/60 px-2.5 py-1.5 rounded-lg border border-stone-800/80">
-            <span className="flex items-center gap-1 text-stone-300">
-              <Zap className="w-3 h-3 text-amber-500" /> Push / Drag / Lift Capacity:
-            </span>
-            <span className="text-amber-300 font-bold">{encumbranceInfo.pushDragLift} lbs ({encumbranceInfo.effectiveSize} Size Tier)</span>
+            {/* Size & Powerful Build Config Bar */}
+            <div className="flex items-center justify-between gap-2 bg-stone-950/80 p-2 rounded-xl border border-amber-900/40 text-[11px] flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="text-stone-400 font-medium flex items-center gap-1">
+                  <Maximize2 className="w-3.5 h-3.5 text-amber-500" /> Size:
+                </span>
+                <select
+                  value={character.sizeCategory || 'Medium'}
+                  onChange={(e) => onUpdateCharacter({ ...character, sizeCategory: e.target.value as any })}
+                  className="bg-stone-900 border border-stone-700 text-amber-300 font-bold rounded px-2 py-0.5 text-[11px]"
+                >
+                  <option value="Fine">Fine (1/8 Capacity)</option>
+                  <option value="Diminutive">Diminutive (1/4 Capacity)</option>
+                  <option value="Tiny">Tiny (1/2 Capacity)</option>
+                  <option value="Small">Small ({character.edition === '3.5e' ? '3/4' : 'x1'} Capacity)</option>
+                  <option value="Medium">Medium (Standard x1)</option>
+                  <option value="Large">Large (x2 Capacity)</option>
+                  <option value="Huge">Huge (x4 Capacity)</option>
+                  <option value="Gargantuan">Gargantuan (x8 Capacity)</option>
+                  <option value="Colossal">Colossal (x16 Capacity)</option>
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onUpdateCharacter({
+                  ...character,
+                  optionalRules: {
+                    ...character.optionalRules,
+                    hasPowerfulBuild: !encumbranceInfo.hasPowerfulBuild
+                  }
+                })}
+                className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition flex items-center gap-1.5 ${
+                  encumbranceInfo.hasPowerfulBuild
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 ring-1 ring-amber-500/30'
+                    : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+                }`}
+                title="Counts as one size category larger for carrying capacity and push/drag/lift weight"
+              >
+                <Zap className={`w-3 h-3 ${encumbranceInfo.hasPowerfulBuild ? 'text-amber-400 fill-amber-400' : 'text-stone-500'}`} />
+                Powerful Build {encumbranceInfo.hasPowerfulBuild ? '(Active +1 Tier)' : '(Off)'}
+              </button>
+            </div>
+
+            {/* Weight Subtotals Chips */}
+            <div className="grid grid-cols-3 gap-2 text-[10px] font-mono text-center">
+              <div className={`p-1.5 rounded-lg border transition ${
+                weightBreakdown.mode === 'equipped_only' || weightBreakdown.mode === 'carried_only' || weightBreakdown.mode === 'all_items'
+                  ? 'bg-amber-950/60 border-amber-500/60 ring-1 ring-amber-500/30'
+                  : 'bg-stone-950/60 border-stone-800 opacity-60'
+              }`}>
+                <div className="text-amber-400/90 font-sans font-bold">Equipped</div>
+                <div className="text-amber-200 font-bold text-xs">{weightBreakdown.equippedWeight.toFixed(1)} lbs</div>
+              </div>
+              <div className={`p-1.5 rounded-lg border transition ${
+                weightBreakdown.mode === 'carried_only' || weightBreakdown.mode === 'all_items'
+                  ? 'bg-amber-950/60 border-amber-500/60 ring-1 ring-amber-500/30'
+                  : 'bg-stone-950/60 border-stone-800 opacity-60'
+              }`}>
+                <div className="text-amber-400/90 font-sans font-bold">In Backpack</div>
+                <div className="text-amber-200 font-bold text-xs">{weightBreakdown.carriedWeight.toFixed(1)} lbs</div>
+              </div>
+              <div className={`p-1.5 rounded-lg border transition ${
+                weightBreakdown.mode === 'all_items'
+                  ? 'bg-amber-950/60 border-amber-500/60 ring-1 ring-amber-500/30'
+                  : 'bg-blue-950/30 border-blue-600/40 opacity-70'
+              }`}>
+                <div className="text-blue-300/90 font-sans font-bold flex items-center justify-center gap-1">
+                  <Archive className="w-3 h-3 text-blue-400" /> Stored (Ignored)
+                </div>
+                <div className="text-blue-200 font-bold text-xs">{weightBreakdown.storedWeight.toFixed(1)} lbs</div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="w-full bg-stone-950 rounded-full h-3 border border-stone-800 overflow-hidden relative">
+              <div
+                className={`h-full transition-all ${
+                  encumbranceInfo.status === 'Over Capacity'
+                    ? 'bg-rose-600'
+                    : encumbranceInfo.status === 'Heavily Encumbered'
+                    ? 'bg-rose-500'
+                    : encumbranceInfo.status === 'Encumbered'
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-600'
+                }`}
+                style={{ width: `${Math.min(100, (encumbranceInfo.totalWeight / encumbranceInfo.maxCapacity) * 100)}%` }}
+              />
+            </div>
+
+            {/* Threshold Indicators & Status */}
+            {encumbranceInfo.isVariant ? (
+              <div className="space-y-1 pt-1">
+                <div className="flex justify-between text-[10px] font-mono text-stone-400">
+                  <span>Encumbered: {encumbranceInfo.encumberedThreshold} lbs</span>
+                  <span>Heavy: {encumbranceInfo.heavilyEncumberedThreshold} lbs</span>
+                  <span>Max: {encumbranceInfo.maxCapacity} lbs</span>
+                </div>
+
+                {encumbranceInfo.status !== 'Normal' && (
+                  <div className={`text-[11px] p-2 rounded-lg font-bold flex items-center justify-between gap-2 border ${
+                    encumbranceInfo.status === 'Over Capacity'
+                      ? 'bg-rose-950/80 border-rose-600 text-rose-300'
+                      : encumbranceInfo.status === 'Heavily Encumbered'
+                      ? 'bg-rose-950/60 border-rose-700/60 text-rose-300'
+                      : 'bg-amber-950/60 border-amber-600/50 text-amber-300'
+                  }`}>
+                    <div className="flex items-center gap-1.5">
+                      <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>
+                        STATUS: <strong>{encumbranceInfo.status.toUpperCase()}</strong>
+                        {encumbranceInfo.speedPenalty > 0 && ` (-${encumbranceInfo.speedPenalty} ft Speed)`}
+                      </span>
+                    </div>
+                    {encumbranceInfo.hasDisadvantage && (
+                      <span className="text-[10px] bg-rose-900/80 text-rose-200 border border-rose-500 px-1.5 py-0.5 rounded font-mono font-bold">
+                        DISADVANTAGE ON CHECKS & SAVES
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              isEncumbered && (
+                <div className="text-[10px] text-rose-400 flex items-center gap-1 font-bold">
+                  <ShieldAlert className="w-3.5 h-3.5" /> OVER CAPACITY! Speed reduced by 10 ft.
+                </div>
+              )
+            )}
+
+            {/* Push / Drag / Lift Capacity Footer */}
+            <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 bg-stone-950/60 px-2.5 py-1.5 rounded-lg border border-stone-800/80">
+              <span className="flex items-center gap-1 text-stone-300">
+                <Zap className="w-3 h-3 text-amber-500" /> Push / Drag / Lift Capacity:
+              </span>
+              <span className="text-amber-300 font-bold">{encumbranceInfo.pushDragLift} lbs ({encumbranceInfo.effectiveSize} Size Tier)</span>
+            </div>
           </div>
-        </div>
+        </CollapsibleBox>
       </div>
 
       {/* SECTION 3: Gear Inventory List */}
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-stone-800 pb-2">
-          <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-lg">
-            <Package className="w-5 h-5 text-amber-500" />
-            <span>Equipment & Inventory</span>
-            <span className="text-xs text-stone-400 font-sans font-normal ml-2 hidden sm:inline">
-              (Drag <GripVertical className="inline w-3.5 h-3.5 text-amber-500 -mt-0.5" /> to reorder)
-            </span>
-          </div>
+      <CollapsibleBox
+        title="Equipment & Inventory"
+        icon={<Package className="w-5 h-5 text-amber-500" />}
+        storageKey="sheet3_equipment"
+        headerExtra={
           <button
-            onClick={() => setShowAddItemModal(true)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAddItemModal(true);
+            }}
             className="flex items-center gap-1 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md"
           >
             <Plus className="w-4 h-4" /> Add Item
           </button>
+        }
+      >
+        <div className="space-y-4 pt-2">
+
+        {/* SEARCH & CATEGORY FILTER TOOLBAR */}
+        <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-3">
+          {/* Search Input Bar */}
+          <div className="relative flex items-center">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search inventory items (e.g., 'Plate', 'Dagger', 'Potion')..."
+              className="w-full bg-stone-900 border border-stone-700 focus:border-amber-500 rounded-xl pl-9 pr-8 py-1.5 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:ring-1 focus:ring-amber-500/50"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 text-stone-400 hover:text-stone-200 p-0.5 rounded transition"
+                title="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-[10px] font-mono text-stone-400 font-bold uppercase mr-1 flex items-center gap-1">
+              <Filter className="w-3 h-3 text-amber-500" /> Filter:
+            </span>
+
+            {/* All Items */}
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('all')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 ${
+                categoryFilter === 'all'
+                  ? 'bg-amber-600 text-stone-950 shadow'
+                  : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5 text-amber-400" />
+              <span>All Items</span>
+              <span className={`text-[10px] font-mono px-1 rounded ${categoryFilter === 'all' ? 'bg-amber-800/40 text-stone-950' : 'bg-stone-800 text-stone-400'}`}>
+                {countAll}
+              </span>
+            </button>
+
+            {/* Melee Weapons */}
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('weapon_melee')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 ${
+                categoryFilter === 'weapon_melee'
+                  ? 'bg-rose-700 text-white shadow'
+                  : 'bg-stone-900 text-stone-400 hover:text-rose-300 border border-stone-800'
+              }`}
+            >
+              <Swords className="w-3.5 h-3.5 text-rose-400" />
+              <span>Melee Weapons</span>
+              <span className={`text-[10px] font-mono px-1 rounded ${categoryFilter === 'weapon_melee' ? 'bg-rose-900 text-rose-100' : 'bg-stone-800 text-stone-400'}`}>
+                {countMelee}
+              </span>
+            </button>
+
+            {/* Ranged Weapons */}
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('weapon_ranged')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 ${
+                categoryFilter === 'weapon_ranged'
+                  ? 'bg-orange-700 text-white shadow'
+                  : 'bg-stone-900 text-stone-400 hover:text-orange-300 border border-stone-800'
+              }`}
+            >
+              <Target className="w-3.5 h-3.5 text-orange-400" />
+              <span>Ranged Weapons</span>
+              <span className={`text-[10px] font-mono px-1 rounded ${categoryFilter === 'weapon_ranged' ? 'bg-orange-900 text-orange-100' : 'bg-stone-800 text-stone-400'}`}>
+                {countRanged}
+              </span>
+            </button>
+
+            {/* Armor & Shields */}
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('armor')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 ${
+                categoryFilter === 'armor'
+                  ? 'bg-blue-700 text-white shadow'
+                  : 'bg-stone-900 text-stone-400 hover:text-blue-300 border border-stone-800'
+              }`}
+            >
+              <Shield className="w-3.5 h-3.5 text-blue-400" />
+              <span>Armor & Shields</span>
+              <span className={`text-[10px] font-mono px-1 rounded ${categoryFilter === 'armor' ? 'bg-blue-900 text-blue-100' : 'bg-stone-800 text-stone-400'}`}>
+                {countArmor}
+              </span>
+            </button>
+
+            {/* Magic Items */}
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('magic')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 ${
+                categoryFilter === 'magic'
+                  ? 'bg-purple-700 text-white shadow'
+                  : 'bg-stone-900 text-stone-400 hover:text-purple-300 border border-stone-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+              <span>Magic Items</span>
+              <span className={`text-[10px] font-mono px-1 rounded ${categoryFilter === 'magic' ? 'bg-purple-900 text-purple-100' : 'bg-stone-800 text-stone-400'}`}>
+                {countMagic}
+              </span>
+            </button>
+
+            {/* General / Misc Items */}
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('misc')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 ${
+                categoryFilter === 'misc'
+                  ? 'bg-stone-700 text-white shadow'
+                  : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+              }`}
+            >
+              <Package className="w-3.5 h-3.5 text-stone-400" />
+              <span>General / Misc</span>
+              <span className={`text-[10px] font-mono px-1 rounded ${categoryFilter === 'misc' ? 'bg-stone-800 text-stone-100' : 'bg-stone-800 text-stone-400'}`}>
+                {countMisc}
+              </span>
+            </button>
+          </div>
         </div>
+
+        {character.activeTransformation && character.activeTransformation.form.hasHands === false && (
+          <div className="bg-purple-950/90 border border-purple-500/70 rounded-xl p-3 mb-3 flex items-center justify-between text-xs text-purple-200 shadow">
+            <div className="flex items-center gap-2.5">
+              <span className="text-2xl">🐾</span>
+              <div>
+                <strong className="text-amber-300 font-bold block">{character.activeTransformation.form.name} (No Hands / Beast Form)</strong>
+                <span className="text-stone-300 text-[11px] block">
+                  Equipment, weapons, and armor are merged into beast form and automatically unequipped. Revert transformation or switch to a form with hands to re-equip items.
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {character.inventory.length === 0 ? (
           <p className="text-xs text-stone-500 italic py-4 text-center">
             No gear items in inventory. Click "+ Add Item" to log weapons, potions, armor, or adventuring packs!
           </p>
+        ) : filteredInventory.length === 0 ? (
+          <div className="bg-stone-950/60 border border-stone-800/80 rounded-xl p-6 text-center space-y-2">
+            <Package className="w-8 h-8 text-stone-600 mx-auto" />
+            <p className="text-xs text-stone-400 font-medium">
+              No items in your inventory match the active search filter {searchQuery ? `("${searchQuery}")` : ''}.
+            </p>
+            <button
+              type="button"
+              onClick={() => { setSearchQuery(''); setCategoryFilter('all'); }}
+              className="px-3 py-1 bg-amber-900/60 hover:bg-amber-800 text-amber-200 border border-amber-600/50 rounded-lg text-xs font-bold transition inline-block mt-1"
+            >
+              Reset Search & Filters
+            </button>
+          </div>
         ) : (
           <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
-            {character.inventory.map((item, index) => {
+            {filteredInventory.map(({ item, originalIndex }) => {
+              const index = originalIndex;
               const basePrice = item.costGp;
               const hasPrice = basePrice !== undefined && basePrice !== null && !isNaN(Number(basePrice));
               const qty = Math.max(1, Number(item.quantity) || 1);
@@ -1298,7 +1660,8 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
             })}
           </div>
         )}
-      </div>
+        </div>
+      </CollapsibleBox>
 
       {/* MODAL: Add Inventory Item */}
       {showAddItemModal && (
@@ -1796,6 +2159,10 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
                     checked={editingItem.equipped}
                     onChange={(e) => {
                       const isChecked = e.target.checked;
+                      if (isChecked && character.activeTransformation && character.activeTransformation.form.hasHands === false) {
+                        alert(`❌ Cannot equip weapons or gear in this form! Your active transformation (${character.activeTransformation.form.name}) lacks hands/humanoid anatomy.`);
+                        return;
+                      }
                       setEditingItem({
                         ...editingItem,
                         equipped: isChecked,

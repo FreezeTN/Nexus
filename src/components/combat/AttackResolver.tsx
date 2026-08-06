@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CharacterData, Attack, Spell, EncounterEnvironment } from '../../types';
 import { Combatant } from './EncounterTracker';
 import { getSpellAttackBonus, getSpellSaveDC, formatModifier, rollCompoundDamage, RolledDamagePart, applyResistanceAndDRToDamage, calculateCharacterTotalDR, getCharacterResistances, getConditionEffects } from '../../utils/dndCalculations';
-import { playDiceSound } from '../../utils/diceAudio';
+import { playDiceSound, playHitSound, playMissSound, playDamageAppliedSound, playFireSound, playIceColdSound, playLightningSound, playAcidPoisonSound } from '../../utils/diceAudio';
 import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2 } from 'lucide-react';
 
 interface AttackResolverProps {
@@ -299,6 +299,15 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     // Nat 20 auto-hits; Nat 1 auto-misses; otherwise compare total vs effective target AC
     const isHit = actionType === 'saving_throw' ? true : (isCrit || (!isNat1 && totalAttack >= effectiveTargetAc));
 
+    // Trigger hit / crit / miss sound effects
+    if (isCrit) {
+      playHitSound(true);
+    } else if (isHit) {
+      playHitSound(false);
+    } else {
+      playMissSound();
+    }
+
     if (onRoll) {
       const modeStr = rollMode !== 'normal' ? ` (${rollMode.toUpperCase()})` : '';
       onRoll(`Attack Roll: ${activeAttackName}${modeStr} vs ${targetNameStr}`, 20, 1, totalBonus, rollMode);
@@ -401,6 +410,10 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
       onLogAction('damage', `${critPrefix}Damage rolled for ${lastResult.attackName} vs ${lastResult.targetName}: ${finalTotal} damage (${finalBreakdown})`, character.name);
     }
 
+    // Trigger contextual elemental / damage sound effect
+    const primaryType = result.parts[0]?.damageType || 'Slashing';
+    playDamageAppliedSound(primaryType);
+
     setRolledDamage({
       total: finalTotal,
       breakdown: finalBreakdown,
@@ -414,6 +427,8 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   // Apply rolled damage directly to combatant's HP
   const handleApplyDamage = () => {
     if (!rolledDamage || !lastResult?.targetCombatantId || !onApplyDamageToCombatant) return;
+    const primaryType = rolledDamage.parts[0]?.damageType || 'Slashing';
+    playDamageAppliedSound(primaryType);
     onApplyDamageToCombatant(lastResult.targetCombatantId, rolledDamage.total);
     if (onLogAction) {
       onLogAction('damage', `Applied ${rolledDamage.total} damage to ${lastResult.targetName}`, character.name);

@@ -9,13 +9,15 @@ interface DiceRollerProps {
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onClearLogs: () => void;
   activeRollResult?: DiceRollResult | null;
+  onOpenAudioModal?: () => void;
 }
 
 export const DiceRoller: React.FC<DiceRollerProps> = ({
   rollLogs,
   onRoll,
   onClearLogs,
-  activeRollResult
+  activeRollResult,
+  onOpenAudioModal
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedDie, setSelectedDie] = useState<number>(20);
@@ -97,15 +99,24 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 <button
                   onClick={handleToggleSound}
                   className={`p-1.5 rounded-lg border transition text-xs flex items-center gap-1 ${
-                    soundOn
+                    isDiceSoundEnabled()
                       ? 'bg-amber-950/80 text-amber-300 border-amber-600/50 hover:bg-amber-900'
                       : 'bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200'
                   }`}
-                  title={soundOn ? 'Dice Roll Sound Enabled' : 'Dice Roll Sound Muted'}
+                  title={isDiceSoundEnabled() ? 'Dice Roll Sound Enabled (Click to toggle sound)' : 'Dice Roll Sound Muted (Click to enable sound)'}
                 >
-                  {soundOn ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-stone-500" />}
-                  <span className="text-[10px] font-mono">{soundOn ? 'ON' : 'OFF'}</span>
+                  {isDiceSoundEnabled() ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-stone-500" />}
+                  <span className="text-[10px] font-mono">{isDiceSoundEnabled() ? 'ON' : 'OFF'}</span>
                 </button>
+                {onOpenAudioModal && (
+                  <button
+                    onClick={onOpenAudioModal}
+                    className="p-1.5 rounded-lg border border-stone-800 bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-amber-300 transition text-[10px] font-mono"
+                    title="Open Full Audio Options & Volume Controls"
+                  >
+                    Options
+                  </button>
+                )}
                 <button
                   onClick={() => setIsOpen(false)}
                   className="text-stone-400 hover:text-stone-200 p-1 rounded-md"

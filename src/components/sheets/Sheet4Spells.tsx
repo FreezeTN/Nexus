@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { AbilityName, CharacterData, Spell } from '../../types';
+import { CollapsibleBox } from '../common/CollapsibleBox';
 import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { ShadowrunSpellsComplexForms } from '../shadowrun/ShadowrunSpellsComplexForms';
 import { getSpellSaveDC, getSpellAttackBonus, getAbilityModifier, formatModifier, OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, isHealingSpell, getHealingExpression, rollHealing, isCharacterDead, isReviveSpell, getMaxUnlockedSpellSlotLevel, getRequiredLevelForSpellSlotLevel, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { PRESET_5E_SPELLS } from '../../data/presetSpells';
+import { isDuplicateSpell, deduplicateSpells } from '../../utils/spellUtils';
 import { SpellTargetModal, getAutoConditionForSpell } from '../modals/SpellTargetModal';
 import {
   Wand2,
@@ -376,6 +378,22 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
   const handleSaveSpell = () => {
     if (!spellName.trim()) return;
 
+    // Check for duplicate spell name or effect
+    const dupCheck = isDuplicateSpell(
+      character.spells || [],
+      { name: spellName, description: spellDesc },
+      editingSpellId || undefined
+    );
+
+    if (dupCheck.isDuplicate) {
+      if (dupCheck.reason === 'name') {
+        alert(`"${spellName.trim()}" is already in ${character.name}'s spellbook! Spells in your spellbook must have unique names.`);
+      } else {
+        alert(`A spell with this exact effect/description already exists in ${character.name}'s spellbook ("${dupCheck.matchName}"). Spells in your spellbook must be unique.`);
+      }
+      return;
+    }
+
     if (editingSpellId) {
       const updatedSpells = character.spells.map(s => {
         if (s.id === editingSpellId) {
@@ -476,10 +494,21 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
     });
   };
 
+  const handlePrepareAllInLevel = (lvl: number, prepare: boolean) => {
+    const updatedSpells = character.spells.map(s => {
+      if (s.level === lvl) {
+        return { ...s, prepared: prepare };
+      }
+      return s;
+    });
+    onUpdateCharacter({ ...character, spells: updatedSpells });
+  };
+
   const processedSpells = getProcessedSpells(activeTab === 'daily');
 
-  // Group spells by level if needed
-  const spellsByLevel = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(lvl => ({
+  // Group spells by level if needed (respecting ascending / descending order)
+  const levelOrder = sortOrder === 'desc' ? [9, 8, 7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const spellsByLevel = levelOrder.map(lvl => ({
     level: lvl,
     label: lvl === 0 ? 'Cantrips (Level 0)' : `Level ${lvl} Spells`,
     spells: processedSpells.filter(s => s.level === lvl)
@@ -500,13 +529,11 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* SECTION 1: Casting Stats & Quick Controls */}
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 pb-3">
-          <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-lg">
-            <Wand2 className="w-5 h-5 text-purple-400" />
-            <span>Spells & Spellcasting Stats</span>
-          </div>
-
+      <CollapsibleBox
+        title="Spells & Spellcasting Stats"
+        icon={<Wand2 className="w-5 h-5 text-purple-400" />}
+        storageKey="sheet4_stats"
+        headerExtra={
           <button
             onClick={handleToggleSpellcaster}
             className={`px-3 py-1.5 rounded-xl border font-bold text-xs transition ${
@@ -517,10 +544,10 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
           >
             Spellcaster Mode: {character.isSpellcaster ? 'ACTIVE' : 'INACTIVE'}
           </button>
-        </div>
-
+        }
+      >
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
           {/* Casting Ability Selector */}
           <div className="bg-stone-950 border border-stone-800 p-4 rounded-xl text-center flex flex-col items-center justify-between">
             <div className="text-xs uppercase font-mono font-bold text-stone-400 mb-1">
@@ -567,21 +594,15 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
             <div className="text-[10px] text-stone-500 font-mono mt-1">Prof + Ability Mod (Click to Roll)</div>
           </div>
         </div>
-      </div>
+      </CollapsibleBox>
 
       {/* SECTION 2: Spell Slots Tracker (Levels 1 to 9) */}
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-3">
-        <div className="flex items-center justify-between border-b border-stone-800 pb-2">
-          <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-base">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Spell Slot Tracker (Levels 1 - 9)</span>
-          </div>
-          <div className="text-xs text-stone-400 font-mono">
-            Track remaining slots per level
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
+      <CollapsibleBox
+        title="Spell Slot Tracker (Levels 1 - 9)"
+        icon={<Sparkles className="w-5 h-5 text-amber-400" />}
+        storageKey="sheet4_slots"
+      >
+        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2 pt-2">
           {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((lvl) => {
             const slot = character.spellSlots.find(s => s.level === lvl) || { level: lvl, max: 0, current: 0 };
             const isUnlocked = lvl <= maxUnlockedLevel || slot.max > 0;
@@ -664,45 +685,54 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
             );
           })}
         </div>
-      </div>
+      </CollapsibleBox>
 
       {/* SECTION 3: Main Spell System (Tabbed Views: Spells per Day vs Full Spellbook) */}
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-5">
-        {/* Mode Switcher Tabs */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 pb-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('daily')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-                activeTab === 'daily'
-                  ? 'bg-amber-600 text-stone-950 shadow-lg font-extrabold'
-                  : 'bg-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-700'
-              }`}
-            >
-              <Sun className="w-4 h-4 text-amber-300 fill-amber-300" />
-              <span>Spells per Day (Daily Prepared)</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('spellbook')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
-                activeTab === 'spellbook'
-                  ? 'bg-purple-700 text-white shadow-lg font-extrabold'
-                  : 'bg-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-700'
-              }`}
-            >
-              <BookOpen className="w-4 h-4 text-purple-300" />
-              <span>Full Spellbook ({character.spells.length})</span>
-            </button>
-          </div>
-
+      <CollapsibleBox
+        title="Spells & Daily Spellbook"
+        icon={<Wand2 className="w-5 h-5 text-amber-500" />}
+        storageKey="sheet4_spells_main"
+        headerExtra={
           <button
-            onClick={handleOpenAddModal}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleOpenAddModal();
+            }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-700 to-amber-800 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold transition shadow-md"
           >
             <Plus className="w-4 h-4" /> Add New Spell
           </button>
-        </div>
+        }
+      >
+        <div className="space-y-5 pt-2">
+          {/* Mode Switcher Tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 pb-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveTab('daily')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                  activeTab === 'daily'
+                    ? 'bg-amber-600 text-stone-950 shadow-lg font-extrabold'
+                    : 'bg-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-700'
+                }`}
+              >
+                <Sun className="w-4 h-4 text-amber-300 fill-amber-300" />
+                <span>Spells per Day (Daily Prepared)</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('spellbook')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                  activeTab === 'spellbook'
+                    ? 'bg-purple-700 text-white shadow-lg font-extrabold'
+                    : 'bg-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-700'
+                }`}
+              >
+                <BookOpen className="w-4 h-4 text-purple-300" />
+                <span>Full Spellbook ({character.spells.length})</span>
+              </button>
+            </div>
+          </div>
 
         {/* MODE 1: SPELLS PER DAY GENERATOR & LIST */}
         {activeTab === 'daily' && (
@@ -770,15 +800,50 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
                 ))}
               </div>
 
-              <div className="relative min-w-[160px]">
-                <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search daily spells..."
-                  className="w-full bg-stone-900 border border-stone-700 rounded-xl pl-8 pr-3 py-1 text-xs text-stone-100 placeholder-stone-500 focus:outline-none"
-                />
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="flex items-center gap-1.5 text-stone-400 font-mono font-bold text-[11px]">
+                  <ArrowUpDown className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Sort:</span>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as any)}
+                    className="bg-stone-900 border border-stone-700 rounded-lg px-2 py-1 text-stone-200 font-semibold focus:outline-none text-xs"
+                  >
+                    <option value="level">Level</option>
+                    <option value="name">Name</option>
+                    <option value="school">School</option>
+                  </select>
+
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
+                    className="px-2 py-1 bg-stone-900 border border-stone-700 text-amber-300 font-mono text-[11px] font-bold rounded-lg hover:bg-stone-800 transition flex items-center gap-1 shadow-sm"
+                    title={sortOrder === 'asc' ? 'Sort Ascending (Lowest Level / A-Z first)' : 'Sort Descending (Highest Level / Z-A first)'}
+                  >
+                    {sortOrder === 'asc' ? (
+                      <>
+                        <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                        <span>ASC</span>
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                        <span>DESC</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="relative min-w-[160px]">
+                  <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search daily spells..."
+                    className="w-full bg-stone-900 border border-stone-700 rounded-xl pl-8 pr-3 py-1 text-xs text-stone-100 placeholder-stone-500 focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
 
@@ -908,9 +973,11 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
                         </div>
 
                         {/* SHORT DESCRIPTION / QUICK SUMMARY */}
-                        <div className="mt-2.5 bg-stone-900/90 p-2.5 rounded-lg border border-stone-800 text-stone-200 text-xs leading-relaxed">
-                          <span className="text-amber-400/90 font-semibold font-serif mr-1">Effect:</span>
-                          {shortSummary}
+                        <div className="mt-2.5 bg-stone-900/90 p-2.5 rounded-lg border border-amber-900/40 text-stone-200 text-xs leading-relaxed">
+                          <div className="text-[10px] font-mono font-bold text-amber-400 mb-0.5">
+                            ⚡ Effect Summary
+                          </div>
+                          <div>{shortSummary}</div>
                         </div>
                       </div>
 
@@ -959,6 +1026,30 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
         {/* MODE 2: FULL SPELLBOOK LIBRARY WITH SORTING & DETAILED DESCRIPTIONS */}
         {activeTab === 'spellbook' && (
           <div className="space-y-4">
+            {/* Daily Spells Generator Banner in Spellbook */}
+            <div className="bg-purple-950/70 border border-purple-500/50 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-inner">
+              <div className="flex items-center gap-2.5 text-xs">
+                <BookOpen className="w-4 h-4 text-purple-300" />
+                <div>
+                  <strong className="text-purple-200 font-bold block">Spellbook & Daily Preparation Generator</strong>
+                  <span className="text-stone-300 text-[11px] block">
+                    Checkmark spells below to include in your daily prepared list. Currently prepared: <span className="text-amber-300 font-bold">{preparedSpellsCount}</span> / {recommendedPreparedMax}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleSyncPreparedSpells}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold rounded-lg text-xs transition shadow"
+                  title="Auto-select spells per day up to your prepared max"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Auto-Prepare Spells per Day</span>
+                </button>
+              </div>
+            </div>
+
             {/* Sorting & Grouping Controls */}
             <div className="flex flex-wrap items-center justify-between gap-3 bg-stone-950 p-3 rounded-xl border border-stone-800 text-xs">
               <div className="flex items-center gap-3 flex-wrap">
@@ -971,17 +1062,29 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
                   onChange={(e) => setSortBy(e.target.value as any)}
                   className="bg-stone-900 border border-stone-700 rounded-lg px-2 py-1 text-stone-200 font-semibold focus:outline-none"
                 >
-                  <option value="level">Spell Level (0 to 9)</option>
+                  <option value="level">Spell Level (Cantrips to Lvl 9)</option>
                   <option value="name">Spell Name (A-Z)</option>
                   <option value="school">School of Magic</option>
                   <option value="prepared">Prepared Status</option>
                 </select>
 
                 <button
+                  type="button"
                   onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')}
-                  className="px-2 py-1 bg-stone-900 border border-stone-700 text-amber-300 font-mono text-[11px] font-bold rounded-lg hover:bg-stone-800 transition"
+                  className="px-2.5 py-1 bg-stone-900 border border-stone-700 text-amber-300 font-mono text-[11px] font-bold rounded-lg hover:bg-stone-800 transition flex items-center gap-1 shadow-sm"
+                  title={sortOrder === 'asc' ? 'Sort Ascending (Lowest Level / A-Z first)' : 'Sort Descending (Highest Level / Z-A first)'}
                 >
-                  {sortOrder.toUpperCase()}
+                  {sortOrder === 'asc' ? (
+                    <>
+                      <ChevronUp className="w-3.5 h-3.5 text-amber-400" />
+                      <span>ASC</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="w-3.5 h-3.5 text-amber-400" />
+                      <span>DESC</span>
+                    </>
+                  )}
                 </button>
 
                 {sortBy === 'level' && (
@@ -1057,28 +1160,41 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
               <div className="space-y-4">
                 {spellsByLevel.map(group => {
                   const isCollapsed = collapsedLevels[group.level];
+                  const allPreparedInLevel = group.spells.every(s => s.prepared);
 
                   return (
                     <div key={group.level} className="border border-stone-800 rounded-xl overflow-hidden bg-stone-950">
                       {/* Section Header */}
-                      <button
-                        onClick={() => toggleLevelCollapse(group.level)}
-                        className="w-full bg-stone-900 hover:bg-stone-800/80 px-4 py-2.5 flex items-center justify-between text-left transition border-b border-stone-800"
-                      >
-                        <div className="flex items-center gap-2">
+                      <div className="bg-stone-900 px-4 py-2.5 flex items-center justify-between text-left transition border-b border-stone-800">
+                        <button
+                          onClick={() => toggleLevelCollapse(group.level)}
+                          className="flex items-center gap-2 hover:opacity-80 transition"
+                        >
                           <Layers className="w-4 h-4 text-purple-400" />
                           <span className="font-serif font-bold text-amber-300 text-sm">{group.label}</span>
                           <span className="text-[10px] font-mono text-stone-400 bg-stone-800 px-2 py-0.5 rounded-full border border-stone-700">
                             {group.spells.length} {group.spells.length === 1 ? 'spell' : 'spells'}
                           </span>
-                        </div>
+                        </button>
 
-                        {isCollapsed ? (
-                          <ChevronDown className="w-4 h-4 text-stone-400" />
-                        ) : (
-                          <ChevronUp className="w-4 h-4 text-stone-400" />
-                        )}
-                      </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => handlePrepareAllInLevel(group.level, !allPreparedInLevel)}
+                            className="text-[11px] font-mono font-bold px-2 py-1 bg-stone-800 hover:bg-stone-700 text-purple-300 rounded border border-stone-700 transition"
+                            title={allPreparedInLevel ? "Unprepare all in level" : "Prepare all in level for Daily List"}
+                          >
+                            {allPreparedInLevel ? '✓ All Prepared' : '+ Prepare Level'}
+                          </button>
+
+                          <button onClick={() => toggleLevelCollapse(group.level)}>
+                            {isCollapsed ? (
+                              <ChevronDown className="w-4 h-4 text-stone-400" />
+                            ) : (
+                              <ChevronUp className="w-4 h-4 text-stone-400" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
 
                       {/* Spell Cards in Group */}
                       {!isCollapsed && (
@@ -1124,7 +1240,8 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
             )}
           </div>
         )}
-      </div>
+        </div>
+      </CollapsibleBox>
 
       {/* MODAL: Add / Edit Spell */}
       {showSpellModal && (
@@ -1157,6 +1274,12 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
                       if (!selectedId) return;
                       const preset = PRESET_5E_SPELLS.find(p => p.id === selectedId);
                       if (preset) {
+                        const dup = isDuplicateSpell(character.spells || [], preset);
+                        if (dup.isDuplicate) {
+                          alert(`"${preset.name}" is already in ${character.name}'s spellbook! Spells in your spellbook must be unique.`);
+                          e.target.value = "";
+                          return;
+                        }
                         setSpellName(preset.name);
                         setSpellLevel(preset.level);
                         setSpellSchool(preset.school);
@@ -1176,11 +1299,14 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
                     className="w-full bg-stone-900 border border-purple-500/50 text-amber-200 rounded-lg p-2 text-xs font-serif font-bold focus:outline-none focus:border-amber-400"
                   >
                     <option value="">-- Choose an Official 5e Preset Spell (Wish, Revivify, Fireball...) --</option>
-                    {PRESET_5E_SPELLS.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.level === 0 ? 'Cantrip' : `Lvl ${p.level}`} - {p.school})
-                      </option>
-                    ))}
+                    {PRESET_5E_SPELLS.map(p => {
+                      const dup = isDuplicateSpell(character.spells || [], p);
+                      return (
+                        <option key={p.id} value={p.id} disabled={dup.isDuplicate}>
+                          {p.name} ({p.level === 0 ? 'Cantrip' : `Lvl ${p.level}`} - {p.school}){dup.isDuplicate ? ' ✓ [Already in Spellbook]' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               )}
@@ -1501,13 +1627,16 @@ const SpellbookCard: React.FC<SpellbookCardProps> = ({
         </div>
 
         {/* FULL DETAILED DESCRIPTION */}
-        <p className="text-stone-300 text-xs mt-2.5 leading-relaxed bg-stone-900/90 p-2.5 rounded border border-stone-800">
-          {spell.description}
-        </p>
+        <div className="mt-2.5 bg-stone-900/90 p-2.5 rounded border border-stone-800 text-stone-300 text-xs leading-relaxed space-y-1">
+          <div className="text-[10px] uppercase font-mono font-bold text-purple-300 flex items-center justify-between">
+            <span>📖 Full Rules Description</span>
+          </div>
+          <p>{spell.description}</p>
+        </div>
 
         {spell.shortDescription && (
-          <div className="mt-1.5 text-[11px] text-amber-300/80 italic font-mono">
-            <strong>Daily Short Note:</strong> {spell.shortDescription}
+          <div className="mt-1.5 text-[11px] text-amber-300/90 italic font-mono bg-stone-950/60 p-2 rounded border border-amber-900/40">
+            <strong className="text-amber-400 not-italic font-bold">Effect Summary:</strong> {spell.shortDescription}
           </div>
         )}
       </div>

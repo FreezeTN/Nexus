@@ -339,6 +339,9 @@ export interface CharacterData {
   // Shadowrun System Data
   shadowrun?: ShadowrunData;
 
+  // Active Transformation Engine (Wild Shape, Polymorph, Shapechange, Lycanthropy)
+  activeTransformation?: ActiveTransformation;
+
   // Conditions & Status Effects
   conditions?: string[];
   exhaustionLevel?: number; // 0-6
@@ -441,4 +444,39 @@ export type EncounterEnvironment =
   | 'shadowfell'
   | 'aerial'
   | 'lair_active';
+
+export interface TransformationForm {
+  id: string;
+  name: string;
+  type: 'Wild Shape' | 'Polymorph' | 'Shapechange' | 'Lycanthropy' | 'Vampire Form' | 'Custom';
+  sizeCategory?: 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan';
+  formHpMax: number;
+  formHpCurrent: number;
+  formAc: number;
+  formSpeed: number;
+  formAbilities?: { STR: number; DEX: number; CON: number };
+  hasHands?: boolean; // If true, form has hands/humanoid anatomy and can equip weapons & gear. If false, equipped items are unequipped/merged.
+  naturalWeapons: Attack[];
+  specialTraits?: string[];
+  portraitUrl?: string;
+  notes?: string;
+}
+
+export interface ActiveTransformation {
+  form: TransformationForm;
+  transformedAt: string;
+  originalStats: {
+    hpMax: number;
+    hpCurrent: number;
+    hpTemp: number;
+    armorClass: number;
+    speed: number;
+    sizeCategory?: 'Fine' | 'Diminutive' | 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan' | 'Colossal';
+    abilities: AbilityScores;
+    attacks: Attack[];
+    portraitUrl?: string;
+    equippedItemIds?: string[];
+  };
+}
+
 

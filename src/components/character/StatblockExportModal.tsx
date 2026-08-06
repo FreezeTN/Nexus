@@ -96,26 +96,8 @@ ${character.classFeatures.map(f => `- **${f.name}:** ${f.source} - ${f.descripti
             </button>
 
             <button
-              onClick={onExportJson}
-              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5"
-              title="Export Full Character JSON File"
-            >
-              <Download className="w-4 h-4" />
-              <span>Export JSON</span>
-            </button>
-
-            <label
-              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-              title="Import Character JSON File"
-            >
-              <Upload className="w-4 h-4" />
-              <span>Import JSON</span>
-              <input type="file" accept=".json" onChange={onImportJson} className="hidden" />
-            </label>
-
-            <button
               onClick={onClose}
-              className="p-1.5 text-stone-400 hover:text-stone-100 font-bold rounded-lg hover:bg-stone-800"
+              className="p-1.5 text-stone-400 hover:text-stone-100 font-bold rounded-lg hover:bg-stone-800 cursor-pointer"
             >
               ✕
             </button>

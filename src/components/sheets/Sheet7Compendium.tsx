@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CharacterData, Spell, Feat, ClassFeature, GearItem } from '../../types';
+import { CharacterData, Spell, Feat, ClassFeature, GearItem, RuleEdition } from '../../types';
 import { getAbilityModifier, formatModifier } from '../../utils/dndCalculations';
+import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import {
   CompendiumItem,
@@ -39,12 +40,14 @@ interface Sheet7CompendiumProps {
   activeCharacter?: CharacterData;
   onUpdateCharacter?: (updated: CharacterData) => void;
   onAddMonsterToRoster?: (monster: CharacterData) => void;
+  enabledSystems?: RuleEdition[];
 }
 
 export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
   activeCharacter,
   onUpdateCharacter,
-  onAddMonsterToRoster
+  onAddMonsterToRoster,
+  enabledSystems
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<CompendiumCategory | 'all'>('all');
   const [selectedSystem, setSelectedSystem] = useState<string>('all');
@@ -102,6 +105,9 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         if (selectedSystem === 'pathfinder' && itemEdition !== 'pathfinder') return false;
         if (selectedSystem === 'shadowrun' && itemEdition !== 'shadowrun') return false;
         if (selectedSystem === 'cthulhu' && itemEdition !== 'cthulhu') return false;
+      } else if (enabledSystems && enabledSystems.length > 0) {
+        const itemEdition = (item.edition || '5e') as RuleEdition;
+        if (!enabledSystems.includes(itemEdition)) return false;
       }
 
       // Search Query
@@ -183,9 +189,20 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
       });
       showToast(`🎒 Added "${item.name}" to ${activeCharacter.name}'s inventory!`);
     } else if (item.category === 'spells' && item.spellData) {
+      const spellCandidate = {
+        name: item.spellData.name || item.name,
+        description: item.description
+      };
+
+      const dup = isDuplicateSpell(activeCharacter.spells || [], spellCandidate);
+      if (dup.isDuplicate) {
+        showToast(`⚠️ "${spellCandidate.name}" is already in ${activeCharacter.name}'s spellbook!`);
+        return;
+      }
+
       const newSpell: Spell = {
         id: 'spell-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-        name: item.spellData.name || item.name,
+        name: spellCandidate.name,
         level: item.spellData.level ?? 1,
         school: item.spellData.school || 'Evocation',
         castingTime: item.spellData.castingTime || '1 action',
@@ -309,13 +326,15 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               <Filter className="w-3.5 h-3.5 text-amber-400" /> System:
             </span>
             {[
-              { id: 'all', label: 'All Systems' },
+              { id: 'all', label: 'Active Systems' },
               { id: '5e', label: 'D&D 5e' },
               { id: '3.5e', label: '3.5e' },
               { id: 'pathfinder', label: 'Pathfinder' },
               { id: 'shadowrun', label: 'Shadowrun' },
               { id: 'cthulhu', label: 'Call of Cthulhu' }
-            ].map((sys) => (
+            ]
+              .filter(sys => sys.id === 'all' || !enabledSystems || enabledSystems.includes(sys.id as RuleEdition))
+              .map((sys) => (
               <button
                 key={sys.id}
                 onClick={() => setSelectedSystem(sys.id)}

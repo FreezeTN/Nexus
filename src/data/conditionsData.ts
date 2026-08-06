@@ -191,6 +191,22 @@ export const DND_CONDITIONS: ConditionInfo[] = [
     description: 'A target with three-quarters cover has a +5 bonus to Armor Class and Dexterity saving throws.',
     colorClass: 'border-stone-600/70 bg-stone-950/70 text-stone-100',
     badgeClass: 'bg-stone-900 text-stone-100 border-stone-400 font-bold'
+  },
+  {
+    id: 'ethereal',
+    name: 'Ethereal',
+    summary: '🌌 Border Ethereal: Phased out of Material Plane. Invisible to Material creatures without Ethereal Sight. Cannot affect/be affected by Material objects/creatures (except Force magic).',
+    description: 'A creature on the Ethereal Plane is phased out of the Material Plane. It is invisible to creatures on the Material Plane unless they possess Ethereal Sight, See Invisibility, or Truesight. It cannot affect or be affected by anything on the Material Plane, with the exception of Force damage, spatial magic (like Wall of Force), or abilities explicitly extending into the Ethereal Plane. Ethereal creatures can move in any direction through solid objects as difficult terrain.',
+    colorClass: 'border-indigo-500/60 bg-indigo-950/40 text-indigo-300',
+    badgeClass: 'bg-indigo-900/90 text-indigo-200 border-indigo-400 font-bold'
+  },
+  {
+    id: 'ethereal-sight',
+    name: 'Ethereal Sight',
+    summary: '👁️ Ethereal Sight: See 60 ft into the Ethereal Plane from the Material Plane (and vice versa).',
+    description: 'The creature can see 60 feet into the Ethereal Plane when it is on the Material Plane, and vice versa. It detects phased and ethereal creatures as translucent figures.',
+    colorClass: 'border-purple-500/60 bg-purple-950/40 text-purple-300',
+    badgeClass: 'bg-purple-900/90 text-purple-200 border-purple-400 font-bold'
   }
 ];
 

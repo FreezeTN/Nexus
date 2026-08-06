@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Attack, CharacterData, Party } from '../../types';
+import { CollapsibleBox } from '../common/CollapsibleBox';
 import { UserProfile } from '../../lib/firebase';
 import { ShadowrunCombatPanel } from '../shadowrun/ShadowrunCombatPanel';
 import { COMBAT_CHEAT_SHEET, CombatRule } from '../../data/dndRulesData';
@@ -10,6 +11,8 @@ import { RestModal } from '../combat/RestModal';
 import { EncounterTracker } from '../combat/EncounterTracker';
 import { MaxHpInspectorModal } from '../modals/MaxHpInspectorModal';
 import { SpellTargetModal } from '../modals/SpellTargetModal';
+import { TransformationModal } from '../modals/TransformationModal';
+import { revertTransformation } from '../../data/transformationData';
 import { getEnvironmentalTraitStatus } from '../../utils/environmentRules';
 import {
   Swords,
@@ -63,6 +66,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   const [showCheatSheet, setShowCheatSheet] = useState(false);
   const [showAddAttackModal, setShowAddAttackModal] = useState(false);
   const [showRestModal, setShowRestModal] = useState(false);
+  const [showTransformationModal, setShowTransformationModal] = useState(false);
   const [showMaxHpInspector, setShowMaxHpInspector] = useState(false);
   const [targetModalSpell, setTargetModalSpell] = useState<any | null>(null);
   const effectiveMaxHp = getEffectiveMaxHp(character);
@@ -486,17 +490,15 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* SECTION 1: Quick View Combat Stats */}
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl text-stone-100 space-y-4">
-        <div className="flex items-center justify-between border-b border-stone-800 pb-2 flex-wrap gap-2">
-          <h2 className="text-xl font-serif font-bold text-amber-200 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-amber-500" />
-            <span>Quick View: Combat Stats</span>
-          </h2>
-
+      <CollapsibleBox
+        title="Quick View: Combat Stats"
+        icon={<Zap className="w-5 h-5 text-amber-500" />}
+        storageKey="sheet2_vitals"
+        headerExtra={
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowRestModal(true)}
-              className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-600/40 px-3 py-1.5 rounded-xl font-bold text-xs transition"
+              className="flex items-center gap-1.5 bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-600/40 px-3 py-1 rounded-xl font-bold text-xs transition"
               title="Open Short / Long Rest Recovery Engine"
             >
               <Flame className="w-3.5 h-3.5 text-amber-500" />
@@ -504,9 +506,9 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
             </button>
             <span className="text-xs text-stone-400 font-mono hidden sm:inline">Real-Time Battle Dashboard</span>
           </div>
-        </div>
-
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        }
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 pt-2">
           {/* Armor Class */}
           {(() => {
             const acBreakdown = getArmorClassBreakdown(character);
@@ -778,7 +780,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
             </button>
           </div>
         </div>
-      </div>
+      </CollapsibleBox>
 
       {/* SECTION 1.5: Conditions & Status Effects */}
       <ConditionsPanel character={character} onUpdateCharacter={onUpdateCharacter} />
@@ -795,13 +797,11 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
       />
 
       {/* SECTION 2: Attacks & Cantrip Actions */}
-      <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
-        <div className="flex flex-wrap items-center justify-between border-b border-stone-800 pb-2 gap-2">
-          <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-lg">
-            <Swords className="w-5 h-5 text-amber-500" />
-            <span>Attacks & Spellcasting Weaponry</span>
-          </div>
-
+      <CollapsibleBox
+        title="Attacks & Spellcasting Weaponry"
+        icon={<Swords className="w-5 h-5 text-amber-500" />}
+        storageKey="sheet2_attacks"
+        headerExtra={
           <div className="flex items-center gap-2">
             {character.optionalRules?.useFlankingRules && (
               <button
@@ -825,6 +825,56 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
               <Plus className="w-4 h-4" /> Add Attack
             </button>
           </div>
+        }
+      >
+        {/* Transformation Engine Banner */}
+        <div className="mb-4">
+          {character.activeTransformation ? (
+            <div className="bg-purple-950/90 border border-purple-500/70 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🐺</span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-amber-300 text-sm">{character.activeTransformation.form.name}</span>
+                    <span className="text-[10px] bg-purple-900 border border-purple-500 text-purple-200 px-2 py-0.5 rounded-full font-bold">
+                      {character.activeTransformation.form.type}
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-300 mt-0.5">
+                    Form HP: <strong className="text-emerald-400">{character.hpCurrent} / {character.hpMax}</strong> | AC: <strong className="text-amber-300">{character.armorClass}</strong> | Speed: <strong className="text-sky-300">{character.speed} ft</strong> | Natural Weapons Auto-Injected
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowTransformationModal(true)}
+                  className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 border border-purple-400 text-purple-100 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                >
+                  <span>🐾 Change Form</span>
+                </button>
+                <button
+                  onClick={() => onUpdateCharacter(revertTransformation(character))}
+                  className="px-3 py-1.5 bg-rose-800 hover:bg-rose-700 border border-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer"
+                >
+                  <span>⏪ Revert Form</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between bg-stone-950 border border-stone-800 rounded-xl p-2.5">
+              <div className="flex items-center gap-2 text-xs text-stone-300">
+                <span className="text-lg">🐾</span>
+                <span className="font-bold text-amber-300">Transformation Engine</span>
+                <span className="text-stone-500 hidden sm:inline">(Wild Shape, Polymorph, Lycanthropy & Shapechange with Natural Weapons)</span>
+              </div>
+              <button
+                onClick={() => setShowTransformationModal(true)}
+                className="px-3 py-1 bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer"
+              >
+                <span>🐾 Transform Form & Natural Weapons</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {character.multiattack && (
@@ -966,18 +1016,17 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
             })}
           </div>
         )}
-      </div>
+      </CollapsibleBox>
 
       {/* SECTION 2.5: Combat Spells & Healing Actions */}
       {((character.spells && character.spells.length > 0) || character.inventory.some(i => isHealingItem(i))) && (
-        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-stone-800 pb-2 flex-wrap gap-2">
-            <h3 className="text-lg font-serif font-bold text-amber-200 flex items-center gap-2">
-              <Heart className="w-5 h-5 text-rose-500 fill-rose-500/30" />
-              <span>Combat Spells & Healing Actions</span>
-            </h3>
-            <span className="text-xs text-stone-400 font-mono">Quick Combat Magic & Potions</span>
-          </div>
+        <CollapsibleBox
+          title="Combat Spells & Healing Actions"
+          icon={<Heart className="w-5 h-5 text-rose-500 fill-rose-500/30" />}
+          storageKey="sheet2_combat_spells"
+          headerExtra={<span className="text-xs text-stone-400 font-mono hidden sm:inline">Quick Combat Magic & Potions</span>}
+        >
+          <div className="space-y-4 pt-2">
 
           {/* Quick Healing Items */}
           {character.inventory.filter(i => isHealingItem(i)).length > 0 && (
@@ -1088,19 +1137,19 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
               </div>
             </div>
           )}
-        </div>
+          </div>
+        </CollapsibleBox>
       )}
 
       {/* SECTION 2.7: Class Features & Active Combat Abilities */}
       {character.classFeatures && character.classFeatures.length > 0 && (
-        <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-stone-800 pb-2 flex-wrap gap-2">
-            <h3 className="text-lg font-serif font-bold text-amber-200 flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-400 fill-amber-400/20" />
-              <span>Class Features & Active Combat Abilities</span>
-            </h3>
-            <span className="text-xs text-stone-400 font-mono">Special Powers, Maneuvers & Passive Buffs</span>
-          </div>
+        <CollapsibleBox
+          title="Class Features & Active Combat Abilities"
+          icon={<Zap className="w-5 h-5 text-amber-400 fill-amber-400/20" />}
+          storageKey="sheet2_combat_features"
+          headerExtra={<span className="text-xs text-stone-400 font-mono hidden sm:inline">Special Powers, Maneuvers & Passive Buffs</span>}
+        >
+          <div className="space-y-4 pt-2">
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {character.classFeatures.map((feature) => {
@@ -1234,7 +1283,8 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
               );
             })}
           </div>
-        </div>
+          </div>
+        </CollapsibleBox>
       )}
 
       {/* SECTION 2.8: Legendary Actions, Lair Actions & Reactions */}
@@ -1626,6 +1676,16 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
           allCharacters={allCharacters}
           onClose={() => setTargetModalSpell(null)}
           onConfirmCast={handleConfirmCastSpellTarget}
+        />
+      )}
+
+      {/* Transformation & Shapechange Modal */}
+      {showTransformationModal && (
+        <TransformationModal
+          isOpen={showTransformationModal}
+          onClose={() => setShowTransformationModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
         />
       )}
     </div>

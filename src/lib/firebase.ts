@@ -23,7 +23,8 @@ import {
   getDocs, 
   deleteDoc,
   onSnapshot,
-  serverTimestamp 
+  serverTimestamp,
+  getDocFromServer
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { CharacterData } from '../types';
@@ -57,6 +58,83 @@ function initDb() {
 }
 
 export const db = initDb();
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errObj = error as any;
+  const errMsg = errObj?.message || String(error);
+  const errCode = errObj?.code || '';
+
+  // Suppress loud errors if client is offline or connection unavailable
+  if (
+    errCode === 'unavailable' ||
+    errCode === 'failed-precondition' ||
+    errMsg.includes('offline') ||
+    errMsg.includes('unavailable') ||
+    errMsg.includes('Could not reach Cloud Firestore')
+  ) {
+    console.info(`Firestore operation [${operationType}] at [${path || 'unknown'}] operating in offline fallback mode.`);
+    return;
+  }
+  const errInfo: FirestoreErrorInfo = {
+    error: errMsg,
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+    },
+    operationType,
+    path
+  };
+  console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
+}
+
+// Validate Connection to Firestore on startup
+async function testFirestoreConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error: any) {
+    const errMsg = error?.message || String(error);
+    const errCode = error?.code || '';
+    if (
+      errCode === 'unavailable' ||
+      errCode === 'failed-precondition' ||
+      errMsg.includes('offline') ||
+      errMsg.includes('unavailable') ||
+      errMsg.includes('Could not reach Cloud Firestore')
+    ) {
+      console.info('Firestore is operating in local/offline fallback mode.');
+    } else {
+      console.info('Firestore connection test note:', errMsg);
+    }
+  }
+}
+testFirestoreConnection().catch((err) => {
+  console.info('Firestore connection test status:', err?.message || err);
+});
 
 function getGoogleProvider(): GoogleAuthProvider {
   return new GoogleAuthProvider();
@@ -335,6 +413,18 @@ export function sanitizePresenceMap(map: Record<string, CharacterPresence>): Rec
       copy.activeUserRole = undefined;
     }
 
+    // Ensure DM active user presence does not leave activeUserId set on player slot
+    if (copy.activeUserId && copy.dmUserId && copy.activeUserId === copy.dmUserId) {
+      copy.activeUserId = undefined;
+      copy.activeUserName = undefined;
+      copy.activeUserRole = undefined;
+    }
+    if (copy.activeUserRole === 'DM') {
+      copy.activeUserId = undefined;
+      copy.activeUserName = undefined;
+      copy.activeUserRole = undefined;
+    }
+
     sanitized[id] = copy;
   });
 
@@ -501,6 +591,13 @@ export async function updateCharacterPresence(
     newEntry.dmActive = true;
     newEntry.dmUserId = user.uid;
     newEntry.dmUserName = user.displayName;
+
+    // Clear activeUserId if it belonged to the DM so that it does not block players from selecting the character
+    if (newEntry.activeUserId === user.uid || newEntry.activeUserRole === 'DM' || (newEntry.dmUserId && newEntry.activeUserId === newEntry.dmUserId)) {
+      newEntry.activeUserId = undefined;
+      newEntry.activeUserName = undefined;
+      newEntry.activeUserRole = undefined;
+    }
   } else {
     newEntry.activeUserId = user.uid;
     newEntry.activeUserName = user.displayName;

@@ -17,14 +17,15 @@ import {
   ChevronDown,
   Lock,
   Crown,
-  UserCheck
+  UserCheck,
+  SlidersHorizontal
 } from 'lucide-react';
 import { HpOrb } from './HpOrb';
 import { UserProfile, CharacterPresence } from '../lib/firebase';
 
 interface MainMenuProps {
   characters: CharacterData[];
-  activeCharacter: CharacterData;
+  activeCharacter?: CharacterData | null;
   onSelectCharacter: (id: string) => void;
   onCreateNewCharacter: (category?: 'character' | 'monster' | 'vendor') => void;
   onEnterGame: () => void;
@@ -33,6 +34,9 @@ interface MainMenuProps {
   currentUser?: UserProfile | null;
   presenceMap?: Record<string, CharacterPresence>;
   onOpenAuthModal?: () => void;
+  enabledSystems?: RuleEdition[];
+  onOpenSystemSelector?: () => void;
+  onOpenAudioModal?: () => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -45,9 +49,12 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   edition,
   currentUser,
   presenceMap = {},
-  onOpenAuthModal
+  onOpenAuthModal,
+  enabledSystems = ['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu'],
+  onOpenSystemSelector,
+  onOpenAudioModal
 }) => {
-  const currentEdition = edition || activeCharacter.edition || '5e';
+  const currentEdition = edition || activeCharacter?.edition || '5e';
   const activeSystem = currentEdition === 'shadowrun'
     ? 'shadowrun'
     : currentEdition === 'pathfinder'
@@ -62,9 +69,17 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [collapsedFolders, setCollapsedFolders] = React.useState<Record<string, boolean>>({});
 
   React.useEffect(() => {
-    setSelectedSystem(activeSystem);
-    setSelectedEdition(currentEdition);
-  }, [activeCharacter.id, currentEdition, activeSystem]);
+    let ed = currentEdition;
+    if (enabledSystems && enabledSystems.length > 0 && !enabledSystems.includes(ed)) {
+      ed = enabledSystems[0];
+    }
+    if (activeSystem === 'dnd' && !enabledSystems.includes('5e') && enabledSystems.includes('3.5e')) {
+      ed = '3.5e';
+    }
+    setSelectedEdition(ed);
+    const sys = ed === 'shadowrun' ? 'shadowrun' : ed === 'pathfinder' ? 'pathfinder' : ed === 'cthulhu' ? 'cthulhu' : 'dnd';
+    setSelectedSystem(sys);
+  }, [activeCharacter?.id, currentEdition, activeSystem, enabledSystems]);
 
   const toggleFolderCollapse = (folderKey: string) => {
     setCollapsedFolders(prev => ({ ...prev, [folderKey]: !prev[folderKey] }));
@@ -76,7 +91,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     if (sys === 'shadowrun') targetEdition = 'shadowrun';
     else if (sys === 'pathfinder') targetEdition = 'pathfinder';
     else if (sys === 'cthulhu') targetEdition = 'cthulhu';
-    else targetEdition = selectedEdition === '3.5e' ? '3.5e' : '5e';
+    else {
+      if (!enabledSystems.includes('5e') && enabledSystems.includes('3.5e')) {
+        targetEdition = '3.5e';
+      } else if (selectedEdition === '3.5e' && enabledSystems.includes('3.5e')) {
+        targetEdition = '3.5e';
+      } else {
+        targetEdition = '5e';
+      }
+    }
 
     setSelectedEdition(targetEdition);
     if (onSystemChange) {
@@ -109,7 +132,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     const merchantChars = systemChars.filter(c => c.isVendor && !c.isMonster);
 
     const renderCard = (char: CharacterData) => {
-      const isActive = char.id === activeCharacter.id;
+      const isActive = activeCharacter ? char.id === activeCharacter.id : false;
       const sr = char.shadowrun;
       const isSR = char.edition === 'shadowrun';
       const displayPortrait = char.portraitUrl || (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined);
@@ -119,8 +142,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       const presence = presenceMap[char.id];
       const activeUserId = presence?.activeUserId;
       const activeUserName = presence?.activeUserName || 'Player';
-      const isLockedForPlayer = isPlayerRole && !!activeUserId && activeUserId !== currentUserId;
-      const isDmActiveOnChar = !!presence?.dmActive && char.id !== activeCharacter.id;
+      const activeUserRole = presence?.activeUserRole;
+      const dmUserId = presence?.dmUserId;
+
+      // Character is locked ONLY when another PLAYER (not a DM) is active on it
+      const isLockedForPlayer = isPlayerRole && 
+        !!activeUserId && 
+        activeUserId !== currentUserId && 
+        activeUserId !== dmUserId && 
+        activeUserRole !== 'DM';
+      const isDmActiveOnChar = !!presence?.dmActive && char.id !== activeCharacter?.id;
       const dmUserName = presence?.dmUserName || 'DM';
 
       const handleCardClick = () => {
@@ -300,9 +331,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       }
     ];
 
-    const foldersConfig = allFolders;
+    const foldersConfig = isPlayerRole
+      ? allFolders.filter(f => f.key === 'characters')
+      : allFolders;
 
-    const activeFolders = activeFolderTab === 'all'
+    const activeFolders = (activeFolderTab === 'all' || (isPlayerRole && (activeFolderTab === 'monsters' || activeFolderTab === 'merchants')))
       ? foldersConfig
       : foldersConfig.filter(f => f.key === activeFolderTab);
 
@@ -350,7 +383,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
             }`}
           >
-            📁 All Folders ({systemChars.length})
+            📁 All Folders ({isPlayerRole ? playerChars.length : systemChars.length})
           </button>
           <button
             onClick={() => setActiveFolderTab('characters')}
@@ -362,26 +395,30 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           >
             🧙 Characters ({playerChars.length})
           </button>
-          <button
-            onClick={() => setActiveFolderTab('monsters')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
-              activeFolderTab === 'monsters'
-                ? 'bg-red-600 text-stone-950 shadow-md'
-                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
-            }`}
-          >
-            👹 Monsters ({monsterChars.length})
-          </button>
-          <button
-            onClick={() => setActiveFolderTab('merchants')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
-              activeFolderTab === 'merchants'
-                ? 'bg-cyan-600 text-stone-950 shadow-md'
-                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
-            }`}
-          >
-            🏪 Merchants ({merchantChars.length})
-          </button>
+          {!isPlayerRole && (
+            <>
+              <button
+                onClick={() => setActiveFolderTab('monsters')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
+                  activeFolderTab === 'monsters'
+                    ? 'bg-red-600 text-stone-950 shadow-md'
+                    : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+              >
+                👹 Monsters ({monsterChars.length})
+              </button>
+              <button
+                onClick={() => setActiveFolderTab('merchants')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition flex items-center gap-1.5 ${
+                  activeFolderTab === 'merchants'
+                    ? 'bg-cyan-600 text-stone-950 shadow-md'
+                    : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+              >
+                🏪 Merchants ({merchantChars.length})
+              </button>
+            </>
+          )}
         </div>
 
         {/* Folder Sections */}
@@ -459,196 +496,213 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   return (
     <div className="space-y-8 pb-12">
-      {/* Welcome Banner */}
-      <div className="bg-stone-900 border border-stone-800 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute -right-12 -bottom-12 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-950 border border-stone-800 text-amber-400 text-xs font-mono font-bold">
-              <Layers className="w-3.5 h-3.5" /> Tabletop RPG Vault & Multi-System Campaign Suite
-            </div>
-            <h2 className="text-3xl md:text-4xl font-serif font-bold text-stone-100">
-              Welcome to the TRPG Master Hub
-            </h2>
-            <p className="text-sm text-stone-400 leading-relaxed">
-              Select your active Tabletop RPG System ruleset below. Seamlessly switch between D&D 5e, D&D 3.5e, Shadowrun, Pathfinder 2e, and Call of Cthulhu, complete with system-tailored mechanics, UI color themes, and automatic category folder sorting.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 shrink-0">
-            {currentUser ? (
-              <>
-                <button
-                  onClick={() => onCreateNewCharacter('character')}
-                  className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
-                >
-                  <Plus className="w-5 h-5" />
-                  <span>Create Character</span>
-                </button>
-
-                <button
-                  onClick={onEnterGame}
-                  className="px-5 py-3 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-2xl transition flex items-center justify-center gap-2 font-bold cursor-pointer"
-                >
-                  <span>Open Active Sheet</span>
-                  <ChevronRight className="w-5 h-5 text-amber-400" />
-                </button>
-              </>
-            ) : (
+      {/* System Selector Cards */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h3 className="font-serif font-bold text-xl text-stone-200 flex items-center gap-2">
+            <Layers className="w-5 h-5 text-amber-500" /> Choose TRPG Ruleset & Active System
+          </h3>
+          <div className="flex items-center gap-2">
+            {onOpenSystemSelector && (
               <button
-                onClick={onOpenAuthModal}
-                className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                type="button"
+                onClick={onOpenSystemSelector}
+                className="text-xs text-amber-400 hover:text-amber-300 font-mono font-bold flex items-center gap-1.5 bg-stone-900 border border-stone-800 hover:border-amber-500/40 px-3 py-1.5 rounded-xl transition cursor-pointer"
               >
-                <Lock className="w-5 h-5" />
-                <span>Sign In / Enter Guest Mode</span>
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Change Active Systems ({enabledSystems.length}/5)</span>
               </button>
             )}
           </div>
         </div>
-      </div>
 
-      {/* System Selector Cards */}
-      <div className="space-y-4">
-        <h3 className="font-serif font-bold text-xl text-stone-200 flex items-center gap-2">
-          <Layers className="w-5 h-5 text-amber-500" /> Choose TRPG Ruleset & Active System
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* System Card 1: D&D 5e / 3.5e */}
-          <button
-            onClick={() => handleSelectSystemCard('dnd')}
-            className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
-              selectedSystem === 'dnd'
-                ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/50 shadow-xl'
-                : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
-                <Shield className="w-6 h-6" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* System Card 1: D&D 5e */}
+          {enabledSystems.includes('5e') && (
+            <button
+              type="button"
+              onClick={() => handleSelectEdition('5e')}
+              className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                selectedSystem === 'dnd' && selectedEdition === '5e'
+                  ? 'bg-amber-950/60 border-amber-500 ring-2 ring-amber-500/50 shadow-xl'
+                  : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="p-3 rounded-xl border bg-amber-500/10 border-amber-500/30 text-amber-400">
+                  <Shield className="w-6 h-6" />
+                </div>
+                {activeSystem === 'dnd' && currentEdition === '5e' ? (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase flex items-center gap-1 shadow bg-amber-400 text-stone-950 border-amber-300">
+                    <CheckCircle2 className="w-3 h-3" /> ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase bg-amber-950/80 text-amber-300 border-amber-500/30">
+                    Fantasy Theme
+                  </span>
+                )}
               </div>
-              {activeSystem === 'dnd' ? (
-                <span className="text-[10px] bg-amber-400 text-stone-950 font-mono font-bold px-2 py-0.5 rounded border border-amber-300 uppercase flex items-center gap-1 shadow">
-                  <CheckCircle2 className="w-3 h-3" /> ACTIVE
-                </span>
-              ) : (
-                <span className="text-[10px] bg-amber-950/80 text-amber-300 font-mono font-bold px-2 py-0.5 rounded border border-amber-500/30 uppercase">
-                  Fantasy Theme
-                </span>
-              )}
-            </div>
 
-            <div>
-              <h3 className="font-serif font-bold text-lg text-amber-200">Dungeons & Dragons</h3>
-              <p className="text-xs text-stone-400 mt-1">
-                Supports 5th Edition (5e) and 3.5 Edition (3.5e) with full stats, AC breakdown & spell slots.
-              </p>
-            </div>
+              <div>
+                <h3 className="font-serif font-bold text-lg text-amber-200">
+                  D&D 5th Edition
+                </h3>
+                <p className="text-xs text-stone-400 mt-1">
+                  Modern 5e ruleset with proficiency scaling, Advantage/Disadvantage, and spell slots.
+                </p>
+              </div>
 
-            <div className="text-[11px] font-mono text-amber-400 flex items-center justify-between pt-2 border-t border-stone-800">
-              <span>5e & 3.5e Rulesets</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </button>
+              <div className="text-[11px] font-mono flex items-center justify-between pt-2 border-t border-stone-800 text-amber-400">
+                <span>5e Ruleset</span>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+          )}
+
+          {/* System Card 2: D&D 3.5e */}
+          {enabledSystems.includes('3.5e') && (
+            <button
+              type="button"
+              onClick={() => handleSelectEdition('3.5e')}
+              className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                selectedSystem === 'dnd' && selectedEdition === '3.5e'
+                  ? 'bg-rose-950/60 border-rose-500 ring-2 ring-rose-500/50 shadow-xl'
+                  : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="p-3 rounded-xl border bg-rose-500/10 border-rose-500/30 text-rose-400">
+                  <Shield className="w-6 h-6" />
+                </div>
+                {activeSystem === 'dnd' && currentEdition === '3.5e' ? (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase flex items-center gap-1 shadow bg-rose-500 text-stone-950 border-rose-300">
+                    <CheckCircle2 className="w-3 h-3" /> ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border uppercase bg-rose-950/80 text-rose-300 border-rose-500/30">
+                    Classic d20 Theme
+                  </span>
+                )}
+              </div>
+
+              <div>
+                <h3 className="font-serif font-bold text-lg text-rose-200">
+                  D&D 3.5 Edition
+                </h3>
+                <p className="text-xs text-stone-400 mt-1">
+                  Classic 3.5e d20 ruleset with Fortitude/Reflex/Will saves, skill points & tactical combat stats.
+                </p>
+              </div>
+
+              <div className="text-[11px] font-mono flex items-center justify-between pt-2 border-t border-stone-800 text-rose-400">
+                <span>3.5e Ruleset</span>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+          )}
 
           {/* System Card 2: Shadowrun */}
-          <button
-            onClick={() => handleSelectSystemCard('shadowrun')}
-            className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
-              selectedSystem === 'shadowrun'
-                ? 'bg-cyan-950/60 border-cyan-500 ring-2 ring-cyan-500/50 shadow-xl'
-                : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
-                <Cpu className="w-6 h-6" />
+          {enabledSystems.includes('shadowrun') && (
+            <button
+              onClick={() => handleSelectSystemCard('shadowrun')}
+              className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                selectedSystem === 'shadowrun'
+                  ? 'bg-cyan-950/60 border-cyan-500 ring-2 ring-cyan-500/50 shadow-xl'
+                  : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-xl text-cyan-400">
+                  <Cpu className="w-6 h-6" />
+                </div>
+                {activeSystem === 'shadowrun' ? (
+                  <span className="text-[10px] bg-cyan-400 text-stone-950 font-mono font-bold px-2 py-0.5 rounded border border-cyan-300 uppercase flex items-center gap-1 shadow">
+                    <CheckCircle2 className="w-3 h-3" /> ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-cyan-950/80 text-cyan-300 font-mono font-bold px-2 py-0.5 rounded border border-cyan-500/30 uppercase">
+                    Cyber Theme
+                  </span>
+                )}
               </div>
-              {activeSystem === 'shadowrun' ? (
-                <span className="text-[10px] bg-cyan-400 text-stone-950 font-mono font-bold px-2 py-0.5 rounded border border-cyan-300 uppercase flex items-center gap-1 shadow">
-                  <CheckCircle2 className="w-3 h-3" /> ACTIVE
-                </span>
-              ) : (
-                <span className="text-[10px] bg-cyan-950/80 text-cyan-300 font-mono font-bold px-2 py-0.5 rounded border border-cyan-500/30 uppercase">
-                  Cyber Theme
-                </span>
-              )}
-            </div>
 
-            <div>
-              <h3 className="font-serif font-bold text-lg text-cyan-200">Shadowrun</h3>
-              <p className="text-xs text-stone-400 mt-1">
-                Futuristic cyberpunk RPG featuring cyberware, decking, rigging, and Matrix operations.
-              </p>
-            </div>
+              <div>
+                <h3 className="font-serif font-bold text-lg text-cyan-200">Shadowrun</h3>
+                <p className="text-xs text-stone-400 mt-1">
+                  Futuristic cyberpunk RPG featuring cyberware, decking, rigging, and Matrix operations.
+                </p>
+              </div>
 
-            <div className="text-[11px] font-mono text-cyan-400 flex items-center justify-between pt-2 border-t border-stone-800">
-              <span>Cyberpunk System</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </button>
+              <div className="text-[11px] font-mono text-cyan-400 flex items-center justify-between pt-2 border-t border-stone-800">
+                <span>Cyberpunk System</span>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+          )}
 
           {/* System Card 3: Pathfinder 2e */}
-          <button
-            onClick={() => handleSelectSystemCard('pathfinder')}
-            className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
-              selectedSystem === 'pathfinder'
-                ? 'bg-purple-950/60 border-purple-500 ring-2 ring-purple-500/50 shadow-xl'
-                : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-400">
-                <BookOpen className="w-6 h-6" />
+          {enabledSystems.includes('pathfinder') && (
+            <button
+              onClick={() => handleSelectSystemCard('pathfinder')}
+              className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                selectedSystem === 'pathfinder'
+                  ? 'bg-purple-950/60 border-purple-500 ring-2 ring-purple-500/50 shadow-xl'
+                  : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="p-3 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-400">
+                  <BookOpen className="w-6 h-6" />
+                </div>
+                {activeSystem === 'pathfinder' ? (
+                  <span className="text-[10px] bg-purple-400 text-stone-950 font-mono font-bold px-2 py-0.5 rounded border border-purple-300 uppercase flex items-center gap-1 shadow">
+                    <CheckCircle2 className="w-3 h-3" /> ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-purple-950/80 text-purple-300 font-mono font-bold px-2 py-0.5 rounded border border-purple-500/30 uppercase">
+                    Arcane Theme
+                  </span>
+                )}
               </div>
-              {activeSystem === 'pathfinder' ? (
-                <span className="text-[10px] bg-purple-400 text-stone-950 font-mono font-bold px-2 py-0.5 rounded border border-purple-300 uppercase flex items-center gap-1 shadow">
-                  <CheckCircle2 className="w-3 h-3" /> ACTIVE
-                </span>
-              ) : (
-                <span className="text-[10px] bg-purple-950/80 text-purple-300 font-mono font-bold px-2 py-0.5 rounded border border-purple-500/30 uppercase">
-                  Arcane Theme
-                </span>
-              )}
-            </div>
 
-            <div>
-              <h3 className="font-serif font-bold text-lg text-purple-200">Pathfinder 2e</h3>
-              <p className="text-xs text-stone-400 mt-1">
-                Tactical fantasy RPG powered by a versatile 3-action economy and rich character customization.
-              </p>
-            </div>
+              <div>
+                <h3 className="font-serif font-bold text-lg text-purple-200">Pathfinder 2e</h3>
+                <p className="text-xs text-stone-400 mt-1">
+                  Tactical fantasy RPG powered by a versatile 3-action economy and rich character customization.
+                </p>
+              </div>
 
-            <div className="text-[11px] font-mono text-purple-400 flex items-center justify-between pt-2 border-t border-stone-800">
-              <span>Fantasy System</span>
-              <ChevronRight className="w-4 h-4" />
-            </div>
-          </button>
+              <div className="text-[11px] font-mono text-purple-400 flex items-center justify-between pt-2 border-t border-stone-800">
+                <span>Fantasy System</span>
+                <ChevronRight className="w-4 h-4" />
+              </div>
+            </button>
+          )}
 
           {/* System Card 4: Call of Cthulhu */}
-          <button
-            onClick={() => handleSelectSystemCard('cthulhu')}
-            className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
-              selectedSystem === 'cthulhu'
-                ? 'bg-emerald-950/60 border-emerald-500 ring-2 ring-emerald-500/50 shadow-xl'
-                : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
-            }`}
-          >
-            <div className="flex items-start justify-between">
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">
-                <Skull className="w-6 h-6" />
+          {enabledSystems.includes('cthulhu') && (
+            <button
+              onClick={() => handleSelectSystemCard('cthulhu')}
+              className={`p-5 rounded-2xl border text-left transition flex flex-col justify-between space-y-4 relative overflow-hidden ${
+                selectedSystem === 'cthulhu'
+                  ? 'bg-emerald-950/60 border-emerald-500 ring-2 ring-emerald-500/50 shadow-xl'
+                  : 'bg-stone-900 border-stone-800 hover:border-stone-700 opacity-80 hover:opacity-100'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400">
+                  <Skull className="w-6 h-6" />
+                </div>
+                {activeSystem === 'cthulhu' ? (
+                  <span className="text-[10px] bg-emerald-400 text-stone-950 font-mono font-bold px-2 py-0.5 rounded border border-emerald-300 uppercase flex items-center gap-1 shadow">
+                    <CheckCircle2 className="w-3 h-3" /> ACTIVE
+                  </span>
+                ) : (
+                  <span className="text-[10px] bg-emerald-950/80 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30 uppercase">
+                    Horror Theme
+                  </span>
+                )}
               </div>
-              {activeSystem === 'cthulhu' ? (
-                <span className="text-[10px] bg-emerald-400 text-stone-950 font-mono font-bold px-2 py-0.5 rounded border border-emerald-300 uppercase flex items-center gap-1 shadow">
-                  <CheckCircle2 className="w-3 h-3" /> ACTIVE
-                </span>
-              ) : (
-                <span className="text-[10px] bg-emerald-950/80 text-emerald-300 font-mono font-bold px-2 py-0.5 rounded border border-emerald-500/30 uppercase">
-                  Horror Theme
-                </span>
-              )}
-            </div>
 
             <div>
               <h3 className="font-serif font-bold text-lg text-emerald-200">Call of Cthulhu</h3>
@@ -662,56 +716,78 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               <ChevronRight className="w-4 h-4" />
             </div>
           </button>
-        </div>
+        )}
       </div>
+    </div>
 
       {/* D&D Panel */}
       {selectedSystem === 'dnd' && (
-        <div className="bg-stone-900 border border-theme-accent rounded-3xl p-6 shadow-xl space-y-6">
+        <div className={`bg-stone-900 border rounded-3xl p-6 shadow-xl space-y-6 ${
+          selectedEdition === '3.5e' ? 'border-rose-500/60' : 'border-amber-500/60'
+        }`}>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-stone-800 pb-4">
             <div>
-              <h3 className="text-xl font-serif font-bold text-theme-text flex items-center gap-2">
-                <Shield className="w-5 h-5 text-theme-accent" /> Dungeons & Dragons Roster
+              <h3 className={`text-xl font-serif font-bold flex items-center gap-2 ${
+                selectedEdition === '3.5e' ? 'text-rose-200' : 'text-amber-200'
+              }`}>
+                <Shield className={`w-5 h-5 ${selectedEdition === '3.5e' ? 'text-rose-400' : 'text-amber-400'}`} />
+                {selectedEdition === '3.5e' ? 'Dungeons & Dragons 3.5e Roster' : 'Dungeons & Dragons 5e Roster'}
               </h3>
               <p className="text-xs text-stone-400">
-                Switch between 5e and 3.5e ruleset editions below to change rule mechanics & color theme.
+                {enabledSystems.includes('5e') && enabledSystems.includes('3.5e')
+                  ? 'Switch between 5e and 3.5e ruleset editions below to change rule mechanics & color theme.'
+                  : selectedEdition === '3.5e'
+                  ? 'Classic 3.5 Edition d20 ruleset with Fortitude/Reflex/Will saves, skill points & tactical combat stats.'
+                  : 'Modern 5th Edition d20 ruleset with proficiency scaling and spell slots.'}
               </p>
             </div>
 
             {/* Edition Toggle */}
             <div className="flex items-center gap-1 bg-stone-950 p-1 rounded-xl border border-stone-800">
-              <button
-                onClick={() => handleSelectEdition('5e')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-serif font-bold transition ${
-                  selectedEdition === '5e'
-                    ? 'bg-theme-accent text-stone-950 shadow-md'
-                    : 'text-stone-400 hover:text-stone-200'
-                }`}
-              >
-                D&D 5th Edition (5e)
-              </button>
-              <button
-                onClick={() => handleSelectEdition('3.5e')}
-                className={`px-4 py-1.5 rounded-lg text-xs font-serif font-bold transition ${
-                  selectedEdition === '3.5e'
-                    ? 'bg-theme-accent text-stone-950 shadow-md'
-                    : 'text-stone-400 hover:text-stone-200'
-                }`}
-              >
-                D&D 3.5 Edition (3.5e)
-              </button>
+              {enabledSystems.includes('5e') && (
+                <button
+                  onClick={() => handleSelectEdition('5e')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-serif font-bold transition ${
+                    selectedEdition === '5e'
+                      ? 'bg-amber-500 text-stone-950 shadow-md'
+                      : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  D&D 5th Edition (5e)
+                </button>
+              )}
+              {enabledSystems.includes('3.5e') && (
+                <button
+                  onClick={() => handleSelectEdition('3.5e')}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-serif font-bold transition ${
+                    selectedEdition === '3.5e'
+                      ? 'bg-rose-500 text-stone-950 shadow-md'
+                      : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  D&D 3.5 Edition (3.5e)
+                </button>
+              )}
             </div>
           </div>
 
           {renderFolderSystemView(
             characters.filter(c => (c.edition || '5e') === selectedEdition),
-            {
-              accentBorder: 'border-amber-500',
-              accentBg: 'bg-amber-950/40',
-              accentText: 'text-amber-300',
-              primaryBtn: 'bg-stone-800 hover:bg-amber-600 hover:text-stone-950 text-stone-200',
-              playBtnLabel: 'Play'
-            }
+            selectedEdition === '3.5e'
+              ? {
+                  accentBorder: 'border-rose-500',
+                  accentBg: 'bg-rose-950/40',
+                  accentText: 'text-rose-300',
+                  primaryBtn: 'bg-stone-800 hover:bg-rose-600 hover:text-stone-950 text-stone-200',
+                  playBtnLabel: 'Play'
+                }
+              : {
+                  accentBorder: 'border-amber-500',
+                  accentBg: 'bg-amber-950/40',
+                  accentText: 'text-amber-300',
+                  primaryBtn: 'bg-stone-800 hover:bg-amber-600 hover:text-stone-950 text-stone-200',
+                  playBtnLabel: 'Play'
+                }
           )}
         </div>
       )}

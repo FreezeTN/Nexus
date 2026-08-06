@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { AbilityName, CharacterData, ClassFeature, Feat, Skill } from '../../types';
+import { CollapsibleBox } from '../common/CollapsibleBox';
 import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { ShadowrunStatsPanel } from '../shadowrun/ShadowrunStatsPanel';
 import { ShadowrunSkillsPanel } from '../shadowrun/ShadowrunSkillsPanel';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
 import { LevelProgressionModal } from '../modals/LevelProgressionModal';
+import { TransformationModal } from '../modals/TransformationModal';
 import {
   getAbilityModifier,
   formatModifier,
@@ -103,6 +105,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   const [showAddFeatureModal, setShowAddFeatureModal] = useState(false);
   const [showAddFeatModal, setShowAddFeatModal] = useState(false);
   const [showLevelProgressionModal, setShowLevelProgressionModal] = useState(false);
+  const [showTransformationModal, setShowTransformationModal] = useState(false);
 
   // New Feature Form state
   const [newFeatureName, setNewFeatureName] = useState('');
@@ -529,6 +532,14 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setShowTransformationModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-950/90 hover:bg-purple-900 text-purple-200 border border-purple-500/60 rounded-xl text-xs font-bold transition shadow-md cursor-pointer"
+              title="Open Transformation Engine (Wild Shape, Polymorph, Lycanthropy, Natural Weapons)"
+            >
+              <span>🐾</span>
+              <span>{character.activeTransformation ? `Form: ${character.activeTransformation.form.name}` : 'Transformation Engine'}</span>
+            </button>
             <button
               onClick={() => setShowLevelProgressionModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/90 hover:bg-amber-900 text-amber-200 border border-amber-500/50 rounded-xl text-xs font-bold transition shadow-md"
@@ -1603,18 +1614,20 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
       {/* SECTION 3: Skills & Features Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column (5 cols): D&D Skills List (5e vs 3.5e) */}
-        <div className="lg:col-span-5 bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-5 shadow-xl">
-          <div className="flex items-center justify-between mb-3 border-b border-stone-800 pb-2">
-            <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-base">
-              <Shield className="w-5 h-5 text-amber-500" />
-              <span>Skills ({character.edition === '3.5e' ? '3.5e Ranks System' : '5e Proficiency System'})</span>
-            </div>
-            {character.edition !== '3.5e' && (
-              <div className="text-xs text-stone-400 font-mono">
-                Prof: <span className="text-purple-300 font-bold">+{profBonus}</span>
-              </div>
-            )}
-          </div>
+        <div className="lg:col-span-5">
+          <CollapsibleBox
+            title={`Skills (${character.edition === '3.5e' ? '3.5e Ranks System' : '5e Proficiency System'})`}
+            icon={<Shield className="w-5 h-5 text-amber-500" />}
+            storageKey="sheet1_skills"
+            headerExtra={
+              character.edition !== '3.5e' ? (
+                <div className="text-xs text-stone-400 font-mono">
+                  Prof: <span className="text-purple-300 font-bold">+{profBonus}</span>
+                </div>
+              ) : undefined
+            }
+          >
+            <div className="space-y-1.5 pt-2">
 
           {/* 3.5e Skill Point Calculator Summary Panel */}
           {character.edition === '3.5e' && (() => {
@@ -1814,27 +1827,28 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 </div>
               );
             })}
-          </div>
+            </div>
+            </div>
+          </CollapsibleBox>
         </div>
 
         {/* Right Column (7 cols): Class Features & Feats */}
         <div className="lg:col-span-7 space-y-6">
           {/* Class Features Box */}
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-3 border-b border-stone-800 pb-2">
-              <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-base">
-                <Zap className="w-5 h-5 text-amber-500" />
-                <span>Class Features</span>
-              </div>
+          <CollapsibleBox
+            title="Class Features"
+            icon={<Zap className="w-5 h-5 text-amber-500" />}
+            storageKey="sheet1_features"
+            headerExtra={
               <button
                 onClick={() => setShowAddFeatureModal(true)}
                 className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/80 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Feature
               </button>
-            </div>
-
-            <div className="space-y-3">
+            }
+          >
+            <div className="space-y-3 pt-2">
               {character.classFeatures.length === 0 ? (
                 <p className="text-xs text-stone-500 italic py-2">No class features recorded yet.</p>
               ) : (
@@ -1890,24 +1904,23 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 ))
               )}
             </div>
-          </div>
+          </CollapsibleBox>
 
           {/* Feats Box */}
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-5 shadow-xl">
-            <div className="flex items-center justify-between mb-3 border-b border-stone-800 pb-2">
-              <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-base">
-                <Star className="w-5 h-5 text-amber-500" />
-                <span>Feats</span>
-              </div>
+          <CollapsibleBox
+            title="Feats"
+            icon={<Star className="w-5 h-5 text-amber-500" />}
+            storageKey="sheet1_feats"
+            headerExtra={
               <button
                 onClick={() => setShowAddFeatModal(true)}
                 className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/80 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Add Feat
               </button>
-            </div>
-
-            <div className="space-y-3">
+            }
+          >
+            <div className="space-y-3 pt-2">
               {character.feats.length === 0 ? (
                 <p className="text-xs text-stone-500 italic py-2">No feats added yet.</p>
               ) : (
@@ -1930,10 +1943,10 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 ))
               )}
             </div>
-          </div>
+          </CollapsibleBox>
         </div>
       </div>
-      </>
+        </>
       )}
 
       {/* MODAL: Add Class Feature */}
@@ -2239,6 +2252,16 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
         <LevelProgressionModal
           character={character}
           onClose={() => setShowLevelProgressionModal(false)}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* Transformation & Wild Shape Engine Modal */}
+      {showTransformationModal && (
+        <TransformationModal
+          isOpen={showTransformationModal}
+          onClose={() => setShowTransformationModal(false)}
+          character={character}
           onUpdateCharacter={onUpdateCharacter}
         />
       )}

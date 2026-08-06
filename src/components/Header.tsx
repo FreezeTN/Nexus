@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CharacterData, RuleEdition } from '../types';
+import { TabId } from './Navigation';
 import { getPassivePerception, getProficiencyBonus, formatModifier, convertCharacterEdition, getEffectiveSpeed, getArmorClassBreakdown, getCombinedLevel, getActiveClassChoice, isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../data/monsterPortraits';
 import { getXpProgressDetails } from '../data/levelProgressionData';
@@ -46,8 +47,13 @@ import {
   Sword,
   Cloud,
   Lock,
-  Pencil
+  Pencil,
+  SlidersHorizontal,
+  Volume2,
+  VolumeX,
+  Settings
 } from 'lucide-react';
+import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -57,7 +63,7 @@ interface BeforeInstallPromptEvent extends Event {
 
 interface HeaderProps {
   characters: CharacterData[];
-  activeCharacter: CharacterData;
+  activeCharacter?: CharacterData | null;
   partiesCount?: number;
   onOpenPartyManager?: () => void;
   onOpenSessionLobby?: () => void;
@@ -74,6 +80,10 @@ interface HeaderProps {
   currentUser?: UserProfile | null;
   onOpenAuthModal?: () => void;
   presenceMap?: Record<string, CharacterPresence>;
+  enabledSystems?: RuleEdition[];
+  onOpenSystemSelector?: () => void;
+  onOpenAudioModal?: () => void;
+  activeTab?: TabId;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -94,11 +104,15 @@ export const Header: React.FC<HeaderProps> = ({
   edition,
   currentUser,
   onOpenAuthModal,
-  presenceMap = {}
+  presenceMap = {},
+  enabledSystems,
+  onOpenSystemSelector,
+  onOpenAudioModal,
+  activeTab
 }) => {
+  const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
-  const [showConvertModal, setShowConvertModal] = useState<boolean>(false);
   const [showPwaModal, setShowPwaModal] = useState<boolean>(false);
   const [showStatblockModal, setShowStatblockModal] = useState<boolean>(false);
   const [showLevelModal, setShowLevelModal] = useState<boolean>(false);
@@ -106,9 +120,13 @@ export const Header: React.FC<HeaderProps> = ({
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
   const [hpDelta, setHpDelta] = useState<string>('');
   const [showMaxHpInspector, setShowMaxHpInspector] = useState<boolean>(false);
-  const effectiveMaxHp = getEffectiveMaxHp(activeCharacter);
 
-  const xpProgressDetails = getXpProgressDetails(activeCharacter.experiencePoints || 0, activeCharacter.level || 1);
+  const effectiveMaxHp = activeCharacter ? getEffectiveMaxHp(activeCharacter) : 0;
+  const xpProgressDetails = activeCharacter ? getXpProgressDetails(activeCharacter.experiencePoints || 0, activeCharacter.level || 1) : null;
+  const currentEdition = edition || activeCharacter?.edition || '5e';
+  const profBonus = activeCharacter ? getProficiencyBonus(activeCharacter.level) : 2;
+  const passivePerception = activeCharacter ? getPassivePerception(activeCharacter) : 10;
+  const speedInfo = activeCharacter ? getEffectiveSpeed(activeCharacter) : { baseSpeed: 30, effectiveSpeed: 30, isModified: false, speedPenalty: 0, reasons: [] };
 
   useEffect(() => {
     // Detect if already installed / running in standalone window
@@ -131,8 +149,6 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const currentEdition = edition || activeCharacter.edition || '5e';
-
   const handleTriggerInstall = async () => {
     if (deferredPrompt) {
       await deferredPrompt.prompt();
@@ -146,11 +162,8 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const profBonus = getProficiencyBonus(activeCharacter.level);
-  const passivePerception = getPassivePerception(activeCharacter);
-  const speedInfo = getEffectiveSpeed(activeCharacter);
-
   const handleApplyHpChange = (type: 'heal' | 'damage' | 'temp') => {
+    if (!activeCharacter) return;
     const amount = parseInt(hpDelta) || (type === 'heal' || type === 'damage' ? 1 : 0);
     if (amount <= 0 && type !== 'temp') return;
 
@@ -234,6 +247,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const handleShortRest = () => {
+    if (!activeCharacter) return;
     if (isCharacterDead(activeCharacter)) {
       alert(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life.`);
       setShowRestModal(null);
@@ -256,6 +270,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const handleLongRest = () => {
+    if (!activeCharacter) return;
     if (isCharacterDead(activeCharacter)) {
       alert(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life. Magic such as Revivify, Raise Dead, or manual HP edit is required.`);
       setShowRestModal(null);
@@ -338,24 +353,23 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
               {/* Compact Mobile Edition Toggle */}
               <div className="flex md:hidden items-center bg-stone-950 p-0.5 rounded border border-theme-accent text-[10px]">
-                <button
-                  onClick={() => handleEditionChange('5e')}
-                  className={`px-1.5 py-0.5 rounded font-bold ${currentEdition === '5e' ? 'bg-amber-500 text-stone-950' : 'text-stone-400'}`}
-                >
-                  5e
-                </button>
-                <button
-                  onClick={() => handleEditionChange('3.5e')}
-                  className={`px-1.5 py-0.5 rounded font-bold ${currentEdition === '3.5e' ? 'bg-rose-500 text-stone-950' : 'text-stone-400'}`}
-                >
-                  3.5e
-                </button>
-                <button
-                  onClick={() => handleEditionChange('shadowrun')}
-                  className={`px-1.5 py-0.5 rounded font-bold ${currentEdition === 'shadowrun' ? 'bg-cyan-500 text-stone-950' : 'text-stone-400'}`}
-                >
-                  SR
-                </button>
+                {[
+                  { id: '5e' as RuleEdition, label: '5e' },
+                  { id: '3.5e' as RuleEdition, label: '3.5e' },
+                  { id: 'shadowrun' as RuleEdition, label: 'SR' },
+                  { id: 'pathfinder' as RuleEdition, label: 'PF' },
+                  { id: 'cthulhu' as RuleEdition, label: 'CoC' },
+                ]
+                  .filter(sys => !enabledSystems || enabledSystems.includes(sys.id))
+                  .map(sys => (
+                    <button
+                      key={sys.id}
+                      onClick={() => handleEditionChange(sys.id)}
+                      className={`px-1.5 py-0.5 rounded font-bold ${currentEdition === sys.id ? 'bg-amber-500 text-stone-950' : 'text-stone-400'}`}
+                    >
+                      {sys.label}
+                    </button>
+                  ))}
               </div>
             </div>
             <div className="flex items-center gap-2 mt-0.5">
@@ -368,20 +382,22 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               ) : (
                 (() => {
-                  const isPlayerRole = currentUser.role === 'Player';
+                  const isPlayerRole = !currentUser || currentUser.role === 'Player';
                   const currentUserId = currentUser.uid || 'guest_player';
 
-                  const activePortrait = activeCharacter.portraitUrl || (activeCharacter.isMonster ? getMonsterPortraitUrl(activeCharacter.name, activeCharacter.id) : undefined);
+                  const activePortrait = activeCharacter ? (activeCharacter.portraitUrl || (activeCharacter.isMonster ? getMonsterPortraitUrl(activeCharacter.name, activeCharacter.id) : undefined)) : undefined;
                   const systemChars = characters.filter((c) => (c.edition || '5e') === currentEdition);
-                  const dropdownList = systemChars.some((c) => c.id === activeCharacter.id)
-                    ? systemChars
-                    : [activeCharacter, ...systemChars.filter((c) => c.id !== activeCharacter.id)];
+                  const dropdownList = activeCharacter
+                    ? (systemChars.some((c) => c.id === activeCharacter.id)
+                        ? systemChars
+                        : [activeCharacter, ...systemChars.filter((c) => c.id !== activeCharacter.id)])
+                    : systemChars;
 
                   const playerChars = dropdownList.filter((c) => !c.isMonster && !c.isVendor);
                   const monsterChars = dropdownList.filter((c) => c.isMonster);
                   const merchantChars = dropdownList.filter((c) => c.isVendor && !c.isMonster);
 
-                  const activePresence = presenceMap[activeCharacter.id];
+                  const activePresence = activeCharacter ? presenceMap[activeCharacter.id] : undefined;
                   const activeDmIsHere = !!activePresence?.dmActive;
 
                   return (
@@ -389,7 +405,7 @@ export const Header: React.FC<HeaderProps> = ({
                       {activePortrait && (
                         <img
                           src={activePortrait}
-                          alt={activeCharacter.name}
+                          alt={activeCharacter?.name || ''}
                           className="w-8 h-8 rounded-lg object-cover border border-amber-500/60 shadow shrink-0"
                           referrerPolicy="no-referrer"
                           onError={(e) => {
@@ -400,10 +416,11 @@ export const Header: React.FC<HeaderProps> = ({
                         />
                       )}
                       <select
-                        value={activeCharacter.id}
+                        value={activeCharacter?.id || ''}
                         onChange={(e) => onSelectCharacter(e.target.value)}
                         className="bg-stone-800 border border-stone-700 hover:border-theme-accent rounded-lg px-3 py-1 font-serif text-lg font-bold text-theme-text focus:outline-none focus:ring-2 focus:ring-theme-accent max-w-[260px] sm:max-w-none truncate"
                       >
+                        <option value="">-- Select a Character --</option>
                         {playerChars.length > 0 && (
                           <optgroup label="🧙 Player Characters">
                             {playerChars.map((char) => {
@@ -416,13 +433,20 @@ export const Header: React.FC<HeaderProps> = ({
                               const presence = presenceMap[char.id];
                               const activeUserId = presence?.activeUserId;
                               const activeUserName = presence?.activeUserName || 'Player';
-                              const isLockedByOtherPlayer = isPlayerRole && !!activeUserId && activeUserId !== currentUserId;
+                              const activeUserRole = presence?.activeUserRole;
+                              const dmUserId = presence?.dmUserId;
+
+                              const isLockedByOtherPlayer = isPlayerRole && 
+                                !!activeUserId && 
+                                activeUserId !== currentUserId && 
+                                activeUserId !== dmUserId && 
+                                activeUserRole !== 'DM';
                               const isCharDmActive = !!presence?.dmActive;
 
                               let lockOrActiveLabel = '';
                               if (isLockedByOtherPlayer) {
                                 lockOrActiveLabel = ` [🔒 Active: ${activeUserName}]`;
-                              } else if (activeUserId && activeUserId !== currentUserId) {
+                              } else if (activeUserId && activeUserId !== currentUserId && activeUserId !== dmUserId && activeUserRole !== 'DM') {
                                 lockOrActiveLabel = ` [Active: ${activeUserName}]`;
                               }
 
@@ -443,7 +467,7 @@ export const Header: React.FC<HeaderProps> = ({
                           </optgroup>
                         )}
 
-                        {monsterChars.length > 0 && (
+                        {!isPlayerRole && monsterChars.length > 0 && (
                           <optgroup label="👹 Monsters & Encounter Creatures">
                             {monsterChars.map((char) => (
                               <option key={char.id} value={char.id}>
@@ -453,7 +477,7 @@ export const Header: React.FC<HeaderProps> = ({
                           </optgroup>
                         )}
 
-                        {merchantChars.length > 0 && (
+                        {!isPlayerRole && merchantChars.length > 0 && (
                           <optgroup label="🏪 Merchants & Shopkeepers">
                             {merchantChars.map((char) => (
                               <option key={char.id} value={char.id}>
@@ -491,7 +515,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {currentUser && onOpenPartyManager && (
+              {currentUser && activeCharacter && onOpenPartyManager && (
                 <button
                   onClick={onOpenPartyManager}
                   className="px-2.5 py-1.5 bg-purple-950/80 hover:bg-purple-900/90 active:scale-95 text-purple-200 border border-purple-600/60 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
@@ -531,24 +555,14 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
-              {currentUser && (
-                <>
-                  <button
-                    onClick={() => setShowConvertModal(true)}
-                    className="p-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-cyan-400 border border-stone-700 rounded-lg transition cursor-pointer"
-                    title={`Convert ${activeCharacter.name} to another TRPG system`}
-                  >
-                    <RefreshCw className="w-5 h-5" />
-                  </button>
-
-                  <button
-                    onClick={() => setShowDeleteModal(true)}
-                    className="p-1.5 bg-stone-800 hover:bg-rose-950/80 hover:border-rose-600 active:scale-95 text-stone-400 hover:text-rose-300 border border-stone-700 rounded-lg transition cursor-pointer"
-                    title={`Delete ${activeCharacter.name}`}
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </>
+              {showCharacterHeader && (
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="p-1.5 bg-stone-800 hover:bg-rose-950/80 hover:border-rose-600 active:scale-95 text-stone-400 hover:text-rose-300 border border-stone-700 rounded-lg transition cursor-pointer"
+                  title={`Delete ${activeCharacter?.name}`}
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
               )}
             </div>
           </div>
@@ -569,23 +583,36 @@ export const Header: React.FC<HeaderProps> = ({
                 { id: 'shadowrun' as RuleEdition, label: 'Shadowrun' },
                 { id: 'pathfinder' as RuleEdition, label: 'Pathfinder' },
                 { id: 'cthulhu' as RuleEdition, label: 'Cthulhu' },
-              ].map((sys) => (
-                <button
-                  key={sys.id}
-                  onClick={() => handleEditionChange(sys.id)}
-                  className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
-                    currentEdition === sys.id
-                      ? 'bg-theme-accent text-stone-950 shadow'
-                      : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
-                  }`}
-                >
-                  {sys.label}
-                </button>
-              ))}
+              ]
+                .filter(sys => !enabledSystems || enabledSystems.includes(sys.id))
+                .map((sys) => (
+                  <button
+                    key={sys.id}
+                    onClick={() => handleEditionChange(sys.id)}
+                    className={`px-2 py-0.5 rounded text-[11px] font-bold transition ${
+                      currentEdition === sys.id
+                        ? 'bg-theme-accent text-stone-950 shadow'
+                        : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800'
+                    }`}
+                  >
+                    {sys.label}
+                  </button>
+                ))}
             </div>
+
+            {onOpenSystemSelector && (
+              <button
+                type="button"
+                onClick={onOpenSystemSelector}
+                className="ml-1 p-1 hover:bg-stone-800 text-amber-400 hover:text-amber-300 rounded transition cursor-pointer border border-stone-800"
+                title="Configure / Filter Enabled TRPG Systems"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
-          {currentUser && (
+          {showCharacterHeader && (
             <>
               {activeCharacter.isVendor && (
                 <div className="bg-theme-dark border border-theme-accent px-3 py-1.5 rounded-lg text-theme-text font-bold flex items-center gap-1.5 shadow-md">
@@ -625,7 +652,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : (
                   <span className="font-mono font-bold text-sm text-stone-100">{activeCharacter.level}</span>
                 )}
-                {xpProgressDetails.canLevelUp && (
+                {xpProgressDetails?.canLevelUp && (
                   <span className="px-1.5 py-0.5 bg-emerald-500 text-stone-950 font-mono font-bold text-[10px] rounded-full animate-pulse ml-1">
                     LEVEL UP!
                   </span>
@@ -637,7 +664,7 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Rest, Export, Import Action Controls */}
         <div className="flex items-center gap-2">
-          {currentUser && (
+          {showCharacterHeader && (
             <>
               <button
                 onClick={() => setShowRestModal('short')}
@@ -662,33 +689,46 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">7d</span>
                 )}
               </button>
-
-              {onOpenSessionLobby && (
-                <button
-                  onClick={onOpenSessionLobby}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow ${
-                    activeSession
-                      ? 'bg-amber-950/90 hover:bg-amber-900 border border-amber-500 text-amber-200 animate-pulse'
-                      : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-amber-300'
-                  }`}
-                  title="Open Multiplayer Campaign Session Lobby & 6-Digit Room Code"
-                >
-                  <Users className={`w-4 h-4 ${activeSession ? 'text-emerald-400' : 'text-amber-400'}`} />
-                  {activeSession ? (
-                    <>
-                      <span>Room: <strong className="font-mono text-amber-300">{activeSession.code}</strong></span>
-                      <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono font-extrabold">
-                        {activeSession.members?.length || 1} Live
-                      </span>
-                    </>
-                  ) : (
-                    <span>Session Lobby</span>
-                  )}
-                </button>
-              )}
-
-              <div className="h-5 w-px bg-stone-800 my-auto" />
             </>
+          )}
+
+          {currentUser && onOpenSessionLobby && (
+            <button
+              onClick={onOpenSessionLobby}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow ${
+                activeSession
+                  ? 'bg-amber-950/90 hover:bg-amber-900 border border-amber-500 text-amber-200 animate-pulse'
+                  : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-amber-300'
+              }`}
+              title="Open Multiplayer Campaign Session Lobby & 6-Digit Room Code"
+            >
+              <Users className={`w-4 h-4 ${activeSession ? 'text-emerald-400' : 'text-amber-400'}`} />
+              {activeSession ? (
+                <>
+                  <span>Room: <strong className="font-mono text-amber-300">{activeSession.code}</strong></span>
+                  <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono font-extrabold">
+                    {activeSession.members?.length || 1} Live
+                  </span>
+                </>
+              ) : (
+                <span>Session Lobby</span>
+              )}
+            </button>
+          )}
+
+          {onOpenAudioModal && (
+            <button
+              onClick={onOpenAudioModal}
+              className={`p-2 rounded-lg border transition text-xs flex items-center gap-1.5 shadow ${
+                isSoundEnabled()
+                  ? 'bg-stone-800 hover:bg-stone-700 text-amber-300 border-stone-700'
+                  : 'bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-800/80'
+              }`}
+              title="Options (Sound & App Settings)"
+            >
+              <Settings className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline font-bold">Options</span>
+            </button>
           )}
 
           <button
@@ -708,39 +748,21 @@ export const Header: React.FC<HeaderProps> = ({
             </span>
           </button>
 
-          {currentUser && (
-            <>
-              <button
-                onClick={() => setShowStatblockModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition shadow"
-                title="Open Printable Statblock & JSON Backup Manager"
-              >
-                <BookOpen className="w-4 h-4 text-amber-400" />
-                <span className="hidden sm:inline font-serif font-bold">Statblock & Backup</span>
-              </button>
-
-              <button
-                onClick={onExportJson}
-                className="p-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg border border-stone-700 transition"
-                title="Export Character JSON"
-              >
-                <Download className="w-4 h-4" />
-              </button>
-
-              <label
-                className="p-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg border border-stone-700 transition cursor-pointer"
-                title="Import Character JSON"
-              >
-                <Upload className="w-4 h-4" />
-                <input type="file" accept=".json" onChange={onImportJson} className="hidden" />
-              </label>
-            </>
+          {currentUser && showCharacterHeader && (
+            <button
+              onClick={() => setShowStatblockModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition shadow"
+              title="Open Printable Statblock View"
+            >
+              <BookOpen className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline font-serif font-bold">Printable Statblock</span>
+            </button>
           )}
         </div>
       </div>
 
       {/* Vitals & Combat Quick Status Strip */}
-      {currentUser && (
+      {showCharacterHeader && (
         <div className="bg-stone-950/80 border-t border-stone-800 py-2.5 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
           {/* Quick HP Status with Animated Orb below Rest options */}
@@ -955,7 +977,7 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       {/* Rest & Recovery Modal */}
-      {showRestModal && createPortal(
+      {showRestModal && activeCharacter && createPortal(
         <RestModal
           character={activeCharacter}
           onClose={() => setShowRestModal(null)}
@@ -966,7 +988,7 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       {/* Delete Character Confirm Modal */}
-      {showDeleteModal && createPortal(
+      {showDeleteModal && activeCharacter && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-stone-900 border border-rose-800/60 rounded-2xl p-6 max-w-md w-full shadow-2xl text-stone-100">
             <div className="flex items-center gap-3 text-rose-400 text-lg font-serif font-bold mb-2">
@@ -1004,84 +1026,7 @@ export const Header: React.FC<HeaderProps> = ({
         document.body
       )}
 
-      {/* Convert Ruleset Modal */}
-      {showConvertModal && createPortal(
-        <div className="fixed inset-0 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-stone-900 border border-theme-accent rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-stone-800 pb-3 shrink-0">
-              <h3 className="text-lg font-serif font-bold text-theme-text flex items-center gap-2">
-                <RefreshCw className="w-5 h-5 text-theme-accent" />
-                Convert {activeCharacter.name}'s Ruleset
-              </h3>
-              <button
-                onClick={() => setShowConvertModal(false)}
-                className="text-stone-400 hover:text-stone-200 text-sm font-bold p-1"
-              >
-                ✕
-              </button>
-            </div>
 
-            <p className="text-xs text-stone-300 leading-relaxed shrink-0">
-              Converting rulesets adapts <strong className="text-theme-text">{activeCharacter.name}</strong> to your target TRPG mechanics while preserving equipment, backstory, notes, and portrait data.
-            </p>
-
-            <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 min-h-0">
-              {[
-                { id: '5e' as RuleEdition, title: 'D&D 5th Edition (5e)', desc: 'Standard 5e stats, proficiency bonuses, and 18 skills.' },
-                { id: '3.5e' as RuleEdition, title: 'D&D 3.5 Edition (3.5e)', desc: 'Base Attack Bonus (BAB), Fort/Ref/Will saves, Touch AC, and 30+ skill ranks.' },
-                { id: 'shadowrun' as RuleEdition, title: 'Shadowrun', desc: 'Cyberware, Essence, Matrix/Decking, Physical/Stun monitors, Nuyen & Karma.' },
-                { id: 'pathfinder' as RuleEdition, title: 'Pathfinder 2e', desc: '3-Action combat, proficiency ranks, and tactical fantasy features.' },
-                { id: 'cthulhu' as RuleEdition, title: 'Call of Cthulhu (7e)', desc: 'Sanity points, Eldritch horror tracking, and d100 skill percentiles.' },
-              ].map((edition) => {
-                const isCurrent = (activeCharacter.edition || '5e') === edition.id;
-
-                return (
-                  <button
-                    key={edition.id}
-                    disabled={isCurrent}
-                    onClick={() => {
-                      const updated = convertCharacterEdition(activeCharacter, edition.id);
-                      onUpdateCharacter(updated);
-                      if (onSystemChange) {
-                        onSystemChange(edition.id);
-                      }
-                      setShowConvertModal(false);
-                    }}
-                    className={`w-full p-3 rounded-xl border text-left transition flex items-center justify-between ${
-                      isCurrent
-                        ? 'bg-stone-950 border-stone-800 opacity-50 cursor-not-allowed'
-                        : 'bg-stone-950/80 hover:bg-stone-950 border-stone-800 hover:border-theme-accent text-stone-200 hover:text-white'
-                    }`}
-                  >
-                    <div>
-                      <div className="font-serif font-bold text-sm flex items-center gap-2">
-                        <span>{edition.title}</span>
-                        {isCurrent && (
-                          <span className="text-[10px] bg-stone-800 text-amber-400 font-mono font-bold px-2 py-0.5 rounded">
-                            CURRENT
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-stone-400 mt-0.5">{edition.desc}</p>
-                    </div>
-                    {!isCurrent && <ChevronRight className="w-4 h-4 text-theme-accent shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-stone-800 shrink-0">
-              <button
-                onClick={() => setShowConvertModal(false)}
-                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-bold transition"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* PWA / Local App Installation Modal */}
       {showPwaModal && createPortal(
@@ -1171,17 +1116,19 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       {/* Statblock Export & Printable PDF Modal */}
-      <StatblockExportModal
-        character={activeCharacter}
-        characters={characters}
-        isOpen={showStatblockModal}
-        onClose={() => setShowStatblockModal(false)}
-        onExportJson={onExportJson}
-        onImportJson={onImportJson}
-      />
+      {showStatblockModal && activeCharacter && (
+        <StatblockExportModal
+          character={activeCharacter}
+          characters={characters}
+          isOpen={showStatblockModal}
+          onClose={() => setShowStatblockModal(false)}
+          onExportJson={onExportJson}
+          onImportJson={onImportJson}
+        />
+      )}
 
       {/* Level Progression & Character Advancement Modal */}
-      {showLevelModal && (
+      {showLevelModal && activeCharacter && (
         <LevelProgressionModal
           character={activeCharacter}
           onClose={() => setShowLevelModal(false)}
@@ -1190,7 +1137,7 @@ export const Header: React.FC<HeaderProps> = ({
       )}
 
       {/* Max HP Inspector Modal */}
-      {showMaxHpInspector && onUpdateCharacter && (
+      {showMaxHpInspector && activeCharacter && onUpdateCharacter && (
         <MaxHpInspectorModal
           isOpen={showMaxHpInspector}
           onClose={() => setShowMaxHpInspector(false)}

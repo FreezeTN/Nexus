@@ -22,21 +22,41 @@ import {
   Award,
   Swords,
   Cpu,
-  Skull
+  Skull,
+  Volume2,
+  VolumeX,
+  Radio,
+  History,
+  Crown,
+  Users,
+  CheckCircle2,
+  Zap,
+  RadioTower
 } from 'lucide-react';
 
 interface Sheet6UserGuideProps {
   edition?: RuleEdition;
+  enabledSystems?: RuleEdition[];
 }
 
-export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e' }) => {
+export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
+  edition = '5e',
+  enabledSystems
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState<string>('all');
-  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'conversion'>(edition);
+  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'conversion' | 'audio' | 'changelog'>(edition);
 
   useEffect(() => {
-    setGuideEdition(edition);
-  }, [edition]);
+    if (guideEdition === 'conversion' || guideEdition === 'audio' || guideEdition === 'changelog') return;
+    if (enabledSystems && enabledSystems.length > 0) {
+      if (!enabledSystems.includes(guideEdition as RuleEdition)) {
+        setGuideEdition(enabledSystems[0]);
+      }
+    } else {
+      setGuideEdition(edition);
+    }
+  }, [edition, enabledSystems]);
 
   // 5e Guide Data
   const guideSections5e = [
@@ -112,7 +132,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
       description: 'Manage 5e characters, portrait URLs, import/export backups, and trigger rests.',
       items: [
         {
-          name: 'Character Switcher',
+          name: 'Character Switcher & Main Menu',
           action: 'Top Left Dropdown / Main Menu',
           detail: 'Switch instantly between stored 5e characters. All character state is automatically saved to your browser local storage.'
         },
@@ -123,8 +143,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
         },
         {
           name: 'JSON Export & Import',
-          action: 'Export / Import Buttons in Header',
-          detail: 'Download your character sheet as a `.json` backup file or load previously exported character sheets to move between devices.'
+          action: 'Options Modal (⚙️) → Character Tab',
+          detail: 'When logged in, open the Options modal (⚙️) and select the Character tab to import `.json` backups or export active character sheets.'
         },
         {
           name: 'Short Rest & Long Rest',
@@ -137,14 +157,19 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
           detail: 'Rolls a d20 + your DEX initiative modifier and logs the result directly to the Floating Dice Roller.'
         },
         {
-          name: 'DM Active Presence Indicator',
+          name: 'DM Active Presence & Unlocked Player Access',
           action: '👑 DM Active Header Banner',
-          detail: 'Displays a live crown indicator whenever a Dungeon Master is actively managing or viewing this character sheet in real time.'
+          detail: 'Displays a live crown indicator whenever a Dungeon Master is actively managing or viewing this character sheet. DM presence does NOT block players from selecting or controlling the character. Selection is locked only when another active Player occupies the character slot.'
         },
         {
-          name: 'Death Saving Throws & Stabilization',
+          name: 'Audio & Sound Effects Options',
+          action: '🔊 Sound Status in Header / Main Menu',
+          detail: 'Opens the Audio Options modal to adjust Master Volume (0-100%), toggle Master Mute, select volume presets (25%, 50%, 75%, Max), and test all 12 procedural Web Audio API sound effects.'
+        },
+        {
+          name: 'Death Saving Throws & Permanent Death',
           action: 'Combat Sheet Death Save Tracker',
-          detail: 'When at 0 HP, roll death saving throws. 3 Successes (or a Natural 20) automatically restores 1 HP so the character can act again and resets death saves. Taking damage while at 0 HP automatically adds 1 Death Save Failure (3 Failures = Character Death).'
+          detail: 'When at 0 HP, roll death saving throws. 3 Successes (or a Natural 20) automatically restores 1 HP so the character can act again and resets death saves. Accumulating 3 Failures results in Permanent Death: HP is locked to 0, labeled "DEAD", and standard rests are disabled until Revive spells (e.g. Revivify) are cast.'
         }
       ]
     },
@@ -405,12 +430,22 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
         {
           name: '3.5e Ruleset Badge & Conversion',
           action: 'Header Edition Badge / Switcher',
-          detail: 'Shows active D&D 3.5e system tag. You can convert any character between 3.5e and 5e rulesets in the top-right header menu.'
+          detail: 'Shows active D&D 3.5e system tag. You can convert any character between rulesets in the Options modal (⚙️) under the Character tab.'
         },
         {
           name: 'Base Attack Bonus (BAB)',
           action: 'Header Vitals Bar',
           detail: 'In 3.5e, Base Attack Bonus (BAB) replaces Proficiency Bonus and scales based on class progression (Full, 3/4, or 1/2 BAB).'
+        },
+        {
+          name: 'DM Active Presence & Unlocked Player Selection',
+          action: '👑 DM Active Indicator',
+          detail: 'DM active presence on a character sheet displays a live crown badge but does NOT lock player selection. Players can select and play characters concurrently with the DM.'
+        },
+        {
+          name: 'Audio & Sound Options Control',
+          action: '🔊 Header / Main Menu / Dice Roller',
+          detail: 'Adjust Master Volume (0-100%), toggle Master Mute, and preview all 12 procedural sound effects.'
         },
         {
           name: 'Custom Portrait & HP Calculation Mode',
@@ -748,8 +783,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
       items: [
         {
           name: 'How to Convert Any Character',
-          action: 'Click <RefreshCw> in Top Header or System Switcher',
-          detail: 'Click the Convert button (<RefreshCw>) next to your character name in the header menu. Select your target system to convert instantly.'
+          action: 'Options Modal (⚙️) → Character Tab',
+          detail: 'Open the Options modal (⚙️), navigate to the Character tab (visible when logged in and a character is selected), and choose your target TRPG system to convert instantly.'
         },
         {
           name: 'D&D 5e ↔ D&D 3.5e Conversion',
@@ -775,6 +810,173 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
     }
   ];
 
+  // Audio & Sound Engine Guide Data
+  const guideSectionsAudio = [
+    {
+      id: 'audio-overview',
+      title: 'Procedural Web Audio Engine & Sound Options',
+      icon: Volume2,
+      color: 'text-amber-400',
+      description: 'Master volume slider, volume presets, sound effect triggers, and sound preferences.',
+      items: [
+        {
+          name: 'Master Volume & Mute Controls',
+          action: 'Header Sound Button / Main Menu',
+          detail: 'Click the Sound Status indicator in the top header, Main Menu ("Sound Options"), or Floating Dice Roller ("Options") to open the Audio Options modal. Adjust master volume from 0% to 100% or toggle master mute.'
+        },
+        {
+          name: '1-Click Volume Presets',
+          action: 'Mute, 25%, 50%, 75%, Max 100%',
+          detail: 'Quickly set master volume level using pre-configured volume preset buttons in the Audio Options modal.'
+        },
+        {
+          name: '12 Procedural Synthesized Sound Effects',
+          action: 'Interactive Live Sound Previews',
+          detail: 'Features real-time Web Audio synthesis for 12 dynamic triggers: Dice Rolls, Weapon Hit, Critical Hit Chime, Miss/Parry Whoosh, Fire Roar, Cold Shimmer, Lightning Thunder, Acid Sizzle, Healing Arpeggio, Spell Cast, Level Up Fanfare, and Death Bell.'
+        },
+        {
+          name: 'Persistent Sound Storage',
+          action: 'Browser Local Storage',
+          detail: 'Volume settings and mute toggles are saved automatically in your browser and restored across sessions.'
+        }
+      ]
+    }
+  ];
+
+  // App Release Notes & Version History Changelog Data
+  const changelogData = [
+    {
+      version: 'v2.5.0',
+      date: 'August 2026',
+      title: 'DM Presence Unlocking, Options Control & Spellbook Enhancements',
+      badge: 'Latest Release',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      highlights: [
+        {
+          category: '👑 DM Active Presence Unlocking',
+          detail: 'Dungeon Master active presence on a character sheet no longer locks players out. Players can select and control characters concurrently while the DM manages or views them. Character selection is locked only when another Player is active on that character slot.'
+        },
+        {
+          category: '⚙️ Options Menu & Character Management',
+          detail: 'Moved Character Import (.json), Export (.json), and TRPG Ruleset Conversion into the unified "Options" modal (⚙️) under a dedicated "Character" tab (accessible when logged in / character selected).'
+        },
+        {
+          category: '🔮 Ascending & Descending Spell Level Sorting',
+          detail: 'Players can now sort spells ascending (Cantrips → Level 9) or descending (Level 9 → Cantrips), by Name (A-Z / Z-A), or Magic School across both Daily Spells and Spellbook views.'
+        },
+        {
+          category: '✨ Strict Spellbook Uniqueness Protection',
+          detail: 'Spells in a character\'s spellbook stay strictly unique by Name and Effect. Prevents duplicate spell entries when adding custom spells, selecting official 5e presets, or importing from the Compendium.'
+        },
+        {
+          category: '🌐 English UI Standardization',
+          detail: 'Standardized all UI labels and section headings across the spell management tabs to pure English expressions.'
+        },
+        {
+          category: '💾 Persistent Sound Preferences',
+          detail: 'Master volume level and mute state are saved automatically to browser local storage and applied instantly across all dice rolls, attacks, spells, and combat events.'
+        },
+        {
+          category: '📘 User Manual & Changelog Integration',
+          detail: 'Updated User Guide with dedicated Audio & Sound section, DM non-locking presence guidelines, and an integrated Version Changelog timeline.'
+        }
+      ]
+    },
+    {
+      version: 'v2.4.0',
+      date: 'July 2026',
+      title: 'Procedural Sound Synthesizer & Max HP Inspector',
+      badge: 'Major Feature',
+      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      highlights: [
+        {
+          category: '🎶 Procedural Web Audio Engine',
+          detail: 'Synthesizes 12 real-time audio effects (Dice Roll, Weapon Hit, Critical Hit Chime, Miss/Parry Whoosh, Fire Roar, Cold Shimmer, Lightning Thunder, Acid Sizzle, Healing Arpeggio, Spell Cast, Level Up Fanfare, Death Bell) using pure Web Audio API oscillators without external asset downloads.'
+        },
+        {
+          category: '🩸 Max Hit Point Breakdown Inspector',
+          detail: 'Click Max HP in Header or Combat Sheet to open an interactive modal breaking down Base HP, Tough feat bonuses, equipped item bonuses, Aid spell modifiers, and Exhaustion Level 4+ halving.'
+        },
+        {
+          category: '💀 Death Saving Throws & Revive Spells',
+          detail: '3 Death Save failures result in Permanent Death (rest disables HP regeneration). Casting Revivify, Raise Dead, or Resurrection automatically revives dead characters.'
+        }
+      ]
+    },
+    {
+      version: 'v2.3.0',
+      date: 'June 2026',
+      title: 'Multi-TRPG Systems & Instant Conversion',
+      badge: 'Core Platform',
+      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+      highlights: [
+        {
+          category: '⚔️ 5 Popular TRPG Systems',
+          detail: 'Full native support for D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, and Call of Cthulhu 7e.'
+        },
+        {
+          category: '🔄 Zero Data Loss Conversion',
+          detail: '1-click character conversion between all 5 systems preserving inventory, backstory, custom weapons, portrait links, and notes.'
+        },
+        {
+          category: '💻 Shadowrun Cyberpunk Panels',
+          detail: 'Cyberdeck Matrix stats, condition monitors, cyberware grade multipliers (Standard, Alpha, Beta, Delta), and drone/vehicle rigging.'
+        }
+      ]
+    },
+    {
+      version: 'v2.2.0',
+      date: 'May 2026',
+      title: 'Firebase Live Sessions & Party Manager',
+      badge: 'Multiplayer',
+      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+      highlights: [
+        {
+          category: '🌐 Live Session Lobby',
+          detail: 'Host or join online party rooms using room codes, sync character stats in real time, and share dice roll logs across players.'
+        },
+        {
+          category: '👥 Adventuring Party Manager',
+          detail: 'Group characters into parties, view collective HP pool, track average passive perception, and launch entire parties into combat encounters.'
+        }
+      ]
+    },
+    {
+      version: 'v2.1.0',
+      date: 'April 2026',
+      title: 'Encounter Tracker & Attack Resolver',
+      badge: 'Combat Engine',
+      badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+      highlights: [
+        {
+          category: '🎯 Target AC Attack Resolver',
+          detail: 'Select enemy targets in combat, roll attacks against target AC, and apply damage automatically.'
+        },
+        {
+          category: '🗡️ Encounter Tracker',
+          detail: 'Manage initiative order, track status conditions, and calculate monster defeat XP.'
+        }
+      ]
+    },
+    {
+      version: 'v2.0.0',
+      date: 'March 2026',
+      title: 'UI Modernization & Animated HP Orb',
+      badge: 'Initial Release',
+      badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
+      highlights: [
+        {
+          category: '🎨 Liquid Vitality Orb',
+          detail: 'Dynamic color-coded liquid HP orb (Green 75-100%, Yellow 49-74%, Red <49%) with smooth wave animation.'
+        },
+        {
+          category: '📖 SRD Rules Compendium & JSON Backups',
+          detail: 'Search official SRD rules library, export and import character sheets as `.json` backup files.'
+        }
+      ]
+    }
+  ];
+
   const currentGuideSections = guideEdition === 'shadowrun'
     ? guideSectionsShadowrun
     : guideEdition === 'pathfinder'
@@ -783,6 +985,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
     ? guideSectionsCthulhu
     : guideEdition === 'conversion'
     ? guideSectionsConversion
+    : guideEdition === 'audio'
+    ? guideSectionsAudio
     : guideEdition === '3.5e'
     ? guideSections35e
     : guideSections5e;
@@ -807,6 +1011,19 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
     return null;
   }).filter(Boolean);
 
+  const filteredChangelog = changelogData.filter(entry => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      entry.version.toLowerCase().includes(query) ||
+      entry.title.toLowerCase().includes(query) ||
+      entry.date.toLowerCase().includes(query) ||
+      entry.highlights.some(
+        h => h.category.toLowerCase().includes(query) || h.detail.toLowerCase().includes(query)
+      )
+    );
+  });
+
   return (
     <div className="space-y-6 pb-16">
       {/* Banner Intro & Edition Switcher */}
@@ -830,6 +1047,10 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
                 ? 'Call of Cthulhu 7e Horror Guide'
                 : guideEdition === 'conversion'
                 ? 'TRPG System Conversion Guide'
+                : guideEdition === 'audio'
+                ? 'Procedural Web Audio Engine & Sound Options'
+                : guideEdition === 'changelog'
+                ? 'Application Release Notes & Version History'
                 : guideEdition === '3.5e'
                 ? 'D&D 3.5 Edition (3.5e) Guide'
                 : 'D&D 5th Edition (5e) Guide'}
@@ -843,69 +1064,83 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
                 ? 'Complete manual for Call of Cthulhu 7e mechanics: d100 percentile skills, Sanity points (SAN), Bouts of Madness, and Eldritch horror tracking.'
                 : guideEdition === 'conversion'
                 ? 'Comprehensive guide on converting characters seamlessly between D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, and Call of Cthulhu with zero data loss.'
+                : guideEdition === 'audio'
+                ? 'Comprehensive guide to the built-in procedural Web Audio synthesizer, master volume slider, volume presets, sound effect triggers, and sound preferences.'
+                : guideEdition === 'changelog'
+                ? 'Complete version history log of features, enhancements, bug fixes, system expansions, and UI updates.'
                 : guideEdition === '3.5e'
                 ? 'Complete manual for D&D 3.5e mechanics: Base Attack Bonus (BAB), Touch AC, Flat-Footed AC, Fort/Ref/Will Base Saves, 3.5e Skill Point Calculator, and Class Skill checkboxes.'
                 : 'Complete manual for D&D 5e mechanics: Proficiency bonus, 18 skills, Advantage/Disadvantage, death saves, spell slots, and character management.'}
             </p>
           </div>
 
-          {/* Edition Selection Toggle Tabs */}
+          {/* Edition & View Selection Toggle Tabs */}
           <div className="bg-stone-950/90 p-1.5 rounded-2xl border border-amber-600/40 flex flex-wrap items-center gap-1.5 shrink-0 shadow-lg">
-            <button
-              onClick={() => setGuideEdition('5e')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                guideEdition === '5e'
-                  ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
-                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
-              }`}
-            >
-              <Award className="w-3.5 h-3.5" />
-              D&D 5e
-            </button>
-            <button
-              onClick={() => setGuideEdition('3.5e')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                guideEdition === '3.5e'
-                  ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
-                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
-              }`}
-            >
-              <Swords className="w-3.5 h-3.5" />
-              D&D 3.5e
-            </button>
-            <button
-              onClick={() => setGuideEdition('shadowrun')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                guideEdition === 'shadowrun'
-                  ? 'bg-cyan-500 text-stone-950 shadow-md ring-1 ring-cyan-300'
-                  : 'text-stone-400 hover:text-cyan-300 hover:bg-stone-900'
-              }`}
-            >
-              <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-              Shadowrun
-            </button>
-            <button
-              onClick={() => setGuideEdition('pathfinder')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                guideEdition === 'pathfinder'
-                  ? 'bg-purple-600 text-stone-950 shadow-md ring-1 ring-purple-300'
-                  : 'text-stone-400 hover:text-purple-300 hover:bg-stone-900'
-              }`}
-            >
-              <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-              Pathfinder
-            </button>
-            <button
-              onClick={() => setGuideEdition('cthulhu')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                guideEdition === 'cthulhu'
-                  ? 'bg-emerald-600 text-stone-950 shadow-md ring-1 ring-emerald-300'
-                  : 'text-stone-400 hover:text-emerald-300 hover:bg-stone-900'
-              }`}
-            >
-              <Skull className="w-3.5 h-3.5 text-emerald-400" />
-              Cthulhu
-            </button>
+            {(!enabledSystems || enabledSystems.includes('5e')) && (
+              <button
+                onClick={() => setGuideEdition('5e')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                  guideEdition === '5e'
+                    ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                }`}
+              >
+                <Award className="w-3.5 h-3.5" />
+                D&D 5e
+              </button>
+            )}
+            {(!enabledSystems || enabledSystems.includes('3.5e')) && (
+              <button
+                onClick={() => setGuideEdition('3.5e')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                  guideEdition === '3.5e'
+                    ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                }`}
+              >
+                <Swords className="w-3.5 h-3.5" />
+                D&D 3.5e
+              </button>
+            )}
+            {(!enabledSystems || enabledSystems.includes('shadowrun')) && (
+              <button
+                onClick={() => setGuideEdition('shadowrun')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                  guideEdition === 'shadowrun'
+                    ? 'bg-cyan-500 text-stone-950 shadow-md ring-1 ring-cyan-300'
+                    : 'text-stone-400 hover:text-cyan-300 hover:bg-stone-900'
+                }`}
+              >
+                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
+                Shadowrun
+              </button>
+            )}
+            {(!enabledSystems || enabledSystems.includes('pathfinder')) && (
+              <button
+                onClick={() => setGuideEdition('pathfinder')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                  guideEdition === 'pathfinder'
+                    ? 'bg-purple-600 text-stone-950 shadow-md ring-1 ring-purple-300'
+                    : 'text-stone-400 hover:text-purple-300 hover:bg-stone-900'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 text-purple-400" />
+                Pathfinder
+              </button>
+            )}
+            {(!enabledSystems || enabledSystems.includes('cthulhu')) && (
+              <button
+                onClick={() => setGuideEdition('cthulhu')}
+                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                  guideEdition === 'cthulhu'
+                    ? 'bg-emerald-600 text-stone-950 shadow-md ring-1 ring-emerald-300'
+                    : 'text-stone-400 hover:text-emerald-300 hover:bg-stone-900'
+                }`}
+              >
+                <Skull className="w-3.5 h-3.5 text-emerald-400" />
+                Cthulhu
+              </button>
+            )}
             <button
               onClick={() => setGuideEdition('conversion')}
               className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
@@ -916,6 +1151,28 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
             >
               <RefreshCw className="w-3.5 h-3.5 text-cyan-300" />
               System Conversion
+            </button>
+            <button
+              onClick={() => setGuideEdition('audio')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === 'audio'
+                  ? 'bg-amber-500 text-stone-950 shadow-md ring-1 ring-amber-300'
+                  : 'text-stone-400 hover:text-amber-300 hover:bg-stone-900'
+              }`}
+            >
+              <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+              Audio & Sound
+            </button>
+            <button
+              onClick={() => setGuideEdition('changelog')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                guideEdition === 'changelog'
+                  ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-300'
+                  : 'text-stone-400 hover:text-amber-300 hover:bg-stone-900'
+              }`}
+            >
+              <History className="w-3.5 h-3.5 text-amber-400" />
+              Changelog
             </button>
           </div>
         </div>
@@ -929,7 +1186,11 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${guideEdition} functions (e.g. roll, BAB, skill, hp)...`}
+                placeholder={
+                  guideEdition === 'changelog'
+                    ? 'Search release notes (e.g. v2.5.0, DM, audio)...'
+                    : `Search ${guideEdition} functions (e.g. roll, volume, skill, hp)...`
+                }
                 className="w-full bg-stone-950/90 border border-stone-800 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -943,131 +1204,192 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1">
-            <button
-              onClick={() => setActiveSection('all')}
-              className={`px-3 py-1.5 rounded-lg border font-medium transition ${
-                activeSection === 'all'
-                  ? 'bg-amber-600 border-amber-500 text-stone-950 font-bold shadow-md'
-                  : 'bg-stone-950/80 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
-              }`}
-            >
-              All Sections
-            </button>
-            {currentGuideSections.map((sec) => {
-              let shortTitle = sec.title.replace(' (5e)', '').replace(' (3.5e)', '');
-              if (sec.id.startsWith('formulas')) shortTitle = '📐 Formulas Breakdown';
-              if (sec.id === 'header-mgmt') shortTitle = 'Header & Management';
-              if (sec.id === 'sheet1-guide') shortTitle = 'Stats & Skills';
-              if (sec.id === 'sheet2-guide') shortTitle = 'Combat & Actions';
-              if (sec.id === 'sheet3-guide') shortTitle = 'Gear & Wealth';
-              if (sec.id === 'sheet4-guide') shortTitle = 'Spells & Casting';
-              if (sec.id === 'sheet5-guide') shortTitle = 'Description & Notes';
-              if (sec.id === 'dice-guide') shortTitle = 'Dice Roller';
+          {guideEdition !== 'changelog' && (
+            <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1">
+              <button
+                onClick={() => setActiveSection('all')}
+                className={`px-3 py-1.5 rounded-lg border font-medium transition ${
+                  activeSection === 'all'
+                    ? 'bg-amber-600 border-amber-500 text-stone-950 font-bold shadow-md'
+                    : 'bg-stone-950/80 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                }`}
+              >
+                All Sections
+              </button>
+              {currentGuideSections.map((sec) => {
+                let shortTitle = sec.title.replace(' (5e)', '').replace(' (3.5e)', '');
+                if (sec.id.startsWith('formulas')) shortTitle = '📐 Formulas Breakdown';
+                if (sec.id === 'header-mgmt') shortTitle = 'Header & Management';
+                if (sec.id === 'sheet1-guide') shortTitle = 'Stats & Skills';
+                if (sec.id === 'sheet2-guide') shortTitle = 'Combat & Actions';
+                if (sec.id === 'sheet3-guide') shortTitle = 'Gear & Wealth';
+                if (sec.id === 'sheet4-guide') shortTitle = 'Spells & Casting';
+                if (sec.id === 'sheet5-guide') shortTitle = 'Description & Notes';
+                if (sec.id === 'dice-guide') shortTitle = 'Dice Roller';
+                if (sec.id === 'audio-overview') shortTitle = '🔊 Audio & Sound';
 
-              return (
-                <button
-                  key={sec.id}
-                  onClick={() => setActiveSection(sec.id)}
-                  className={`px-3 py-1.5 rounded-lg border font-medium transition whitespace-nowrap ${
-                    activeSection === sec.id
-                      ? 'bg-amber-600 border-amber-500 text-stone-950 font-bold shadow-md'
-                      : 'bg-stone-950/80 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
-                  }`}
-                >
-                  {shortTitle}
-                </button>
-              );
-            })}
-          </div>
+                return (
+                  <button
+                    key={sec.id}
+                    onClick={() => setActiveSection(sec.id)}
+                    className={`px-3 py-1.5 rounded-lg border font-medium transition whitespace-nowrap ${
+                      activeSection === sec.id
+                        ? 'bg-amber-600 border-amber-500 text-stone-950 font-bold shadow-md'
+                        : 'bg-stone-950/80 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+                    }`}
+                  >
+                    {shortTitle}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Guide Sections Grid */}
-      <div className="space-y-6">
-        {filteredSections.map((section) => {
-          if (!section) return null;
-          if (activeSection !== 'all' && activeSection !== section.id) return null;
-
-          const IconComponent = section.icon;
-
-          return (
+      {/* Main Content Area: Changelog View vs Standard Functions Grid */}
+      {guideEdition === 'changelog' ? (
+        <div className="space-y-6">
+          {filteredChangelog.map((entry) => (
             <div
-              key={section.id}
-              className="bg-stone-900/90 border border-stone-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-4"
+              key={entry.version}
+              className="bg-stone-900/90 border border-stone-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-4 relative overflow-hidden"
             >
-              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800 pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-stone-950 border border-stone-800 rounded-xl">
-                    <IconComponent className={`w-5 h-5 ${section.color}`} />
+                  <div className="p-2.5 bg-stone-950 border border-stone-800 rounded-xl text-amber-400">
+                    <History className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-serif font-bold text-amber-200">
-                      {section.title}
-                    </h3>
-                    <p className="text-xs text-stone-400">{section.description}</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-serif font-bold text-amber-200">
+                        {entry.version}
+                      </h3>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${entry.badgeColor}`}>
+                        {entry.badge}
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-300 font-medium mt-0.5">{entry.title}</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-mono text-stone-500 bg-stone-950 px-2 py-1 rounded border border-stone-800">
-                  {section.items.length} Functions
+                <span className="text-xs font-mono text-stone-400 bg-stone-950 px-3 py-1 rounded-lg border border-stone-800 self-start sm:self-auto">
+                  {entry.date}
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {section.items.map((item, idx) => (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                {entry.highlights.map((item, idx) => (
                   <div
                     key={idx}
-                    className="bg-stone-950/70 border border-stone-800/80 rounded-xl p-3.5 space-y-1.5 hover:border-amber-600/40 transition group"
+                    className="bg-stone-950/70 border border-stone-800/80 rounded-xl p-3.5 space-y-1 hover:border-amber-600/40 transition"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-serif font-bold text-stone-100 text-xs group-hover:text-amber-300 transition">
-                        {item.name}
-                      </span>
-                      <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-stone-900 border border-stone-800 text-amber-400 rounded-full">
-                        {item.action}
-                      </span>
+                    <div className="flex items-center gap-2 text-xs font-serif font-bold text-amber-300">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{item.category}</span>
                     </div>
-                    <p className="text-[11px] text-stone-400 leading-relaxed">
+                    <p className="text-[11px] text-stone-400 leading-relaxed pl-5">
                       {item.detail}
                     </p>
                   </div>
                 ))}
               </div>
             </div>
-          );
-        })}
+          ))}
 
-        {filteredSections.length === 0 && (
-          <div className="bg-stone-900 border border-stone-800 rounded-2xl p-12 text-center text-stone-400 space-y-2">
-            <HelpCircle className="w-10 h-10 text-stone-600 mx-auto" />
-            <p className="text-sm font-bold text-stone-300">No matching functions found for {guideEdition}</p>
-            <p className="text-xs">Try adjusting your search term or switch guide edition.</p>
-          </div>
-        )}
-      </div>
+          {filteredChangelog.length === 0 && (
+            <div className="bg-stone-900 border border-stone-800 rounded-2xl p-12 text-center text-stone-400 space-y-2">
+              <HelpCircle className="w-10 h-10 text-stone-600 mx-auto" />
+              <p className="text-sm font-bold text-stone-300">No matching release notes found</p>
+              <p className="text-xs">Try adjusting your search query.</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {filteredSections.map((section) => {
+            if (!section) return null;
+            if (activeSection !== 'all' && activeSection !== section.id) return null;
+
+            const IconComponent = section.icon;
+
+            return (
+              <div
+                key={section.id}
+                className="bg-stone-900/90 border border-stone-800 rounded-2xl p-5 md:p-6 shadow-xl space-y-4"
+              >
+                <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-stone-950 border border-stone-800 rounded-xl">
+                      <IconComponent className={`w-5 h-5 ${section.color}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-serif font-bold text-amber-200">
+                        {section.title}
+                      </h3>
+                      <p className="text-xs text-stone-400">{section.description}</p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono text-stone-500 bg-stone-950 px-2 py-1 rounded border border-stone-800">
+                    {section.items.length} Functions
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {section.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-stone-950/70 border border-stone-800/80 rounded-xl p-3.5 space-y-1.5 hover:border-amber-600/40 transition group"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-serif font-bold text-stone-100 text-xs group-hover:text-amber-300 transition">
+                          {item.name}
+                        </span>
+                        <span className="text-[10px] font-mono font-semibold px-2 py-0.5 bg-stone-900 border border-stone-800 text-amber-400 rounded-full">
+                          {item.action}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-stone-400 leading-relaxed">
+                        {item.detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {filteredSections.length === 0 && (
+            <div className="bg-stone-900 border border-stone-800 rounded-2xl p-12 text-center text-stone-400 space-y-2">
+              <HelpCircle className="w-10 h-10 text-stone-600 mx-auto" />
+              <p className="text-sm font-bold text-stone-300">No matching functions found for {guideEdition}</p>
+              <p className="text-xs">Try adjusting your search term or switch guide edition.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Quick FAQ / Tips Box */}
       <div className="bg-stone-900/70 border border-amber-900/40 rounded-2xl p-6 shadow-xl space-y-4">
         <h4 className="text-base font-serif font-bold text-amber-300 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400" /> Pro Tips for {guideEdition} Players
+          <Sparkles className="w-4 h-4 text-amber-400" /> Pro Tips for {guideEdition === 'changelog' ? 'TRPG Players' : guideEdition}
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
           <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
             <div className="font-bold text-amber-200">💾 Automatic Local Persistence</div>
             <p className="text-stone-400 text-[11px]">
-              Every edit, roll history, custom attack, portrait link, and spell adjustment is automatically saved to your browser.
+              Every edit, roll history, custom attack, portrait link, audio preference, and spell adjustment is automatically saved to your browser.
             </p>
           </div>
           <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
             <div className="font-bold text-amber-200">🎲 Interactive Roll Triggers</div>
             <p className="text-stone-400 text-[11px]">
-              Click any d20 icon across Stats, Skills, Attacks, and Spells to trigger instant interactive rolls logged to your dice tray.
+              Click any d20 icon across Stats, Skills, Attacks, and Spells to trigger instant interactive rolls logged to your dice tray with audio feedback.
             </p>
           </div>
           <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
-            <div className="font-bold text-amber-200">🔄 Instant Edition Conversion</div>
+            <div className="font-bold text-amber-200">👑 Concurrent DM & Player Access</div>
             <p className="text-stone-400 text-[11px]">
-              You can convert any character between 3.5e and 5e rulesets in the top-right header menu at any time.
+              Dungeon Masters and Players can view and edit character sheets concurrently without locking each other out.
             </p>
           </div>
         </div>
@@ -1075,4 +1397,3 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({ edition = '5e'
     </div>
   );
 };
-

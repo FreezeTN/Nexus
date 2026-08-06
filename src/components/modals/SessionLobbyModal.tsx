@@ -36,7 +36,7 @@ interface SessionLobbyModalProps {
   onClose: () => void;
   currentUser: UserProfile | null;
   activeSession: GameSession | null;
-  activeCharacter: CharacterData;
+  activeCharacter?: CharacterData | null;
   allCharacters: CharacterData[];
   presenceMap?: Record<string, CharacterPresence>;
   onSessionChange: (sessionCode: string | null) => void;
@@ -332,11 +332,36 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                       {playerCharacters.length === 0 ? (
                         <option value="">No player characters found for active TRPG</option>
                       ) : (
-                        playerCharacters.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} (Lvl {c.level} {c.characterClass})
-                          </option>
-                        ))
+                        playerCharacters.map(c => {
+                          const presence = presenceMap[c.id];
+                          const activeUserId = presence?.activeUserId;
+                          const activeUserName = presence?.activeUserName || 'Player';
+                          const activeUserRole = presence?.activeUserRole;
+                          const dmUserId = presence?.dmUserId;
+                          const currentUserId = currentUser?.uid || 'guest_player';
+                          const isPlayerRole = !currentUser || currentUser.role === 'Player';
+
+                          const isLockedByOtherPlayer = isPlayerRole && 
+                            !!activeUserId && 
+                            activeUserId !== currentUserId && 
+                            activeUserId !== dmUserId && 
+                            activeUserRole !== 'DM';
+                          const isCharDmActive = !!presence?.dmActive;
+
+                          let label = `${c.name} (Lvl ${c.level} ${c.characterClass})`;
+                          if (isLockedByOtherPlayer) {
+                            label += ` [🔒 In Use: ${activeUserName}]`;
+                          }
+                          if (isCharDmActive) {
+                            label += ` [👑 DM Active]`;
+                          }
+
+                          return (
+                            <option key={c.id} value={c.id} disabled={isLockedByOtherPlayer}>
+                              {label}
+                            </option>
+                          );
+                        })
                       )}
                     </select>
                   </div>

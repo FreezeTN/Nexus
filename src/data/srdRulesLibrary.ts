@@ -2497,6 +2497,158 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
     ]
   },
   {
+    id: 'monster-5e-ghost',
+    name: 'Ghost',
+    race: 'Undead',
+    characterClass: 'Monster',
+    subclass: 'CR 4',
+    level: 5,
+    edition: '5e',
+    background: 'Medium Undead',
+    alignment: 'Any Alignment',
+    experiencePoints: 1100,
+    isMonster: true,
+    monsterXpReward: 1100,
+    sizeCategory: 'Medium',
+    hpMax: 45,
+    hpCurrent: 45,
+    armorClass: 11,
+    initiativeBonus: 1,
+    speed: 0,
+    hitDiceTotal: '10d8',
+    hitDiceCurrent: 10,
+    abilities: { STR: { score: 7 }, DEX: { score: 13 }, CON: { score: 10 }, INT: { score: 10 }, WIS: { score: 12 }, CHA: { score: 17 } },
+    attacks: [
+      { id: 'atk-gho-1', name: 'Withering Touch', attackBonus: 5, damage: '4d6 + 3', damageType: 'Necrotic', range: '5 ft Melee', notes: 'Corroding ethereal spectral attack' }
+    ],
+    classFeatures: [
+      { id: 'feat-gho-1', name: 'Ethereal Sight', source: 'Undead Trait', description: 'Can see 60 feet into the Ethereal Plane when on the Material Plane, and vice versa.' },
+      { id: 'feat-gho-2', name: 'Etherealness', source: 'Undead Action', description: 'Action: Enters the Border Ethereal from the Material Plane, or vice versa. Invisible on Material Plane unless seen with Ethereal Sight.' },
+      { id: 'feat-gho-3', name: 'Incorporeal Movement', source: 'Undead Trait', description: 'Can move through creatures and objects as if difficult terrain. Takes 1d10 force damage if ending turn inside object.' },
+      { id: 'feat-gho-4', name: 'Possession', source: 'Undead Action (Recharge 6)', description: 'Target humanoid within 5ft must succeed on DC 13 CHA save or be possessed by ghost.' }
+    ]
+  },
+  {
+    id: 'monster-5e-nightmare',
+    name: 'Nightmare',
+    race: 'Fiend',
+    characterClass: 'Monster',
+    subclass: 'CR 3',
+    level: 4,
+    edition: '5e',
+    background: 'Large Fiend',
+    alignment: 'Neutral Evil',
+    experiencePoints: 700,
+    isMonster: true,
+    monsterXpReward: 700,
+    sizeCategory: 'Large',
+    hpMax: 68,
+    hpCurrent: 68,
+    armorClass: 13,
+    initiativeBonus: 2,
+    speed: 60,
+    hitDiceTotal: '8d10+24',
+    hitDiceCurrent: 8,
+    abilities: { STR: { score: 18 }, DEX: { score: 15 }, CON: { score: 16 }, INT: { score: 10 }, WIS: { score: 13 }, CHA: { score: 15 } },
+    attacks: [
+      { id: 'atk-nmr-1', name: 'Hooves', attackBonus: 6, damage: '2d8 + 4 + 2d6', damageType: 'Bludgeoning + Fire', range: '5 ft Melee', notes: 'Flaming fiery hooves strike' }
+    ],
+    classFeatures: [
+      { id: 'feat-nmr-1', name: 'Ethereal Stride', source: 'Fiend Action', description: 'Action: Nightmare and up to 3 willing riders touching it magically teleport to the Ethereal Plane or back to the Material Plane!' },
+      { id: 'feat-nmr-2', name: 'Confer Fire Resistance', source: 'Fiend Trait', description: 'Grants Fire Resistance to any creature riding the Nightmare.' }
+    ]
+  },
+  {
+    id: 'monster-5e-succubus',
+    name: 'Succubus / Incubus',
+    race: 'Fiend',
+    characterClass: 'Monster',
+    subclass: 'CR 4',
+    level: 5,
+    edition: '5e',
+    background: 'Medium Fiend',
+    alignment: 'Neutral Evil',
+    experiencePoints: 1100,
+    isMonster: true,
+    monsterXpReward: 1100,
+    sizeCategory: 'Medium',
+    hpMax: 66,
+    hpCurrent: 66,
+    armorClass: 15,
+    initiativeBonus: 3,
+    speed: 30,
+    hitDiceTotal: '12d8+12',
+    hitDiceCurrent: 12,
+    abilities: { STR: { score: 8 }, DEX: { score: 17 }, CON: { score: 13 }, INT: { score: 15 }, WIS: { score: 12 }, CHA: { score: 20 } },
+    attacks: [
+      { id: 'atk-suc-1', name: 'Claw', attackBonus: 5, damage: '1d6 + 3', damageType: 'Slashing', range: '5 ft Melee' },
+      { id: 'atk-suc-2', name: 'Draining Kiss', attackBonus: 5, damage: '5d10 + 5', damageType: 'Psychic', range: '5 ft Melee', notes: 'Target max HP is reduced by damage taken until long rest' }
+    ],
+    classFeatures: [
+      { id: 'feat-suc-1', name: 'Etherealness', source: 'Fiend Action', description: 'Action: Enters the Border Ethereal from the Material Plane, or vice versa.' },
+      { id: 'feat-suc-2', name: 'Charm', source: 'Fiend Action', description: 'DC 15 WIS save or charmed for 1 day. Charmed target obeys succubus commands.' }
+    ]
+  },
+  {
+    id: 'monster-5e-ethereal-filcher',
+    name: 'Ethereal Filcher',
+    race: 'Aberration',
+    characterClass: 'Monster',
+    subclass: 'CR 3',
+    level: 4,
+    edition: '5e',
+    background: 'Medium Aberration',
+    alignment: 'Chaotic Neutral',
+    experiencePoints: 700,
+    isMonster: true,
+    monsterXpReward: 700,
+    sizeCategory: 'Medium',
+    hpMax: 39,
+    hpCurrent: 39,
+    armorClass: 16,
+    initiativeBonus: 3,
+    speed: 40,
+    hitDiceTotal: '6d8+12',
+    hitDiceCurrent: 6,
+    abilities: { STR: { score: 10 }, DEX: { score: 17 }, CON: { score: 14 }, INT: { score: 7 }, WIS: { score: 12 }, CHA: { score: 10 } },
+    attacks: [
+      { id: 'atk-efil-1', name: 'Bite', attackBonus: 5, damage: '1d4 + 3', damageType: 'Piercing', range: '5 ft Melee' },
+      { id: 'atk-efil-2', name: 'Snatch & Vanish', attackBonus: 5, damage: '0', damageType: 'Utility', range: '5 ft Melee', notes: 'DC 13 Sleight of Hand check to snatch a weapon, magic item, or gold pouch and instantly escape into Ethereal Plane!' }
+    ],
+    classFeatures: [
+      { id: 'feat-efil-1', name: 'Ethereal Jaunt', source: 'Aberration Trait', description: 'Bonus Action: Shifts from Material Plane to Ethereal Plane, or vice versa at will.' }
+    ]
+  },
+  {
+    id: 'monster-5e-blink-dog',
+    name: 'Blink Dog',
+    race: 'Fey',
+    characterClass: 'Monster',
+    subclass: 'CR 1/4',
+    level: 1,
+    edition: '5e',
+    background: 'Medium Fey',
+    alignment: 'Lawful Good',
+    experiencePoints: 50,
+    isMonster: true,
+    monsterXpReward: 50,
+    sizeCategory: 'Medium',
+    hpMax: 22,
+    hpCurrent: 22,
+    armorClass: 13,
+    initiativeBonus: 3,
+    speed: 40,
+    hitDiceTotal: '4d8+4',
+    hitDiceCurrent: 4,
+    abilities: { STR: { score: 12 }, DEX: { score: 17 }, CON: { score: 12 }, INT: { score: 10 }, WIS: { score: 13 }, CHA: { score: 11 } },
+    attacks: [
+      { id: 'atk-bdog-1', name: 'Bite', attackBonus: 5, damage: '1d6 + 3', damageType: 'Piercing', range: '5 ft Melee' }
+    ],
+    classFeatures: [
+      { id: 'feat-bdog-1', name: 'Teleport / Blink', source: 'Fey Action', description: 'Bonus Action: Teleports up to 40 ft to an unoccupied space, phasing briefly through the Border Ethereal.' }
+    ]
+  },
+  {
     id: 'monster-5e-flameskull',
     name: 'Flameskull',
     race: 'Undead',

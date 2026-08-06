@@ -10,6 +10,7 @@ import {
 } from '../../data/levelProgressionData';
 import { getAbilityModifier, formatModifier, getProficiencyBonus, getCombinedLevel, getActiveClassChoice, getPrimaryXp, getSecondaryXp, getUnallocatedXp } from '../../utils/dndCalculations';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
+import { playLevelUpSound } from '../../utils/diceAudio';
 import {
   TrendingUp,
   Award,
@@ -206,6 +207,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
   };
 
   const handleApplyLevelUp = () => {
+    playLevelUpSound();
     const hpGain = getEffectiveHpGain();
     const newMaxHp = character.hpMax + hpGain;
     const newCurrentHp = character.hpCurrent + hpGain;

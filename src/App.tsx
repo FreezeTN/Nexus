@@ -17,6 +17,8 @@ import { NewCharacterModal } from './components/modals/NewCharacterModal';
 import { PartyManagerModal } from './components/modals/PartyManagerModal';
 import { SessionLobbyModal } from './components/modals/SessionLobbyModal';
 import { AuthModal } from './components/modals/AuthModal';
+import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorModal';
+import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
 import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Crown } from 'lucide-react';
@@ -38,10 +40,35 @@ import {
 const STORAGE_KEY_CHARACTERS = 'dnd_app_characters_v5';
 const STORAGE_KEY_ACTIVE = 'dnd_app_active_id_v4';
 const STORAGE_KEY_PARTIES = 'dnd_app_parties_v1';
+const STORAGE_KEY_ENABLED_SYSTEMS = 'dnd_app_enabled_systems_v2';
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+
+  const [enabledSystems, setEnabledSystems] = useState<RuleEdition[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ENABLED_SYSTEMS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to load enabled TRPG systems from localStorage', e);
+    }
+    return ['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu'];
+  });
+
+  const [hasConfiguredSystems, setHasConfiguredSystems] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_ENABLED_SYSTEMS) !== null;
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const [showTRPGSelectorModal, setShowTRPGSelectorModal] = useState<boolean>(!hasConfiguredSystems);
+  const [showAudioModal, setShowAudioModal] = useState<boolean>(false);
 
   const [characters, setCharacters] = useState<CharacterData[]>(() => {
     try {
@@ -77,7 +104,7 @@ export default function App() {
     } catch (e) {
       console.error('Failed to load active ID from localStorage', e);
     }
-    return characters[0]?.id || SAMPLE_CHARACTERS[0].id;
+    return '';
   });
 
   const [activeTab, setActiveTab] = useState<TabId>('sheet1');
@@ -173,8 +200,35 @@ export default function App() {
   const [rollLogs, setRollLogs] = useState<DiceRollResult[]>([]);
   const [activeRollResult, setActiveRollResult] = useState<DiceRollResult | null>(null);
 
-  const activeCharacter = characters.find(c => c.id === activeCharacterId) || characters[0] || SAMPLE_CHARACTERS[0];
-  const currentSystemTheme: RuleEdition = previewTheme || activeCharacter.edition || '5e';
+  const activeCharacter = characters.find(c => c.id === activeCharacterId) || null;
+  const currentSystemTheme: RuleEdition = previewTheme || activeCharacter?.edition || '5e';
+
+  useEffect(() => {
+    if (!activeCharacter && ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5'].includes(activeTab)) {
+      setActiveTab('menu');
+    }
+  }, [activeCharacter, activeTab]);
+
+  const handleSaveTRPGSystems = (selected: RuleEdition[]) => {
+    setEnabledSystems(selected);
+    setHasConfiguredSystems(true);
+    setShowTRPGSelectorModal(false);
+    try {
+      localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(selected));
+    } catch (e) {
+      console.error('Failed to save enabled systems to localStorage', e);
+    }
+
+    if (!selected.includes(currentSystemTheme)) {
+      setPreviewTheme(selected[0]);
+    }
+    if (activeCharacter && !selected.includes(activeCharacter.edition || '5e')) {
+      const firstMatchingChar = characters.find(c => selected.includes(c.edition || '5e'));
+      if (firstMatchingChar) {
+        setActiveCharacterId(firstMatchingChar.id);
+      }
+    }
+  };
 
   // Firebase Auth & Cloud Sync Listener
   useEffect(() => {
@@ -335,9 +389,14 @@ export default function App() {
 
   const handleSelectCharacter = (id: string) => {
     setActiveCharacterId(id);
-    const target = characters.find(c => c.id === id);
-    if (target?.edition) {
-      setPreviewTheme(target.edition);
+    if (id) {
+      setActiveTab('sheet1');
+      const target = characters.find(c => c.id === id);
+      if (target?.edition) {
+        setPreviewTheme(target.edition);
+      }
+    } else {
+      setActiveTab('menu');
     }
   };
 
@@ -489,13 +548,14 @@ export default function App() {
   };
 
   const handleRollInitiative = () => {
+    if (!activeCharacter) return;
     handleRoll(`${activeCharacter.name} Initiative`, 20, 1, activeCharacter.initiativeBonus, 'normal');
   };
 
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 font-sans selection:bg-amber-600 selection:text-stone-950 transition-colors duration-300" data-theme={currentSystemTheme}>
       {/* Top DM Active Banner Indicator */}
-      {presenceMap[activeCharacter.id]?.dmActive && (
+      {activeCharacter && presenceMap[activeCharacter.id]?.dmActive && activeTab !== 'menu' && (
         <div className="bg-purple-950/90 border-b border-purple-600/60 text-purple-200 px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 shadow-lg animate-pulse">
           <Crown className="w-4 h-4 text-amber-400 fill-amber-400 shrink-0" />
           <span>
@@ -524,15 +584,20 @@ export default function App() {
         currentUser={currentUser}
         onOpenAuthModal={() => setShowAuthModal(true)}
         presenceMap={presenceMap}
+        enabledSystems={enabledSystems}
+        onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
+        onOpenAudioModal={() => setShowAudioModal(true)}
+        activeTab={activeTab}
       />
 
       {/* 5 Sheets Navigation Tab Bar */}
       <Navigation
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        isSpellcaster={activeCharacter.isSpellcaster}
+        isSpellcaster={activeCharacter?.isSpellcaster || false}
         edition={currentSystemTheme}
         currentUser={currentUser}
+        hasActiveCharacter={!!activeCharacter}
       />
 
       {/* Main Content Body */}
@@ -549,10 +614,13 @@ export default function App() {
             currentUser={currentUser}
             presenceMap={presenceMap}
             onOpenAuthModal={() => setShowAuthModal(true)}
+            enabledSystems={enabledSystems}
+            onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
+            onOpenAudioModal={() => setShowAudioModal(true)}
           />
         )}
 
-        {activeTab === 'sheet1' && (
+        {activeTab === 'sheet1' && activeCharacter && (
           <Sheet1StatsFeatures
             character={activeCharacter}
             currentUser={currentUser}
@@ -561,7 +629,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'sheet2' && (
+        {activeTab === 'sheet2' && activeCharacter && (
           <Sheet2Combat
             character={activeCharacter}
             allCharacters={characters}
@@ -574,7 +642,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'sheet3' && (
+        {activeTab === 'sheet3' && activeCharacter && (
           <Sheet3GearWealth
             character={activeCharacter}
             onUpdateCharacter={handleUpdateCharacter}
@@ -582,7 +650,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'sheet4' && (
+        {activeTab === 'sheet4' && activeCharacter && (
           <Sheet4Spells
             character={activeCharacter}
             allCharacters={characters}
@@ -593,7 +661,7 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'sheet5' && (
+        {activeTab === 'sheet5' && activeCharacter && (
           <Sheet5DescriptionNotes
             character={activeCharacter}
             onUpdateCharacter={handleUpdateCharacter}
@@ -601,7 +669,10 @@ export default function App() {
         )}
 
         {activeTab === 'sheet6' && (
-          <Sheet6UserGuide edition={currentSystemTheme} />
+          <Sheet6UserGuide
+            edition={currentSystemTheme}
+            enabledSystems={enabledSystems}
+          />
         )}
 
         {activeTab === 'sheet7' && (
@@ -611,6 +682,7 @@ export default function App() {
             onAddMonsterToRoster={(monster) => {
               setCharacters(prev => [...prev, monster]);
             }}
+            enabledSystems={enabledSystems}
           />
         )}
       </main>
@@ -621,6 +693,7 @@ export default function App() {
         onRoll={handleRoll}
         onClearLogs={() => setRollLogs([])}
         activeRollResult={activeRollResult}
+        onOpenAudioModal={() => setShowAudioModal(true)}
       />
 
       {/* New Character Modal */}
@@ -631,8 +704,18 @@ export default function App() {
           initialEdition={currentSystemTheme}
           initialIsMonster={newCharCategory === 'monster'}
           initialIsVendor={newCharCategory === 'vendor'}
+          enabledSystems={enabledSystems}
         />
       )}
+
+      {/* TRPG System Selector Screen Modal */}
+      <TRPGSystemSelectorModal
+        isOpen={showTRPGSelectorModal}
+        onClose={() => setShowTRPGSelectorModal(false)}
+        enabledSystems={enabledSystems}
+        onSaveSystems={handleSaveTRPGSystems}
+        isInitialSetup={!hasConfiguredSystems}
+      />
 
       {/* Party Manager Modal */}
       <PartyManagerModal
@@ -640,7 +723,7 @@ export default function App() {
         onClose={() => setShowPartyModal(false)}
         parties={parties}
         allCharacters={characters}
-        activeCharacterId={activeCharacter.id}
+        activeCharacterId={activeCharacter?.id || ''}
         onUpdateParties={setParties}
         onSelectCharacter={(charId) => {
           handleSelectCharacter(charId);
@@ -671,6 +754,18 @@ export default function App() {
         onClose={() => setShowAuthModal(false)}
         currentUser={currentUser}
         onUserChange={setCurrentUser}
+      />
+
+      {/* Audio & Options Modal */}
+      <AudioOptionsModal
+        isOpen={showAudioModal}
+        onClose={() => setShowAudioModal(false)}
+        currentUser={currentUser}
+        activeCharacter={activeCharacter}
+        onUpdateCharacter={handleUpdateCharacter}
+        onSystemChange={handleSystemChange}
+        onExportJson={handleExportJson}
+        onImportJson={handleImportJson}
       />
     </div>
   );
