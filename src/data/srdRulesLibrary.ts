@@ -161,6 +161,24 @@ export const OFFICIAL_5E_FEATS: Feat[] = [
     name: 'Piercer',
     source: 'Tasha’s Cauldron of Everything',
     description: 'Increase Strength or Dexterity score by 1. Once per turn when you hit a creature with an attack that deals piercing damage, you can reroll one of the attack’s damage dice. When you score a critical hit with piercing damage, you can roll one additional damage die when determining the extra piercing damage.'
+  },
+  {
+    id: 'feat-5e-27',
+    name: 'Metamagic Adept (Subtle Spell)',
+    source: 'Tasha’s Cauldron of Everything',
+    description: 'You gain 2 sorcery points and learn 2 Metamagic options (such as Subtle Spell). Subtle Spell allows you to cast spells without verbal or somatic components—ideal for casting while in Wild Shape or animal forms without breaking stealth.'
+  },
+  {
+    id: 'feat-5e-28',
+    name: 'Telepathic (Wild Shape Communication)',
+    source: 'Tasha’s Cauldron of Everything',
+    description: 'Increase INT, WIS, or CHA by 1. You can speak telepathically to any creature you can see within 60 feet. This bypasses the normal restriction preventing vocal communication while transformed in Wild Shape or animal forms.'
+  },
+  {
+    id: 'feat-5e-29',
+    name: 'Eldritch Adept (Sculptor of Flesh / Mask of Many Faces)',
+    source: 'Tasha’s Cauldron of Everything',
+    description: 'You learn one Eldritch Invocation of your choice, such as Sculptor of Flesh (cast Polymorph once per long rest) or Mask of Many Faces (cast Disguise Self at will without expending a spell slot).'
   }
 ];
 
@@ -317,6 +335,42 @@ export const OFFICIAL_35E_FEATS: Feat[] = [
     name: 'Improved Unarmed Strike',
     source: 'D&D 3.5e SRD',
     description: 'You are considered to be armed even when unarmed — you do not provoke attacks of opportunity when striking unarmed. Your unarmed strikes deal lethal damage (1d3 for Medium).'
+  },
+  {
+    id: 'feat-35e-26',
+    name: 'Natural Spell',
+    source: 'Player’s Handbook (p. 98)',
+    description: 'You can complete the verbal and somatic components of spells while using Wild Shape. You can also use material components or spell focus items that are melded with your form. Prerequisite: WIS 13, Wild Shape class feature.'
+  },
+  {
+    id: 'feat-35e-27',
+    name: 'Fast Wild Shape',
+    source: 'Complete Divine (p. 81)',
+    description: 'You can assume a Wild Shape form as a Move Action instead of a Standard Action. Prerequisite: DEX 13, Wild Shape class feature.'
+  },
+  {
+    id: 'feat-35e-28',
+    name: 'Dragon Wild Shape',
+    source: 'Draconomicon (p. 105)',
+    description: 'You can use Wild Shape to assume the form of a Small or Medium dragon. You gain all supernatural and extraordinary abilities (breath weapon, flight, elemental immunities) of the dragon form. Prerequisite: WIS 19, Wild Shape (can turn into Huge animal).'
+  },
+  {
+    id: 'feat-35e-29',
+    name: 'Exalted Wild Shape',
+    source: 'Book of Exalted Deeds (p. 42)',
+    description: 'You can use Wild Shape to assume the form of a celestial creature, blink dog, or unicorn, gaining its supernatural qualities and damage resistance. Prerequisite: Wild Shape class feature, Good alignment.'
+  },
+  {
+    id: 'feat-35e-30',
+    name: 'Multiattack',
+    source: 'Monster Manual / 3.5e SRD',
+    description: 'The creature’s secondary attacks with natural weapons take only a -2 penalty instead of -5. Essential for beast and shapeshifting forms with multiple natural attack routines (Bite/Claw/Claw).'
+  },
+  {
+    id: 'feat-35e-31',
+    name: 'Frozen Wild Shape',
+    source: 'Frostburn (p. 47)',
+    description: 'You can use Wild Shape to assume the form of a magical beast with the Cold subtype, such as a Cryohydra or Frost Worm. Prerequisite: Wild Shape class feature.'
   }
 ];
 
@@ -330,40 +384,109 @@ export const OFFICIAL_5E_CLASS_FEATURES: (ClassFeature & { className: string; re
   { id: 'cf5e-fgt-3', className: 'Fighter', reqLevel: 2, name: 'Action Surge', source: 'Fighter Level 2', description: 'On your turn, you can take one additional action on top of your regular action and possible bonus action. Recharges on a Short or Long Rest.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
   { id: 'cf5e-fgt-4', className: 'Fighter', reqLevel: 5, name: 'Extra Attack', source: 'Fighter Level 5', description: 'You can attack twice, instead of once, whenever you take the Attack action on your turn.' },
   { id: 'cf5e-fgt-5', className: 'Fighter', reqLevel: 9, name: 'Indomitable', source: 'Fighter Level 9', description: 'You can reroll a saving throw that you fail. You must use the new roll. Recharges on a Long Rest.', usesMax: 1, usesRemaining: 1, recharge: 'Long Rest' },
+  { id: 'cf5e-fgt-6', className: 'Fighter', reqLevel: 11, name: 'Extra Attack (2)', source: 'Fighter Level 11', description: 'You can attack three times whenever you take the Attack action on your turn.' },
+  { id: 'cf5e-fgt-7', className: 'Fighter', reqLevel: 20, name: 'Extra Attack (3)', source: 'Fighter Level 20', description: 'You can attack four times whenever you take the Attack action on your turn.' },
 
   // Wizard
   { id: 'cf5e-wiz-1', className: 'Wizard', reqLevel: 1, name: 'Arcane Recovery', source: 'Wizard Level 1', description: 'Once per day when you finish a short rest, you can choose expended spell slots to recover with a combined level equal to or less than half your wizard level (rounded up).', usesMax: 1, usesRemaining: 1, recharge: 'Long Rest' },
-  { id: 'cf5e-wiz-2', className: 'Wizard', reqLevel: 2, name: 'Sculpt Spells (Evocation)', source: 'Wizard Level 2', description: 'When you cast an evocation spell that affects other creatures you can see, you can choose 1 + spell level creatures to automatically succeed on their saving throws and take 0 damage if they would take half.' },
-  { id: 'cf5e-wiz-3', className: 'Wizard', reqLevel: 10, name: 'Empowered Evocation', source: 'Wizard Level 10', description: 'You can add your Intelligence modifier to one damage roll of any wizard evocation spell you cast.' },
+  { id: 'cf5e-wiz-2', className: 'Wizard', reqLevel: 1, name: 'Spellbook & Ritual Casting', source: 'Wizard Level 1', description: 'You possess a spellbook containing wizard spells. You can cast any wizard spell in your spellbook as a ritual if that spell has the ritual tag.' },
+  { id: 'cf5e-wiz-3', className: 'Wizard', reqLevel: 2, name: 'Sculpt Spells (Evocation)', source: 'Wizard Level 2', description: 'When you cast an evocation spell that affects other creatures you can see, you can choose 1 + spell level creatures to automatically succeed on their saving throws and take 0 damage if they would take half.' },
+  { id: 'cf5e-wiz-4', className: 'Wizard', reqLevel: 10, name: 'Empowered Evocation', source: 'Wizard Level 10', description: 'You can add your Intelligence modifier to one damage roll of any wizard evocation spell you cast.' },
+  { id: 'cf5e-wiz-5', className: 'Wizard', reqLevel: 14, name: 'Overchannel', source: 'Wizard Level 14', description: 'When you cast a 1st through 5th level evocation spell that deals damage, you can deal maximum damage with that spell.' },
+  { id: 'cf5e-wiz-6', className: 'Wizard', reqLevel: 20, name: 'Signature Spells', source: 'Wizard Level 20', description: 'Choose two 3rd-level wizard spells in your spellbook. You always have them prepared and can cast each once per short rest without spending a slot.' },
 
   // Rogue
   { id: 'cf5e-rog-1', className: 'Rogue', reqLevel: 1, name: 'Sneak Attack', source: 'Rogue Level 1', description: 'Once per turn, you can deal an extra 1d6 damage (scaling with level) to one creature you hit with an attack if you have advantage on the attack roll or if an ally is within 5 feet of the target.' },
-  { id: 'cf5e-rog-2', className: 'Rogue', reqLevel: 2, name: 'Cunning Action', source: 'Rogue Level 2', description: 'You can use a bonus action on each of your turns in combat to take the Dash, Disengage, or Hide action.' },
-  { id: 'cf5e-rog-3', className: 'Rogue', reqLevel: 5, name: 'Uncanny Dodge', source: 'Rogue Level 5', description: 'When an attacker that you can see hits you with an attack, you can use your reaction to halve the attack’s damage against you.' },
-  { id: 'cf5e-rog-4', className: 'Rogue', reqLevel: 7, name: 'Evasion', source: 'Rogue Level 7', description: 'When you are subjected to an effect that allows you to make a DEX saving throw to take only half damage, you instead take no damage if you succeed on the saving throw, and only half damage if you fail.' },
+  { id: 'cf5e-rog-2', className: 'Rogue', reqLevel: 1, name: 'Thieves’ Cant', source: 'Rogue Level 1', description: 'A secret mix of dialect, jargon, and code that allows you to hide messages in seemingly normal conversation.' },
+  { id: 'cf5e-rog-3', className: 'Rogue', reqLevel: 2, name: 'Cunning Action', source: 'Rogue Level 2', description: 'You can use a bonus action on each of your turns in combat to take the Dash, Disengage, or Hide action.' },
+  { id: 'cf5e-rog-4', className: 'Rogue', reqLevel: 5, name: 'Uncanny Dodge', source: 'Rogue Level 5', description: 'When an attacker that you can see hits you with an attack, you can use your reaction to halve the attack’s damage against you.' },
+  { id: 'cf5e-rog-5', className: 'Rogue', reqLevel: 7, name: 'Evasion', source: 'Rogue Level 7', description: 'When you are subjected to an effect that allows you to make a DEX saving throw to take only half damage, you instead take no damage if you succeed on the saving throw, and only half damage if you fail.' },
+  { id: 'cf5e-rog-6', className: 'Rogue', reqLevel: 11, name: 'Reliable Talent', source: 'Rogue Level 11', description: 'Whenever you make an ability check that lets you add your proficiency bonus, you can treat a d20 roll of 9 or lower as a 10.' },
+  { id: 'cf5e-rog-7', className: 'Rogue', reqLevel: 20, name: 'Stroke of Luck', source: 'Rogue Level 20', description: 'If your attack misses a target within range, you can turn the miss into a hit. Alternatively, if you fail an ability check, you can treat the d20 roll as a 20.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
 
   // Paladin
-  { id: 'cf5e-pal-1', className: 'Paladin', reqLevel: 1, name: 'Divine Sense', source: 'Paladin Level 1', description: 'As an action, you can open your awareness to detect celestial, fiend, or undead within 60 feet. Uses = 1 + CHA mod per long rest.', recharge: 'Long Rest' },
+  { id: 'cf5e-pal-1', className: 'Paladin', reqLevel: 1, name: 'Divine Sense', source: 'Paladin Level 1', description: 'As an action, you can open your awareness to detect celestial, fiend, or undead within 60 feet. Uses = 1 + CHA mod per long rest.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' },
   { id: 'cf5e-pal-2', className: 'Paladin', reqLevel: 1, name: 'Lay on Hands', source: 'Paladin Level 1', description: 'You have a pool of healing power that replenishes when you take a long rest. With that pool, you can restore a total number of hit points equal to your Paladin level × 5.', recharge: 'Long Rest' },
-  { id: 'cf5e-pal-3', className: 'Paladin', reqLevel: 2, name: 'Divine Smite', source: 'Paladin Level 2', description: 'When you hit a creature with a melee weapon attack, you can expend one spell slot to deal radiant damage to the target, in addition to the weapon’s damage (2d8 for 1st-level slot + 1d8 per higher level).' },
-  { id: 'cf5e-pal-4', className: 'Paladin', reqLevel: 6, name: 'Aura of Protection', source: 'Paladin Level 6', description: 'Whenever you or a friendly creature within 10 feet of you must make a saving throw, the creature gains a bonus to the saving throw equal to your Charisma modifier (minimum of +1).' },
+  { id: 'cf5e-pal-3', className: 'Paladin', reqLevel: 2, name: 'Fighting Style (Paladin)', source: 'Paladin Level 2', description: 'Select a Paladin Fighting Style: Blessed Warrior (2 Cleric Cantrips), Defense (+1 AC), Dueling (+2 damage), or Great Weapon Fighting.' },
+  { id: 'cf5e-pal-4', className: 'Paladin', reqLevel: 2, name: 'Divine Smite', source: 'Paladin Level 2', description: 'When you hit a creature with a melee weapon attack, you can expend one spell slot to deal radiant damage to the target, in addition to the weapon’s damage (2d8 for 1st-level slot + 1d8 per higher level, +1d8 vs Undead/Fiends).' },
+  { id: 'cf5e-pal-5', className: 'Paladin', reqLevel: 3, name: 'Divine Health', source: 'Paladin Level 3', description: 'The divine magic flowing through you makes you immune to disease.' },
+  { id: 'cf5e-pal-6', className: 'Paladin', reqLevel: 3, name: 'Channel Divinity: Sacred Weapon / Turn Unholy', source: 'Paladin Level 3', description: 'As an action, add your Charisma modifier to attack rolls with a weapon for 1 minute or turn fiends and undead within 30 feet.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
+  { id: 'cf5e-pal-7', className: 'Paladin', reqLevel: 5, name: 'Extra Attack (Paladin)', source: 'Paladin Level 5', description: 'You can attack twice, instead of once, whenever you take the Attack action on your turn.' },
+  { id: 'cf5e-pal-8', className: 'Paladin', reqLevel: 6, name: 'Aura of Protection', source: 'Paladin Level 6', description: 'Whenever you or a friendly creature within 10 feet of you must make a saving throw, the creature gains a bonus to the saving throw equal to your Charisma modifier (minimum of +1).' },
+  { id: 'cf5e-pal-9', className: 'Paladin', reqLevel: 10, name: 'Aura of Courage', source: 'Paladin Level 10', description: 'You and friendly creatures within 10 feet of you can’t be frightened while you are conscious.' },
+  { id: 'cf5e-pal-10', className: 'Paladin', reqLevel: 11, name: 'Improved Divine Smite', source: 'Paladin Level 11', description: 'All your melee weapon strikes are infused with divine energy. Whenever you hit a creature with a melee weapon, the target takes an extra 1d8 radiant damage.' },
+  { id: 'cf5e-pal-11', className: 'Paladin', reqLevel: 14, name: 'Cleansing Touch', source: 'Paladin Level 14', description: 'Use your action to end one spell on yourself or on one willing creature that you touch. Uses = Charisma modifier per long rest.', recharge: 'Long Rest' },
+  { id: 'cf5e-pal-12', className: 'Paladin', reqLevel: 18, name: 'Aura Expansion', source: 'Paladin Level 18', description: 'The range of your Aura of Protection and Aura of Courage expands from 10 feet out to 30 feet.' },
 
   // Barbarian
-  { id: 'cf5e-bar-1', className: 'Barbarian', reqLevel: 1, name: 'Rage', source: 'Barbarian Level 1', description: 'Bonus action to enter a rage. You have advantage on STR checks/saves, bonus to melee damage (+2 to +4), and resistance to bludgeoning, piercing, and slashing damage.', recharge: 'Long Rest' },
-  { id: 'cf5e-bar-2', className: 'Barbarian', reqLevel: 1, name: 'Unarmored Defense', source: 'Barbarian Level 1', description: 'While you are not wearing armor, your Armor Class equals 10 + DEX modifier + CON modifier. You can use a shield and still gain this benefit.' },
+  { id: 'cf5e-bar-1', className: 'Barbarian', reqLevel: 1, name: 'Rage', source: 'Barbarian Level 1', description: 'Bonus action to enter a rage. You have advantage on STR checks/saves, bonus to melee damage (+2 to +4), and resistance to bludgeoning, piercing, and slashing damage.', usesMax: 2, usesRemaining: 2, recharge: 'Long Rest' },
+  { id: 'cf5e-bar-2', className: 'Barbarian', reqLevel: 1, name: 'Unarmored Defense (Barbarian)', source: 'Barbarian Level 1', description: 'While you are not wearing armor, your Armor Class equals 10 + DEX modifier + CON modifier. You can use a shield and still gain this benefit.' },
   { id: 'cf5e-bar-3', className: 'Barbarian', reqLevel: 2, name: 'Reckless Attack', source: 'Barbarian Level 2', description: 'When you make your first attack on your turn, you can decide to attack recklessly. Doing so gives you advantage on melee weapon attack rolls using Strength, but attack rolls against you have advantage until your next turn.' },
+  { id: 'cf5e-bar-4', className: 'Barbarian', reqLevel: 2, name: 'Danger Sense', source: 'Barbarian Level 2', description: 'You have advantage on DEX saving throws against effects that you can see, such as traps and spells, provided you aren’t blinded, deafened, or incapacitated.' },
+  { id: 'cf5e-bar-5', className: 'Barbarian', reqLevel: 5, name: 'Extra Attack & Fast Movement', source: 'Barbarian Level 5', description: 'You can attack twice on your turn. Your speed increases by 10 feet while you aren’t wearing heavy armor.' },
+  { id: 'cf5e-bar-6', className: 'Barbarian', reqLevel: 9, name: 'Brutal Critical', source: 'Barbarian Level 9', description: 'You can roll one additional weapon damage die when determining the extra damage for a critical hit with a melee attack.' },
+  { id: 'cf5e-bar-7', className: 'Barbarian', reqLevel: 11, name: 'Relentless Rage', source: 'Barbarian Level 11', description: 'If you drop to 0 HP while raging and don’t die outright, pass a DC 10 CON save to drop to 1 HP instead.' },
+  { id: 'cf5e-bar-8', className: 'Barbarian', reqLevel: 20, name: 'Primal Champion', source: 'Barbarian Level 20', description: 'Your Strength and Constitution scores increase by 4. Your maximum for those scores is now 24.' },
 
   // Cleric
-  { id: 'cf5e-clr-1', className: 'Cleric', reqLevel: 2, name: 'Channel Divinity: Turn Undead', source: 'Cleric Level 2', description: 'As an action, you present your holy symbol and speak a prayer censuring the undead. Each undead within 30 feet must make a Wisdom saving throw or be turned for 1 minute or until it takes damage.', recharge: 'Short Rest' },
-  { id: 'cf5e-clr-2', className: 'Cleric', reqLevel: 5, name: 'Destroy Undead', source: 'Cleric Level 5', description: 'When an undead fails its saving throw against your Turn Undead feature, the creature is instantly destroyed if its challenge rating is at or below the threshold for your Cleric level (CR 1/2 at Lvl 5, CR 1 at Lvl 8, etc.).' },
+  { id: 'cf5e-clr-1', className: 'Cleric', reqLevel: 1, name: 'Divine Domain Feature', source: 'Cleric Level 1', description: 'You gain 1st-level domain features (such as Disciple of Life: +2 + spell level bonus healing for Life Domain, or Warding Flare for Light Domain).' },
+  { id: 'cf5e-clr-2', className: 'Cleric', reqLevel: 2, name: 'Channel Divinity: Turn Undead', source: 'Cleric Level 2', description: 'As an action, you present your holy symbol and speak a prayer censuring the undead. Each undead within 30 feet must make a Wisdom saving throw or be turned for 1 minute or until it takes damage.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
+  { id: 'cf5e-clr-3', className: 'Cleric', reqLevel: 2, name: 'Channel Divinity: Domain Feature', source: 'Cleric Level 2', description: 'You gain your domain-specific Channel Divinity option (such as Preserve Life: heal allies within 30ft up to 5 × Cleric level HP).' },
+  { id: 'cf5e-clr-4', className: 'Cleric', reqLevel: 5, name: 'Destroy Undead', source: 'Cleric Level 5', description: 'When an undead fails its saving throw against your Turn Undead feature, the creature is instantly destroyed if its challenge rating is at or below the threshold for your Cleric level (CR 1/2 at Lvl 5, CR 1 at Lvl 8, CR 2 at Lvl 11, CR 3 at Lvl 14, CR 4 at Lvl 17).' },
+  { id: 'cf5e-clr-5', className: 'Cleric', reqLevel: 8, name: 'Blessed Strikes / Divine Strike', source: 'Cleric Level 8', description: 'Once on each of your turns when you hit a creature with a weapon attack or deal damage with a cantrip, you deal an extra 1d8 radiant damage.' },
+  { id: 'cf5e-clr-6', className: 'Cleric', reqLevel: 10, name: 'Divine Intervention', source: 'Cleric Level 10', description: 'As an action, describe the assistance you seek and roll percentile dice (d100). If you roll a number equal to or lower than your cleric level, your deity intervenes.', recharge: 'Long Rest' },
+  { id: 'cf5e-clr-7', className: 'Cleric', reqLevel: 17, name: 'Supreme Healing', source: 'Cleric Level 17', description: 'When you would normally roll one or more dice to restore hit points with a spell, you instead use the highest possible number for each die.' },
 
-  // Racial Traits & Special Class Features
-  { id: 'cf5e-race-pb', className: 'Racial Trait', reqLevel: 1, name: 'Powerful Build / Little Giant', source: 'Racial Trait (Goliath, Firbolg, Bugbear, Orc)', description: 'You count as one size category larger when determining your carrying capacity and the weight you can push, drag, or lift.' },
-  { id: 'cf5e-brd-1', className: 'Bard', reqLevel: 1, name: 'Bardic Inspiration', source: 'Bard Level 1', description: 'Bonus action to give a d6 inspiration die to an ally within 60 feet. They can add it to an ability check, attack roll, or saving throw.', recharge: 'Long Rest' },
-  { id: 'cf5e-dru-1', className: 'Druid', reqLevel: 2, name: 'Wild Shape', source: 'Druid Level 2', description: 'Action to assume the shape of a beast you have seen before. You gain the beast’s hit points and physical statistics.', usesMax: 2, usesRemaining: 2, recharge: 'Short Rest' },
-  { id: 'cf5e-mnk-1', className: 'Monk', reqLevel: 1, name: 'Martial Arts & Ki', source: 'Monk Level 1', description: 'Use DEX for attack and damage with unarmed strikes and monk weapons. Make an unarmed strike as a bonus action after taking the Attack action.' },
-  { id: 'cf5e-sor-1', className: 'Sorcerer', reqLevel: 2, name: 'Font of Magic & Metamagic', source: 'Sorcerer Level 2', description: 'Transform sorcery points into spell slots or apply Metamagic options (Quickened Spell, Twinned Spell, Empowered Spell) to your spellcasting.' },
-  { id: 'cf5e-rng-1', className: 'Ranger', reqLevel: 1, name: 'Favored Enemy & Natural Explorer', source: 'Ranger Level 1', description: 'Advantage on Wisdom (Survival) checks to track chosen favored enemies and Intelligence checks to recall information about them.' }
+  // Druid / Shapeshifter
+  { id: 'cf5e-dru-1', className: 'Druid', reqLevel: 1, name: 'Druidic Language & Spellcasting', source: 'Druid Level 1', description: 'You know Druidic, the secret language of druids. You cast divine spells drawn from the druid spell list.' },
+  { id: 'cf5e-dru-2', className: 'Druid', reqLevel: 2, name: 'Wild Shape (Shapeshift)', source: 'Druid Level 2', description: 'Action to assume the shape of a beast you have seen before. You gain the beast’s hit points, armor class, movement, and physical Strength/Dexterity/Constitution statistics while retaining your mental scores.', usesMax: 2, usesRemaining: 2, recharge: 'Short Rest' },
+  { id: 'cf5e-dru-3', className: 'Druid', reqLevel: 2, name: 'Combat Wild Shape (Circle of the Moon)', source: 'Druid Level 2', description: 'You can use Wild Shape as a Bonus Action instead of an Action. While transformed, you can spend a spell slot as a bonus action to regain 1d8 HP per spell slot level.' },
+  { id: 'cf5e-dru-4', className: 'Druid', reqLevel: 2, name: 'Circle Forms (Shapeshifter CR Upgrade)', source: 'Druid Level 2', description: 'You can transform into beasts of CR 1 (such as Brown Bear, Dire Wolf, Giant Spider). At 6th level you can transform into CR 2 beasts, and at 9th level CR 3 beasts.' },
+  { id: 'cf5e-dru-5', className: 'Druid', reqLevel: 6, name: 'Primal Strike (Magical Beast Attacks)', source: 'Druid Level 6', description: 'Your attacks in beast form count as magical for the purpose of overcoming resistance and immunity to nonmagical attacks and damage.' },
+  { id: 'cf5e-dru-6', className: 'Druid', reqLevel: 10, name: 'Elemental Wild Shape', source: 'Druid Level 10', description: 'You can expend two uses of Wild Shape at the same time to transform into an Air Elemental, Earth Elemental, Fire Elemental, or Water Elemental.' },
+  { id: 'cf5e-dru-7', className: 'Druid', reqLevel: 14, name: 'Thousand Faces (At-Will Shapeshifting)', source: 'Druid Level 14', description: 'You gain the ability to cast Alter Self at will without expending a spell slot to freely change your humanoid form.' },
+  { id: 'cf5e-dru-8', className: 'Druid', reqLevel: 18, name: 'Beast Spells', source: 'Druid Level 18', description: 'You can cast many of your druid spells in any shape you assume using Wild Shape (providing verbal and somatic components).' },
+  { id: 'cf5e-dru-9', className: 'Druid', reqLevel: 20, name: 'Archdruid (Infinite Wild Shape)', source: 'Druid Level 20', description: 'You can use Wild Shape an unlimited number of times. You ignore verbal and somatic components of druid spells.' },
+
+  // Bard
+  { id: 'cf5e-brd-1', className: 'Bard', reqLevel: 1, name: 'Bardic Inspiration', source: 'Bard Level 1', description: 'Bonus action to give a d6 inspiration die to an ally within 60 feet. They can add it to an ability check, attack roll, or saving throw.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' },
+  { id: 'cf5e-brd-2', className: 'Bard', reqLevel: 2, name: 'Jack of All Trades', source: 'Bard Level 2', description: 'You can add half your proficiency bonus (rounded down) to any ability check you make that doesn’t already include your proficiency bonus.' },
+  { id: 'cf5e-brd-3', className: 'Bard', reqLevel: 2, name: 'Song of Rest', source: 'Bard Level 2', description: 'Perform during a short rest to help revitalize wounded allies. Allies regain an extra 1d6 hit points if they spend hit dice.' },
+  { id: 'cf5e-brd-4', className: 'Bard', reqLevel: 5, name: 'Font of Inspiration', source: 'Bard Level 5', description: 'You regain all of your expended uses of Bardic Inspiration when you finish a short or long rest.' },
+  { id: 'cf5e-brd-5', className: 'Bard', reqLevel: 6, name: 'Countercharm', source: 'Bard Level 6', description: 'As an action, perform to grant yourself and friendly creatures within 30 feet advantage on saving throws against being frightened or charmed.' },
+  { id: 'cf5e-brd-6', className: 'Bard', reqLevel: 10, name: 'Magical Secrets', source: 'Bard Level 10', description: 'Choose two spells from any class list (including paladin/ranger/wizard/cleric). A chosen spell counts as a bard spell for you.' },
+
+  // Monk
+  { id: 'cf5e-mnk-1', className: 'Monk', reqLevel: 1, name: 'Unarmored Defense (Monk)', source: 'Monk Level 1', description: 'While you are wearing no armor and not wielding a shield, your AC equals 10 + DEX modifier + WIS modifier.' },
+  { id: 'cf5e-mnk-2', className: 'Monk', reqLevel: 1, name: 'Martial Arts & Ki', source: 'Monk Level 1', description: 'Use DEX for attack and damage with unarmed strikes and monk weapons. Make an unarmed strike as a bonus action after taking the Attack action.' },
+  { id: 'cf5e-mnk-3', className: 'Monk', reqLevel: 2, name: 'Ki Points (Flurry / Patient / Step)', source: 'Monk Level 2', description: 'Spend Ki points to fuel Flurry of Blows (2 bonus unarmed strikes), Patient Defense (Dodge bonus action), or Step of the Wind (Disengage/Dash).', usesMax: 2, usesRemaining: 2, recharge: 'Short Rest' },
+  { id: 'cf5e-mnk-4', className: 'Monk', reqLevel: 3, name: 'Deflect Missiles', source: 'Monk Level 3', description: 'Use your reaction to deflect or catch the missile when you are hit by a ranged weapon attack, reducing damage by 1d10 + DEX mod + Monk level.' },
+  { id: 'cf5e-mnk-5', className: 'Monk', reqLevel: 5, name: 'Extra Attack & Stunning Strike', source: 'Monk Level 5', description: 'Attack twice. When you hit with a melee weapon attack, spend 1 Ki point to force a CON save or stun the target until the end of your next turn.' },
+  { id: 'cf5e-mnk-6', className: 'Monk', reqLevel: 6, name: 'Ki-Empowered Strikes', source: 'Monk Level 6', description: 'Your unarmed strikes count as magical for the purpose of overcoming resistance and immunity to nonmagical attacks.' },
+  { id: 'cf5e-mnk-7', className: 'Monk', reqLevel: 7, name: 'Evasion & Stillness of Mind', source: 'Monk Level 7', description: 'Take 0 damage on successful DEX save (half on fail). Use your action to end one effect on yourself that is causing you to be charmed or frightened.' },
+  { id: 'cf5e-mnk-8', className: 'Monk', reqLevel: 14, name: 'Diamond Soul', source: 'Monk Level 14', description: 'You gain proficiency in all saving throws. When you fail a saving throw, spend 1 Ki point to reroll it.' },
+
+  // Ranger
+  { id: 'cf5e-rng-1', className: 'Ranger', reqLevel: 1, name: 'Favored Enemy & Natural Explorer', source: 'Ranger Level 1', description: 'Advantage on Wisdom (Survival) checks to track chosen favored enemies and Intelligence checks to recall information about them.' },
+  { id: 'cf5e-rng-2', className: 'Ranger', reqLevel: 2, name: 'Fighting Style (Ranger)', source: 'Ranger Level 2', description: 'Choose Archery (+2 attack), Defense (+1 AC), Dueling (+2 damage), or Two-Weapon Fighting.' },
+  { id: 'cf5e-rng-3', className: 'Ranger', reqLevel: 3, name: 'Primeval Awareness', source: 'Ranger Level 3', description: 'Spend a spell slot to focus your awareness. Sense whether aberrants, celestials, dragons, elemental, fiends, or undead are within 1 mile.' },
+  { id: 'cf5e-rng-4', className: 'Ranger', reqLevel: 5, name: 'Extra Attack (Ranger)', source: 'Ranger Level 5', description: 'You can attack twice whenever you take the Attack action on your turn.' },
+  { id: 'cf5e-rng-5', className: 'Ranger', reqLevel: 8, name: 'Land’s Stride', source: 'Ranger Level 8', description: 'Moving through nonmagical difficult terrain costs you no extra movement. Pass through nonmagical plants without damage or slow.' },
+
+  // Sorcerer
+  { id: 'cf5e-sor-1', className: 'Sorcerer', reqLevel: 1, name: 'Sorcerous Origin', source: 'Sorcerer Level 1', description: 'Your innate magic comes from a sorcerous origin (e.g. Draconic Bloodline: +1 HP/lvl & AC 13 + DEX, Wild Magic: Wild Magic Surge).' },
+  { id: 'cf5e-sor-2', className: 'Sorcerer', reqLevel: 2, name: 'Font of Magic & Sorcery Points', source: 'Sorcerer Level 2', description: 'You gain sorcery points equal to your sorcerer level that you can convert into spell slots or use to fuel Metamagic.' },
+  { id: 'cf5e-sor-3', className: 'Sorcerer', reqLevel: 3, name: 'Metamagic Options', source: 'Sorcerer Level 3', description: 'Apply Metamagic to spells: Quickened Spell (cast as bonus action), Twinned Spell (target 2 creatures), Empowered Spell (reroll damage dice).' },
+
+  // Warlock
+  { id: 'cf5e-war-1', className: 'Warlock', reqLevel: 1, name: 'Otherworldly Patron & Pact Magic', source: 'Warlock Level 1', description: 'You strike a bargain with an otherworldly patron (Fiend, Archfey, Great Old One, Hexblade). Spell slots recharge on a Short Rest.' },
+  { id: 'cf5e-war-2', className: 'Warlock', reqLevel: 2, name: 'Eldritch Invocations', source: 'Warlock Level 2', description: 'Choose eldritch invocations (Agonizing Blast: add CHA to Eldritch Blast damage, Devil’s Sight: see in magical darkness).' },
+  { id: 'cf5e-war-3', className: 'Warlock', reqLevel: 3, name: 'Pact Boon', source: 'Warlock Level 3', description: 'Your patron grants a pact gift: Pact of the Blade (summon magical weapon), Pact of the Chain (find familiar), or Pact of the Tome (3 cantrips).' },
+
+  // Artificer
+  { id: 'cf5e-art-1', className: 'Artificer', reqLevel: 1, name: 'Magical Tinkering & Spellcasting', source: 'Artificer Level 1', description: 'Imbue mundane objects with minor magical properties or light. You cast spells prepared using thieves’ tools or artisan tools.' },
+  { id: 'cf5e-art-2', className: 'Artificer', reqLevel: 2, name: 'Infuse Item', source: 'Artificer Level 2', description: 'Gain the ability to produce magic items (Enhanced Weapon +1, Enhanced Defense +1, Replicating Magic Items).' },
+  { id: 'cf5e-art-3', className: 'Artificer', reqLevel: 7, name: 'Flash of Genius', source: 'Artificer Level 7', description: 'When you or another creature you see makes an ability check or saving throw, add your Intelligence modifier to the roll.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' }
 ];
 
 // ==========================================
@@ -379,8 +502,69 @@ export const OFFICIAL_35E_CLASS_FEATURES: (ClassFeature & { className: string; r
   { id: 'cf35-clr-1', className: 'Cleric', reqLevel: 1, name: 'Turn or Rebuke Undead', source: 'Cleric 3.5e', description: 'Good clerics can turn or destroy undead creatures. Evil clerics can rebuke or command such creatures. Uses per day = 3 + Charisma modifier.', recharge: 'Long Rest' },
   { id: 'cf35-bar-1', className: 'Barbarian', reqLevel: 1, name: 'Barbarian Rage', source: 'Barbarian 3.5e', description: 'A barbarian can fly into a rage. Grants +4 Strength, +4 Constitution, +2 morale bonus on Will saves, and a -2 penalty to AC for 3 + CON mod rounds.', recharge: 'Long Rest' },
   { id: 'cf35-pal-1', className: 'Paladin', reqLevel: 2, name: 'Smite Evil', source: 'Paladin 3.5e', description: 'Once per day, a paladin may attempt to smite evil with one normal melee attack. She adds her Charisma bonus to her attack roll and deals 1 extra point of damage per paladin level.' },
-  { id: 'cf35-pal-2', className: 'Paladin', reqLevel: 2, name: 'Divine Grace', source: 'Paladin 3.5e', description: 'A paladin gains a bonus equal to her Charisma bonus (if any) on all saving throws (Fortitude, Reflex, Will).' }
+  { id: 'cf35-pal-2', className: 'Paladin', reqLevel: 2, name: 'Divine Grace', source: 'Paladin 3.5e', description: 'A paladin gains a bonus equal to her Charisma bonus (if any) on all saving throws (Fortitude, Reflex, Will).' },
+  { id: 'cf35-dru-1', className: 'Druid', reqLevel: 1, name: 'Nature Sense & Animal Companion', source: 'Druid 3.5e', description: 'Gain +2 bonus on Knowledge (nature) and Survival checks. Obtain an animal companion (badger, camel, dire rat, dog, eagle, hawk, horse, owl, pony, snake, or wolf).' },
+  { id: 'cf35-dru-2', className: 'Druid', reqLevel: 5, name: 'Wild Shape (3.5e)', source: 'Druid 3.5e', description: 'Assume the form of a Small or Medium animal 1/day (increases to 2/day at 6th, 3/day at 7th, 4/day at 10th). You take on physical abilities while keeping mental scores.' },
+  { id: 'cf35-dru-3', className: 'Druid', reqLevel: 8, name: 'Wild Shape (Large)', source: 'Druid 3.5e', description: 'Wild shape forms include Large animals (Dire Wolf, Brown Bear, Rhinoceros, Tiger).' },
+  { id: 'cf35-dru-4', className: 'Druid', reqLevel: 16, name: 'Wild Shape (Elemental)', source: 'Druid 3.5e', description: 'Assume the form of a Small, Medium, or Large Air, Earth, Fire, or Water Elemental.' }
 ];
+
+/**
+ * Automatically syncs official class features for a character based on their class, level, and edition.
+ * Strips previous auto-assigned class features while preserving user custom entries.
+ */
+export function syncClassFeaturesForCharacter(
+  character: CharacterData,
+  targetClassName?: string,
+  targetLevelNum?: number,
+  edition: RuleEdition = '5e'
+): CharacterData {
+  const activeClass = targetClassName || character.characterClass || 'Fighter';
+  const activeLevel = targetLevelNum !== undefined ? targetLevelNum : (character.level || 1);
+  const activeEdition = edition || character.edition || '5e';
+
+  const catalog = activeEdition === '3.5e' ? OFFICIAL_35E_CLASS_FEATURES : OFFICIAL_5E_CLASS_FEATURES;
+
+  // Find all matching features for the active class where reqLevel <= activeLevel
+  const matchingFeatures = catalog.filter(f => {
+    const classMatch = f.className.toLowerCase() === activeClass.toLowerCase() ||
+      activeClass.toLowerCase().includes(f.className.toLowerCase()) ||
+      f.className.toLowerCase().includes(activeClass.toLowerCase());
+    return classMatch && f.reqLevel <= activeLevel;
+  });
+
+  // Preserve non-auto features (custom user features or features from other sources/races/forms)
+  const nonAutoFeatures = (character.classFeatures || []).filter(f => {
+    const isAutoClass = f.source && (f.source.startsWith('AutoClass:') || f.source.includes('Level'));
+    const isMatchingOfficialId = catalog.some(catItem => catItem.id === f.id);
+    return !isAutoClass && !isMatchingOfficialId;
+  });
+
+  // Convert catalog items into character ClassFeatures
+  const newClassFeatures: ClassFeature[] = matchingFeatures.map(f => ({
+    id: f.id,
+    name: f.name,
+    source: `AutoClass: ${f.className} Lvl ${f.reqLevel}`,
+    description: f.description,
+    usesMax: f.usesMax,
+    usesRemaining: f.usesRemaining !== undefined ? f.usesRemaining : f.usesMax,
+    recharge: f.recharge,
+  }));
+
+  // Merge unique features
+  const mergedFeaturesMap = new Map<string, ClassFeature>();
+  for (const feat of [...nonAutoFeatures, ...newClassFeatures]) {
+    mergedFeaturesMap.set(feat.name.toLowerCase(), feat);
+  }
+
+  return {
+    ...character,
+    characterClass: activeClass,
+    level: activeLevel,
+    classFeatures: Array.from(mergedFeaturesMap.values()),
+  };
+}
+
 
 // ==========================================
 // BULK OFFICIAL MONSTERS (D&D 5E & 3.5E)

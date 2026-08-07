@@ -11,6 +11,7 @@ import {
 import { getAbilityModifier, formatModifier, getProficiencyBonus, getCombinedLevel, getActiveClassChoice, getPrimaryXp, getSecondaryXp, getUnallocatedXp } from '../../utils/dndCalculations';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { playLevelUpSound } from '../../utils/diceAudio';
+import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
 import {
   TrendingUp,
   Award,
@@ -259,7 +260,8 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
         }
       };
 
-      onUpdateCharacter(updatedChar);
+      const syncedChar = syncClassFeaturesForCharacter(updatedChar, activeClassName, targetLevel, character.edition);
+      onUpdateCharacter(syncedChar);
       alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
     } else {
       const currentPriXp = getPrimaryXp(character);
@@ -286,7 +288,8 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
         } : {})
       };
 
-      onUpdateCharacter(updatedChar);
+      const syncedChar = syncClassFeaturesForCharacter(updatedChar, character.characterClass, targetLevel, character.edition);
+      onUpdateCharacter(syncedChar);
       alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
     }
     onClose();

@@ -77,6 +77,7 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   const [rollMode, setRollMode] = useState<'normal' | 'advantage' | 'disadvantage'>('normal');
   const [coverBonus, setCoverBonus] = useState<number>(0); // 0 = None, 2 = Half Cover (+2 AC), 5 = Three-Quarters Cover (+5 AC)
   const [extraBonus, setExtraBonus] = useState<number>(0); // e.g., Bless +1d4 or +1 magic
+  const [isPowerAttack, setIsPowerAttack] = useState<boolean>(false); // -5 Attack / +10 Heavy/Ranged Damage (GWM / Sharpshooter / Power Attack)
 
   // Resolution Result State
   const [lastResult, setLastResult] = useState<{
@@ -136,13 +137,15 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     ? selectedAttack.name
     : customAttackName;
 
-  const activeAttackBonus = selectedSpell
+  const rawAttackBonus = selectedSpell
     ? spellAtkBonus
     : selectedAttack
     ? selectedAttack.attackBonus
     : customAttackBonus;
 
-  const activeDamageExpr = selectedSpell
+  const activeAttackBonus = rawAttackBonus + (isPowerAttack ? -5 : 0);
+
+  const rawDamageExpr = selectedSpell
     ? extractSpellDamage(selectedSpell)
     : selectedAttack
     ? (selectedAttack.damageType && !selectedAttack.damage.toLowerCase().includes(selectedAttack.damageType.split('/')[0].trim().toLowerCase())
@@ -150,16 +153,25 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
         : selectedAttack.damage)
     : customDamageExpr;
 
+  const activeDamageExpr = isPowerAttack ? `${rawDamageExpr} + 10` : rawDamageExpr;
+
   const activeAttackRange = selectedSpell
     ? selectedSpell.range || '60 ft'
     : selectedAttack
     ? selectedAttack.range || '5 ft'
     : '5 ft';
 
+  const isRanged = activeAttackRange.toLowerCase().includes('range') || (selectedAttack?.range ? (parseInt(selectedAttack.range) > 5) : false);
+
+  const hasSharpshooter = (character.feats || []).some(f => f.name.toLowerCase().includes('sharpshooter')) ||
+                          (character.classFeatures || []).some(f => f.name.toLowerCase().includes('sharpshooter'));
+
   // Selected Target Object
   const targetCombatant = combatants.find(c => c.id === selectedTargetId);
   const baseTargetAc = targetCombatant ? targetCombatant.armorClass : manualTargetAc;
-  const effectiveTargetAc = baseTargetAc + coverBonus;
+  // Sharpshooter feat ignores cover for ranged attacks!
+  const effectiveCoverBonus = (hasSharpshooter && isRanged) ? 0 : coverBonus;
+  const effectiveTargetAc = baseTargetAc + effectiveCoverBonus;
   const targetNameStr = targetCombatant ? targetCombatant.name : `Target (AC ${manualTargetAc})`;
 
   // Full CharacterData object for target (lookup from allCharacters / character)
@@ -196,7 +208,6 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   const targetConditions = targetCombatant?.conditions || [];
   const attackerExhaustion = character.exhaustionLevel || 0;
 
-  const isRanged = activeAttackRange.toLowerCase().includes('range') || (selectedAttack?.range ? (parseInt(selectedAttack.range) > 5) : false);
   const attackerEffects = getConditionEffects(attackerConditions, attackerExhaustion, isRanged);
   const targetEffects = getConditionEffects(targetConditions, 0, false);
 
@@ -626,6 +637,29 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
                 3/4 Cover (+5 AC)
               </button>
             </div>
+            {hasSharpshooter && isRanged && coverBonus > 0 && (
+              <p className="text-[10px] text-amber-300 mt-1 font-semibold flex items-center gap-1">
+                <span>🎯 Sharpshooter Feat Active: Ranged cover bonuses are ignored!</span>
+              </p>
+            )}
+          </div>
+
+          {/* Heavy / Ranged Power Attack Toggle */}
+          <div>
+            <label className="flex items-center gap-2 p-2 bg-stone-950 border border-stone-800 rounded-xl cursor-pointer hover:border-amber-500/50 transition">
+              <input
+                type="checkbox"
+                checked={isPowerAttack}
+                onChange={(e) => setIsPowerAttack(e.target.checked)}
+                className="w-4 h-4 rounded bg-stone-900 border-stone-700 text-amber-500 focus:ring-amber-500"
+              />
+              <div className="text-xs">
+                <span className="font-bold text-amber-300">Power Attack / GWM / Sharpshooter</span>
+                <span className="block text-[10px] text-stone-400 font-mono">
+                  Take -5 penalty to Hit for +10 Damage
+                </span>
+              </div>
+            </label>
           </div>
         </div>
 
@@ -696,7 +730,7 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
 
           <div>
             <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
-              <label className="block text-stone-400 text-xs font-bold">Extra Attack Bonus (e.g. Bless +2)</label>
+              <label className="block text-stone-400 text-xs font-bold">Attack Bonus Modifier</label>
               {attackerEffects.extraAttackBonusItems.length > 0 && (
                 <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-950/90 border border-cyan-500/50 px-2 py-0.5 rounded flex items-center gap-1 shadow">
                   <Sparkles className="w-3 h-3 text-cyan-400" />

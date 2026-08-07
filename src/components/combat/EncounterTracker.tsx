@@ -336,11 +336,14 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     );
   };
 
-  // Correct calculation of DEX score and initiative bonus
+  // Correct calculation of DEX score and initiative bonus (plus Alert feat +5)
   const dexScore = character.abilities?.DEX?.score ?? 10;
   const dexMod = getAbilityModifier(dexScore);
+  const hasAlertFeat = (character.feats || []).some(f => f.name.toLowerCase().includes('alert')) ||
+                       (character.classFeatures || []).some(f => f.name.toLowerCase().includes('alert'));
+  const featInitBonus = hasAlertFeat ? 5 : 0;
   const rawInitBonus = typeof character.initiativeBonus === 'number' && !isNaN(character.initiativeBonus) ? character.initiativeBonus : 0;
-  const initBonus = rawInitBonus + (isNaN(dexMod) ? 0 : dexMod);
+  const initBonus = rawInitBonus + (isNaN(dexMod) ? 0 : dexMod) + featInitBonus;
 
   // Roll Initiative for active Player Character
   const handleRollPlayerInitiative = () => {

@@ -20,6 +20,7 @@ export const RestModal: React.FC<RestModalProps> = ({
 }) => {
   const [restType, setRestType] = useState<'short' | 'long'>(initialRestType);
   const [diceToSpend, setDiceToSpend] = useState<number>(1);
+  const [applySpellRecovery, setApplySpellRecovery] = useState<boolean>(true);
   const [restLog, setRestLog] = useState<string | null>(null);
 
   const effectiveMaxHp = getEffectiveMaxHp(character);
@@ -65,6 +66,33 @@ export const RestModal: React.FC<RestModalProps> = ({
       return feat;
     });
 
+    // Short Rest Spell Slot Recovery (Warlock Pact Magic & Arcane / Natural Recovery)
+    let updatedSpellSlots = [...(character.spellSlots || [])];
+    let spellRecoveryLog = '';
+
+    const isWarlock = (character.characterClass || '').toLowerCase().includes('warlock');
+    const isWizardOrDruid = ['wizard', 'druid', 'sorcerer'].some(c => (character.characterClass || '').toLowerCase().includes(c));
+
+    if (isWarlock) {
+      updatedSpellSlots = updatedSpellSlots.map(slot => ({ ...slot, current: slot.max }));
+      spellRecoveryLog = ' Warlock Pact Magic slots fully restored!';
+    } else if (applySpellRecovery && isWizardOrDruid) {
+      const maxSlotsToRecover = Math.max(1, Math.ceil(character.level / 2));
+      let recoveredCount = 0;
+      updatedSpellSlots = updatedSpellSlots.map(slot => {
+        if (slot.level > 0 && slot.current < slot.max && recoveredCount < maxSlotsToRecover) {
+          const needed = slot.max - slot.current;
+          const toAdd = Math.min(needed, maxSlotsToRecover - recoveredCount);
+          recoveredCount += toAdd;
+          return { ...slot, current: slot.current + toAdd };
+        }
+        return slot;
+      });
+      if (recoveredCount > 0) {
+        spellRecoveryLog = ` Arcane/Natural Recovery restored +${recoveredCount} spell slot(s)!`;
+      }
+    }
+
     let conditions = character.conditions || [];
     let deathSavesSuccesses = character.deathSavesSuccesses || 0;
     let deathSavesFailures = character.deathSavesFailures || 0;
@@ -79,6 +107,7 @@ export const RestModal: React.FC<RestModalProps> = ({
       ...character,
       hpCurrent: newHp,
       hitDiceCurrent: newHitDice,
+      spellSlots: updatedSpellSlots,
       classFeatures: updatedFeatures,
       conditions,
       deathSavesSuccesses,
@@ -89,7 +118,7 @@ export const RestModal: React.FC<RestModalProps> = ({
       onRoll(`Short Rest Healing (${countToSpend}d${dieSides} + ${countToSpend * conMod} CON)`, dieSides, countToSpend, countToSpend * conMod, 'normal');
     }
 
-    setRestLog(`Short Rest Completed! Spent ${countToSpend} Hit Die (${rolls.join(', ')} + CON) restoring +${totalHpRecovered} HP! Short Rest class features recharged.`);
+    setRestLog(`Short Rest Completed! Spent ${countToSpend} Hit Die (${rolls.join(', ')} + CON) restoring +${totalHpRecovered} HP! Short Rest class features recharged.${spellRecoveryLog}`);
   };
 
   // Execute Long Rest
@@ -218,6 +247,24 @@ export const RestModal: React.FC<RestModalProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Class Spell Recovery Indicator */}
+            {['warlock', 'wizard', 'druid', 'sorcerer'].some(c => (character.characterClass || '').toLowerCase().includes(c)) && (
+              <label className="flex items-center gap-2 p-2 bg-purple-950/40 border border-purple-800/50 rounded-xl cursor-pointer text-xs text-purple-200 font-semibold">
+                <input
+                  type="checkbox"
+                  checked={applySpellRecovery}
+                  onChange={(e) => setApplySpellRecovery(e.target.checked)}
+                  className="w-4 h-4 rounded bg-stone-900 border-stone-700 text-purple-500 focus:ring-purple-500"
+                />
+                <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                <span>
+                  {(character.characterClass || '').toLowerCase().includes('warlock')
+                    ? 'Restore Warlock Pact Magic Spell Slots'
+                    : 'Apply Arcane / Natural Recovery (+ Spell Slots)'}
+                </span>
+              </label>
+            )}
 
             <button
               onClick={handlePerformShortRest}

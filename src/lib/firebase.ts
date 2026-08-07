@@ -27,7 +27,7 @@ import {
   getDocFromServer
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { CharacterData } from '../types';
+import { CharacterData, OptionalRulesConfig } from '../types';
 
 export type UserRole = 'Player' | 'DM';
 
@@ -660,6 +660,7 @@ export interface GameSession {
   status: 'active' | 'closed';
   members: SessionMember[];
   activeCharacterIds: string[];
+  optionalRules?: OptionalRulesConfig; // DM-enforced campaign optional rules for all participants
   createdAt: string;
   updatedAt: string;
 }
@@ -679,7 +680,8 @@ export function generateRoomCode(): string {
  */
 export async function createGameSession(
   user: { uid: string; displayName: string },
-  sessionName: string
+  sessionName: string,
+  optionalRules?: OptionalRulesConfig
 ): Promise<GameSession> {
   const code = generateRoomCode();
   const timestamp = new Date().toISOString();
@@ -700,6 +702,7 @@ export async function createGameSession(
     status: 'active',
     members: [dmMember],
     activeCharacterIds: [],
+    optionalRules: optionalRules || {},
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -708,9 +711,26 @@ export async function createGameSession(
     await setDoc(doc(db, 'sessions', code), newSession);
   } catch (e) {
     console.error('Error creating session:', e);
+    handleFirestoreError(e, OperationType.WRITE, `sessions/${code}`);
+    throw e;
   }
 
   return newSession;
+}
+
+/**
+ * Update DM-enforced optional rules for a session
+ */
+export async function updateSessionOptionalRules(
+  sessionCode: string,
+  optionalRules: OptionalRulesConfig
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  await updateDoc(sessionRef, {
+    optionalRules,
+    updatedAt: new Date().toISOString()
+  });
 }
 
 /**

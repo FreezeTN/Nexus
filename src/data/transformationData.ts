@@ -1,4 +1,4 @@
-import { TransformationForm, CharacterData, ActiveTransformation, Attack } from '../types';
+import { TransformationForm, CharacterData, ActiveTransformation, Attack, ClassFeature, Feat } from '../types';
 
 export const PRESET_TRANSFORMATION_FORMS: TransformationForm[] = [
   {
@@ -377,6 +377,39 @@ export function applyTransformation(char: CharacterData, form: TransformationFor
     new Set([...currentConds.filter(c => !c.startsWith('Transformed:')), transformCondName])
   );
 
+  // Construct form features and feats from specialTraits
+  const formClassFeatures: ClassFeature[] = (form.specialTraits || []).map((traitStr, idx) => {
+    const splitIndex = traitStr.indexOf('(');
+    const traitName = splitIndex > 0 ? traitStr.substring(0, splitIndex).trim() : traitStr;
+    const traitDesc = splitIndex > 0 ? traitStr.substring(splitIndex + 1, traitStr.length - (traitStr.endsWith(')') ? 1 : 0)).trim() : traitStr;
+    return {
+      id: `form-cf-${form.id}-${idx}`,
+      name: `${traitName} (${form.name})`,
+      source: `Form: ${form.name}`,
+      description: traitDesc || traitStr,
+    };
+  });
+
+  const formFeats: Feat[] = (form.specialTraits || []).map((traitStr, idx) => {
+    const splitIndex = traitStr.indexOf('(');
+    const traitName = splitIndex > 0 ? traitStr.substring(0, splitIndex).trim() : traitStr;
+    const traitDesc = splitIndex > 0 ? traitStr.substring(splitIndex + 1, traitStr.length - (traitStr.endsWith(')') ? 1 : 0)).trim() : traitStr;
+    return {
+      id: `form-feat-${form.id}-${idx}`,
+      name: `${traitName} (${form.name})`,
+      source: `Form: ${form.name}`,
+      description: traitDesc || traitStr,
+    };
+  });
+
+  // Filter existing form features/feats
+  const baseClassFeatures = (cleanChar.classFeatures || []).filter(
+    f => !f.source || (!f.source.startsWith('Form:') && !f.source.startsWith('Wild Shape:') && !f.source.startsWith('Transformation:'))
+  );
+  const baseFeats = (cleanChar.feats || []).filter(
+    f => !f.source || (!f.source.startsWith('Form:') && !f.source.startsWith('Wild Shape:') && !f.source.startsWith('Transformation:'))
+  );
+
   return {
     ...cleanChar,
     activeTransformation,
@@ -388,6 +421,8 @@ export function applyTransformation(char: CharacterData, form: TransformationFor
     abilities: updatedAbilities,
     inventory: updatedInventory,
     attacks: [...formNaturalWeapons, ...(cleanChar.attacks || [])],
+    classFeatures: [...baseClassFeatures, ...formClassFeatures],
+    feats: [...baseFeats, ...formFeats],
     conditions: updatedConds,
     portraitUrl: form.portraitUrl || cleanChar.portraitUrl,
   };
@@ -479,6 +514,14 @@ export function revertTransformation(char: CharacterData): CharacterData {
     atk => !(atk.notes && atk.notes.includes('[Natural Weapon]'))
   );
 
+  // Remove form features and feats
+  const cleanedClassFeatures = (char.classFeatures || []).filter(
+    f => !f.source || (!f.source.startsWith('Form:') && !f.source.startsWith('Wild Shape:') && !f.source.startsWith('Transformation:'))
+  );
+  const cleanedFeats = (char.feats || []).filter(
+    f => !f.source || (!f.source.startsWith('Form:') && !f.source.startsWith('Wild Shape:') && !f.source.startsWith('Transformation:'))
+  );
+
   // Remove transformation condition
   const cleanedConds = (char.conditions || []).filter(c => !c.startsWith('Transformed:'));
 
@@ -494,6 +537,8 @@ export function revertTransformation(char: CharacterData): CharacterData {
     abilities: originalStats.abilities,
     inventory: restoredInventory,
     attacks: originalStats.attacks.length > 0 ? originalStats.attacks : cleanedAttacks,
+    classFeatures: cleanedClassFeatures,
+    feats: cleanedFeats,
     conditions: cleanedConds,
     portraitUrl: originalStats.portraitUrl,
   };

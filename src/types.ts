@@ -137,6 +137,23 @@ export interface ShadowrunData {
   spellsComplexForms?: ShadowrunSpellComplexForm[];
 }
 
+export interface HybridHeritageData {
+  enabled: boolean;
+  primaryParent: string;
+  secondaryParent: string;
+  customHybridName?: string;
+  primaryTraitName?: string;
+  primaryTraitDesc?: string;
+  secondaryTraitName?: string;
+  secondaryTraitDesc?: string;
+  speedFeet?: number;
+  sizeCategory?: string;
+  hasDarkvision?: boolean;
+  isClassicSRD?: boolean;
+  classicSRDId?: string;
+  dragonVariety?: string;
+}
+
 export interface OptionalRulesConfig {
   useVariantEncumbrance?: boolean;   // Variant Encumbrance (STRx5 = Encumbered -10ft speed, STRx10 = Heavy -20ft speed & Disadvantage)
   weightCalculationMode?: 'equipped_only' | 'carried_only' | 'all_items'; // Encumbrance weight mode (Default: carried_only)
@@ -157,6 +174,8 @@ export interface OptionalRulesConfig {
   useDefenseBonusUA109?: boolean;   // Unearthed Arcana p.109: Class Defense Bonus by Level
   useArmorAsDRUA109?: boolean;      // Unearthed Arcana p.109/111: Armor as Damage Reduction
   hasPowerfulBuild?: boolean;       // Powerful Build / Little Giant: Counts as 1 size category larger for carrying capacity, push, drag, and lift
+  useHalfBreedSystem?: boolean;     // Half-Breed / Hybrid Heritage Ancestry rules (Alpine DM / Homebrew 5e)
+  useClassicSRDHalfBreed?: boolean; // Classic SRD Half-Breeds (5e & 3.5e SRD)
 }
 
 export type AbilityName = 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA';
@@ -249,6 +268,8 @@ export interface GearItem {
   immunity?: string; // Damage type immunity granted by item (e.g. Poison, Fire, Acid, All)
   stealthDisadvantage?: boolean;
   hpMaxBonus?: number; // Max HP bonus or penalty granted when equipped
+  isCursed?: boolean; // Cursed artifact marker with active drawbacks or attunement restrictions
+  spellDcBonus?: number; // Spell Save DC bonus (e.g. +1, +2 from Robe of the Archmagi or Rod of the Pact Keeper)
   weaponStats?: {
     attackBonus?: string | number;
     damage?: string;
@@ -332,6 +353,9 @@ export interface CharacterData {
 
   // Optional D&D Rules & Variant Calculations
   optionalRules?: OptionalRulesConfig;
+
+  // Half-Breed / Hybrid Heritage Data (The Alpine DM System)
+  hybridHeritage?: HybridHeritageData;
 
   // Sanity & Madness System Data (DMG p.264)
   sanity?: SanityData;

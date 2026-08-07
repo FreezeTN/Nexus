@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { CharacterData, RuleEdition, Skill } from '../../types';
+import { CharacterData, ClassFeature, RuleEdition, Skill } from '../../types';
 import { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST } from '../../utils/dndCalculations';
-import { UserPlus, Sparkles, X, Store, Layers, Skull, Dices, Shuffle, Settings, Zap, Crosshair, Scale, Swords } from 'lucide-react';
+import { UserPlus, Sparkles, X, Store, Layers, Skull, Dices, Shuffle, Settings, Zap, Crosshair, Scale, Swords, Dna } from 'lucide-react';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
+import { PARENT_RACE_CATALOG, getHybridName, buildHybridFeature, CLASSIC_SRD_HALF_BREEDS, getClassicSRDHalfBreedsForEdition, buildClassicSRDFeature, ClassicSRDHalfBreed, DRAGON_VARIETIES_35E, DRAGON_VARIETIES_5E } from '../../data/halfBreedData';
+import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
 
 interface NewCharacterModalProps {
   onClose: () => void;
@@ -218,6 +220,16 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   const [useDefenseBonusUA109, setUseDefenseBonusUA109] = useState(false);
   const [useArmorAsDRUA109, setUseArmorAsDRUA109] = useState(false);
 
+  // Half-Breed System State (The Alpine DM Rules & Classic SRD Half-Breeds)
+  const [useHalfBreedSystem, setUseHalfBreedSystem] = useState(false);
+  const [primaryParent, setPrimaryParent] = useState('Elf');
+  const [secondaryParent, setSecondaryParent] = useState('Dwarf');
+  const [customHybridName, setCustomHybridName] = useState('');
+
+  const [useClassicSRDHalfBreed, setUseClassicSRDHalfBreed] = useState(false);
+  const [selectedClassicSRDId, setSelectedClassicSRDId] = useState<string>('srd-5e-half-elf');
+  const [dragonVariety, setDragonVariety] = useState<string>('Red');
+
   // Portrait URL & HP Calculation Mode
   const [portraitUrl, setPortraitUrl] = useState('');
   const [hpCalcMode, setHpCalcMode] = useState<'Average' | 'Rolled' | 'Max'>('Average');
@@ -235,6 +247,12 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     setRace(newRace);
     setCharacterClass(newClass);
     setSubclass(newSubclass);
+
+    // Auto adjust classic SRD half breed default for selected edition
+    const srdList = getClassicSRDHalfBreedsForEdition(newEd);
+    if (srdList.length > 0) {
+      setSelectedClassicSRDId(srdList[0].id);
+    }
   };
 
   // Handle class change & auto update subclass options for current system
@@ -327,10 +345,41 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
     const isCaster = ['Wizard', 'Sorcerer', 'Cleric', 'Druid', 'Bard', 'Warlock', 'Paladin', 'Ranger'].includes(characterClass);
 
+    const primaryData = PARENT_RACE_CATALOG.find(p => p.name === primaryParent) || PARENT_RACE_CATALOG[0];
+    const secondaryData = PARENT_RACE_CATALOG.find(s => s.name === secondaryParent) || PARENT_RACE_CATALOG[1];
+
+    const availableSRDHalfBreeds = getClassicSRDHalfBreedsForEdition(edition);
+    const selectedSRD = availableSRDHalfBreeds.find(hb => hb.id === selectedClassicSRDId) || availableSRDHalfBreeds[0];
+
+    let finalRaceName = race;
+    let hybridFeature: ClassFeature | null = null;
+    let charSpeed = race === 'Halfling' || race === 'Dwarf' || race === 'Gnome' ? 20 : 30;
+
+    if (useHalfBreedSystem) {
+      finalRaceName = getHybridName(primaryParent, secondaryParent, customHybridName);
+      hybridFeature = buildHybridFeature(
+        finalRaceName,
+        primaryData,
+        secondaryData,
+        primaryData.size,
+        primaryData.speed,
+        primaryData.hasDarkvision || secondaryData.hasDarkvision
+      );
+      charSpeed = primaryData.speed;
+    } else if (useClassicSRDHalfBreed && selectedSRD) {
+      if (selectedSRD.id.includes('half-dragon')) {
+        finalRaceName = edition === '3.5e' ? `Half-${dragonVariety} Dragon (3.5e SRD)` : `Half-${dragonVariety} Dragon (5e SRD)`;
+      } else {
+        finalRaceName = selectedSRD.name;
+      }
+      hybridFeature = buildClassicSRDFeature(selectedSRD, dragonVariety);
+      charSpeed = selectedSRD.speed;
+    }
+
     const newChar: CharacterData = {
       id: 'char-' + Date.now(),
       name: name.trim(),
-      race,
+      race: finalRaceName,
       characterClass,
       subclass,
       level,
@@ -345,6 +394,32 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       isMonster,
       monsterXpReward: isMonster ? monsterXpReward : undefined,
 
+      hybridHeritage: useHalfBreedSystem ? {
+        enabled: true,
+        isClassicSRD: false,
+        primaryParent,
+        secondaryParent,
+        customHybridName: finalRaceName,
+        primaryTraitName: primaryData.primaryTraitName,
+        primaryTraitDesc: primaryData.primaryTraitDesc,
+        secondaryTraitName: secondaryData.secondaryTraitName,
+        secondaryTraitDesc: secondaryData.secondaryTraitDesc,
+        speedFeet: primaryData.speed,
+        sizeCategory: primaryData.size,
+        hasDarkvision: primaryData.hasDarkvision || secondaryData.secondaryTraitDesc.includes('Darkvision')
+      } : (useClassicSRDHalfBreed && selectedSRD) ? {
+        enabled: true,
+        isClassicSRD: true,
+        classicSRDId: selectedSRD.id,
+        dragonVariety: selectedSRD.id.includes('half-dragon') ? dragonVariety : undefined,
+        primaryParent: finalRaceName,
+        secondaryParent: 'SRD Classic',
+        customHybridName: finalRaceName,
+        speedFeet: selectedSRD.speed,
+        sizeCategory: selectedSRD.size,
+        hasDarkvision: selectedSRD.hasDarkvision
+      } : undefined,
+
       optionalRules: {
         useVariantEncumbrance,
         useFlankingRules,
@@ -358,6 +433,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         useGestaltUA72,
         useDefenseBonusUA109,
         useArmorAsDRUA109,
+        useHalfBreedSystem,
+        useClassicSRDHalfBreed,
       },
 
       // 3.5e initial stats
@@ -373,7 +450,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       hitDiceCurrent: level,
       armorClass: 10 + Math.floor((dex - 10) / 2),
       initiativeBonus: Math.floor((dex - 10) / 2),
-      speed: race === 'Halfling' || race === 'Dwarf' || race === 'Gnome' ? 20 : 30,
+      speed: charSpeed,
       inspiration: false,
 
       deathSavesSuccesses: 0,
@@ -404,10 +481,11 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
             id: s.name,
             name: s.name,
             ability: s.ability,
-            proficient: false
+            proficient: (useHalfBreedSystem && (primaryParent === 'Elf' || secondaryParent === 'Elf')) && s.name === 'Perception' ? true : false
           })),
 
       classFeatures: [
+        ...(hybridFeature ? [hybridFeature] : []),
         {
           id: 'cf-base-1',
           name: `${characterClass} Level ${level} Features`,
@@ -479,7 +557,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       }
     };
 
-    onCreate(newChar);
+    const syncedChar = syncClassFeaturesForCharacter(newChar, characterClass, level, edition);
+    onCreate(syncedChar);
   };
 
   return (
@@ -581,19 +660,232 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
               />
             </div>
 
-            <div>
-              <label className="block text-stone-400 mb-1">
-                {edition === 'shadowrun' ? 'Metatype (Race)' : edition === 'pathfinder' ? 'Ancestry (Race)' : edition === 'cthulhu' ? 'Origin / Heritage' : 'Race'}
-              </label>
-              <select
-                value={race}
-                onChange={(e) => setRace(e.target.value)}
-                className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
-              >
-                {(RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e']).map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <label className="block text-stone-400 text-xs font-bold">
+                  {edition === 'shadowrun' ? 'Metatype (Race)' : edition === 'pathfinder' ? 'Ancestry (Race)' : edition === 'cthulhu' ? 'Origin / Heritage' : 'Race'}
+                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-600/40 px-2 py-0.5 rounded-md transition">
+                    <input
+                      type="checkbox"
+                      checked={useHalfBreedSystem}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseHalfBreedSystem(checked);
+                        if (checked) setUseClassicSRDHalfBreed(false);
+                      }}
+                      className="accent-amber-500 w-3.5 h-3.5 rounded"
+                    />
+                    <Dna className="w-3 h-3 text-amber-400" />
+                    <span>The Alpine DM System</span>
+                  </label>
+
+                  <label className="flex items-center gap-1.5 cursor-pointer text-amber-300 hover:text-amber-200 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-md transition">
+                    <input
+                      type="checkbox"
+                      checked={useClassicSRDHalfBreed}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUseClassicSRDHalfBreed(checked);
+                        if (checked) {
+                          setUseHalfBreedSystem(false);
+                          const srdList = getClassicSRDHalfBreedsForEdition(edition);
+                          if (srdList.length > 0) setSelectedClassicSRDId(srdList[0].id);
+                        }
+                      }}
+                      className="accent-amber-500 w-3.5 h-3.5 rounded"
+                    />
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Classic Half-Breeds (SRD)</span>
+                  </label>
+                </div>
+              </div>
+
+              {!useHalfBreedSystem && !useClassicSRDHalfBreed && (
+                <select
+                  value={race}
+                  onChange={(e) => setRace(e.target.value)}
+                  className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
+                >
+                  {(RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e']).map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* The Alpine DM System UI */}
+              {useHalfBreedSystem && (
+                <div className="bg-stone-900/95 border border-amber-600/50 p-3 rounded-xl space-y-3 shadow-lg">
+                  <div className="text-xs text-amber-300 font-serif font-bold flex items-center justify-between border-b border-stone-800 pb-2">
+                    <span className="flex items-center gap-1.5">
+                      <Dna className="w-4 h-4 text-amber-400 animate-pulse" />
+                      Hybrid Ancestry Builder (The Alpine DM System)
+                    </span>
+                    <span className="text-[10px] bg-amber-950 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded font-mono font-bold">
+                      DUAL HERITAGE ACTIVE
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">Primary Parent Ancestry *</label>
+                      <select
+                        value={primaryParent}
+                        onChange={(e) => setPrimaryParent(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-medium focus:outline-none focus:border-amber-500"
+                      >
+                        {PARENT_RACE_CATALOG.map(pr => (
+                          <option key={pr.id} value={pr.name}>{pr.name} ({pr.size}, {pr.speed}ft)</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">Secondary Parent Ancestry *</label>
+                      <select
+                        value={secondaryParent}
+                        onChange={(e) => setSecondaryParent(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-medium focus:outline-none focus:border-amber-500"
+                      >
+                        {PARENT_RACE_CATALOG.map(pr => (
+                          <option key={pr.id} value={pr.name}>{pr.name} ({pr.size}, {pr.speed}ft)</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-300 font-bold text-xs mb-1">
+                      Custom Hybrid Race Title (Optional / Auto-Generated)
+                    </label>
+                    <input
+                      type="text"
+                      value={customHybridName}
+                      onChange={(e) => setCustomHybridName(e.target.value)}
+                      placeholder={`e.g. ${getHybridName(primaryParent, secondaryParent)}`}
+                      className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-amber-200 font-bold text-xs focus:outline-none focus:border-amber-500"
+                    />
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      Calculated Race Name: <strong className="text-amber-300 font-serif">{getHybridName(primaryParent, secondaryParent, customHybridName)}</strong>
+                    </p>
+                  </div>
+
+                  {/* Live Ancestral Traits Preview */}
+                  {(() => {
+                    const pData = PARENT_RACE_CATALOG.find(p => p.name === primaryParent) || PARENT_RACE_CATALOG[0];
+                    const sData = PARENT_RACE_CATALOG.find(s => s.name === secondaryParent) || PARENT_RACE_CATALOG[1];
+                    const hasDV = pData.hasDarkvision || sData.hasDarkvision;
+
+                    return (
+                      <div className="bg-stone-950 border border-amber-900/40 p-2.5 rounded-lg space-y-1.5 text-[11px] text-stone-300">
+                        <div className="font-bold text-amber-200 flex items-center justify-between border-b border-stone-800 pb-1">
+                          <span>Inherited Ancestral Traits</span>
+                          <span className="font-mono text-[10px] text-amber-400/80">
+                            Size: {pData.size} | Speed: {pData.speed}ft | Darkvision: {hasDV ? '60ft' : 'None'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1.5 pt-1">
+                          <div>
+                            <span className="text-amber-400 font-semibold">🧬 Primary Ancestry ({pData.name}):</span>{' '}
+                            <strong className="text-stone-100">{pData.primaryTraitName}</strong> — <span className="text-stone-400">{pData.primaryTraitDesc}</span>
+                          </div>
+                          <div>
+                            <span className="text-amber-400 font-semibold">⚡ Secondary Ancestry ({sData.name}):</span>{' '}
+                            <strong className="text-stone-100">{sData.secondaryTraitName}</strong> — <span className="text-stone-400">{sData.secondaryTraitDesc}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Classic SRD Half-Breeds UI */}
+              {useClassicSRDHalfBreed && (
+                <div className="bg-stone-900/95 border border-amber-600/50 p-3 rounded-xl space-y-3 shadow-lg">
+                  <div className="text-xs text-amber-300 font-serif font-bold flex items-center justify-between border-b border-stone-800 pb-2">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                      Classic SRD Half-Breed Rules ({edition.toUpperCase()})
+                    </span>
+                    <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-mono font-bold">
+                      {edition.toUpperCase()} SRD COMPLIANT
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-300 font-bold text-xs mb-1">Select SRD Half-Breed Race ({edition}) *</label>
+                    <select
+                      value={selectedClassicSRDId}
+                      onChange={(e) => setSelectedClassicSRDId(e.target.value)}
+                      className="w-full bg-stone-950 border border-stone-700 rounded p-2 text-stone-100 font-bold focus:outline-none focus:border-amber-500 text-xs"
+                    >
+                      {getClassicSRDHalfBreedsForEdition(edition).map(hb => (
+                        <option key={hb.id} value={hb.id}>
+                          {hb.name} ({hb.size}, {hb.speed}ft {hb.flySpeed ? `/ Fly ${hb.flySpeed}ft` : ''})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedClassicSRDId.includes('half-dragon') && (
+                    <div className="bg-stone-950 border border-amber-600/40 p-2.5 rounded-lg space-y-1.5">
+                      <label className="block text-amber-300 font-bold text-xs">
+                        🐉 Select Dragon Ancestry / Variety ({edition.toUpperCase()}) *
+                      </label>
+                      <select
+                        value={dragonVariety}
+                        onChange={(e) => setDragonVariety(e.target.value)}
+                        className="w-full bg-stone-900 border border-stone-700 rounded p-2 text-stone-100 font-bold text-xs focus:outline-none focus:border-amber-500"
+                      >
+                        {(edition === '3.5e' ? DRAGON_VARIETIES_35E : DRAGON_VARIETIES_5E).map(dv => (
+                          <option key={dv.variety} value={dv.variety}>
+                            {dv.variety} Dragon — {dv.immunityOrResistance} | Breath: {dv.breathWeapon}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-[10px] text-stone-400 italic">
+                        Determines breath weapon area/damage type and elemental energy immunity/resistance.
+                      </p>
+                    </div>
+                  )}
+
+                  {(() => {
+                    const srdList = getClassicSRDHalfBreedsForEdition(edition);
+                    const srdHB = srdList.find(hb => hb.id === selectedClassicSRDId) || srdList[0];
+                    if (!srdHB) return null;
+
+                    const dynamicFeature = buildClassicSRDFeature(srdHB, dragonVariety);
+                    const isDragon = srdHB.id.includes('half-dragon');
+                    const displayName = isDragon ? (edition === '3.5e' ? `Half-${dragonVariety} Dragon (3.5e SRD)` : `Half-${dragonVariety} Dragon (5e SRD)`) : srdHB.name;
+
+                    return (
+                      <div className="bg-stone-950 border border-amber-900/50 p-3 rounded-lg space-y-2 text-[11px] text-stone-300">
+                        <div className="flex items-center justify-between border-b border-stone-800 pb-1.5">
+                          <span className="font-bold text-amber-200 text-xs">{displayName}</span>
+                          <span className="font-mono text-[10px] bg-amber-950 text-amber-300 border border-amber-600/40 px-2 py-0.5 rounded font-bold">
+                            Size: {srdHB.size} | Speed: {srdHB.speed}ft {srdHB.flySpeed ? `(Fly ${srdHB.flySpeed}ft)` : ''} | {srdHB.hasDarkvision ? 'Darkvision 60ft' : srdHB.hasLowLightVision ? 'Low-Light Vision' : 'Normal Vision'}
+                          </span>
+                        </div>
+
+                        <p className="text-stone-400 italic text-[11px]">{srdHB.description}</p>
+
+                        <div className="bg-stone-900/80 p-2 rounded border border-amber-900/40 text-amber-300 font-mono text-[11px]">
+                          <strong>Stat Adjustments:</strong> {srdHB.statBonusText}
+                        </div>
+
+                        <div className="space-y-1.5 pt-1">
+                          <span className="text-amber-400 font-bold block text-[11px]">Racial Traits ({srdHB.source}):</span>
+                          <div className="bg-stone-900/60 p-2 rounded border border-stone-800 whitespace-pre-wrap text-[11px] text-stone-300 leading-relaxed font-sans">
+                            {dynamicFeature.description.split('\n\nRacial Traits:\n')[1] || dynamicFeature.description}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           </div>
 
@@ -864,7 +1156,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                 </div>
               </label>
 
-              {/* Flanking Rules */}
+              {/* Tactical Flanking */}
               <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
                 <input
                   type="checkbox"
@@ -878,6 +1170,24 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                   </span>
                   <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
                     Adds Advantage prompt (5e) or +2 Attack bonus (3.5e) when positioned with an ally.
+                  </p>
+                </div>
+              </label>
+
+              {/* Half-Breed / Hybrid Heritage Ancestry */}
+              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
+                <input
+                  type="checkbox"
+                  checked={useHalfBreedSystem}
+                  onChange={(e) => setUseHalfBreedSystem(e.target.checked)}
+                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                />
+                <div>
+                  <span className="font-bold text-stone-200 flex items-center gap-1">
+                    <Dna className="w-3.5 h-3.5 text-amber-400" /> Half-Breed System (The Alpine DM)
+                  </span>
+                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                    Enables dual parent ancestry heritage, custom hybrid race names & combined traits.
                   </p>
                 </div>
               </label>

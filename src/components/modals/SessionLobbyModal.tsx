@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CharacterData } from '../../types';
+import { CharacterData, OptionalRulesConfig } from '../../types';
 import { 
   UserProfile, 
   GameSession, 
@@ -8,6 +8,7 @@ import {
   leaveGameSession, 
   closeGameSession, 
   updateSessionMemberCharacter,
+  updateSessionOptionalRules,
   CharacterPresence 
 } from '../../lib/firebase';
 import { 
@@ -27,9 +28,332 @@ import {
   Share2, 
   X,
   Radio,
-  UserPlus
+  UserPlus,
+  Settings,
+  Scale,
+  Swords,
+  Brain,
+  Dna,
+  Layers,
+  Zap,
+  Crosshair,
+  Lock,
+  Sliders,
+  RefreshCw
 } from 'lucide-react';
 import { getPassivePerception, getEffectiveMaxHp } from '../../utils/dndCalculations';
+
+interface CampaignRulesSelectorProps {
+  rules: OptionalRulesConfig;
+  onChangeRules: (updated: OptionalRulesConfig) => void;
+  readOnly?: boolean;
+}
+
+export const CampaignRulesSelector: React.FC<CampaignRulesSelectorProps> = ({
+  rules,
+  onChangeRules,
+  readOnly = false
+}) => {
+  const toggleRule = (key: keyof OptionalRulesConfig) => {
+    if (readOnly) return;
+    onChangeRules({
+      ...rules,
+      [key]: !rules[key]
+    });
+  };
+
+  const applyPreset = (preset: 'default' | 'tactical' | 'high_power') => {
+    if (readOnly) return;
+    if (preset === 'default') {
+      onChangeRules({});
+    } else if (preset === 'tactical') {
+      onChangeRules({
+        useVariantEncumbrance: true,
+        useFlankingRules: true,
+        useGrittyRealismResting: true,
+        useVariantCritDamage: true,
+        useSanityRules: true,
+        useMilestoneXp: true,
+      });
+    } else if (preset === 'high_power') {
+      onChangeRules({
+        useGestaltUA72: true,
+        useDefenseBonusUA109: true,
+        useArmorAsDRUA109: true,
+        useFlankingRules: true,
+        useMulticlassing: true,
+        useHalfBreedSystem: true,
+        hasPowerfulBuild: true,
+      });
+    }
+  };
+
+  const activeCount = Object.values(rules).filter(Boolean).length;
+
+  return (
+    <div className="bg-stone-950/80 border border-amber-900/40 rounded-xl p-4 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-800/80 pb-2.5">
+        <div className="flex items-center gap-2">
+          <Settings className="w-4 h-4 text-amber-400" />
+          <span className="font-serif font-bold text-amber-200 text-sm">
+            Campaign Optional Rules & Variant Mechanics
+          </span>
+          {activeCount > 0 && (
+            <span className="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-700/60 px-2 py-0.5 rounded-full">
+              {activeCount} Active
+            </span>
+          )}
+        </div>
+
+        {!readOnly && (
+          <div className="flex items-center gap-1.5 text-[10px] font-mono">
+            <span className="text-stone-400 font-semibold">Presets:</span>
+            <button
+              type="button"
+              onClick={() => applyPreset('default')}
+              className="px-2 py-0.5 bg-stone-900 hover:bg-stone-800 text-stone-300 rounded border border-stone-700 transition"
+            >
+              Standard 5e
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('tactical')}
+              className="px-2 py-0.5 bg-amber-950/80 hover:bg-amber-900/80 text-amber-300 rounded border border-amber-700/60 transition"
+            >
+              Gritty & Tactical
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPreset('high_power')}
+              className="px-2 py-0.5 bg-purple-950/80 hover:bg-purple-900/80 text-purple-300 rounded border border-purple-700/60 transition"
+            >
+              High Power / UA
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
+        {/* Rule Items */}
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useVariantEncumbrance ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useVariantEncumbrance}
+            onChange={() => toggleRule('useVariantEncumbrance')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Scale className="w-3 h-3 text-amber-400 shrink-0" /> Variant Encumbrance
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              STR×5 lbs = Encumbered, STR×10 lbs = Heavy penalty.
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useFlankingRules ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useFlankingRules}
+            onChange={() => toggleRule('useFlankingRules')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Swords className="w-3 h-3 text-amber-400 shrink-0" /> Tactical Flanking
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Gain Advantage / +2 on melee attacks when flanking.
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useGrittyRealismResting ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useGrittyRealismResting}
+            onChange={() => toggleRule('useGrittyRealismResting')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Shield className="w-3 h-3 text-amber-400 shrink-0" /> Gritty Realism Resting
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Short Rest = 8 hours, Long Rest = 7 days.
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useVariantCritDamage ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useVariantCritDamage}
+            onChange={() => toggleRule('useVariantCritDamage')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-amber-400 shrink-0" /> Variant Critical Damage
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Max initial damage die + roll second die.
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useMilestoneXp ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useMilestoneXp}
+            onChange={() => toggleRule('useMilestoneXp')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Crown className="w-3 h-3 text-amber-400 shrink-0" /> Milestone Progression
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Level up via DM story milestones instead of numerical XP.
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useDiagonal5105Rules ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useDiagonal5105Rules}
+            onChange={() => toggleRule('useDiagonal5105Rules')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Sliders className="w-3 h-3 text-amber-400 shrink-0" /> 5/10/5 Diagonal Movement
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Alternating 5ft and 10ft cost for grid diagonal movement.
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useSanityRules ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useSanityRules}
+            onChange={() => toggleRule('useSanityRules')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Brain className="w-3 h-3 text-amber-400 shrink-0" /> Sanity & Madness System
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Sanity score & madness checks (DMG p.264).
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useGestaltUA72 ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useGestaltUA72}
+            onChange={() => toggleRule('useGestaltUA72')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Layers className="w-3 h-3 text-amber-400 shrink-0" /> Gestalt Characters (UA)
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Dual class progression at every level (UA p.72).
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useDefenseBonusUA109 ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useDefenseBonusUA109}
+            onChange={() => toggleRule('useDefenseBonusUA109')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Shield className="w-3 h-3 text-amber-400 shrink-0" /> Class Defense Bonus
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Scaling defense bonus to AC by level (UA p.109).
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useArmorAsDRUA109 ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useArmorAsDRUA109}
+            onChange={() => toggleRule('useArmorAsDRUA109')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Crosshair className="w-3 h-3 text-amber-400 shrink-0" /> Armor as DR (UA109)
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Armor absorbs incoming damage (UA p.109/111).
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useHalfBreedSystem ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useHalfBreedSystem}
+            onChange={() => toggleRule('useHalfBreedSystem')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Dna className="w-3 h-3 text-amber-400 shrink-0" /> Half-Breed Ancestry
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Dual-ancestry hybrid heritage rules & traits.
+            </p>
+          </div>
+        </label>
+
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useMulticlassing ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.useMulticlassing}
+            onChange={() => toggleRule('useMulticlassing')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Zap className="w-3 h-3 text-amber-400 shrink-0" /> Multiclassing
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Allow secondary class selection & dual XP allocation.
+            </p>
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+};
 
 interface SessionLobbyModalProps {
   isOpen: boolean;
@@ -64,6 +388,11 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [sessionOptionalRules, setSessionOptionalRules] = useState<OptionalRulesConfig>(
+    activeSession?.optionalRules || {}
+  );
+  const [isUpdatingRules, setIsUpdatingRules] = useState<boolean>(false);
+  const [rulesSavedSuccess, setRulesSavedSuccess] = useState<boolean>(false);
 
   const activeEdition = activeCharacter?.edition || '5e';
   const playerCharacters = allCharacters.filter(c => 
@@ -79,6 +408,12 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
       setSelectedCharId(playerCharacters[0].id);
     }
   }, [activeCharacter?.id, activeEdition]);
+
+  useEffect(() => {
+    if (activeSession?.optionalRules) {
+      setSessionOptionalRules(activeSession.optionalRules);
+    }
+  }, [activeSession?.optionalRules]);
 
   useEffect(() => {
     if (isOpen) {
@@ -147,7 +482,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
         displayName: currentUser?.displayName || 'Dungeon Master'
       };
 
-      const newSession = await createGameSession(userObj, newSessionName || 'Campaign Session');
+      const newSession = await createGameSession(userObj, newSessionName || 'Campaign Session', sessionOptionalRules);
       onSessionChange(newSession.code);
       setTab('current');
       setNewSessionName('');
@@ -155,6 +490,21 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
       setErrorMsg(err.message || 'Failed to create session.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSaveSessionRules = async () => {
+    if (!activeSession) return;
+    setIsUpdatingRules(true);
+    setErrorMsg(null);
+    try {
+      await updateSessionOptionalRules(activeSession.code, sessionOptionalRules);
+      setRulesSavedSuccess(true);
+      setTimeout(() => setRulesSavedSuccess(false), 3000);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to update session optional rules.');
+    } finally {
+      setIsUpdatingRules(false);
     }
   };
 
@@ -193,6 +543,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
   };
 
   const isDmOfSession = activeSession && currentUser && activeSession.dmUid === currentUser.uid;
+  const activeTab = (!activeSession && tab === 'current') ? 'join' : tab;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
@@ -226,7 +577,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
             <button
               onClick={() => setTab('current')}
               className={`px-4 py-2.5 rounded-t-xl transition flex items-center gap-2 ${
-                tab === 'current'
+                activeTab === 'current'
                   ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
                   : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
               }`}
@@ -239,7 +590,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
           <button
             onClick={() => setTab('join')}
             className={`px-4 py-2.5 rounded-t-xl transition flex items-center gap-2 ${
-              tab === 'join'
+              activeTab === 'join'
                 ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
             }`}
@@ -251,7 +602,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
           <button
             onClick={() => setTab('create')}
             className={`px-4 py-2.5 rounded-t-xl transition flex items-center gap-2 ${
-              tab === 'create'
+              activeTab === 'create'
                 ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
                 : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
             }`}
@@ -270,7 +621,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
           )}
 
           {/* TAB 1: ACTIVE SESSION LOBBY */}
-          {tab === 'current' && activeSession && (
+          {activeTab === 'current' && activeSession && (
             <div className="space-y-5">
               {/* Session Banner */}
               <div className="bg-stone-950 border border-amber-600/40 rounded-2xl p-4 md:p-5 space-y-3 relative overflow-hidden">
@@ -320,51 +671,58 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                   </div>
                 </div>
 
-                {/* Character Picker for active session */}
+                {/* Character Picker for active session (Only for Players; DM controls campaign) */}
                 <div className="pt-2 border-t border-stone-800/80 flex flex-wrap items-center justify-between gap-2 text-xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-stone-400 font-medium">Your Active Character in Session:</span>
-                    <select
-                      value={selectedCharId}
-                      onChange={(e) => handleChangeCharacter(e.target.value)}
-                      className="bg-stone-900 border border-stone-700 rounded-lg px-2.5 py-1 text-amber-200 font-bold focus:outline-none focus:border-amber-500"
-                    >
-                      {playerCharacters.length === 0 ? (
-                        <option value="">No player characters found for active TRPG</option>
-                      ) : (
-                        playerCharacters.map(c => {
-                          const presence = presenceMap[c.id];
-                          const activeUserId = presence?.activeUserId;
-                          const activeUserName = presence?.activeUserName || 'Player';
-                          const activeUserRole = presence?.activeUserRole;
-                          const dmUserId = presence?.dmUserId;
-                          const currentUserId = currentUser?.uid || 'guest_player';
-                          const isPlayerRole = !currentUser || currentUser.role === 'Player';
+                  {!isDmOfSession ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-stone-400 font-medium">Your Active Character in Session:</span>
+                      <select
+                        value={selectedCharId}
+                        onChange={(e) => handleChangeCharacter(e.target.value)}
+                        className="bg-stone-900 border border-stone-700 rounded-lg px-2.5 py-1 text-amber-200 font-bold focus:outline-none focus:border-amber-500"
+                      >
+                        {playerCharacters.length === 0 ? (
+                          <option value="">No player characters found for active TRPG</option>
+                        ) : (
+                          playerCharacters.map(c => {
+                            const presence = presenceMap[c.id];
+                            const activeUserId = presence?.activeUserId;
+                            const activeUserName = presence?.activeUserName || 'Player';
+                            const activeUserRole = presence?.activeUserRole;
+                            const dmUserId = presence?.dmUserId;
+                            const currentUserId = currentUser?.uid || 'guest_player';
+                            const isPlayerRole = !currentUser || currentUser.role === 'Player';
 
-                          const isLockedByOtherPlayer = isPlayerRole && 
-                            !!activeUserId && 
-                            activeUserId !== currentUserId && 
-                            activeUserId !== dmUserId && 
-                            activeUserRole !== 'DM';
-                          const isCharDmActive = !!presence?.dmActive;
+                            const isLockedByOtherPlayer = isPlayerRole && 
+                              !!activeUserId && 
+                              activeUserId !== currentUserId && 
+                              activeUserId !== dmUserId && 
+                              activeUserRole !== 'DM';
+                            const isCharDmActive = !!presence?.dmActive;
 
-                          let label = `${c.name} (Lvl ${c.level} ${c.characterClass})`;
-                          if (isLockedByOtherPlayer) {
-                            label += ` [🔒 In Use: ${activeUserName}]`;
-                          }
-                          if (isCharDmActive) {
-                            label += ` [👑 DM Active]`;
-                          }
+                            let label = `${c.name} (Lvl ${c.level} ${c.characterClass})`;
+                            if (isLockedByOtherPlayer) {
+                              label += ` [🔒 In Use: ${activeUserName}]`;
+                            }
+                            if (isCharDmActive) {
+                              label += ` [👑 DM Active]`;
+                            }
 
-                          return (
-                            <option key={c.id} value={c.id} disabled={isLockedByOtherPlayer}>
-                              {label}
-                            </option>
-                          );
-                        })
-                      )}
-                    </select>
-                  </div>
+                            return (
+                              <option key={c.id} value={c.id} disabled={isLockedByOtherPlayer}>
+                                {label}
+                              </option>
+                            );
+                          })
+                        )}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-purple-300 font-semibold bg-purple-950/60 border border-purple-800/60 px-3 py-1.5 rounded-lg shadow-inner">
+                      <Crown className="w-4 h-4 text-purple-400 shrink-0" />
+                      <span>Campaign Host & DM Mode Active</span>
+                    </div>
+                  )}
 
                   <div className="flex items-center gap-2">
                     <button
@@ -456,11 +814,67 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                   })}
                 </div>
               </div>
+
+              {/* Campaign Optional Rules Section */}
+              <div className="space-y-3 pt-3 border-t border-stone-800">
+                {isDmOfSession ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-serif font-bold text-amber-300 flex items-center gap-1.5">
+                        <Crown className="w-3.5 h-3.5 text-purple-400" /> DM Campaign Optional Rules Management
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleSaveSessionRules}
+                        disabled={isUpdatingRules}
+                        className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-stone-950 font-bold text-xs rounded-xl shadow transition flex items-center gap-1.5"
+                      >
+                        {isUpdatingRules ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5 text-stone-950" />
+                        )}
+                        <span>Sync Rules to All Players</span>
+                      </button>
+                    </div>
+
+                    {rulesSavedSuccess && (
+                      <div className="bg-emerald-950/80 border border-emerald-600/70 text-emerald-200 text-xs px-3 py-2 rounded-lg flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>Campaign optional rules synchronized live to all player sheets!</span>
+                      </div>
+                    )}
+
+                    <CampaignRulesSelector
+                      rules={sessionOptionalRules}
+                      onChangeRules={setSessionOptionalRules}
+                      readOnly={false}
+                    />
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-serif font-bold text-amber-300 bg-amber-950/40 border border-amber-800/40 p-2.5 rounded-lg">
+                      <Lock className="w-4 h-4 text-amber-400 shrink-0" />
+                      <div>
+                        <span>Campaign Rules Enforced by DM ({activeSession.dmName})</span>
+                        <p className="text-[11px] font-sans text-stone-400 font-normal">
+                          All player character sheets and combat rules automatically conform to these settings.
+                        </p>
+                      </div>
+                    </div>
+                    <CampaignRulesSelector
+                      rules={sessionOptionalRules}
+                      onChangeRules={() => {}}
+                      readOnly={true}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {/* TAB 2: JOIN SESSION BY CODE */}
-          {tab === 'join' && (
+          {activeTab === 'join' && (
             <div className="space-y-4">
               <div className="bg-stone-950/80 border border-stone-800 rounded-2xl p-5 space-y-4">
                 <div className="space-y-1">
@@ -528,7 +942,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
           )}
 
           {/* TAB 3: CREATE NEW SESSION */}
-          {tab === 'create' && (
+          {activeTab === 'create' && (
             <div className="space-y-4">
               <div className="bg-stone-950/80 border border-stone-800 rounded-2xl p-5 space-y-4">
                 <div className="space-y-1">
@@ -536,11 +950,11 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                     <Crown className="w-4 h-4 text-purple-400" /> Host New Campaign Session (DM)
                   </h3>
                   <p className="text-xs text-stone-400 leading-relaxed">
-                    Create a dedicated room code for your campaign session. Share the code with your players so everyone syncs in real-time.
+                    Create a dedicated room code for your campaign session. Configure optional rules below to enforce standard mechanics across all connected players.
                   </p>
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-mono uppercase text-stone-300 font-bold mb-1">
                       Campaign Session Name
@@ -551,6 +965,18 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                       onChange={(e) => setNewSessionName(e.target.value)}
                       placeholder="e.g. Curse of Strahd - Session 12"
                       className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3.5 py-2.5 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* Campaign Rules Initial Selector */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-mono uppercase text-stone-300 font-bold">
+                      Initial Campaign Optional Rules & Variant Mechanics
+                    </label>
+                    <CampaignRulesSelector
+                      rules={sessionOptionalRules}
+                      onChangeRules={setSessionOptionalRules}
+                      readOnly={false}
                     />
                   </div>
 

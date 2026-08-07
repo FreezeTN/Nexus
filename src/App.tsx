@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CharacterData, DiceRollResult, RuleEdition, Party } from './types';
 import { SAMPLE_CHARACTERS } from './data/defaultCharacters';
 import { DEFAULT_PARTIES } from './data/defaultParties';
@@ -200,7 +200,20 @@ export default function App() {
   const [rollLogs, setRollLogs] = useState<DiceRollResult[]>([]);
   const [activeRollResult, setActiveRollResult] = useState<DiceRollResult | null>(null);
 
-  const activeCharacter = characters.find(c => c.id === activeCharacterId) || null;
+  const rawActiveCharacter = characters.find(c => c.id === activeCharacterId) || null;
+  const activeCharacter = useMemo(() => {
+    if (!rawActiveCharacter) return null;
+    if (!activeSession?.optionalRules || Object.keys(activeSession.optionalRules).length === 0) {
+      return rawActiveCharacter;
+    }
+    return {
+      ...rawActiveCharacter,
+      optionalRules: {
+        ...rawActiveCharacter.optionalRules,
+        ...activeSession.optionalRules
+      }
+    };
+  }, [rawActiveCharacter, activeSession?.optionalRules]);
   const currentSystemTheme: RuleEdition = previewTheme || activeCharacter?.edition || '5e';
 
   useEffect(() => {
@@ -624,6 +637,7 @@ export default function App() {
           <Sheet1StatsFeatures
             character={activeCharacter}
             currentUser={currentUser}
+            activeSession={activeSession}
             onUpdateCharacter={handleUpdateCharacter}
             onRoll={handleRoll}
           />

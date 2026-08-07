@@ -96,14 +96,20 @@ export function getSpellSaveDC(char: CharacterData): number {
   if (char.spellSaveDCOverride) return char.spellSaveDCOverride;
   const abilityMod = getAbilityModifier(char.abilities[char.spellcastingAbility]?.score || 10);
   const profBonus = getProficiencyBonus(getEffectiveLevel(char));
-  return 8 + profBonus + abilityMod;
+  const itemBonus = (char.inventory || [])
+    .filter(i => i.equipped && i.attuned && i.spellDcBonus)
+    .reduce((sum, i) => sum + (i.spellDcBonus || 0), 0);
+  return 8 + profBonus + abilityMod + itemBonus;
 }
 
 export function getSpellAttackBonus(char: CharacterData): number {
   if (char.spellAttackBonusOverride !== undefined) return char.spellAttackBonusOverride;
   const abilityMod = getAbilityModifier(char.abilities[char.spellcastingAbility]?.score || 10);
   const profBonus = getProficiencyBonus(getEffectiveLevel(char));
-  return profBonus + abilityMod;
+  const itemBonus = (char.inventory || [])
+    .filter(i => i.equipped && i.attuned && i.spellDcBonus)
+    .reduce((sum, i) => sum + (i.spellDcBonus || 0), 0);
+  return profBonus + abilityMod + itemBonus;
 }
 
 export function getCombinedLevel(char: CharacterData): number {
@@ -639,6 +645,7 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
   const inventory = char.inventory || [];
   const equippedItems = inventory.filter(i => i.equipped && !i.stored);
 
+  // 1. Equipped Items
   for (const item of equippedItems) {
     if (item.resistance && item.resistance.trim()) {
       const parts = item.resistance.split(/[,/]/).map(s => s.trim()).filter(Boolean);
@@ -650,11 +657,98 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
     }
   }
 
-  // Add race/feature implied resistances
+  // 2. Base Race & Ancestry Resistances
   const raceLower = (char.race || '').toLowerCase();
-  if (raceLower.includes('tiefling')) list.push({ type: 'Fire', source: 'Tiefling Racial Resistance' });
-  if (raceLower.includes('dwarf')) list.push({ type: 'Poison', source: 'Dwarven Resilience' });
-  if (raceLower.includes('dragonborn')) list.push({ type: 'Draconic', source: 'Dragonborn Resistance' });
+
+  if (raceLower.includes('tiefling')) {
+    if (!list.some(r => r.type.toLowerCase() === 'fire')) {
+      list.push({ type: 'Fire', source: 'Hellish Resistance (Tiefling)' });
+    }
+  }
+  if (raceLower.includes('dwarf')) {
+    if (!list.some(r => r.type.toLowerCase() === 'poison')) {
+      list.push({ type: 'Poison', source: 'Dwarven Resilience (Dwarf)' });
+    }
+  }
+  if (raceLower.includes('aasimar')) {
+    if (!list.some(r => r.type.toLowerCase() === 'necrotic')) {
+      list.push({ type: 'Necrotic', source: 'Celestial Resistance (Aasimar)' });
+    }
+    if (!list.some(r => r.type.toLowerCase() === 'radiant')) {
+      list.push({ type: 'Radiant', source: 'Celestial Resistance (Aasimar)' });
+    }
+  }
+  if (raceLower.includes('warforged')) {
+    if (!list.some(r => r.type.toLowerCase() === 'poison')) {
+      list.push({ type: 'Poison', source: 'Constructed Resilience (Warforged)' });
+    }
+  }
+  if (raceLower.includes('dragonborn')) {
+    // Detect elemental type from feature text, defaulting to Fire
+    const featStr = (char.classFeatures || []).map(f => `${f.name} ${f.description}`).join(' ').toLowerCase();
+    let draconicType = 'Fire';
+    if (featStr.includes('cold') || featStr.includes('white') || featStr.includes('silver')) draconicType = 'Cold';
+    else if (featStr.includes('lightning') || featStr.includes('blue') || featStr.includes('bronze')) draconicType = 'Lightning';
+    else if (featStr.includes('acid') || featStr.includes('black') || featStr.includes('copper')) draconicType = 'Acid';
+    else if (featStr.includes('poison') || featStr.includes('green')) draconicType = 'Poison';
+
+    if (!list.some(r => r.type.toLowerCase() === draconicType.toLowerCase())) {
+      list.push({ type: draconicType, source: `Draconic Resistance (${draconicType} Dragonborn)` });
+    }
+  }
+  if (raceLower.includes('genasi')) {
+    const featStr = (char.classFeatures || []).map(f => `${f.name} ${f.description}`).join(' ').toLowerCase();
+    let genasiType = 'Fire';
+    if (featStr.includes('water') || featStr.includes('cold')) genasiType = 'Cold';
+    else if (featStr.includes('earth') || featStr.includes('acid')) genasiType = 'Acid';
+    else if (featStr.includes('air') || featStr.includes('lightning')) genasiType = 'Lightning';
+
+    if (!list.some(r => r.type.toLowerCase() === genasiType.toLowerCase())) {
+      list.push({ type: genasiType, source: `Elemental Resistance (${genasiType} Genasi)` });
+    }
+  }
+
+  // 3. Half-Breed / Hybrid Heritage Ancestry (The Alpine DM System)
+  if (char.hybridHeritage?.enabled) {
+    const p1 = (char.hybridHeritage.primaryParent || '').toLowerCase();
+    const p2 = (char.hybridHeritage.secondaryParent || '').toLowerCase();
+
+    const applyParentResist = (pName: string) => {
+      if (pName.includes('tiefling') && !list.some(r => r.type.toLowerCase() === 'fire')) {
+        list.push({ type: 'Fire', source: 'Tiefling Heritage Resistance' });
+      }
+      if ((pName.includes('dwarf') || pName.includes('warforged')) && !list.some(r => r.type.toLowerCase() === 'poison')) {
+        list.push({ type: 'Poison', source: 'Dwarven / Warforged Heritage Resilience' });
+      }
+      if (pName.includes('aasimar')) {
+        if (!list.some(r => r.type.toLowerCase() === 'necrotic')) list.push({ type: 'Necrotic', source: 'Celestial Heritage Resistance' });
+        if (!list.some(r => r.type.toLowerCase() === 'radiant')) list.push({ type: 'Radiant', source: 'Celestial Heritage Resistance' });
+      }
+      if (pName.includes('dragonborn') && !list.some(r => r.type.toLowerCase() === 'fire')) {
+        list.push({ type: 'Fire', source: 'Draconic Heritage Resistance' });
+      }
+      if (pName.includes('genasi') && !list.some(r => r.type.toLowerCase() === 'fire')) {
+        list.push({ type: 'Fire', source: 'Elemental Heritage Resistance' });
+      }
+    };
+
+    applyParentResist(p1);
+    applyParentResist(p2);
+  }
+
+  // 4. Scan Class / Racial Features for explicit "resistance to [type]"
+  if (char.classFeatures) {
+    for (const feat of char.classFeatures) {
+      const text = `${feat.name} ${feat.description}`.toLowerCase();
+      const matches = text.matchAll(/resistance to (fire|cold|lightning|acid|poison|necrotic|radiant|psychic|force|thunder|slashing|piercing|bludgeoning|physical)/gi);
+      for (const match of matches) {
+        const typeFound = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+        if (!list.some(r => r.type.toLowerCase() === typeFound.toLowerCase() && r.source === feat.name)) {
+          list.push({ type: typeFound, source: feat.name });
+        }
+      }
+    }
+  }
 
   return list;
 }
@@ -1411,7 +1505,13 @@ export interface SpeedDetails {
 }
 
 export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
-  const baseSpeed = char.speed ?? 30;
+  let baseSpeed = char.speed ?? 30;
+  const hasMobileFeat = (char.feats || []).some(f => f.name.toLowerCase().includes('mobile')) ||
+                        (char.classFeatures || []).some(f => f.name.toLowerCase().includes('mobile'));
+  if (hasMobileFeat) {
+    baseSpeed += 10;
+  }
+
   const conditions = char.conditions || [];
   const exhaustion = char.exhaustionLevel || 0;
   const effects = getConditionEffects(conditions, exhaustion);

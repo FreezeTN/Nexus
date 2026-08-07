@@ -5,6 +5,7 @@ import { TabId } from './Navigation';
 import { getPassivePerception, getProficiencyBonus, formatModifier, convertCharacterEdition, getEffectiveSpeed, getArmorClassBreakdown, getCombinedLevel, getActiveClassChoice, isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../data/monsterPortraits';
 import { getXpProgressDetails } from '../data/levelProgressionData';
+import { revertTransformation } from '../data/transformationData';
 import { HpOrb, getHpColorClass } from './HpOrb';
 import { StatblockExportModal } from './character/StatblockExportModal';
 import { LevelProgressionModal } from './modals/LevelProgressionModal';
@@ -205,8 +206,21 @@ export const Header: React.FC<HeaderProps> = ({
           hpCurrent = Math.max(0, hpCurrent - damageToHp);
         }
       } else {
-        hpCurrent = Math.max(0, hpCurrent - amount);
+        hpCurrent = hpCurrent - amount;
       }
+
+      // Check if character is in transformed Beast / Wild Shape form and form HP drops <= 0
+      if (activeCharacter.activeTransformation && hpCurrent <= 0) {
+        // Revert transformation with overflow damage calculated
+        const dummyCharWithNewHp = { ...activeCharacter, hpCurrent, hpTemp };
+        const revertedChar = revertTransformation(dummyCharWithNewHp);
+        alert(`🐾 Beast Form (${activeCharacter.activeTransformation.form.name}) dropped to 0 HP!\nReverted to original form. Overflow damage applied to base HP (${revertedChar.hpCurrent}/${revertedChar.hpMax} HP).`);
+        onUpdateCharacter(revertedChar);
+        setHpDelta('');
+        return;
+      }
+
+      hpCurrent = Math.max(0, hpCurrent);
 
       let deathSavesFailures = activeCharacter.deathSavesFailures || 0;
       let conditions = activeCharacter.conditions || [];
@@ -234,6 +248,18 @@ export const Header: React.FC<HeaderProps> = ({
         deathSavesFailures,
         conditions
       });
+
+      // Concentration Check Helper Trigger
+      const hasConcentratingSpell = (activeCharacter.spells || []).some(s => s.concentration);
+      if (amount > 0 && hasConcentratingSpell) {
+        const dc = Math.max(10, Math.floor(amount / 2));
+        const conScore = activeCharacter.abilities?.CON?.score || 10;
+        const conMod = Math.floor((conScore - 10) / 2);
+        const hasWarCaster = (activeCharacter.feats || []).some(f => f.name.toLowerCase().includes('war caster')) ||
+                             (activeCharacter.classFeatures || []).some(f => f.name.toLowerCase().includes('war caster'));
+        alert(`⚡ Concentration Check Required!\nTook ${amount} damage while concentrating on a spell.\nTarget DC: ${dc} (Roll 1d20 + ${conMod} CON save${hasWarCaster ? ' WITH ADVANTAGE from War Caster feat' : ''}).`);
+      }
+
       setHpDelta('');
     } else if (type === 'temp') {
       hpTemp = amount;
