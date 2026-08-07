@@ -174,12 +174,59 @@ MILESTONE 12: ELEMENTAL & COMBAT DAMAGE IMMUNITIES
 
 * Combat Damage Resolution:
   - Updated `applyResistanceAndDRToDamage` to apply Immunity **FIRST** (per D&D 5e rules), reducing incoming damage to 0 HP before Resistance or Damage Reduction (DR) calculations occur.
-  - Generates clear combat combat logs: `🚫 Immunity (Source) completely negated all X damage (0 HP taken)`.
+  - Generates clear combat logs: `🚫 Immunity (Source) completely negated all X damage (0 HP taken)`.
 
 * Sheet 3 (Gear & Wealth) & Sheet 2 (Combat) UI Integration:
   - Added "Immunity Granted" input fields to the Add Inventory Item and Edit Inventory Item modals in Sheet 3.
   - Added purple "Immune: <type>" badges to item inventory cards.
   - Added an "Active Defenses & Mitigations" summary bar to Sheet 2 (Combat) displaying all active DR, Resistances, and Immunities currently equipped or active.
+
+--------------------------------------------------------------------------------
+MILESTONE 13: PROCEDURAL WEB AUDIO SYNTHESIZER & MASTER SOUND CONTROL
+--------------------------------------------------------------------------------
+* Pure Web Audio Synthesizer:
+  - Built pure Web Audio API oscillator synthesis engine delivering 12 dynamic sound effects: Dice Rolls, Weapon Hit, Critical Hit Chime, Miss/Parry Whoosh, Fire Roar, Cold Shimmer, Lightning Thunder, Acid Sizzle, Healing Arpeggio, Spell Cast, Level Up Fanfare, and Death Bell.
+
+* Audio Control Interface (`AudioOptionsModal.tsx`):
+  - Master Volume Slider (0% to 100%) and 1-click volume presets (Mute, 25%, 50%, 75%, Max 100%).
+  - Audio preferences are saved automatically to browser local storage and applied across all combat events, attacks, and dice rolls.
+
+--------------------------------------------------------------------------------
+MILESTONE 14: DM ACTIVE PRESENCE UNLOCKING & CONCURRENT CHARACTER ACCESS
+--------------------------------------------------------------------------------
+* Non-Locking Dungeon Master Presence:
+  - Refactored active character slot locking behavior so Dungeon Master active presence on a sheet displays a prominent `👑 DM Active` badge without preventing player selection or editing.
+  - Players and DMs can select, view, and modify character sheets concurrently. Slot selection is locked strictly when another active Player occupies the character slot.
+
+--------------------------------------------------------------------------------
+MILESTONE 15: UNIFIED OPTIONS MODAL & CHARACTER MANAGEMENT
+--------------------------------------------------------------------------------
+* Consolidated Configuration Dialog:
+  - Migrated JSON Character Import (`.json`), Character Export (`.json`), and Multi-Ruleset TRPG System Conversion into the unified Options modal (`OptionsModal.tsx`) under a dedicated "Character" tab.
+  - Streamlined header UI layout and consolidated controls for logged-in users.
+
+--------------------------------------------------------------------------------
+MILESTONE 16: SPELL MANAGEMENT, SORTING & STRICT UNIQUE PROTECTION
+--------------------------------------------------------------------------------
+* Spellbook Sorting & Uniqueness Enforcement:
+  - Implemented ascending and descending spell sorting options across Daily Spells and Spellbook views (Cantrips → Level 9, Level 9 → Cantrips, A-Z / Z-A by Name, Magic School).
+  - Enforced strict spellbook uniqueness by Name and Effect to prevent duplicate spell entries when adding custom spells, selecting official 5e presets, or importing from the Compendium.
+  - Standardized all UI spell management labels and section headings to pure English expressions.
+
+--------------------------------------------------------------------------------
+MILESTONE 17: HYBRID HERITAGE GENERATOR & SUPERNATURAL TRANSFORMATIONS
+--------------------------------------------------------------------------------
+* Hybrid Ancestry & Transformation Mechanics:
+  - Created `HybridHeritageModal.tsx`: Custom ancestry generator combining two distinct species (e.g. Half-Elf, Half-Orc, Tiefling-Human, Aasimar-Dwarf) with custom trait selection and stat blends.
+  - Created `TransformationModal.tsx`: Species transformation engine applying supernatural transformations (Vampire, Lycanthrope, Lich, Fiend, Dragonborn, Aberration) with stat modifiers, temporary HP multipliers, special senses, and vulnerability/immunity traits.
+
+--------------------------------------------------------------------------------
+MILESTONE 18: INTEGRATED USER MANUAL & VERSION CHANGELOG TIMELINE
+--------------------------------------------------------------------------------
+* Complete In-App Version History & Guide (`Sheet6UserGuide.tsx`):
+  - Integrated interactive version changelog timeline with release badges, dates, and keyword filtering.
+  - Added dedicated user guide sections for Audio & Sound Engine, DM Non-Locking Presence, Hybrid Heritages, Transformations, and Spellbook Management.
+  - Fully synchronized `CHANGELOG.txt` and `Sheet6UserGuide.tsx` version histories.
 
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG

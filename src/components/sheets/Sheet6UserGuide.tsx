@@ -199,6 +199,16 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           name: 'Class Features & Feats with Max HP Grants',
           action: '"+ Add Feature / Feat" Buttons',
           detail: 'Add custom racial traits, class features (e.g. Action Surge, Second Wind), or feats with custom source tags and optional Max HP bonuses (e.g., +10 HP for Tough feat).'
+        },
+        {
+          name: 'Hybrid Heritage Ancestry Generator',
+          action: 'Options Modal (⚙️) / Race Selector',
+          detail: 'Combine two distinct ancestries (e.g. Half-Elf, Half-Orc, Tiefling-Human, Aasimar-Dwarf) with custom trait selection, blended racial bonuses, and combined darkvision capabilities.'
+        },
+        {
+          name: 'Supernatural Species Transformations',
+          action: 'Options Modal (⚙️) / Character Tab',
+          detail: 'Apply supernatural species transformations (Vampire, Lycanthrope, Lich, Fiend, Dragonborn, Aberration) with stat modifiers, temporary HP multipliers, special senses, and vulnerability/immunity traits.'
         }
       ]
     },
@@ -301,6 +311,16 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           name: 'Spellbook & Cantrips',
           action: '"+ Add Spell" / Level Filters',
           detail: 'Organize spells by level (Cantrip to 9th). Filter by level, mark prepared spells, and click "Cast / Roll" to trigger spell attacks or damage rolls directly.'
+        },
+        {
+          name: 'Ascending & Descending Spell Level Sorting',
+          action: 'Sorting Selector (Level / Name / School)',
+          detail: 'Sort spells ascending (Cantrips → Level 9) or descending (Level 9 → Cantrips), by Name (A-Z / Z-A), or Magic School across both Daily Spells and Spellbook views.'
+        },
+        {
+          name: 'Strict Unique Spellbook Protection',
+          action: 'Automatic Duplicate Guard',
+          detail: 'Enforces strict spellbook uniqueness by Name and Effect, preventing duplicate entries when adding custom spells, selecting 5e presets, or importing from the Compendium.'
         }
       ]
     },
@@ -867,6 +887,14 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
         {
           category: '✨ Strict Spellbook Uniqueness Protection',
           detail: 'Spells in a character\'s spellbook stay strictly unique by Name and Effect. Prevents duplicate spell entries when adding custom spells, selecting official 5e presets, or importing from the Compendium.'
+        },
+        {
+          category: '🧬 Hybrid Heritage Ancestry Generator',
+          detail: 'Combine two distinct ancestries (e.g. Half-Elf, Half-Orc, Tiefling-Human, Aasimar-Dwarf) with custom trait selection, blended racial bonuses, and darkvision traits.'
+        },
+        {
+          category: '🧛 Supernatural Species Transformations',
+          detail: 'Apply species transformations (Vampire, Lycanthrope, Lich, Fiend, Dragonborn, Aberration) with stat modifiers, temporary HP multipliers, special senses, and vulnerability/immunity traits.'
         },
         {
           category: '🌐 English UI Standardization',
