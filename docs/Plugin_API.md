@@ -30,6 +30,39 @@ export interface GameSystemPlugin {
 }
 ```
 
+## Versioned Marketplace `plugin/manifest.json` Schema
+
+Plugins distributed via the Extension Marketplace declare an explicit `manifest.json` file inside `plugin/`:
+
+```json
+{
+  "name": "Pathfinder 2e Tactical Combat Engine",
+  "version": "2.1.0",
+  "author": "Paizo Community Devs",
+  "dependencies": {},
+  "requiresAppVersion": ">=3.0.0",
+  "permissions": [
+    "character_read",
+    "event_bus",
+    "ui_widgets"
+  ],
+  "description": "Adds 3-action economy tracking, MAP calculators, and reaction indicators.",
+  "category": "tactical",
+  "entryPoint": "plugin/index.js"
+}
+```
+
+### Manifest Fields Specification:
+- **`name`**: Display name of the extension or ruleset.
+- **`version`**: Semantic version string (e.g. `2.1.0`).
+- **`author`**: Extension publisher or author.
+- **`dependencies`**: Map of required plugin IDs and semantic version constraints.
+- **`requiresAppVersion`**: Required host platform version (e.g. `>=3.0.0`). Checked automatically upon installation.
+- **`permissions`**: List of requested platform capabilities (`storage`, `event_bus`, `dice_engine`, `character_read`, `character_write`, `ui_widgets`, `audio_engine`, `network_api`).
+- **`category`**: Extension classification (`fantasy`, `cyberpunk`, `horror`, `tactical`, `universal`, `utility`).
+- **`entryPoint`**: Execution entry script path.
+
+
 ## Sub-Engines
 
 ### 1. `SystemCharacterEngine`

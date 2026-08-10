@@ -99,9 +99,43 @@
 .shadow-theme-glow { box-shadow: 0 0 25px var(--theme-glow) !important; }
 .ring-theme-accent { --tw-ring-color: var(--theme-ring) !important; }
 
-/* Custom theme scrollbar accents */
+/* Custom theme scrollbar styling - ultra sleek & dark */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb {
-  background-color: var(--theme-border-accent);
-  border-radius: 4px;
+  background-color: rgba(120, 113, 108, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--theme-accent, #d97706);
+}
+
+/* Firefox scrollbar styling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 113, 108, 0.4) transparent;
+}
+
+/* Utility to completely hide scrollbars where horizontal sliding tabs or clean views are used */
+.scrollbar-none,
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }
 

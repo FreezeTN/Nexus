@@ -23,6 +23,7 @@ import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
 import { CommandPaletteModal } from './components/common/CommandPaletteModal';
 import { ExtensionManagerModal } from './components/modals/ExtensionManagerModal';
 import { DeveloperSdkModal } from './components/modals/DeveloperSdkModal';
+import { UserManualModal } from './components/modals/UserManualModal';
 import { eventBus } from './events/eventBus';
 import { useHistoryState } from './utils/useHistoryState';
 import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
@@ -119,6 +120,7 @@ export default function App() {
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
   const [showExtensionManager, setShowExtensionManager] = useState<boolean>(false);
   const [showDeveloperSdk, setShowDeveloperSdk] = useState<boolean>(false);
+  const [showUserManualModal, setShowUserManualModal] = useState<boolean>(false);
 
   // Global Ctrl+K / Cmd+K listener for Command Palette
   useEffect(() => {
@@ -999,6 +1001,12 @@ export default function App() {
       <DeveloperSdkModal
         isOpen={showDeveloperSdk}
         onClose={() => setShowDeveloperSdk(false)}
+      />
+
+      {/* Complete User Manual Modal */}
+      <UserManualModal
+        isOpen={showUserManualModal}
+        onClose={() => setShowUserManualModal(false)}
       />
     </div>
   );

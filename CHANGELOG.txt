@@ -229,8 +229,19 @@ MILESTONE 18: INTEGRATED USER MANUAL & VERSION CHANGELOG TIMELINE
   - Fully synchronized `CHANGELOG.txt` and `Sheet6UserGuide.tsx` version histories.
 
 --------------------------------------------------------------------------------
-MILESTONE 19: GUEST ADVENTURER MODE, DASHBOARD WIDGET FIXES & DEVELOPER SDK
+MILESTONE 19: EXTENSION MARKETPLACE, GUEST MODE & UI DECLUTTERING
 --------------------------------------------------------------------------------
+* Versioned Extension Marketplace & plugin/manifest.json Spec:
+  - Implemented full support for `plugin/manifest.json` metadata schema containing `name`, `version`, `author`, `dependencies`, `requiresAppVersion`, and `permissions`.
+  - Added semantic version compatibility checker (`satisfiesAppVersion`) validating extensions against host platform (`v3.3.1`).
+  - Added curated extension marketplace catalog (Pathfinder 2e Tactical Engine, Cyberpunk Netrunner Suite, Shadowrun Matrix, Call of Cthulhu Sanity, 3D Dice Physics, Soundscape Synthesizer, Homebrew Creator).
+  - Integrated interactive `manifest.json` inspector, version update detection (`v1.4.2` -> `v2.0.0`), permission security warnings, and custom JSON manifest uploader.
+
+* Decluttered Navigation & Ultra-Sleek Scrollbars:
+  - Added `.no-scrollbar` / `.scrollbar-none` CSS utility rules to hide unsightly horizontal overflow scrollbars on tab headers.
+  - Streamlined tab labels across modal navigation bars to fit comfortably without clipping or horizontal overflow clutter.
+  - Styled global scrollbars with an ultra-sleek 5px transparent track and subtle dark thumb for high contrast readability.
+
 * Guest Adventurer Mode & Unlocked Local Navigation:
   - Enabled unauthenticated guest users to view, create, and edit character sheets locally without login restrictions.
   - Added a non-intrusive Guest Adventurer banner on the Main Menu with sign-in prompts while keeping full local interactivity available.
@@ -242,6 +253,27 @@ MILESTONE 19: GUEST ADVENTURER MODE, DASHBOARD WIDGET FIXES & DEVELOPER SDK
 * Developer SDK & Command Palette Integrations:
   - Integrated Developer SDK & Architecture Center into the Command Palette (Ctrl+K) for instant access to system registry tests, event logs, and test harness execution.
   - Updated event bus history hooks and resolved automated architecture test assertions across all 5 TRPG rulesets.
+
+--------------------------------------------------------------------------------
+MILESTONE 20: COMPLETE APPLICATION USER MANUAL, SCROLL ENGINE & BUILD FIXES
+--------------------------------------------------------------------------------
+* Complete In-App User Manual (`UserManualModal.tsx` & `Sheet6UserGuide.tsx`):
+  - Built a comprehensive, searchable User Manual modal and embedded tab view covering all feature domains:
+    1. Getting Started, Guest Adventurer Mode & Cloud Persistence.
+    2. Multi-System TRPG Engines (D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, Custom Systems).
+    3. Character Sheets 1–7 & DM Campaign Overview.
+    4. Multiplayer Live Sessions, 6-Character Room Codes & Party Manager.
+    5. Extension Marketplace, plugin/manifest.json, Event Bus & Developer SDK.
+    6. Companion Manager, Animal Familiars, Wild Shape & 0 HP Form Reversion.
+    7. Polyhedral Floating Dice Bar, Custom Formulas & 12 Web Audio Sound FX.
+    8. Command Palette (Ctrl+K), Workspace Customizer & Theme Engines.
+
+* Horizontal Tab Overflow Engine:
+  - Re-engineered all navigation tab headers across Sheet 6, User Manual, and Options modals with touch-friendly horizontal scrolling (`overflow-x-auto`), `shrink-0` non-wrapping labels, and `.scrollbar-none` CSS rules.
+  - Resolved tab clipping and text cutoff issues on narrow viewports and high-density screens.
+
+* Production Build Output Optimization:
+  - Fixed Vite build configuration in `vite.config.ts` (`outDir: 'dist'`, `emptyOutDir: true`) ensuring application artifacts compile cleanly into the `dist/` directory for Cloud Run container hosting and sharing.
 
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG

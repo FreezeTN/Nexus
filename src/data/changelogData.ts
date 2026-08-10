@@ -14,12 +14,41 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.4.0',
+    date: 'August 2026',
+    title: 'Complete Application User Manual, Horizontal Tab Overflow Engine & Build Artifact Fixes',
+    badge: 'Latest Release',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '📖 Complete In-App User Manual Modal',
+        detail: 'Created a standalone, searchable User Manual modal (UserManualModal.tsx) and embedded User Manual view in Sheet 6 detailing all application capabilities: Guest Mode, 6 TRPG Rulesets, Sheets 1–7, Multiplayer Sessions, Extension Marketplace, Companions, Dice & Audio Synthesizer, and Keyboard Power Tools.'
+      },
+      {
+        category: '↔️ Ultra-Clean Horizontal Scroll Navigation',
+        detail: 'Resolved tab header clipping and label cutoff across Sheet 6, User Manual, and Options modals with smooth overflow-x-auto scrolling, flex-nowrap badges, and hidden scrollbar utilities (.scrollbar-none).'
+      },
+      {
+        category: '📦 Build Artifact & Cloud Deployment Optimization',
+        detail: 'Updated Vite build configuration (outDir: "dist", emptyOutDir: true) ensuring clean static artifact bundling for seamless Cloud Run deployments and app share workflows.'
+      }
+    ]
+  },
+  {
     version: 'v3.3.1',
     date: 'August 2026',
-    title: 'Guest Adventurer Mode, Dashboard Widget Routing & Developer SDK Integrations',
-    badge: 'Latest Release',
+    title: 'Versioned Extension Marketplace, Guest Mode & Dashboard Routing',
+    badge: 'Feature Update',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     highlights: [
+      {
+        category: '📦 Versioned Extension Marketplace & manifest.json Specification',
+        detail: 'Full support for plugin/manifest.json metadata schema (name, version, author, dependencies, requiresAppVersion, permissions), semantic compatibility checks, version update alerts, and custom JSON manifest uploader.'
+      },
+      {
+        category: '✨ Ultra-Sleek Scrollbars & Decluttered Navigation Tabs',
+        detail: 'Re-engineered modal navigation headers with hidden scrollbars (.scrollbar-none / .no-scrollbar) and ultra-sleek 5px dark scrollbar tracks for a pristine, uncluttered visual experience.'
+      },
       {
         category: '👤 Guest Adventurer Mode & Offline Sheet Access',
         detail: 'Unauthenticated users can now inspect, create, and manage character sheets locally without being blocked by login prompts.'

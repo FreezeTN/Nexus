@@ -25,7 +25,7 @@ export interface EventPayloadMap {
   SpellLearned: { characterId: string; spellName: string; level?: number };
   SessionStarted: { sessionId: string; sessionTitle: string };
   WorldChanged: { worldId: string; worldName: string };
-  SystemPluginToggled: { pluginId: RuleEdition; enabled: boolean };
+  SystemPluginToggled: { pluginId: RuleEdition | string; enabled: boolean; version?: string; updated?: boolean; uninstalled?: boolean };
   DiceRolled: { formula: string; total: number; isNat20?: boolean; isNat1?: boolean; rollerName?: string };
 }
 

@@ -33,7 +33,9 @@ import {
   Users,
   CheckCircle2,
   Zap,
-  RadioTower
+  RadioTower,
+  ShoppingBag,
+  Dog
 } from 'lucide-react';
 
 interface Sheet6UserGuideProps {
@@ -47,10 +49,10 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState<string>('all');
-  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'conversion' | 'audio' | 'changelog'>(edition);
+  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'manual' | 'conversion' | 'audio' | 'changelog'>(edition);
 
   useEffect(() => {
-    if (guideEdition === 'conversion' || guideEdition === 'audio' || guideEdition === 'changelog') return;
+    if (guideEdition === 'manual' || guideEdition === 'conversion' || guideEdition === 'audio' || guideEdition === 'changelog') return;
     if (enabledSystems && enabledSystems.length > 0) {
       if (!enabledSystems.includes(guideEdition as RuleEdition)) {
         setGuideEdition(enabledSystems[0]);
@@ -865,10 +867,257 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     }
   ];
 
+  // Complete App User Manual Data
+  const guideSectionsManual = [
+    {
+      id: 'manual-start',
+      title: '🚀 Getting Started & Guest Mode',
+      icon: UserPlus,
+      color: 'text-amber-400',
+      description: 'Account management, Guest Mode, Cloud Synchronization, and character backups.',
+      items: [
+        {
+          name: 'Guest Adventurer Mode',
+          action: 'Instant Access Without Registration',
+          detail: 'Create, inspect, and roll on character sheets stored in browser local storage. No registration is required to access full sheet functionality.'
+        },
+        {
+          name: 'Firebase Account & Cloud Sync',
+          action: 'Persistent Cross-Device Sync',
+          detail: 'Sign in via Google or Email to sync character sheets across desktop, tablet, and mobile devices in real time via Firebase Firestore.'
+        },
+        {
+          name: 'Multi-Character & NPC Switcher',
+          action: 'Header Character Dropdown',
+          detail: 'Switch instantly between stored Player Characters, DM Encounter Monsters, and Town Shopkeepers / Merchants with custom vendor margins.'
+        },
+        {
+          name: 'JSON Export & Import',
+          action: 'Options Modal (⚙️) → Character',
+          detail: 'Export character sheets as .json backup files or import existing sheet backups into your local or cloud storage.'
+        }
+      ]
+    },
+    {
+      id: 'manual-systems',
+      title: '⚔️ Rule Systems & Multi-Edition Engines',
+      icon: Layers,
+      color: 'text-emerald-400',
+      description: 'Native rulesets: D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, and Custom TRPGs.',
+      items: [
+        {
+          name: 'D&D 5th Edition (5e)',
+          action: 'Core 5e Ruleset',
+          detail: 'Proficiency Bonus scaling (+2 to +6), Advantage/Disadvantage toggles, 18 skill checks, Passive Perception, Concentration tracking, Pact Magic, and 20 preset spells.'
+        },
+        {
+          name: 'D&D 3.5 Edition (3.5e)',
+          action: 'v3.5 Core Ruleset',
+          detail: 'Base Attack Bonus (BAB) progression (+6/+1 iterative attacks), Fortitude/Reflex/Will base save tables, Touch AC, Flat-Footed AC, Skill Points Calculator with Class/Cross-Class caps, Caster Level, Damage Reduction (DR), and Spell Resistance (SR).'
+        },
+        {
+          name: 'Shadowrun 5e (Cyberpunk)',
+          action: 'd6 Dice Pool Engine',
+          detail: 'Dice pools (Attribute + Skill), Hit threshold (5s and 6s), Glitches, Physical/Stun condition monitors with wound penalties, Cyberware Essence limits (Max 6.00), Cyberdeck Matrix stats, Nuyen (¥), and Karma.'
+        },
+        {
+          name: 'Pathfinder 2e (PF2e)',
+          action: '3-Action Turn Economy',
+          detail: '3-Action economy, Multiple Attack Penalty (MAP: -0, -5, -10), Four Degrees of Success (Critical Success, Success, Failure, Critical Failure), and Proficiency Ranks.'
+        },
+        {
+          name: 'Call of Cthulhu 7e (Horror)',
+          action: 'd100 Percentile System',
+          detail: 'd100 percentile skill checks, Sanity Points (SAN = WIS × 5), Bouts of Madness tracking, and Pushed Rolls.'
+        },
+        {
+          name: 'Custom TRPG Ruleset Creator',
+          action: 'System Selector Modal',
+          detail: 'Configure enabled systems or build modular custom TRPG rulesets with unique attribute keys, dice pool algorithms, and sheet layouts.'
+        }
+      ]
+    },
+    {
+      id: 'manual-sheets',
+      title: '📊 Character Sheet Views (Sheets 1–7 & DM View)',
+      icon: ScrollText,
+      color: 'text-purple-400',
+      description: 'Comprehensive overview of all 7 character sheet tabs and the DM Campaign Dashboard.',
+      items: [
+        {
+          name: 'Sheet 1: Stats, Saves, Skills & Feats',
+          action: 'Primary Ability Scores & Modifiers',
+          detail: 'Primary scores with calculated modifiers below. Toggle Save proficiencies and Skill proficiencies/expertise. Add Class Features, Feats with Max HP grants, Hybrid Heritage ancestry, or Supernatural Species Transformations.'
+        },
+        {
+          name: 'Sheet 2: Combat & Vitality',
+          action: 'HP Orb, Target AC Resolver & Death Saves',
+          detail: 'Track HP with animated liquid HP Orb, Temp HP, and Max HP Inspector. Features Target AC Attack Resolver, Weapon attack & damage rolls, Bonus Actions, Reactions, Conditions, Exhaustion Levels 1-6, Death Saves (3 successes/failures), Permanent Death mechanics, and Revive spell restoration.'
+        },
+        {
+          name: 'Sheet 3: Gear, Wealth & Encumbrance',
+          action: 'Currency Pouch & Carrying Capacity',
+          detail: 'Track CP, SP, EP, GP, PP with auto gold conversion. Manage item quantities, weights, encumbrance capacity bar (STR × 15 lbs), 3 Attunement slots, Damage Reduction (DR), and custom item properties.'
+        },
+        {
+          name: 'Sheet 4: Spells & Spellcasting',
+          action: 'Spell Matrix & Preset Spells',
+          detail: 'Select Casting Ability (INT, WIS, CHA) to calculate Save DC and Attack Bonus. Track 1st–9th level spell slots and Pact Magic slots. Features 20 official 5e preset spells, concentration tracker, ritual tag, unique duplicate spellbook protection, and level sorting.'
+        },
+        {
+          name: 'Sheet 5: Description & Notes',
+          action: 'Demographics & Rich Text Notes',
+          detail: 'Record age, height, weight, eyes, hair, deity/patron, and character portrait URL. Log personality traits, ideals, bonds, flaws, alignment matrix, backstory, and session notes with formatted rich text.'
+        },
+        {
+          name: 'Sheet 6: Rules Reference & User Manual',
+          action: 'Formulas, Conversion & Audio',
+          detail: 'Interactive reference featuring mathematical formula breakdowns, system conversion guides, Web Audio sound sandbox, version changelogs, and live manual search.'
+        },
+        {
+          name: 'Sheet 7: SRD Compendium',
+          action: 'Searchable Database & Quick Import',
+          detail: 'Searchable compendium database of Spells, Equipment, Magic Items, Feats, and Monsters with 1-click import into your active character sheet.'
+        },
+        {
+          name: 'Sheet DM: DM Campaign Dashboard',
+          action: 'Party HP Pool & Encounter XP',
+          detail: 'Dungeon Master dashboard displaying total party HP pool, average passive perception, monster encounter XP award calculator, party loot distribution, and real-time party roll log.'
+        }
+      ]
+    },
+    {
+      id: 'manual-multiplayer',
+      title: '👥 Multiplayer Live Sessions & Party Management',
+      icon: Users,
+      color: 'text-indigo-400',
+      description: 'Firebase Firestore live session rooms, party grouping, and DM controls.',
+      items: [
+        {
+          name: 'Session Lobby & 6-Character Room Codes',
+          action: 'Header "Session Lobby" Button',
+          detail: 'Create a live multiplayer session room or join an existing session using a 6-character room code. Changes to HP, combat rolls, and inventory sync in real time across players.'
+        },
+        {
+          name: 'Party Manager',
+          action: 'Header "Parties" Button',
+          detail: 'Group player characters and allies into adventuring parties. Inspect total party HP, average level, average passive perception, and import entire parties into combat encounters.'
+        },
+        {
+          name: 'DM Active Crown Indicator',
+          action: 'Header Crown Badge',
+          detail: 'Displays a purple Crown badge whenever a Dungeon Master is actively supervising or viewing a sheet. Player access remains unlocked while DM is viewing.'
+        }
+      ]
+    },
+    {
+      id: 'manual-extensions',
+      title: '🔌 Extension Marketplace & Custom Plugins',
+      icon: ShoppingBag,
+      color: 'text-cyan-400',
+      description: 'Plugin manifests, Marketplace extensions, Central Event Bus, and Developer SDK.',
+      items: [
+        {
+          name: 'Plugin Manifest Schema (plugin/manifest.json)',
+          action: 'Standardized Plugin Spec',
+          detail: 'Full support for plugin manifest metadata including name, version, author, dependencies, app compatibility requirements, and permission declarations.'
+        },
+        {
+          name: 'Extension Marketplace Catalog',
+          action: 'Extension Manager Modal (🧩)',
+          detail: 'Install curated extensions: Pathfinder 2e Tactical Engine, Cyberpunk Netrunner Suite, Shadowrun Matrix, Call of Cthulhu Sanity, 3D Dice Physics, Soundscape Synthesizer, and Homebrew Creator.'
+        },
+        {
+          name: 'Central Event Bus & Developer SDK',
+          action: 'Architecture & SDK Specs Tab',
+          detail: 'Inspect live system events (DICE_ROLLED, HP_CHANGED, SPELL_CAST), test event payloads, and access complete TypeScript SDK specifications for custom plugin development.'
+        }
+      ]
+    },
+    {
+      id: 'manual-companions',
+      title: '🐾 Companions & Transformation Manager',
+      icon: Dog,
+      color: 'text-amber-300',
+      description: 'Track familiars, pets, mounts, Wild Shape forms, and polymorph transformations.',
+      items: [
+        {
+          name: 'Companion Manager Modal',
+          action: 'Companion Modal Button',
+          detail: 'Add pets, familiars, mounts, homunculi, or summoned creatures with separate HP, AC, attacks, and special abilities.'
+        },
+        {
+          name: 'Supernatural Transformations & Wild Shape',
+          action: 'Transformation Modal',
+          detail: 'Transform into Beast forms (Wild Shape for Druids), Polymorph targets, Lycanthropes, Vampires, or Liches. Automatically overrides physical stats and grants temporary HP.'
+        },
+        {
+          name: 'Reversion & Overflow Damage on 0 HP',
+          action: 'Automated Form Health Guard',
+          detail: 'When a transformed form drops to 0 HP, the character automatically reverts to their original form, and leftover overflow damage is applied directly to base HP.'
+        }
+      ]
+    },
+    {
+      id: 'manual-dice-audio',
+      title: '🎲 Floating Dice Roller & Sound Synthesizer',
+      icon: Dices,
+      color: 'text-rose-400',
+      description: 'Polyhedral dice toolbar, formula expressions, and Web Audio sound synthesis.',
+      items: [
+        {
+          name: 'Polyhedral Floating Dice Bar',
+          action: 'Bottom Dice Toolbar',
+          detail: '1-click access to d4, d6, d8, d10, d12, d20, and d100 with multiplier and modifier inputs.'
+        },
+        {
+          name: 'Advantage & Disadvantage Rolling',
+          action: 'ADV / DIS Toggle Buttons',
+          detail: 'Roll 2d20 and automatically take the higher result (ADV) or lower result (DIS).'
+        },
+        {
+          name: 'Custom Formula Expression Parser',
+          action: 'Formula Input Field',
+          detail: 'Roll complex expressions like 2d6+4, 1d20+7, or 4d6kh3 directly in the custom formula input.'
+        },
+        {
+          name: '12 Procedural Web Audio Sound FX',
+          action: 'Audio Options Modal',
+          detail: 'Real-time sound synthesis for dice rolls, weapon strikes, critical hits, spell casts, healing chimes, level up fanfares, and death save bells with volume presets.'
+        }
+      ]
+    },
+    {
+      id: 'manual-tools',
+      title: '⚡ Power Tools & Keyboard Shortcuts',
+      icon: Zap,
+      color: 'text-amber-400',
+      description: 'Command Palette (Ctrl+K), Theme Engine, and quick header health adjustments.',
+      items: [
+        {
+          name: 'Command Palette (Ctrl+K / Cmd+K)',
+          action: 'Global Search Shortcut',
+          detail: 'Press Ctrl+K (or Cmd+K) to open the Command Palette and jump instantly to any sheet, modal, or action.'
+        },
+        {
+          name: 'Workspace Customizer & Themes',
+          action: 'Options Modal (⚙️) → Workspace',
+          detail: 'Switch between Parchment Classic, Dark Obsidian, Emerald Glade, Royal Velvet, Cyberpunk Neon, or Blood Moon visual themes.'
+        },
+        {
+          name: 'Quick Health Delta Adjustments',
+          action: 'Header Health Controls',
+          detail: 'Adjust HP instantly using header quick buttons (-10, -1, +1, +10) or type exact values into the HP delta input.'
+        }
+      ]
+    }
+  ];
+
   // App Release Notes & Version History Changelog Data imported from src/data/changelogData.ts
 
-
-  const currentGuideSections = guideEdition === 'shadowrun'
+  const currentGuideSections = guideEdition === 'manual'
+    ? guideSectionsManual
+    : guideEdition === 'shadowrun'
     ? guideSectionsShadowrun
     : guideEdition === 'pathfinder'
     ? guideSectionsPathfinder
@@ -923,8 +1172,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           <BookOpen className="w-64 h-64 text-amber-500" />
         </div>
 
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10 border-b border-amber-900/40 pb-6">
-          <div className="space-y-2 max-w-2xl">
+        <div className="flex flex-col gap-4 relative z-10 border-b border-amber-900/40 pb-6">
+          <div className="space-y-2 w-full">
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/15 border border-amber-500/30 rounded-full text-amber-300 text-xs font-mono font-bold uppercase tracking-wider">
               <HelpCircle className="w-4 h-4 text-amber-400" />
               Edition-Specific User Manual
@@ -966,12 +1215,23 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           </div>
 
           {/* Edition & View Selection Toggle Tabs */}
-          <div className="bg-stone-950/90 p-1.5 rounded-2xl border border-amber-600/40 flex flex-wrap items-center gap-1.5 shrink-0 shadow-lg">
+          <div className="bg-stone-950/90 p-1.5 rounded-2xl border border-amber-600/40 flex items-center gap-1.5 w-full max-w-full overflow-x-auto no-scrollbar scrollbar-none shadow-lg">
+            <button
+              onClick={() => setGuideEdition('manual')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+                guideEdition === 'manual'
+                  ? 'bg-emerald-600 text-stone-950 shadow-md ring-1 ring-emerald-300 font-extrabold'
+                  : 'text-stone-300 hover:text-emerald-300 hover:bg-stone-900'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+              <span>User Manual</span>
+            </button>
             {systemRegistry.getAllSystems().filter(sys => !enabledSystems || enabledSystems.includes(sys.id)).map((sys) => (
               <button
                 key={sys.id}
                 onClick={() => setGuideEdition(sys.id)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                   guideEdition === sys.id
                     ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
                     : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
@@ -983,36 +1243,36 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
             ))}
             <button
               onClick={() => setGuideEdition('conversion')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                 guideEdition === 'conversion'
                   ? 'bg-blue-600 text-white shadow-md ring-1 ring-blue-300'
                   : 'text-stone-400 hover:text-blue-300 hover:bg-stone-900'
               }`}
             >
               <RefreshCw className="w-3.5 h-3.5 text-cyan-300" />
-              System Conversion
+              <span>System Conversion</span>
             </button>
             <button
               onClick={() => setGuideEdition('audio')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                 guideEdition === 'audio'
                   ? 'bg-amber-500 text-stone-950 shadow-md ring-1 ring-amber-300'
                   : 'text-stone-400 hover:text-amber-300 hover:bg-stone-900'
               }`}
             >
               <Volume2 className="w-3.5 h-3.5 text-amber-400" />
-              Audio & Sound
+              <span>Audio & Sound</span>
             </button>
             <button
               onClick={() => setGuideEdition('changelog')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
                 guideEdition === 'changelog'
-                  ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-300'
-                  : 'text-stone-400 hover:text-amber-300 hover:bg-stone-900'
+                  ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-300 font-extrabold'
+                  : 'text-stone-300 hover:text-amber-300 hover:bg-stone-900'
               }`}
             >
               <History className="w-3.5 h-3.5 text-amber-400" />
-              Changelog
+              <span>Changelog</span>
             </button>
           </div>
         </div>
