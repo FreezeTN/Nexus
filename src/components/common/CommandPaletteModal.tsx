@@ -15,7 +15,10 @@ import {
   ChevronRight,
   Package,
   Scroll,
-  Skull
+  Skull,
+  MapPin,
+  FileText,
+  Users
 } from 'lucide-react';
 import { CharacterData, RuleEdition } from '../../types';
 import { systemRegistry } from '../../systems';
@@ -23,6 +26,7 @@ import { eventBus } from '../../events/eventBus';
 import { PRESET_5E_SPELLS } from '../../data/presetSpells';
 import { PRESET_DND_ITEMS } from '../../data/presetItems';
 import { OFFICIAL_BULK_MONSTERS } from '../../data/srdRulesLibrary';
+import { DND_CONDITIONS } from '../../data/conditionsData';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -41,7 +45,7 @@ interface CommandPaletteModalProps {
 interface CommandItem {
   id: string;
   title: string;
-  category: 'Actions' | 'Characters' | 'Spells' | 'Items' | 'Monsters' | 'Systems' | 'Navigation';
+  category: 'Actions' | 'Characters' | 'Spells' | 'Items' | 'Monsters' | 'Conditions' | 'Quests' | 'NPCs' | 'Notes' | 'Locations' | 'Systems' | 'Navigation';
   description?: string;
   icon: React.ReactNode;
   action: () => void;
@@ -245,6 +249,81 @@ export function CommandPaletteModal({
         category: 'Monsters',
         description: `CR ${monster.challengeRating || '1/2'} • ${monster.race || 'Beast'} • AC ${monster.armorClass} • HP ${monster.hpMax}`,
         icon: <Skull className="w-4 h-4 text-rose-400" />,
+        action: () => {
+          onClose();
+          onNavigateTab('dm');
+        }
+      });
+    });
+
+    // Add Conditions & Status Effects to universal index
+    DND_CONDITIONS.forEach((cond) => {
+      list.push({
+        id: `cond-${cond.id}`,
+        title: `Condition: ${cond.name}`,
+        category: 'Conditions',
+        description: cond.summary,
+        icon: <ShieldAlert className="w-4 h-4 text-amber-400" />,
+        action: () => {
+          onClose();
+          onNavigateTab('notes');
+        }
+      });
+    });
+
+    // Add Sample Campaign Quests
+    const SAMPLE_QUESTS = [
+      { id: 'q1', title: 'The Lost Mine of Phandelver', status: 'Active', location: 'Phandalin' },
+      { id: 'q2', title: 'Rescue the Blacksmith Sildar', status: 'Completed', location: 'Cragmaw Hideout' },
+      { id: 'q3', title: 'Investigate the Redbrand Hideout', status: 'Active', location: 'Tresendar Manor' }
+    ];
+    SAMPLE_QUESTS.forEach((quest) => {
+      list.push({
+        id: `quest-${quest.id}`,
+        title: `Quest: ${quest.title}`,
+        category: 'Quests',
+        description: `Status: ${quest.status} • Location: ${quest.location}`,
+        icon: <Scroll className="w-4 h-4 text-purple-400" />,
+        action: () => {
+          onClose();
+          onNavigateTab('notes');
+        }
+      });
+    });
+
+    // Add Sample Campaign NPCs & Factions
+    const SAMPLE_NPCS = [
+      { id: 'npc1', name: 'Gundren Rockseeker', role: 'Dwarf Merchant', faction: 'Rockseeker Brothers' },
+      { id: 'npc2', name: 'Elmar Barthen', role: 'Provisions Merchant', faction: 'Barthen\'s Provisions' },
+      { id: 'npc3', name: 'Iarno "Glasstaff" Albrek', role: 'Mage & Redbrand Leader', faction: 'Redbrand Ruffians' }
+    ];
+    SAMPLE_NPCS.forEach((npc) => {
+      list.push({
+        id: `npc-${npc.id}`,
+        title: `NPC: ${npc.name}`,
+        category: 'NPCs',
+        description: `${npc.role} • ${npc.faction}`,
+        icon: <Users className="w-4 h-4 text-cyan-400" />,
+        action: () => {
+          onClose();
+          onNavigateTab('dm');
+        }
+      });
+    });
+
+    // Add Sample World Locations
+    const SAMPLE_LOCATIONS = [
+      { id: 'loc1', name: 'Town of Phandalin', region: 'Sword Coast' },
+      { id: 'loc2', name: 'Stonehill Inn', region: 'Phandalin Square' },
+      { id: 'loc3', name: 'Wave Echo Cave', region: 'Sword Mountains' }
+    ];
+    SAMPLE_LOCATIONS.forEach((loc) => {
+      list.push({
+        id: `loc-${loc.id}`,
+        title: `Location: ${loc.name}`,
+        category: 'Locations',
+        description: `Region: ${loc.region}`,
+        icon: <MapPin className="w-4 h-4 text-emerald-400" />,
         action: () => {
           onClose();
           onNavigateTab('dm');

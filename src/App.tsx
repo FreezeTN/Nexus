@@ -297,6 +297,11 @@ export default function App() {
     setEnabledSystems(selected);
     setHasConfiguredSystems(true);
     setShowTRPGSelectorModal(false);
+
+    selected.forEach(sysId => {
+      eventBus.emit('SystemPluginToggled', { pluginId: sysId, enabled: true });
+    });
+
     try {
       localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(selected));
     } catch (e) {
@@ -420,10 +425,20 @@ export default function App() {
 
   const handleUpdateCharacter = (updated: CharacterData) => {
     let finalChar = updated;
+    const prevChar = characters.find(c => c.id === finalChar.id);
+
+    // Check level up event
+    if (prevChar && finalChar.level && prevChar.level && finalChar.level > prevChar.level) {
+      eventBus.emit('CharacterLevelUp', {
+        characterId: finalChar.id,
+        characterName: finalChar.name,
+        oldLevel: prevChar.level,
+        newLevel: finalChar.level
+      });
+    }
 
     // Permanent Death Mechanics for non-monsters (Player Characters & Merchants)
     if (!finalChar.isMonster) {
-      const prevChar = characters.find(c => c.id === finalChar.id);
       const wasDead = prevChar ? (isCharacterDead(prevChar)) : false;
 
       if (finalChar.hpCurrent > 0) {
@@ -465,6 +480,9 @@ export default function App() {
       setPreviewTheme(recalculated.edition);
     }
 
+    // Broadcast domain update event
+    eventBus.emit('CharacterUpdated', { character: recalculated });
+
     // Cloud sync if authenticated
     if (currentUser?.uid) {
       saveCharacterToCloud(currentUser.uid, recalculated);
@@ -497,6 +515,9 @@ export default function App() {
     setCharacters(prev => [newChar, ...prev]);
     setActiveCharacterId(newChar.id);
     setShowNewCharacterModal(false);
+
+    // Emit event bus event
+    eventBus.emit('CharacterCreated', { character: newChar });
 
     // Cloud sync if authenticated
     if (currentUser?.uid) {
@@ -607,6 +628,15 @@ export default function App() {
 
     setRollLogs(prev => [result, ...prev]);
     setActiveRollResult(result);
+
+    // Broadcast event bus DiceRolled
+    eventBus.emit('DiceRolled', {
+      formula: `${diceCount}d${diceType}${formatModifier(modifier)}`,
+      total,
+      isNat20,
+      isNat1,
+      rollerName: activeCharacter?.name || label || 'Adventurer'
+    });
 
     // Auto dismiss active toast after 4 seconds
     setTimeout(() => {

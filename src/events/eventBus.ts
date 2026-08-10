@@ -6,6 +6,8 @@ class EventBus {
   private history: LoggedEvent[] = [];
   private maxHistoryLength = 100;
 
+  private globalListeners: Set<(log: LoggedEvent) => void> = new Set();
+
   public on<K extends EventType>(type: K, callback: EventCallback<K>): () => void {
     if (!this.listeners.has(type)) {
       this.listeners.set(type, new Set());
@@ -15,6 +17,13 @@ class EventBus {
 
     return () => {
       set.delete(callback);
+    };
+  }
+
+  public subscribeAll(callback: (log: LoggedEvent) => void): () => void {
+    this.globalListeners.add(callback);
+    return () => {
+      this.globalListeners.delete(callback);
     };
   }
 
@@ -49,6 +58,14 @@ class EventBus {
       });
     }
 
+    this.globalListeners.forEach(cb => {
+      try {
+        cb(log);
+      } catch (err) {
+        console.error('Error in global event listener:', err);
+      }
+    });
+
     return log;
   }
 
@@ -58,6 +75,16 @@ class EventBus {
 
   public clearHistory(): void {
     this.history = [];
+    this.globalListeners.forEach(cb => {
+      try {
+        cb({
+          id: `clear-${Date.now()}`,
+          type: 'WorldChanged',
+          timestamp: new Date(),
+          payload: { worldId: 'cleared', worldName: 'Cleared' }
+        });
+      } catch (e) {}
+    });
   }
 }
 
@@ -74,11 +101,10 @@ export function useEventHistory(): LoggedEvent[] {
   const [history, setHistory] = useState<LoggedEvent[]>(() => eventBus.getHistory());
 
   useEffect(() => {
-    const checkInterval = setInterval(() => {
+    const unsubscribe = eventBus.subscribeAll(() => {
       setHistory(eventBus.getHistory());
-    }, 1000);
-
-    return () => clearInterval(checkInterval);
+    });
+    return () => unsubscribe();
   }, []);
 
   return history;

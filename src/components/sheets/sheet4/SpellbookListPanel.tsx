@@ -7,6 +7,7 @@ import { OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta } from '../../../utils/dndCalc
 import { isShapeshiftAbility } from '../../../data/transformationData';
 import { isCompanionSummonAbility } from '../../../data/companionData';
 import { checkSpellEligibility, SpellEligibilityResult } from '../../../utils/spellClassUtils';
+import { eventBus } from '../../../events/eventBus';
 import {
   Sparkles,
   Plus,
@@ -108,6 +109,12 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
       spells: [...character.spells, newSpell]
     });
 
+    eventBus.emit('SpellLearned', {
+      characterId: character.id,
+      spellName: newSpell.name,
+      level: newSpell.level
+    });
+
     try {
       saveCustomCompendiumEntry({
         id: 'comp-spell-' + newSpell.id,
@@ -157,6 +164,12 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
     onUpdateCharacter({
       ...character,
       spells: [...character.spells, newSpell]
+    });
+
+    eventBus.emit('SpellLearned', {
+      characterId: character.id,
+      spellName: newSpell.name,
+      level: newSpell.level
     });
 
     setPendingSpellConfirm(null);

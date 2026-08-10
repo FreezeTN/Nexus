@@ -68,13 +68,17 @@ export interface GameSystemPlugin {
   icon: string;
   primaryResourceName: string;
 
-  // Extension Metadata
+  // Extension Metadata & Ecosystem Specs
   version?: string;
   author?: string;
   website?: string;
   license?: string;
   category?: 'fantasy' | 'cyberpunk' | 'horror' | 'tactical' | 'universal';
   supportedFeatures?: string[];
+  thirdParty?: boolean;
+  minPlatformVersion?: string;
+  dependencies?: Array<{ pluginId: string; name: string; required: boolean }>;
+  optionalModules?: Array<{ id: string; name: string; description: string; enabledByDefault?: boolean }>;
   
   characterEngine: SystemCharacterEngine;
   combatEngine: SystemCombatEngine;

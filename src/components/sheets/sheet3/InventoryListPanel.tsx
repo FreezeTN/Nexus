@@ -4,6 +4,7 @@ import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { PRESET_DND_ITEMS } from '../../../data/presetItems';
 import { saveCustomCompendiumEntry } from '../../../data/compendiumData';
 import { recalculateCharacterAC } from '../../../utils/dndCalculations';
+import { eventBus } from '../../../events/eventBus';
 import {
   Package,
   Plus,
@@ -181,6 +182,12 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
 
     onUpdateCharacter(updatedChar);
 
+    eventBus.emit('ItemAdded', {
+      characterId: character.id,
+      itemName: newItem.name,
+      quantity: newItem.quantity || 1
+    });
+
     try {
       saveCustomCompendiumEntry({
         id: 'comp-gear-' + newItem.id,
@@ -225,6 +232,12 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       ...character,
       inventory: [...character.inventory, newItem]
     }));
+
+    eventBus.emit('ItemAdded', {
+      characterId: character.id,
+      itemName: newItem.name,
+      quantity: newItem.quantity || 1
+    });
 
     setShowAddItemModal(false);
   };

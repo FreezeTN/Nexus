@@ -14,11 +14,32 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.3.0',
+    date: 'August 2026',
+    title: 'First-Class Plugin Ecosystem, Universal Search Everywhere & Interconnected Knowledge Graph',
+    badge: 'Latest Release',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🧩 First-Class Plugin Ecosystem',
+        detail: 'Enhanced system registry metadata with dependency checking, platform compatibility flags, optional module toggles, and community plugin specs.'
+      },
+      {
+        category: '🔍 "Search Everywhere" Omni-Palette (Ctrl+K)',
+        detail: 'Expanded universal search indexer across all 10 domain entities: Characters, NPCs, Quests, Spells, Conditions, Items, Monsters, Notes, Locations, and System Plugins.'
+      },
+      {
+        category: '🕸️ Interconnected Knowledge Graph',
+        detail: 'Hyper-linked cross-references (Appears In, Member Of, Located At, Relationships, Connected Quests, Mentions) rendered across campaign NPCs, factions, and DM notes.'
+      }
+    ]
+  },
+  {
     version: 'v3.2.0',
     date: 'August 2026',
     title: 'Workspace Customizer, Undo/Redo Engine, Universal Indexing & Architecture Docs',
-    badge: 'Latest Release',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Feature Update',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
     highlights: [
       {
         category: '📌 Pinned Workspace Customizer',

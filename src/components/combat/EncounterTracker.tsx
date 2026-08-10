@@ -13,6 +13,7 @@ import { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData } 
 import { EncounterLogModal } from './encounter/EncounterLogModal';
 import { AddCombatantModal } from './encounter/AddCombatantModal';
 import { MonsterMechanicsBar } from './encounter/MonsterMechanicsBar';
+import { eventBus } from '../../events/eventBus';
 
 export type { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData };
 
@@ -367,6 +368,11 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
       `🛡️ Party "${partyObj.name}" (${members.length} members) joined the encounter as Allies!\n${addedLogDetails.join('\n')}`,
       'Party'
     );
+
+    eventBus.emit('CombatStarted', {
+      encounterName: `Tactical Combat - ${partyObj.name}`,
+      participantsCount: members.length
+    });
 
     setShowAddModal(false);
   };

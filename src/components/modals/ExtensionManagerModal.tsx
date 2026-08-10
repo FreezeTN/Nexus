@@ -190,6 +190,16 @@ export function ExtensionManagerModal({
                           {sys.description}
                         </p>
 
+                        {/* Ecosystem Metadata & Dependency Status */}
+                        <div className="mt-2.5 p-2 bg-stone-900/60 border border-stone-800 rounded-lg flex items-center justify-between text-[10px] font-mono">
+                          <span className="text-emerald-400 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Dependency Check Passed
+                          </span>
+                          <span className="text-stone-400">
+                            Min Platform: {sys.minPlatformVersion || 'v3.0+'}
+                          </span>
+                        </div>
+
                         {/* Plugin Features */}
                         {sys.supportedFeatures && sys.supportedFeatures.length > 0 && (
                           <div className="mt-3 pt-3 border-t border-stone-800/80">

@@ -32,6 +32,8 @@ import {
   X
 } from 'lucide-react';
 
+import { KnowledgeGraphCard, KnowledgeEntity } from '../common/KnowledgeGraphCard';
+
 interface SheetDmOverviewProps {
   activeSession: GameSession;
   allCharacters: CharacterData[];
@@ -721,6 +723,82 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
           })}
         </div>
       )}
+
+      {/* Campaign Lore & Interconnected Knowledge Graph */}
+      <div className="pt-6 border-t border-stone-800 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-serif font-bold text-base text-amber-200 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-indigo-400" /> Interconnected Knowledge Graph
+            </h3>
+            <p className="text-xs text-stone-400">Cross-linked campaign NPCs, factions, locations, and session references</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <KnowledgeGraphCard
+            entity={{
+              id: 'npc-gundren',
+              name: 'Gundren Rockseeker (Dwarf Merchant)',
+              type: 'npc',
+              summary: 'Employer who hired party to escort supply wagon to Phandalin.',
+              appearsInSessions: [
+                { id: 's1', title: 'Session 1: Goblin Ambush' },
+                { id: 's3', title: 'Session 3: Wave Echo Cave Trail' }
+              ],
+              memberOfFactions: [
+                { id: 'f1', name: 'Rockseeker Mining Guild' }
+              ],
+              locatedAt: [
+                { id: 'l1', name: 'Cragmaw Castle (Captured)' },
+                { id: 'l2', name: 'Stonehill Inn' }
+              ],
+              allies: [
+                { id: 'a1', name: 'Sildar Hallwinter' }
+              ],
+              enemies: [
+                { id: 'e1', name: 'King Grol' },
+                { id: 'e2', name: 'The Black Spider' }
+              ],
+              connectedQuests: [
+                { id: 'q1', title: 'Find Gundren & Wave Echo Cave' }
+              ],
+              mentionedInNotes: [
+                { id: 'n1', title: 'Cragmaw Hideout Map & Clues' }
+              ]
+            }}
+          />
+
+          <KnowledgeGraphCard
+            entity={{
+              id: 'npc-glasstaff',
+              name: 'Iarno "Glasstaff" Albrek',
+              type: 'npc',
+              summary: 'Former Lords\' Alliance wizard turned leader of the Redbrand Ruffians.',
+              appearsInSessions: [
+                { id: 's2', title: 'Session 2: Redbrand Confrontation' }
+              ],
+              memberOfFactions: [
+                { id: 'f2', name: 'Redbrand Ruffians' },
+                { id: 'f3', name: 'Lords\' Alliance (Traitor)' }
+              ],
+              locatedAt: [
+                { id: 'l3', name: 'Tresendar Manor Hideout' }
+              ],
+              enemies: [
+                { id: 'e3', name: 'Sildar Hallwinter' },
+                { id: 'e4', name: 'Phandalin Town Council' }
+              ],
+              connectedQuests: [
+                { id: 'q2', title: 'Clear Tresendar Manor' }
+              ],
+              mentionedInNotes: [
+                { id: 'n2', title: 'Intercepted Letter from Black Spider' }
+              ]
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 };
