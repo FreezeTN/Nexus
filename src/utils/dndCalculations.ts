@@ -1,106 +1,12 @@
 import { AbilityName, AbilityScores, CharacterData, GearItem, RuleEdition, Skill } from '../types';
-import {
-  getAbilityModifier,
-  formatModifier,
-  getProficiencyBonus,
-  getSavingThrowBonus,
-  getSkillBonus
-} from './calculators/abilityCalculators';
-
-export {
-  getAbilityModifier,
-  formatModifier,
-  getProficiencyBonus,
-  getSavingThrowBonus,
-  getSkillBonus
-};
+import { getCombinedLevel, getActiveClassChoice, getAbilityModifier, getSavingThrowBonus, getEffectiveLevel } from '../systems/dnd5e';
+export * from '../systems/dnd5e';
 
 export {
   OFFICIAL_DAMAGE_TYPES,
   getDamageTypeMeta,
   type DamageTypeMeta
 } from '../data/damageTypeData';
-
-
-
-export function getPassivePerception(char: CharacterData): number {
-  const effectiveLevel = getEffectiveLevel(char);
-  const perceptionSkill = char.skills.find(s => s.name === 'Perception');
-  if (perceptionSkill) {
-    return 10 + getSkillBonus(perceptionSkill, char.abilities, effectiveLevel);
-  }
-  const wisMod = getAbilityModifier(char.abilities.WIS?.score || 10);
-  return 10 + wisMod;
-}
-
-export function getSpellSaveDC(char: CharacterData): number {
-  if (char.spellSaveDCOverride) return char.spellSaveDCOverride;
-  const abilityMod = getAbilityModifier(char.abilities[char.spellcastingAbility]?.score || 10);
-  const profBonus = getProficiencyBonus(getEffectiveLevel(char));
-  const itemBonus = (char.inventory || [])
-    .filter(i => i.equipped && i.attuned && i.spellDcBonus)
-    .reduce((sum, i) => sum + (i.spellDcBonus || 0), 0);
-  return 8 + profBonus + abilityMod + itemBonus;
-}
-
-export function getSpellAttackBonus(char: CharacterData): number {
-  if (char.spellAttackBonusOverride !== undefined) return char.spellAttackBonusOverride;
-  const abilityMod = getAbilityModifier(char.abilities[char.spellcastingAbility]?.score || 10);
-  const profBonus = getProficiencyBonus(getEffectiveLevel(char));
-  const itemBonus = (char.inventory || [])
-    .filter(i => i.equipped && i.attuned && i.spellDcBonus)
-    .reduce((sum, i) => sum + (i.spellDcBonus || 0), 0);
-  return profBonus + abilityMod + itemBonus;
-}
-
-import { getCombinedLevel } from './calculators/levelCalculators';
-
-export { getCombinedLevel };
-
-export function getEffectiveLevel(char: CharacterData): number {
-  return getCombinedLevel(char);
-}
-
-export function getActiveClassChoice(char: CharacterData): 'primary' | 'secondary' {
-  return char.optionalRules?.activeClassChoice || 'primary';
-}
-
-export function getPrimaryXp(char: CharacterData): number {
-  if (!char.optionalRules?.useMulticlassing || !char.optionalRules?.secondaryClass) {
-    return char.experiencePoints || 0;
-  }
-  if (char.optionalRules?.primaryXp !== undefined) {
-    return char.optionalRules.primaryXp;
-  }
-  const secXp = char.optionalRules?.secondaryXp ?? 0;
-  return Math.max(0, (char.experiencePoints || 0) - secXp);
-}
-
-export function getSecondaryXp(char: CharacterData): number {
-  if (char.optionalRules?.secondaryXp !== undefined) {
-    return char.optionalRules.secondaryXp;
-  }
-  const secLevel = char.optionalRules?.secondaryLevel || 1;
-  // Approximation of minimum XP threshold for secondary level
-  const thresholds = [0, 0, 300, 900, 2700, 6500, 14000, 23000, 34000, 48000, 64000, 85000, 100000, 120000, 140000, 165000, 195000, 225000, 265000, 305000, 355000];
-  return thresholds[secLevel] || 0;
-}
-
-export {
-  getRequiredLevelForSpellSlotLevel,
-  getMaxUnlockedSpellSlotLevel
-} from './calculators/spellCalculators';
-
-
-export function getUnallocatedXp(char: CharacterData): number {
-  if (!char.optionalRules?.useMulticlassing || !char.optionalRules?.secondaryClass) {
-    return 0;
-  }
-  const totalGenXp = char.experiencePoints || 0;
-  const pXp = getPrimaryXp(char);
-  const sXp = getSecondaryXp(char);
-  return Math.max(0, totalGenXp - (pXp + sXp));
-}
 
 export function getEffectiveClassTitle(char: CharacterData): string {
   if (char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass) {

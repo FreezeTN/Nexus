@@ -59,6 +59,21 @@ export interface SystemDataCatalog {
   defaultClassData?: Record<string, { hd: string; primaryStat: string }>;
 }
 
+export type PluginPermission =
+  | 'character:read'
+  | 'character:write'
+  | 'inventory:modify'
+  | 'dice:roll'
+  | 'events:subscribe'
+  | 'voice:integrate';
+
+export interface PluginCapability {
+  id: string;
+  name: string;
+  description: string;
+  enabled: boolean;
+}
+
 export interface GameSystemPlugin {
   id: RuleEdition;
   name: string;
@@ -77,9 +92,14 @@ export interface GameSystemPlugin {
   supportedFeatures?: string[];
   thirdParty?: boolean;
   minPlatformVersion?: string;
+  minSystemVersion?: string;
+  capabilities?: PluginCapability[];
+  permissions?: PluginPermission[];
+  featureFlags?: Record<string, boolean>;
   dependencies?: Array<{ pluginId: string; name: string; required: boolean }>;
   optionalModules?: Array<{ id: string; name: string; description: string; enabledByDefault?: boolean }>;
-  
+  validateConfig?: (config: Record<string, any>) => { valid: boolean; errors?: string[] };
+
   characterEngine: SystemCharacterEngine;
   combatEngine: SystemCombatEngine;
   spellEngine: SystemSpellEngine;

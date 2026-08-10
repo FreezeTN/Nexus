@@ -46,7 +46,7 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
   useEffect(() => {
     if (isOpen) {
       // Run quick check on open
-      setTestResults(runArchitectureTests());
+      runArchitectureTests().then(results => setTestResults(results));
     }
   }, [isOpen]);
 
@@ -58,12 +58,11 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
     setTimeout(() => setCopiedSection(null), 2000);
   };
 
-  const handleRunTests = () => {
+  const handleRunTests = async () => {
     setIsTesting(true);
-    setTimeout(() => {
-      setTestResults(runArchitectureTests());
-      setIsTesting(false);
-    }, 300);
+    const results = await runArchitectureTests();
+    setTestResults(results);
+    setIsTesting(false);
   };
 
   const handleFireSimulatedEvent = () => {

@@ -181,6 +181,18 @@ MILESTONE 12: ELEMENTAL & COMBAT DAMAGE IMMUNITIES
   - Added purple "Immune: <type>" badges to item inventory cards.
   - Added an "Active Defenses & Mitigations" summary bar to Sheet 2 (Combat) displaying all active DR, Resistances, and Immunities currently equipped or active.
 
+--------------------------------------------------------------------------------
+MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIES
+--------------------------------------------------------------------------------
+* Domain Decomposition & Rules System Layout (`src/systems/dnd5e/`):
+  - Decomposed monolithic calculations into isolated, single-responsibility rules modules (`abilities.ts`, `classes.ts`, `spellcasting.ts`, `combat.ts`).
+* Storage Strategy Abstraction & Repository Pattern (`src/repositories/`):
+  - Abstracted persistence with `ICharacterRepository`, `LocalCharacterRepository`, `FirebaseCharacterRepository`, and `CharacterRepositoryProvider`.
+* Domain Services & Event-Driven Engine (`src/services/`):
+  - Created `CharacterService` and `CombatService` encapsulating business workflows with automatic `EventBus` notifications.
+* Branded Nominal Types & Enhanced Plugin Architecture (`src/types.ts` & `src/systems/types.ts`):
+  - Introduced branded nominal IDs (`CharacterId`, `CampaignId`, `QuestId`, etc.) and expanded plugin contracts with permissions and config validation.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

@@ -1,3 +1,20 @@
+declare const __brand: unique symbol;
+export type Brand<T, B> = T & { [__brand]: B };
+
+export type CharacterId = Brand<string, 'CharacterId'>;
+export type CampaignId = Brand<string, 'CampaignId'>;
+export type QuestId = Brand<string, 'QuestId'>;
+export type ItemId = Brand<string, 'ItemId'>;
+export type SpellId = Brand<string, 'SpellId'>;
+export type UserId = Brand<string, 'UserId'>;
+
+export const toCharacterId = (id: string): CharacterId => id as CharacterId;
+export const toCampaignId = (id: string): CampaignId => id as CampaignId;
+export const toQuestId = (id: string): QuestId => id as QuestId;
+export const toItemId = (id: string): ItemId => id as ItemId;
+export const toSpellId = (id: string): SpellId => id as SpellId;
+export const toUserId = (id: string): UserId => id as UserId;
+
 export type RuleEdition = '5e' | '3.5e' | 'shadowrun' | 'pathfinder' | 'cthulhu';
 
 export type MadnessState = 'Sane' | 'Short-Term Madness' | 'Long-Term Madness' | 'Indefinite Madness';
@@ -262,6 +279,8 @@ export interface GearItem {
   notes?: string;
   itemType?: 'Armor' | 'Weapon' | 'Misc';
   armorAc?: number;
+  acBonus?: number;
+  initiativeBonus?: number;
   armorType?: 'Heavy' | 'Medium' | 'Light' | 'Shield' | 'Bonus';
   damageReduction?: number; // Damage Reduction (DR) granted by item (e.g., 2, 5)
   resistance?: string; // Damage type resistance granted by item (e.g. Fire, Cold, Slashing, All)
@@ -341,6 +360,8 @@ export interface CharacterData {
   refSaveBase?: number; // Base Reflex Save for 3.5e
   willSaveBase?: number; // Base Will Save for 3.5e
   touchAcOverride?: number; // Touch AC adjustment for 3.5e
+  acOverride?: number;
+  initiativeOverride?: number;
   flatFootedAcOverride?: number; // Flat-Footed AC adjustment for 3.5e
   spellResist?: number; // Spell Resistance (SR) for 3.5e
   sizeCategory?: 'Fine' | 'Diminutive' | 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan' | 'Colossal';

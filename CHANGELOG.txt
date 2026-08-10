@@ -292,6 +292,28 @@ MILESTONE 21: OBSIDIAN RPG CAMPAIGN GRAPH, UNIFIED SEARCH & PERFORMANCE VIRTUALI
   - Implemented React lazy loading (`React.lazy`) and `<Suspense>` boundary code-splitting for heavy modals (`CampaignGraphModal`, `DeveloperSdkModal`, `UserManualModal`, `ExtensionManagerModal`, `AudioOptionsModal`, `SessionLobbyModal`, `PartyManagerModal`, `TRPGSystemSelectorModal`).
   - Added a reusable `VirtualList` viewport windowing component for fast 60fps rendering of large lists and compendium catalogs.
 
+--------------------------------------------------------------------------------
+MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIES
+--------------------------------------------------------------------------------
+* Domain Decomposition & Rules System Layout (`src/systems/dnd5e/`):
+  - Decomposed monolithic `dndCalculations.ts` into isolated, single-responsibility rules modules (`abilities.ts`, `classes.ts`, `spellcasting.ts`, `combat.ts`).
+  - Standardized domain calculation boundaries and established clear export pipelines.
+
+* Storage Strategy Abstraction & Repository Pattern (`src/repositories/`):
+  - Formulated `ICharacterRepository` contract alongside `LocalCharacterRepository`, `FirebaseCharacterRepository`, and `CharacterRepositoryProvider`.
+  - Abstracted persistence mechanisms so UI components interact with storage via clean, swappable interfaces.
+
+* Domain Services & Event-Driven Engine (`src/services/`):
+  - Built `CharacterService` and `CombatService` to encapsulate domain workflows (level progression, inventory modifications, HP updates, encounter initialization).
+  - Integrated automatic `EventBus` event emission (`ItemAdded`, `CharacterUpdated`, `CharacterLevelUp`, `CombatStarted`).
+
+* Branded Nominal Types & Enhanced Plugin Architecture (`src/types.ts` & `src/systems/types.ts`):
+  - Introduced nominal brand types (`CharacterId`, `CampaignId`, `QuestId`, `ItemId`, `SpellId`, `UserId`) to prevent ID mixing bugs.
+  - Expanded `GameSystemPlugin` interfaces with capabilities, permissions, version compatibility checks, and configuration validators.
+
+* Asynchronous Automated Architecture Test Harness (`src/tests/systemTestSuite.ts`):
+  - Extended the architecture test suite with asynchronous unit checks for repository strategy resolution and domain service event dispatching.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

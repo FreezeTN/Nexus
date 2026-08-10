@@ -14,11 +14,40 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.9.0',
+    date: 'August 2026',
+    title: 'Enterprise Domain Decomposition, Repository Abstraction, Domain Services & Branded Nominal Types',
+    badge: 'Latest Update',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🧩 Domain Decomposition & Standardized Systems Layout',
+        detail: 'Decomposed monolithic calculations into dedicated, single-responsibility rules engine modules under src/systems/dnd5e/ (abilities, classes, spellcasting, combat), establishing clean system boundaries.'
+      },
+      {
+        category: '🗄️ Repository Pattern & Storage Strategy Abstraction',
+        detail: 'Implemented ICharacterRepository interface along with LocalCharacterRepository, FirebaseCharacterRepository, and CharacterRepositoryProvider (src/repositories/) to decouple application UI and business logic from direct persistence frameworks.'
+      },
+      {
+        category: '⚙️ Domain Services & Event-Driven Business Operations',
+        detail: 'Introduced CharacterService and CombatService (src/services/) to manage domain operations like leveling, inventory management, HP modifications, and combat state transitions while dispatching EventBus notifications.'
+      },
+      {
+        category: '🏷️ Branded Nominal Type Safety & Enriched Plugin Contracts',
+        detail: 'Added nominal brand types (CharacterId, CampaignId, QuestId, ItemId, SpellId, UserId) to prevent ID mixing, and enhanced GameSystemPlugin contracts with permissions, capabilities, version constraints, and config validation.'
+      },
+      {
+        category: '🧪 Automated Architecture Test Harness',
+        detail: 'Expanded systemTestSuite.ts with asynchronous automated architecture tests verifying storage repository strategy resolution and domain service event pipelines.'
+      }
+    ]
+  },
+  {
     version: 'v3.8.0',
     date: 'August 2026',
     title: 'Project Credits Tab, Knowledge Graph Node Editing & Active Speaker Combat Highlighting',
-    badge: 'Latest Update',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Previous Version',
+    badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
     highlights: [
       {
         category: '🏆 Project Credits & Attributions Tab in Options',

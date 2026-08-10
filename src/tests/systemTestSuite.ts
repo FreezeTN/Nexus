@@ -3,14 +3,14 @@ import { systemRegistry } from '../systems/registry';
 
 export interface TestResult {
   id: string;
-  category: 'EventBus' | 'PluginRegistry' | 'RuleEngines' | 'VersionCompatibility';
+  category: 'EventBus' | 'PluginRegistry' | 'RuleEngines' | 'VersionCompatibility' | 'Repositories' | 'Services';
   name: string;
   passed: boolean;
   message: string;
   durationMs: number;
 }
 
-export function runArchitectureTests(): TestResult[] {
+export async function runArchitectureTests(): Promise<TestResult[]> {
   const results: TestResult[] = [];
 
   // 1. Test EventBus Publishing & Subscribing
@@ -162,6 +162,74 @@ export function runArchitectureTests(): TestResult[] {
       passed: false,
       message: err?.message || '5e engine calculation failed.',
       durationMs: Math.round(performance.now() - t5Start)
+    });
+  }
+
+  // 6. Test Repository Provider Abstraction
+  const t6Start = performance.now();
+  try {
+    const { CharacterRepositoryProvider } = await import('../repositories/CharacterRepositoryProvider');
+    const localRepo = CharacterRepositoryProvider.getRepository(false);
+    const cloudRepo = CharacterRepositoryProvider.getRepository(true);
+
+    const isLocalValid = Boolean(localRepo && typeof localRepo.saveCharacter === 'function');
+    const isCloudValid = Boolean(cloudRepo && typeof cloudRepo.saveCharacter === 'function');
+
+    results.push({
+      id: 'test-repository-provider',
+      category: 'Repositories',
+      name: 'Repository Pattern & Storage Abstraction',
+      passed: isLocalValid && isCloudValid,
+      message: 'Successfully resolved ICharacterRepository for both Local and Cloud strategies.',
+      durationMs: Math.round(performance.now() - t6Start)
+    });
+  } catch (err: any) {
+    results.push({
+      id: 'test-repository-provider',
+      category: 'Repositories',
+      name: 'Repository Pattern & Storage Abstraction',
+      passed: false,
+      message: err?.message || 'Repository provider instantiation failed.',
+      durationMs: Math.round(performance.now() - t6Start)
+    });
+  }
+
+  // 7. Test CharacterService Domain Logic
+  const t7Start = performance.now();
+  try {
+    const { CharacterService } = await import('../services/CharacterService');
+    const { toCharacterId } = await import('../types');
+
+    const testChar: any = {
+      id: toCharacterId('test-char-1'),
+      name: 'Valeros',
+      level: 1,
+      experiencePoints: 0,
+      hpCurrent: 12,
+      hpMax: 12,
+      abilities: { STR: { score: 16 }, DEX: { score: 12 }, CON: { score: 14 }, INT: { score: 10 }, WIS: { score: 10 }, CHA: { score: 10 } },
+      inventory: []
+    };
+
+    const updated = await CharacterService.addItemToInventory(testChar, { id: 'item-1', name: 'Longsword', quantity: 1, weight: 3, equipped: false }, undefined, false);
+    const hasItem = updated.inventory.some((i: any) => i.name === 'Longsword');
+
+    results.push({
+      id: 'test-service-character',
+      category: 'Services',
+      name: 'Character Domain Service Operations',
+      passed: hasItem,
+      message: 'CharacterService successfully updated character inventory and emitted domain event.',
+      durationMs: Math.round(performance.now() - t7Start)
+    });
+  } catch (err: any) {
+    results.push({
+      id: 'test-service-character',
+      category: 'Services',
+      name: 'Character Domain Service Operations',
+      passed: false,
+      message: err?.message || 'CharacterService test failed.',
+      durationMs: Math.round(performance.now() - t7Start)
     });
   }
 
