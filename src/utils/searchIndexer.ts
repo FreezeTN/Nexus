@@ -23,7 +23,7 @@ export interface IndexedSearchResult {
 export interface CampaignEntity {
   id: string;
   name: string;
-  type: 'npc' | 'location' | 'quest' | 'faction' | 'item' | 'session' | 'note' | 'monster' | 'pc';
+  type: 'npc' | 'location' | 'quest' | 'faction' | 'item' | 'session' | 'note' | 'monster' | 'pc' | 'timeline';
   summary: string;
   region?: string;
   status?: string;
@@ -139,7 +139,35 @@ export const SAMPLE_CAMPAIGN_ENTITIES: CampaignEntity[] = [
     status: 'Allied Patron',
     faction: 'Rockseeker Clan',
     connections: [
-      { targetId: 'entity-7', targetName: 'Town of Phandalin', relationship: 'Frequent Visitor', targetType: 'location' }
+      { targetId: 'entity-4', targetName: 'Dragon Hunt Quest', relationship: 'Quest Sponsor', targetType: 'quest' },
+      { targetId: 'entity-6', targetName: 'Session 18: Dragonfire Incident', relationship: 'Key Informant', targetType: 'session' },
+      { targetId: 'entity-5', targetName: 'Dragon Slayer Longsword', relationship: 'Artifact Finder', targetType: 'item' },
+      { targetId: 'entity-3', targetName: 'Cult of the Dragon', relationship: 'Hunted By', targetType: 'faction' },
+      { targetId: 'entity-10', targetName: 'Sildar Hallwinter', relationship: 'Traveling Companion', targetType: 'pc' },
+      { targetId: 'entity-7', targetName: 'Town of Phandalin', relationship: 'Base Headquarters', targetType: 'location' },
+      { targetId: 'entity-11', targetName: '1492 DR Lost Mine Expedition', relationship: 'Timeline Epoch', targetType: 'timeline' }
+    ]
+  },
+  {
+    id: 'entity-10',
+    name: 'Sildar Hallwinter',
+    type: 'pc',
+    summary: 'Veteran warrior of the Lords Alliance dispatched to maintain order in Phandalin.',
+    status: 'Allied Hero',
+    connections: [
+      { targetId: 'entity-9', targetName: 'Gundren Rockseeker', relationship: 'Sworn Protector', targetType: 'npc' },
+      { targetId: 'entity-7', targetName: 'Town of Phandalin', relationship: 'Stationed At', targetType: 'location' }
+    ]
+  },
+  {
+    id: 'entity-11',
+    name: '1492 DR Lost Mine Expedition',
+    type: 'timeline',
+    summary: 'Historic campaign era marking the rediscovery of the Forge of Spells and the defense of the Sword Coast.',
+    status: 'Campaign Era',
+    connections: [
+      { targetId: 'entity-9', targetName: 'Gundren Rockseeker', relationship: 'Initiator', targetType: 'npc' },
+      { targetId: 'entity-4', targetName: 'Dragon Hunt Quest', relationship: 'Primary Quest Arc', targetType: 'quest' }
     ]
   }
 ];

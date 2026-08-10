@@ -3,8 +3,9 @@ import { CharacterData, Party, EncounterEnvironment } from '../../types';
 import { UserProfile } from '../../lib/firebase';
 import { getAbilityModifier, formatModifier, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { getLevelFromTotalXp } from '../../data/levelProgressionData';
-import { Crosshair, Plus, Trash2, ChevronRight, ChevronLeft, Dices, RefreshCw, ScrollText, Users, Compass, X } from 'lucide-react';
+import { Crosshair, Plus, Trash2, ChevronRight, ChevronLeft, Dices, RefreshCw, ScrollText, Users, Compass, X, Mic, Volume2 } from 'lucide-react';
 import { AttackResolver } from './AttackResolver';
+import { voiceManager, VoicePeerState } from '../../lib/voiceChatService';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound } from '../../utils/diceAudio';
@@ -166,6 +167,21 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const [editingMaxHpValue, setEditingMaxHpValue] = useState<number | string>('');
 
   const [showLogModal, setShowLogModal] = useState(false);
+  const [activeSpeakerNames, setActiveSpeakerNames] = useState<Set<string>>(new Set());
+
+  React.useEffect(() => {
+    const unsub = voiceManager.onPeersChange((peers) => {
+      const speakingNames = new Set<string>();
+      peers.forEach((p) => {
+        if (p.isSpeaking) {
+          if (p.characterName) speakingNames.add(p.characterName.toLowerCase().trim());
+          if (p.displayName) speakingNames.add(p.displayName.toLowerCase().trim());
+        }
+      });
+      setActiveSpeakerNames(speakingNames);
+    });
+    return unsub;
+  }, []);
 
   const [xpAlert, setXpAlert] = useState<{
     monsterName: string;
@@ -775,11 +791,15 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
       <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
         {combatants.map((c, idx) => {
           const isActive = idx === activeTurnIndex;
+          const isSpeaking = activeSpeakerNames.has(c.name.toLowerCase().trim());
+
           return (
             <div
               key={c.id}
               className={`p-3 rounded-xl border transition flex items-center justify-between gap-3 flex-wrap ${
-                isActive
+                isSpeaking
+                  ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/20'
+                  : isActive
                   ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/50 shadow-lg'
                   : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
               }`}
@@ -790,7 +810,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                     <img
                       src={c.portraitUrl || getMonsterPortraitUrl(c.name)}
                       alt={c.name}
-                      className="w-10 h-10 rounded-xl object-cover border border-stone-700 shadow shrink-0"
+                      className={`w-10 h-10 rounded-xl object-cover border shadow shrink-0 ${
+                        isSpeaking ? 'border-emerald-400 ring-2 ring-emerald-400/60 animate-pulse' : 'border-stone-700'
+                      }`}
                       referrerPolicy="no-referrer"
                       onError={(e) => {
                         const img = e.target as HTMLImageElement;
@@ -810,7 +832,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                   </div>
                 ) : (
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs border ${
-                    c.type === 'player'
+                    isSpeaking
+                      ? 'bg-emerald-500 text-stone-950 border-emerald-300 ring-2 ring-emerald-400/60 animate-pulse'
+                      : c.type === 'player'
                       ? 'bg-amber-600 text-stone-950 border-amber-400'
                       : c.type === 'ally'
                       ? 'bg-emerald-700 text-emerald-100 border-emerald-500'
@@ -823,6 +847,11 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                 <div>
                   <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-2">
                     <span>{c.name}</span>
+                    {isSpeaking && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 animate-pulse">
+                        <Mic className="w-3 h-3 text-emerald-400" /> SPEAKING
+                      </span>
+                    )}
                     {c.isPlayerChar && (
                       <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono font-bold">
                         YOU

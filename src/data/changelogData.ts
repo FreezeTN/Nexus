@@ -14,11 +14,32 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.7.0',
+    date: 'August 2026',
+    title: 'Active Speaker Encounter Highlighting, Campaign Relationship Tree Diagram & WebRTC ICE Auto-Restart',
+    badge: 'Latest Update',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🎙️ Active Speaker Highlighting in Initiative Roster',
+        detail: 'Combatant cards in the Encounter Tracker now display a glowing emerald ring, animated microphone pulse icon, and "SPEAKING" badge whenever a party member talks in WebRTC Party Voice.'
+      },
+      {
+        category: '🌳 Interactive Entity Relationship Tree Diagram',
+        detail: 'Campaign Knowledge Graph now features an Interactive Tree View layout with a root entity node branching into 7 core relationship pillars: Quests, Sessions, Items, Factions, Characters/Allies, Locations, and Timelines.'
+      },
+      {
+        category: '🔄 WebRTC ICE Auto-Restart Connection Resilience',
+        detail: 'WebRTC voice manager automatically detects ICE connection failures or network drops and initiates instant ICE restarts (`iceRestart: true`) to maintain stable audio without requiring page refreshes.'
+      }
+    ]
+  },
+  {
     version: 'v3.6.0',
     date: 'August 2026',
     title: 'Integrated WebRTC Party Voice Client, UI Positioning Fixes & Security Hardening',
-    badge: 'Latest Update',
-    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    badge: 'Previous Version',
+    badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
     highlights: [
       {
         category: '🎙️ Integrated WebRTC Party Voice Client',

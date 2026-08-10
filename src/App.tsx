@@ -126,7 +126,20 @@ export default function App() {
   const [showDeveloperSdk, setShowDeveloperSdk] = useState<boolean>(false);
   const [showUserManualModal, setShowUserManualModal] = useState<boolean>(false);
   const [showCampaignGraphModal, setShowCampaignGraphModal] = useState<boolean>(false);
+  const [initialGraphEntityName, setInitialGraphEntityName] = useState<string | undefined>(undefined);
   const [showVoiceModal, setShowVoiceModal] = useState<boolean>(false);
+
+  // Global listener for custom campaign graph view events
+  useEffect(() => {
+    const handleOpenGraph = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const entityName = customEvent.detail?.entityName || customEvent.detail;
+      setInitialGraphEntityName(typeof entityName === 'string' ? entityName : undefined);
+      setShowCampaignGraphModal(true);
+    };
+    window.addEventListener('penpaper_open_campaign_graph', handleOpenGraph);
+    return () => window.removeEventListener('penpaper_open_campaign_graph', handleOpenGraph);
+  }, []);
 
   // Global Ctrl+K / Cmd+K listener for Command Palette
   useEffect(() => {
@@ -1022,7 +1035,11 @@ export default function App() {
         {/* Obsidian-Style RPG Campaign Knowledge Graph Modal */}
         <CampaignGraphModal
           isOpen={showCampaignGraphModal}
-          onClose={() => setShowCampaignGraphModal(false)}
+          onClose={() => {
+            setShowCampaignGraphModal(false);
+            setInitialGraphEntityName(undefined);
+          }}
+          initialEntityName={initialGraphEntityName}
           onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
         />
 

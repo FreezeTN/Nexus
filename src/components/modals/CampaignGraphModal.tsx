@@ -40,6 +40,8 @@ interface CampaignGraphModalProps {
   isOpen: boolean;
   onClose: () => void;
   onNavigateTab?: (tab: string, payload?: any) => void;
+  initialEntityId?: string;
+  initialEntityName?: string;
 }
 
 const TYPE_COLORS: Record<string, { bg: string; stroke: string; text: string; badge: string }> = {
@@ -51,15 +53,41 @@ const TYPE_COLORS: Record<string, { bg: string; stroke: string; text: string; ba
   item: { bg: '#451a03', stroke: '#f59e0b', text: '#fde68a', badge: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
   session: { bg: '#172554', stroke: '#3b82f6', text: '#93c5fd', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/40' },
   pc: { bg: '#713f12', stroke: '#eab308', text: '#fef08a', badge: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40' },
-  note: { bg: '#292524', stroke: '#a8a29e', text: '#e7e5e4', badge: 'bg-stone-500/20 text-stone-300 border-stone-500/40' }
+  note: { bg: '#292524', stroke: '#a8a29e', text: '#e7e5e4', badge: 'bg-stone-500/20 text-stone-300 border-stone-500/40' },
+  timeline: { bg: '#4c1d95', stroke: '#8b5cf6', text: '#ddd6fe', badge: 'bg-violet-500/20 text-violet-300 border-violet-500/40' }
 };
 
-export function CampaignGraphModal({ isOpen, onClose, onNavigateTab }: CampaignGraphModalProps) {
+export function CampaignGraphModal({
+  isOpen,
+  onClose,
+  onNavigateTab,
+  initialEntityId,
+  initialEntityName
+}: CampaignGraphModalProps) {
   const [entities, setEntities] = useState<CampaignEntity[]>(SAMPLE_CAMPAIGN_ENTITIES);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [viewMode, setViewMode] = useState<'graph' | 'tree'>('tree');
   const [selectedEntity, setSelectedEntity] = useState<CampaignEntity | null>(entities[0] || null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  // Auto-select entity if initialEntityId or initialEntityName is passed
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialEntityId) {
+      const match = entities.find((e) => e.id === initialEntityId);
+      if (match) {
+        setSelectedEntity(match);
+        return;
+      }
+    }
+    if (initialEntityName) {
+      const match = entities.find((e) => e.name.toLowerCase() === initialEntityName.toLowerCase());
+      if (match) {
+        setSelectedEntity(match);
+      }
+    }
+  }, [isOpen, initialEntityId, initialEntityName, entities]);
 
   // Graph Canvas & Simulation States
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -448,6 +476,28 @@ export function CampaignGraphModal({ isOpen, onClose, onNavigateTab }: CampaignG
           </div>
 
           <div className="flex items-center gap-2">
+            {/* View Mode Toggle Switch */}
+            <div className="flex items-center bg-stone-900 border border-stone-800 rounded-xl p-1 gap-1">
+              <button
+                onClick={() => setViewMode('tree')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                  viewMode === 'tree' ? 'bg-amber-600 text-stone-950 shadow' : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <Link2 className="w-3.5 h-3.5" />
+                <span>Tree Diagram</span>
+              </button>
+              <button
+                onClick={() => setViewMode('graph')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-serif font-bold transition flex items-center gap-1.5 ${
+                  viewMode === 'graph' ? 'bg-amber-600 text-stone-950 shadow' : 'text-stone-400 hover:text-stone-200'
+                }`}
+              >
+                <Network className="w-3.5 h-3.5" />
+                <span>Force Graph</span>
+              </button>
+            </div>
+
             <button
               onClick={() => setShowAddModal(true)}
               className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shadow"
@@ -479,7 +529,7 @@ export function CampaignGraphModal({ isOpen, onClose, onNavigateTab }: CampaignG
 
           {/* Category Filter Chips */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none pb-1 sm:pb-0">
-            {['All', 'Monsters', 'NPCs', 'Locations', 'Factions', 'Quests', 'Items', 'Sessions'].map((cat) => (
+            {['All', 'Monsters', 'NPCs', 'Locations', 'Factions', 'Quests', 'Items', 'Sessions', 'Timelines'].map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
@@ -498,55 +548,147 @@ export function CampaignGraphModal({ isOpen, onClose, onNavigateTab }: CampaignG
         {/* Main Graph Layout */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
           
-          {/* Canvas Viewport */}
-          <div className="flex-1 bg-stone-950 relative overflow-hidden min-h-[360px]">
-            <canvas
-              ref={canvasRef}
-              width={800}
-              height={600}
-              onMouseDown={handleCanvasMouseDown}
-              onMouseMove={handleCanvasMouseMove}
-              onMouseUp={handleCanvasMouseUp}
-              className="w-full h-full cursor-grab active:cursor-grabbing block"
-            />
+          {/* Main Viewport: Canvas vs Tree Diagram */}
+          <div className="flex-1 bg-stone-950 relative overflow-hidden min-h-[360px] flex flex-col">
+            {viewMode === 'tree' ? (
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 flex flex-col items-center">
+                {selectedEntity ? (
+                  <>
+                    {/* Centered Root Entity Node */}
+                    <div className="bg-stone-900 border-2 border-amber-500/80 rounded-2xl p-4 text-center max-w-md w-full shadow-2xl ring-2 ring-amber-500/20 relative animate-fadeIn">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className={`text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full border ${TYPE_COLORS[selectedEntity.type]?.badge || 'bg-stone-800 text-stone-300 border-stone-700'}`}>
+                          ROOT: {selectedEntity.type.toUpperCase()}
+                        </span>
+                        {selectedEntity.region && (
+                          <span className="text-[10px] text-stone-400 font-mono flex items-center gap-1">
+                            <MapPin className="w-3 h-3 text-emerald-400" />
+                            {selectedEntity.region}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-xl font-serif font-bold text-amber-100">{selectedEntity.name}</h3>
+                      <p className="text-stone-300 text-xs mt-1.5 leading-relaxed">{selectedEntity.summary}</p>
+                    </div>
 
-            {/* Canvas Zoom Floating Controls */}
-            <div className="absolute bottom-4 left-4 bg-stone-900/90 border border-stone-800 rounded-2xl p-1.5 flex items-center gap-1 shadow-lg backdrop-blur">
-              <button
-                onClick={() => setZoom((z) => Math.min(2.5, z + 0.15))}
-                className="p-1.5 hover:bg-stone-800 text-stone-300 hover:text-amber-300 rounded-xl transition"
-                title="Zoom In"
-              >
-                <ZoomIn className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setZoom((z) => Math.max(0.4, z - 0.15))}
-                className="p-1.5 hover:bg-stone-800 text-stone-300 hover:text-amber-300 rounded-xl transition"
-                title="Zoom Out"
-              >
-                <ZoomOut className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => {
-                  setZoom(1);
-                  setPan({ x: 0, y: 0 });
-                }}
-                className="p-1.5 hover:bg-stone-800 text-stone-300 hover:text-amber-300 rounded-xl transition"
-                title="Reset View"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </div>
+                    {/* Connecting Vertical Stem Line */}
+                    <div className="w-0.5 h-6 bg-gradient-to-b from-amber-500 to-stone-700 shrink-0"></div>
 
-            {/* Graph Node Legend */}
-            <div className="absolute top-4 left-4 hidden lg:flex items-center gap-2 bg-stone-900/80 border border-stone-800/80 rounded-2xl p-2 text-[10px] text-stone-400 backdrop-blur">
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500"></span> Monster</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> NPC</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Location</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Faction</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Quest</span>
-              <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Item</span>
-            </div>
+                    {/* 7 Branching Pillar Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full max-w-5xl">
+                      {[
+                        { type: 'quest', title: 'Quests', icon: <Scroll className="w-4 h-4 text-purple-400" />, bg: 'border-purple-500/30' },
+                        { type: 'session', title: 'Sessions', icon: <Calendar className="w-4 h-4 text-blue-400" />, bg: 'border-blue-500/30' },
+                        { type: 'item', title: 'Items & Loot', icon: <Package className="w-4 h-4 text-amber-400" />, bg: 'border-amber-500/30' },
+                        { type: 'faction', title: 'Factions & Guilds', icon: <Shield className="w-4 h-4 text-indigo-400" />, bg: 'border-indigo-500/30' },
+                        { type: 'pc', title: 'Characters & Allies', icon: <Users className="w-4 h-4 text-yellow-400" />, bg: 'border-yellow-500/30' },
+                        { type: 'location', title: 'Locations', icon: <MapPin className="w-4 h-4 text-emerald-400" />, bg: 'border-emerald-500/30' },
+                        { type: 'timeline', title: 'Timelines & History', icon: <Sparkles className="w-4 h-4 text-violet-400" />, bg: 'border-violet-500/30' }
+                      ].map((cat) => {
+                        const items = (selectedEntity.connections || []).filter((c) => {
+                          if (cat.type === 'pc') return ['pc', 'npc', 'monster', 'character'].includes(c.targetType);
+                          return c.targetType === cat.type;
+                        });
+
+                        return (
+                          <div key={cat.type} className={`bg-stone-900/90 border ${cat.bg} rounded-2xl p-3 flex flex-col justify-between shadow`}>
+                            <div>
+                              <div className="flex items-center justify-between border-b border-stone-800 pb-2 mb-2">
+                                <h4 className="text-xs font-serif font-bold text-amber-200 flex items-center gap-1.5">
+                                  {cat.icon}
+                                  <span>{cat.title}</span>
+                                </h4>
+                                <span className="text-[10px] font-mono text-stone-500 bg-stone-950 px-2 py-0.5 rounded-full border border-stone-800">
+                                  {items.length}
+                                </span>
+                              </div>
+
+                              {items.length > 0 ? (
+                                <div className="space-y-1.5">
+                                  {items.map((conn, idx) => {
+                                    const targetEntity = entities.find((e) => e.id === conn.targetId);
+                                    return (
+                                      <div
+                                        key={idx}
+                                        onClick={() => targetEntity && setSelectedEntity(targetEntity)}
+                                        className="bg-stone-950 hover:bg-stone-800 border border-stone-800/80 rounded-xl p-2 transition cursor-pointer flex items-center justify-between group"
+                                      >
+                                        <div>
+                                          <div className="text-[9px] font-mono text-amber-400 uppercase tracking-wider">{conn.relationship}</div>
+                                          <div className="text-xs font-serif font-bold text-stone-200 group-hover:text-amber-200">
+                                            {conn.targetName}
+                                          </div>
+                                        </div>
+                                        <ChevronRight className="w-3.5 h-3.5 text-stone-600 group-hover:text-amber-400 transition" />
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              ) : (
+                                <p className="text-[11px] text-stone-600 italic py-2">No direct {cat.title.toLowerCase()} linked.</p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-stone-500 text-xs font-serif py-12">Select an entity to render its visual relationship tree.</p>
+                )}
+              </div>
+            ) : (
+              <>
+                <canvas
+                  ref={canvasRef}
+                  width={800}
+                  height={600}
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseUp={handleCanvasMouseUp}
+                  className="w-full h-full cursor-grab active:cursor-grabbing block"
+                />
+
+                {/* Canvas Zoom Floating Controls */}
+                <div className="absolute bottom-4 left-4 bg-stone-900/90 border border-stone-800 rounded-2xl p-1.5 flex items-center gap-1 shadow-lg backdrop-blur">
+                  <button
+                    onClick={() => setZoom((z) => Math.min(2.5, z + 0.15))}
+                    className="p-1.5 hover:bg-stone-800 text-stone-300 hover:text-amber-300 rounded-xl transition"
+                    title="Zoom In"
+                  >
+                    <ZoomIn className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => setZoom((z) => Math.max(0.4, z - 0.15))}
+                    className="p-1.5 hover:bg-stone-800 text-stone-300 hover:text-amber-300 rounded-xl transition"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setZoom(1);
+                      setPan({ x: 0, y: 0 });
+                    }}
+                    className="p-1.5 hover:bg-stone-800 text-stone-300 hover:text-amber-300 rounded-xl transition"
+                    title="Reset View"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Graph Node Legend */}
+                <div className="absolute top-4 left-4 hidden lg:flex items-center gap-2 bg-stone-900/80 border border-stone-800/80 rounded-2xl p-2 text-[10px] text-stone-400 backdrop-blur">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-red-500"></span> Monster</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> NPC</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Location</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-indigo-500"></span> Faction</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span> Quest</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Item</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-violet-500"></span> Timeline</span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Side Entity Inspector Card Panel */}

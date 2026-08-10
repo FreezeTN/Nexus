@@ -12,7 +12,8 @@ export type EventType =
   | 'SessionStarted'
   | 'WorldChanged'
   | 'SystemPluginToggled'
-  | 'DiceRolled';
+  | 'DiceRolled'
+  | 'VoiceSpeakerChanged';
 
 export interface EventPayloadMap {
   CharacterCreated: { character: CharacterData };
@@ -27,6 +28,7 @@ export interface EventPayloadMap {
   WorldChanged: { worldId: string; worldName: string };
   SystemPluginToggled: { pluginId: RuleEdition | string; enabled: boolean; version?: string; updated?: boolean; uninstalled?: boolean };
   DiceRolled: { formula: string; total: number; isNat20?: boolean; isNat1?: boolean; rollerName?: string };
+  VoiceSpeakerChanged: { uid: string; displayName: string; characterName?: string; isSpeaking: boolean };
 }
 
 export interface LoggedEvent<K extends EventType = EventType> {

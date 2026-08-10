@@ -234,9 +234,9 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           detail: 'Track 3 Successes and 3 Failures. Accumulating 3 Failures results in Permanent Death for PCs and Merchants: HP is locked to 0, labeled "DEAD", and standard rests or healing items/potions are disabled. Only Revive spells (e.g. Revivify, Resurrection) or manual DM HP modifications bring the character back to life.'
         },
         {
-          name: 'Encounter Tracker & Target AC Attack Resolver',
+          name: 'Encounter Tracker, Target AC Resolver & Active Speaker Highlighting',
           action: 'Combat View & Target AC Panel',
-          detail: 'Manage turn orders, initiative, status conditions, and use the automated Target AC Hit & Attack Resolver to roll attacks vs. enemy AC with 1-click damage application.'
+          detail: 'Manage turn orders, initiative, status conditions, and use the automated Target AC Hit & Attack Resolver. Combatant cards automatically display a glowing emerald ring and "SPEAKING" pulse badge when party members talk in WebRTC Party Voice.'
         },
         {
           name: 'Party Manager & Adventuring Groups',

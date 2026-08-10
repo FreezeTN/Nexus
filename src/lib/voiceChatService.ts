@@ -1,5 +1,6 @@
 import { doc, setDoc, onSnapshot, deleteDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from './firebase';
+import { eventBus } from '../events/eventBus';
 
 export interface VoicePeerState {
   uid: string;
@@ -286,6 +287,24 @@ export class WebRTCVoiceManager {
       }
     };
 
+    // ICE connection state & reconnection handling
+    pc.oniceconnectionstatechange = () => {
+      const state = pc.iceConnectionState;
+      if (state === 'failed' || state === 'disconnected') {
+        console.warn(`[WebRTC] Voice connection to ${remoteUid} ${state}. Triggering ICE restart...`);
+        if (this.localUid > remoteUid) {
+          pc.createOffer({ iceRestart: true })
+            .then((offer) => pc.setLocalDescription(offer))
+            .then(() => {
+              if (pc.localDescription) {
+                this.sendSignal(remoteUid, 'offer', pc.localDescription);
+              }
+            })
+            .catch((e) => console.warn('ICE restart offer failed:', e));
+        }
+      }
+    };
+
     // If localUid > remoteUid, localUid acts as caller/offerer
     if (this.localUid > remoteUid) {
       pc.createOffer()
@@ -519,9 +538,23 @@ export class WebRTCVoiceManager {
     };
   }
 
+  public getActiveSpeakers(): VoicePeerState[] {
+    return Array.from(this.activePeers.values()).filter((p) => p.isSpeaking);
+  }
+
   private notifyPeers() {
     const peerList = Array.from(this.activePeers.values());
     this.onPeersUpdateCallbacks.forEach((cb) => cb(peerList));
+
+    // Emit event bus notification for active speakers
+    peerList.forEach((peer) => {
+      eventBus.emit('VoiceSpeakerChanged', {
+        uid: peer.uid,
+        displayName: peer.displayName,
+        characterName: peer.characterName,
+        isSpeaking: peer.isSpeaking
+      });
+    });
   }
 
   private notifyStatus(status: 'disconnected' | 'connecting' | 'connected' | 'error', errorMsg?: string) {
