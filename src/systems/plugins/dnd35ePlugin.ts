@@ -11,6 +11,10 @@ export const dnd35ePlugin: GameSystemPlugin = {
   badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
   icon: '📜',
   primaryResourceName: 'Hit Points',
+  version: '3.0.0',
+  author: 'Classic D20 Module',
+  category: 'fantasy',
+  supportedFeatures: ['Base Attack Bonus (BAB)', 'Three-Save Matrix (Fort/Ref/Will)', '30+ Skill Point Distribution', 'Touch & Flat-Footed AC'],
 
   characterEngine: {
     getDefaultAbilities() {

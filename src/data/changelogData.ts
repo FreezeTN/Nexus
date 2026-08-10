@@ -14,10 +14,35 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.1.0',
+    date: 'August 2026',
+    title: 'Global Command Palette (Ctrl+K), Central Event Bus & Extension SDK',
+    badge: 'Latest Release',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '⚡ Global Command Palette (Ctrl+K)',
+        detail: 'Omnibox command palette supporting keyboard navigation, instant character switching, action shortcuts, system plugins search, and sheet tab navigation.'
+      },
+      {
+        category: '📡 Central Domain Event Bus',
+        detail: 'Decoupled pub/sub event bus architecture for domain-level events (CharacterCreated, LevelUp, CombatStarted, QuestCompleted, DiceRolled) with reactive event stream logging.'
+      },
+      {
+        category: '🧩 Plugin SDK & Extension Metadata',
+        detail: 'Expanded GameSystemPlugin specification with versioning, author, category, and capability tags. Introduced interactive Extension Manager modal (SDK / Plugins) in the global toolbar.'
+      },
+      {
+        category: '🔗 System Registry Integration',
+        detail: 'Refactored NewCharacterModal, OptionsModal, Compendium, User Guide, and level calculators to consume systemRegistry as the single source of truth for all TRPG rulesets.'
+      }
+    ]
+  },
+  {
     version: 'v3.0.0',
     date: 'August 2026',
     title: 'RPG System Plugin SDK Architecture & Core Refactoring',
-    badge: 'Latest Release',
+    badge: 'Architecture Upgrade',
     badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
     highlights: [
       {

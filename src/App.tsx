@@ -20,6 +20,9 @@ import { SessionLobbyModal } from './components/modals/SessionLobbyModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorModal';
 import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
+import { CommandPaletteModal } from './components/common/CommandPaletteModal';
+import { ExtensionManagerModal } from './components/modals/ExtensionManagerModal';
+import { eventBus } from './events/eventBus';
 import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Crown } from 'lucide-react';
@@ -71,6 +74,20 @@ export default function App() {
 
   const [showTRPGSelectorModal, setShowTRPGSelectorModal] = useState<boolean>(!hasConfiguredSystems);
   const [showAudioModal, setShowAudioModal] = useState<boolean>(false);
+  const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
+  const [showExtensionManager, setShowExtensionManager] = useState<boolean>(false);
+
+  // Global Ctrl+K / Cmd+K listener for Command Palette
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const [characters, setCharacters] = useState<CharacterData[]>(() => {
     try {
@@ -644,6 +661,8 @@ export default function App() {
         enabledSystems={enabledSystems}
         onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
         onOpenAudioModal={() => setShowAudioModal(true)}
+        onOpenCommandPalette={() => setShowCommandPalette(true)}
+        onOpenExtensionManager={() => setShowExtensionManager(true)}
         activeTab={activeTab}
       />
 
@@ -844,6 +863,35 @@ export default function App() {
         onSystemChange={handleSystemChange}
         onExportJson={handleExportJson}
         onImportJson={handleImportJson}
+      />
+
+      {/* Global Command Palette (Ctrl+K / Cmd+K) */}
+      <CommandPaletteModal
+        isOpen={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        characters={characters}
+        activeCharacter={activeCharacter || characters[0]}
+        onSelectCharacter={(char) => handleSelectCharacter(char.id)}
+        onOpenNewCharacter={() => handleOpenNewCharacterModal()}
+        onOpenOptions={() => setShowAudioModal(true)}
+        onOpenAudio={() => setShowAudioModal(true)}
+        onOpenExtensionManager={() => setShowExtensionManager(true)}
+        onNavigateTab={(tab) => setActiveTab(tab)}
+        onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
+      />
+
+      {/* Extension & Plugin Manager Modal */}
+      <ExtensionManagerModal
+        isOpen={showExtensionManager}
+        onClose={() => setShowExtensionManager(false)}
+        enabledSystems={enabledSystems}
+        onToggleSystem={(sysId) => {
+          const updated = enabledSystems.includes(sysId)
+            ? enabledSystems.filter(s => s !== sysId)
+            : [...enabledSystems, sysId];
+          setEnabledSystems(updated);
+          localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(updated));
+        }}
       />
     </div>
   );

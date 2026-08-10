@@ -9,6 +9,10 @@ export const shadowrun5ePlugin: GameSystemPlugin = {
   badgeColor: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/40',
   icon: '💻',
   primaryResourceName: 'Physical & Stun Condition Monitor',
+  version: '3.0.0',
+  author: 'Neon Matrix Syndicate',
+  category: 'cyberpunk',
+  supportedFeatures: ['D6 Dice Pools (Hits on 5+)', 'Glitches & Critical Glitches', 'Essence / Cyberware Strain', 'Nuyen & Karma Ledger'],
 
   characterEngine: {
     getDefaultAbilities() {

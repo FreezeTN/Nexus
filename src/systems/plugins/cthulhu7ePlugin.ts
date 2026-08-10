@@ -9,6 +9,10 @@ export const cthulhu7ePlugin: GameSystemPlugin = {
   badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
   icon: '🐙',
   primaryResourceName: 'Hit Points & Sanity (SAN)',
+  version: '3.0.0',
+  author: 'Eldritch Horror Guild',
+  category: 'horror',
+  supportedFeatures: ['Percentile d100 Skill Rolls', 'Sanity Loss & Bouts of Madness', 'Hard / Extreme Success Thresholds', 'Luck Spending Mechanics'],
 
   characterEngine: {
     getDefaultAbilities() {

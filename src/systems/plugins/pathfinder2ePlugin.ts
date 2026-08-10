@@ -10,6 +10,10 @@ export const pathfinder2ePlugin: GameSystemPlugin = {
   badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
   icon: '🏹',
   primaryResourceName: 'Hit Points',
+  version: '3.0.0',
+  author: 'Tactical Ruleset Engine',
+  category: 'tactical',
+  supportedFeatures: ['3-Action Economy', 'Proficiency Ranks (Untrained->Legendary)', 'Multiple Attack Penalty (MAP)'],
 
   characterEngine: {
     getDefaultAbilities() {

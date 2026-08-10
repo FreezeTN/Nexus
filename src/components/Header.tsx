@@ -52,7 +52,8 @@ import {
   SlidersHorizontal,
   Volume2,
   VolumeX,
-  Settings
+  Settings,
+  Command
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
@@ -84,6 +85,8 @@ interface HeaderProps {
   enabledSystems?: RuleEdition[];
   onOpenSystemSelector?: () => void;
   onOpenAudioModal?: () => void;
+  onOpenCommandPalette?: () => void;
+  onOpenExtensionManager?: () => void;
   activeTab?: TabId;
 }
 
@@ -109,6 +112,8 @@ export const Header: React.FC<HeaderProps> = ({
   enabledSystems,
   onOpenSystemSelector,
   onOpenAudioModal,
+  onOpenCommandPalette,
+  onOpenExtensionManager,
   activeTab
 }) => {
   const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
@@ -736,6 +741,28 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Unified Global App Menu Toolbar */}
           <div className="flex items-center p-0.5 bg-stone-950/90 border border-stone-800 rounded-xl shadow-inner divide-x divide-stone-800">
+            {onOpenCommandPalette && (
+              <button
+                onClick={onOpenCommandPalette}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-stone-800 text-amber-300 font-bold text-xs transition cursor-pointer"
+                title="Open Global Command Palette (Ctrl+K or Cmd+K)"
+              >
+                <Command className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline font-mono">Ctrl+K</span>
+              </button>
+            )}
+
+            {onOpenExtensionManager && (
+              <button
+                onClick={onOpenExtensionManager}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-stone-800 text-indigo-300 font-bold text-xs transition cursor-pointer"
+                title="Manage RPG Plugins, SDK Extensions & Event Bus Stream"
+              >
+                <Layers className="w-4 h-4 text-indigo-400" />
+                <span className="hidden md:inline">SDK / Plugins</span>
+              </button>
+            )}
+
             {currentUser && onOpenSessionLobby && (
               <button
                 onClick={onOpenSessionLobby}

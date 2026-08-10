@@ -11,6 +11,10 @@ export const dnd5ePlugin: GameSystemPlugin = {
   badgeColor: 'bg-red-500/20 text-red-300 border-red-500/40',
   icon: '⚔️',
   primaryResourceName: 'Hit Points',
+  version: '3.0.0',
+  author: 'Core Systems Engine',
+  category: 'fantasy',
+  supportedFeatures: ['5e SRD Rules', 'Advantage / Disadvantage', 'Spell Slot Engine', '18 Skill Projections'],
 
   characterEngine: {
     getDefaultAbilities() {

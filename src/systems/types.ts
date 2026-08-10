@@ -56,6 +56,14 @@ export interface GameSystemPlugin {
   badgeColor: string;
   icon: string;
   primaryResourceName: string;
+
+  // Extension Metadata
+  version?: string;
+  author?: string;
+  website?: string;
+  license?: string;
+  category?: 'fantasy' | 'cyberpunk' | 'horror' | 'tactical' | 'universal';
+  supportedFeatures?: string[];
   
   characterEngine: SystemCharacterEngine;
   combatEngine: SystemCombatEngine;
