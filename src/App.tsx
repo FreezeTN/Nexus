@@ -22,6 +22,7 @@ import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorM
 import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
 import { CommandPaletteModal } from './components/common/CommandPaletteModal';
 import { ExtensionManagerModal } from './components/modals/ExtensionManagerModal';
+import { DeveloperSdkModal } from './components/modals/DeveloperSdkModal';
 import { eventBus } from './events/eventBus';
 import { useHistoryState } from './utils/useHistoryState';
 import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
@@ -47,6 +48,46 @@ const STORAGE_KEY_CHARACTERS = 'dnd_app_characters_v5';
 const STORAGE_KEY_ACTIVE = 'dnd_app_active_id_v4';
 const STORAGE_KEY_PARTIES = 'dnd_app_parties_v1';
 const STORAGE_KEY_ENABLED_SYSTEMS = 'dnd_app_enabled_systems_v2';
+
+const normalizeTabId = (tab: string): TabId => {
+  switch (tab) {
+    case 'stats':
+    case 'sheet1':
+      return 'sheet1';
+    case 'combat':
+    case 'turn_order':
+    case 'turnorder':
+    case 'encounter':
+    case 'sheet2':
+      return 'sheet2';
+    case 'gear':
+    case 'inventory':
+    case 'sheet3':
+      return 'sheet3';
+    case 'spells':
+    case 'magic':
+    case 'sheet4':
+      return 'sheet4';
+    case 'notes':
+    case 'description':
+    case 'sheet5':
+      return 'sheet5';
+    case 'guide':
+    case 'userguide':
+    case 'sheet6':
+      return 'sheet6';
+    case 'compendium':
+    case 'sheet7':
+      return 'sheet7';
+    case 'dm':
+    case 'sheetDm':
+      return 'sheetDm';
+    case 'menu':
+      return 'menu';
+    default:
+      return 'sheet1';
+  }
+};
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
@@ -77,6 +118,7 @@ export default function App() {
   const [showAudioModal, setShowAudioModal] = useState<boolean>(false);
   const [showCommandPalette, setShowCommandPalette] = useState<boolean>(false);
   const [showExtensionManager, setShowExtensionManager] = useState<boolean>(false);
+  const [showDeveloperSdk, setShowDeveloperSdk] = useState<boolean>(false);
 
   // Global Ctrl+K / Cmd+K listener for Command Palette
   useEffect(() => {
@@ -88,6 +130,19 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Global listener for custom navigation events (e.g. WorkspaceCustomizer dashboard widgets)
+  useEffect(() => {
+    const handleNavigate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const targetTab = customEvent.detail;
+      if (targetTab) {
+        setActiveTab(normalizeTabId(targetTab));
+      }
+    };
+    window.addEventListener('penpaper_navigate_tab', handleNavigate);
+    return () => window.removeEventListener('penpaper_navigate_tab', handleNavigate);
   }, []);
 
   const initialCharacters = (() => {
@@ -416,9 +471,9 @@ export default function App() {
     }
   }, [activeCharacterId]);
 
-  // When not logged in at all, automatically force activeTab to Main Menu ('menu') if on any character sheet tab
+  // Guest mode allows navigating character sheets without locking out unauthenticated users
   useEffect(() => {
-    if (!currentUser && activeTab !== 'menu' && activeTab !== 'sheet6') {
+    if (!currentUser && activeTab === 'sheetDm') {
       setActiveTab('menu');
     }
   }, [currentUser, activeTab]);
@@ -920,7 +975,8 @@ export default function App() {
         onOpenOptions={() => setShowAudioModal(true)}
         onOpenAudio={() => setShowAudioModal(true)}
         onOpenExtensionManager={() => setShowExtensionManager(true)}
-        onNavigateTab={(tab) => setActiveTab(tab)}
+        onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
+        onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
         onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
       />
 
@@ -936,6 +992,13 @@ export default function App() {
           setEnabledSystems(updated);
           localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(updated));
         }}
+        onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
+      />
+
+      {/* Developer SDK & Architecture Center Modal */}
+      <DeveloperSdkModal
+        isOpen={showDeveloperSdk}
+        onClose={() => setShowDeveloperSdk(false)}
       />
     </div>
   );

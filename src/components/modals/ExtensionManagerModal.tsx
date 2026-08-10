@@ -7,7 +7,8 @@ import {
   Activity, 
   ShieldCheck, 
   Sparkles, 
-  Code2, 
+  Code2,
+  Code,
   Zap,
   Info,
   Globe,
@@ -24,13 +25,15 @@ interface ExtensionManagerModalProps {
   onClose: () => void;
   enabledSystems: RuleEdition[];
   onToggleSystem: (systemId: RuleEdition) => void;
+  onOpenDeveloperSdk?: () => void;
 }
 
 export function ExtensionManagerModal({
   isOpen,
   onClose,
   enabledSystems,
-  onToggleSystem
+  onToggleSystem,
+  onOpenDeveloperSdk
 }: ExtensionManagerModalProps) {
   const [activeTab, setActiveTab] = useState<'extensions' | 'events' | 'architecture' | 'docs'>('extensions');
   const [selectedDoc, setSelectedDoc] = useState<'architecture' | 'pluginApi' | 'state' | 'events' | 'addingSystem'>('architecture');
@@ -62,12 +65,27 @@ export function ExtensionManagerModal({
             </div>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-xl bg-stone-800 text-stone-400 hover:text-stone-100 hover:bg-stone-700 transition"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {onOpenDeveloperSdk && (
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenDeveloperSdk();
+                }}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-sans text-xs font-semibold rounded-xl flex items-center gap-1.5 transition shadow-lg"
+              >
+                <Code className="w-4 h-4" />
+                <span>Developer SDK Center</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-xl bg-stone-800 text-stone-400 hover:text-stone-100 hover:bg-stone-700 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Modal Tabs Navigation */}

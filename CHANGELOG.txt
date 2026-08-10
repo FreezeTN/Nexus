@@ -228,6 +228,21 @@ MILESTONE 18: INTEGRATED USER MANUAL & VERSION CHANGELOG TIMELINE
   - Added dedicated user guide sections for Audio & Sound Engine, DM Non-Locking Presence, Hybrid Heritages, Transformations, and Spellbook Management.
   - Fully synchronized `CHANGELOG.txt` and `Sheet6UserGuide.tsx` version histories.
 
+--------------------------------------------------------------------------------
+MILESTONE 19: GUEST ADVENTURER MODE, DASHBOARD WIDGET FIXES & DEVELOPER SDK
+--------------------------------------------------------------------------------
+* Guest Adventurer Mode & Unlocked Local Navigation:
+  - Enabled unauthenticated guest users to view, create, and edit character sheets locally without login restrictions.
+  - Added a non-intrusive Guest Adventurer banner on the Main Menu with sign-in prompts while keeping full local interactivity available.
+
+* Workspace Customizer Dashboard Widget Navigation:
+  - Fixed navigation routing for the "Open Turn Order" widget in the Pinned Workspace Customizer, seamlessly navigating to Sheet 2 (Combat & Turn Order).
+  - Added global navigation event handling to support external and custom dashboard widget tab routing.
+
+* Developer SDK & Command Palette Integrations:
+  - Integrated Developer SDK & Architecture Center into the Command Palette (Ctrl+K) for instant access to system registry tests, event logs, and test harness execution.
+  - Updated event bus history hooks and resolved automated architecture test assertions across all 5 TRPG rulesets.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

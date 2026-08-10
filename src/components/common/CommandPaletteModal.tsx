@@ -12,6 +12,7 @@ import {
   Command, 
   X,
   Layers,
+  Code,
   ChevronRight,
   Package,
   Scroll,
@@ -38,6 +39,7 @@ interface CommandPaletteModalProps {
   onOpenOptions: () => void;
   onOpenAudio: () => void;
   onOpenExtensionManager: () => void;
+  onOpenDeveloperSdk?: () => void;
   onNavigateTab: (tabId: any) => void;
   onRollDice?: () => void;
 }
@@ -61,6 +63,7 @@ export function CommandPaletteModal({
   onOpenOptions,
   onOpenAudio,
   onOpenExtensionManager,
+  onOpenDeveloperSdk,
   onNavigateTab,
   onRollDice
 }: CommandPaletteModalProps) {
@@ -109,6 +112,17 @@ export function CommandPaletteModal({
         action: () => {
           onClose();
           onOpenExtensionManager();
+        }
+      },
+      {
+        id: 'action-developer-sdk',
+        title: 'Developer SDK & Architecture Center',
+        category: 'Actions',
+        description: 'Explore Plugin Packaging, Event Bus Inspector, and Test Harness',
+        icon: <Code className="w-4 h-4 text-purple-400" />,
+        action: () => {
+          onClose();
+          if (onOpenDeveloperSdk) onOpenDeveloperSdk();
         }
       },
       {

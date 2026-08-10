@@ -14,11 +14,32 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.3.1',
+    date: 'August 2026',
+    title: 'Guest Adventurer Mode, Dashboard Widget Routing & Developer SDK Integrations',
+    badge: 'Latest Release',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '👤 Guest Adventurer Mode & Offline Sheet Access',
+        detail: 'Unauthenticated users can now inspect, create, and manage character sheets locally without being blocked by login prompts.'
+      },
+      {
+        category: '📌 Workspace Customizer Navigation ("Open Turn Order")',
+        detail: 'Fixed turn order routing in the Pinned Workspace Customizer dashboard widget to seamlessly navigate to Sheet 2 (Combat & Turn Order).'
+      },
+      {
+        category: '⚡ Omni-Palette Developer SDK Integration (Ctrl+K)',
+        detail: 'Integrated Developer SDK & Architecture Center triggers into the Command Palette for instant access to system registry tests, event bus logs, and test harness execution.'
+      }
+    ]
+  },
+  {
     version: 'v3.3.0',
     date: 'August 2026',
     title: 'First-Class Plugin Ecosystem, Universal Search Everywhere & Interconnected Knowledge Graph',
-    badge: 'Latest Release',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Feature Update',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
     highlights: [
       {
         category: '🧩 First-Class Plugin Ecosystem',

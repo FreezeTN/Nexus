@@ -163,8 +163,8 @@ export function WorkspaceCustomizer({ character, onNavigateTab, onRollDice }: Wo
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-stone-400 font-sans">Mod: +{character.initiativeBonus}</span>
                 <button
-                  onClick={() => onNavigateTab('combat')}
-                  className="px-3 py-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-serif font-bold transition"
+                  onClick={() => onNavigateTab('sheet2')}
+                  className="px-3 py-1 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 border border-rose-500/40 rounded-lg text-xs font-serif font-bold transition cursor-pointer"
                 >
                   Open Turn Order →
                 </button>

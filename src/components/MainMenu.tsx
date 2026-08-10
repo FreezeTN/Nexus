@@ -339,37 +339,30 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       ? foldersConfig
       : foldersConfig.filter(f => f.key === activeFolderTab);
 
-    if (!currentUser) {
-      return (
-        <div className="bg-stone-900/90 border border-amber-500/30 rounded-3xl p-8 text-center space-y-6 max-w-2xl mx-auto shadow-2xl my-6">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto shadow-inner">
-            <Lock className="w-8 h-8" />
-          </div>
-          <div className="space-y-2">
-            <h3 className="font-serif font-bold text-2xl text-amber-200">
-              Adventurer Account Required
-            </h3>
-            <p className="text-stone-300 text-sm max-w-lg mx-auto leading-relaxed">
-              No characters or data are accessible while logged out. Please sign in or enter Guest Mode to select, view, or create characters.
-            </p>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+    return (
+      <div className="space-y-6">
+        {!currentUser && (
+          <div className="bg-amber-950/40 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 shrink-0">
+                <User className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-serif font-bold text-amber-200 text-sm">Guest Adventurer Mode</h4>
+                <p className="text-stone-300 text-xs">Playing locally. Sign in to sync your characters across devices & access DM multiplayer sessions.</p>
+              </div>
+            </div>
             {onOpenAuthModal && (
               <button
                 onClick={onOpenAuthModal}
-                className="w-full sm:w-auto px-6 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 cursor-pointer"
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0 shadow cursor-pointer"
               >
-                <UserCheck className="w-5 h-5" /> Sign In / Account & Roles
+                <UserCheck className="w-4 h-4" /> Sign In / Account
               </button>
             )}
           </div>
-        </div>
-      );
-    }
+        )}
 
-    return (
-      <div className="space-y-6">
         {/* Category / Folder Filter Tabs */}
         <div className="flex flex-wrap items-center gap-2 bg-stone-950/80 p-2 rounded-2xl border border-stone-800">
           <span className="text-xs font-serif font-bold text-stone-400 px-2 flex items-center gap-1">
