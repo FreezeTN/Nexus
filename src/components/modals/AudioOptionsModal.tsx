@@ -6,7 +6,7 @@ import { UserProfile } from '../../lib/firebase';
 interface AudioOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialCategory?: 'sound' | 'app' | 'character';
+  initialCategory?: 'sound' | 'app' | 'character' | 'credits';
   currentUser?: UserProfile | null;
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (char: CharacterData) => void;

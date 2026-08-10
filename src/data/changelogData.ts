@@ -14,19 +14,36 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
-    version: 'v3.7.0',
+    version: 'v3.8.0',
     date: 'August 2026',
-    title: 'Active Speaker Encounter Highlighting, Campaign Relationship Tree Diagram & WebRTC ICE Auto-Restart',
+    title: 'Project Credits Tab, Knowledge Graph Node Editing & Active Speaker Combat Highlighting',
     badge: 'Latest Update',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     highlights: [
       {
-        category: '🎙️ Active Speaker Highlighting in Initiative Roster',
-        detail: 'Combatant cards in the Encounter Tracker now display a glowing emerald ring, animated microphone pulse icon, and "SPEAKING" badge whenever a party member talks in WebRTC Party Voice.'
+        category: '🏆 Project Credits & Attributions Tab in Options',
+        detail: 'Added a dedicated Credits category in the Options Menu honoring Freeze (@freezecoaching) as Lead Full-Stack Developer and ChaosDwarf (@chaosdwarf7) for the original Project Idea & Concept, complete with 1-click Discord handle copy buttons.'
       },
       {
+        category: '✏️ Knowledge Graph Node Management & Persistence',
+        detail: 'Campaign Knowledge Graph now supports editing existing node names, categories, and summaries, deleting nodes, adding custom entities, persistent auto-saving in localStorage, and a 1-click "Reset Defaults" restore button.'
+      },
+      {
+        category: '🎙️ Active Speaker Highlighting in Encounter Tracker',
+        detail: 'Combatant cards in the Encounter Tracker display a glowing emerald ring, animated microphone pulse icon, and "SPEAKING" badge whenever a party member talks in WebRTC Party Voice.'
+      }
+    ]
+  },
+  {
+    version: 'v3.7.0',
+    date: 'August 2026',
+    title: 'Campaign Relationship Tree Diagram & WebRTC ICE Auto-Restart Resilience',
+    badge: 'Previous Version',
+    badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
+    highlights: [
+      {
         category: '🌳 Interactive Entity Relationship Tree Diagram',
-        detail: 'Campaign Knowledge Graph now features an Interactive Tree View layout with a root entity node branching into 7 core relationship pillars: Quests, Sessions, Items, Factions, Characters/Allies, Locations, and Timelines.'
+        detail: 'Campaign Knowledge Graph features an Interactive Tree View layout with a root entity node branching into 7 core relationship pillars: Quests, Sessions, Items, Factions, Characters/Allies, Locations, and Timelines.'
       },
       {
         category: '🔄 WebRTC ICE Auto-Restart Connection Resilience',

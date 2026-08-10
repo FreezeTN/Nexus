@@ -6,6 +6,7 @@ import {
   Filter,
   Plus,
   Trash2,
+  Edit3,
   ExternalLink,
   MapPin,
   Users,
@@ -23,7 +24,8 @@ import {
   Swords,
   ChevronRight,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 import { CampaignEntity, SAMPLE_CAMPAIGN_ENTITIES } from '../../utils/searchIndexer';
 
@@ -64,12 +66,40 @@ export function CampaignGraphModal({
   initialEntityId,
   initialEntityName
 }: CampaignGraphModalProps) {
-  const [entities, setEntities] = useState<CampaignEntity[]>(SAMPLE_CAMPAIGN_ENTITIES);
+  const [entities, setEntities] = useState<CampaignEntity[]>(() => {
+    try {
+      const saved = localStorage.getItem('penpaper_campaign_graph_nodes');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.warn('Failed to load campaign graph nodes from localStorage', e);
+    }
+    return SAMPLE_CAMPAIGN_ENTITIES;
+  });
+
+  // Save to localStorage whenever entities change
+  useEffect(() => {
+    try {
+      localStorage.setItem('penpaper_campaign_graph_nodes', JSON.stringify(entities));
+    } catch (e) {
+      console.warn('Failed to save campaign graph nodes to localStorage', e);
+    }
+  }, [entities]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'graph' | 'tree'>('tree');
   const [selectedEntity, setSelectedEntity] = useState<CampaignEntity | null>(entities[0] || null);
   const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  // Edit Node Modal States
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState<CampaignEntity['type']>('npc');
+  const [editSummary, setEditSummary] = useState('');
+  const [editRegion, setEditRegion] = useState('');
 
   // Auto-select entity if initialEntityId or initialEntityName is passed
   useEffect(() => {
@@ -408,7 +438,8 @@ export function CampaignGraphModal({
         (selectedCategory === 'Factions' && e.type === 'faction') ||
         (selectedCategory === 'Quests' && e.type === 'quest') ||
         (selectedCategory === 'Items' && e.type === 'item') ||
-        (selectedCategory === 'Sessions' && e.type === 'session');
+        (selectedCategory === 'Sessions' && e.type === 'session') ||
+        (selectedCategory === 'Timelines' && e.type === 'timeline');
 
       const matchesSearch =
         !searchQuery.trim() ||
@@ -418,6 +449,63 @@ export function CampaignGraphModal({
       return matchesCategory && matchesSearch;
     });
   }, [entities, selectedCategory, searchQuery]);
+
+  // Start Editing Selected Entity
+  const handleStartEditEntity = (entity: CampaignEntity) => {
+    setEditName(entity.name);
+    setEditType(entity.type);
+    setEditSummary(entity.summary);
+    setEditRegion(entity.region || '');
+    setShowEditModal(true);
+  };
+
+  // Save Edits to Entity
+  const handleSaveEditEntity = () => {
+    if (!selectedEntity || !editName.trim()) return;
+
+    const updatedEntity: CampaignEntity = {
+      ...selectedEntity,
+      name: editName.trim(),
+      type: editType,
+      summary: editSummary.trim(),
+      region: editRegion.trim() || undefined
+    };
+
+    setEntities((prev) =>
+      prev.map((e) => (e.id === selectedEntity.id ? updatedEntity : e))
+    );
+    setSelectedEntity(updatedEntity);
+    setShowEditModal(false);
+  };
+
+  // Delete Selected Entity Node
+  const handleDeleteEntity = (entityId: string) => {
+    if (!window.confirm('Are you sure you want to delete this graph node?')) return;
+
+    setEntities((prev) => {
+      // Remove node itself
+      const filtered = prev.filter((e) => e.id !== entityId);
+      // Clean up target connections pointing to this node
+      return filtered.map((e) => ({
+        ...e,
+        connections: e.connections?.filter((c) => c.targetId !== entityId)
+      }));
+    });
+
+    if (selectedEntity?.id === entityId) {
+      const remaining = entities.filter((e) => e.id !== entityId);
+      setSelectedEntity(remaining[0] || null);
+    }
+  };
+
+  // Reset to Default Sample Dataset
+  const handleResetDefaultGraph = () => {
+    if (window.confirm('Reset all graph nodes back to default sample campaign dataset? Custom additions will be overwritten.')) {
+      setEntities(SAMPLE_CAMPAIGN_ENTITIES);
+      setSelectedEntity(SAMPLE_CAMPAIGN_ENTITIES[0] || null);
+      localStorage.removeItem('penpaper_campaign_graph_nodes');
+    }
+  };
 
   // Add Custom Entity
   const handleAddEntity = () => {
@@ -743,8 +831,25 @@ export function CampaignGraphModal({
                   )}
                 </div>
 
-                {/* Quick Actions */}
+                {/* Quick Actions & Edit / Delete Controls */}
                 <div className="pt-3 border-t border-stone-800 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleStartEditEntity(selectedEntity)}
+                      className="px-3 py-2 bg-stone-800 hover:bg-stone-700 border border-stone-700 text-amber-300 rounded-xl text-xs font-serif font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Edit Node</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteEntity(selectedEntity.id)}
+                      className="px-3 py-2 bg-red-950/40 hover:bg-red-900/60 border border-red-800/60 text-red-300 rounded-xl text-xs font-serif font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-red-400" />
+                      <span>Delete</span>
+                    </button>
+                  </div>
+
                   {selectedEntity.type === 'monster' && (
                     <button
                       onClick={() => {
@@ -763,9 +868,9 @@ export function CampaignGraphModal({
                       onClose();
                       if (onNavigateTab) onNavigateTab('notes', selectedEntity);
                     }}
-                    className="w-full px-3 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 rounded-xl text-xs font-serif font-bold transition flex items-center justify-center gap-2"
+                    className="w-full px-3 py-2 bg-stone-800/80 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-serif transition flex items-center justify-center gap-2"
                   >
-                    <Scroll className="w-4 h-4 text-amber-400" />
+                    <Scroll className="w-4 h-4 text-stone-400" />
                     <span>View Campaign Notes</span>
                   </button>
                 </div>
@@ -779,12 +884,103 @@ export function CampaignGraphModal({
 
             <div className="mt-4 pt-3 border-t border-stone-800 text-[10px] text-stone-500 flex items-center justify-between font-mono">
               <span>{entities.length} Campaign Nodes</span>
-              <span className="text-amber-500">Live Knowledge Graph</span>
+              <button
+                onClick={handleResetDefaultGraph}
+                className="text-stone-500 hover:text-amber-400 transition flex items-center gap-1"
+                title="Reset graph nodes to default dataset"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span>Reset Defaults</span>
+              </button>
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* Edit Entity Modal */}
+      {showEditModal && selectedEntity && (
+        <div className="fixed inset-0 z-60 bg-black/80 flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-stone-900 border border-amber-600/50 rounded-2xl p-5 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+              <h3 className="font-serif font-bold text-amber-100 text-sm flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-amber-400" />
+                <span>Edit Campaign Graph Node</span>
+              </h3>
+              <button onClick={() => setShowEditModal(false)} className="text-stone-400 hover:text-stone-200">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="text-stone-400 block mb-1 font-serif">Entity Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-stone-950 border border-stone-800 rounded-xl p-2 text-stone-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-stone-400 block mb-1 font-serif">Entity Type</label>
+                  <select
+                    value={editType}
+                    onChange={(e) => setEditType(e.target.value as any)}
+                    className="w-full bg-stone-950 border border-stone-800 rounded-xl p-2 text-stone-100 focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="npc">NPC</option>
+                    <option value="monster">Monster</option>
+                    <option value="location">Location</option>
+                    <option value="faction">Faction</option>
+                    <option value="quest">Quest</option>
+                    <option value="item">Item</option>
+                    <option value="session">Session</option>
+                    <option value="timeline">Timeline</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-stone-400 block mb-1 font-serif">Region / Status</label>
+                  <input
+                    type="text"
+                    value={editRegion}
+                    onChange={(e) => setEditRegion(e.target.value)}
+                    placeholder="e.g. Sword Coast"
+                    className="w-full bg-stone-950 border border-stone-800 rounded-xl p-2 text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-stone-400 block mb-1 font-serif">Summary Description</label>
+                <textarea
+                  value={editSummary}
+                  onChange={(e) => setEditSummary(e.target.value)}
+                  rows={3}
+                  className="w-full bg-stone-950 border border-stone-800 rounded-xl p-2 text-stone-100 focus:outline-none focus:border-amber-500 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-800">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-serif"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEditEntity}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-serif font-bold rounded-xl text-xs shadow"
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Entity Modal */}
       {showAddModal && (

@@ -28,7 +28,13 @@ import {
   Upload,
   Download,
   UserCheck,
-  ChevronRight
+  ChevronRight,
+  Award,
+  Code2,
+  Heart,
+  MessageSquare,
+  Copy,
+  Crown
 } from 'lucide-react';
 import { CharacterData, RuleEdition } from '../../types';
 import { UserProfile } from '../../lib/firebase';
@@ -56,7 +62,7 @@ import {
 interface OptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialCategory?: 'sound' | 'app' | 'character';
+  initialCategory?: 'sound' | 'app' | 'character' | 'credits';
   currentUser?: UserProfile | null;
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (char: CharacterData) => void;
@@ -76,7 +82,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onExportJson,
   onImportJson
 }) => {
-  const [activeCategory, setActiveCategory] = useState<'sound' | 'app' | 'character'>(initialCategory);
+  const [activeCategory, setActiveCategory] = useState<'sound' | 'app' | 'character' | 'credits'>(initialCategory);
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
   const [volume, setVolumeState] = useState<number>(() => Math.round(getMasterVolume() * 100));
   const [lastPlayed, setLastPlayed] = useState<string | null>(null);
@@ -85,6 +91,15 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
   const [cacheClearedSuccess, setCacheClearedSuccess] = useState(false);
   const [storageStats, setStorageStats] = useState<{ count: number; sizeKB: string }>({ count: 0, sizeKB: '0.0' });
+
+  // Discord handle copy state
+  const [copiedHandle, setCopiedHandle] = useState<string | null>(null);
+
+  const handleCopyHandle = (handle: string) => {
+    navigator.clipboard.writeText(handle);
+    setCopiedHandle(handle);
+    setTimeout(() => setCopiedHandle(null), 2000);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -230,6 +245,18 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               <span>Character</span>
             </button>
           )}
+
+          <button
+            onClick={() => setActiveCategory('credits')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl text-xs font-bold font-serif transition border-t border-x ${
+              activeCategory === 'credits'
+                ? 'bg-stone-900 text-amber-300 border-amber-500/50 shadow-sm'
+                : 'bg-stone-950 text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-900/50'
+            }`}
+          >
+            <Award className="w-4 h-4 text-purple-400" />
+            <span>Credits</span>
+          </button>
         </div>
 
         {/* Modal Body */}
@@ -728,6 +755,134 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               )}
             </div>
           )}
+          {/* CATEGORY 4: CREDITS & ATTRIBUTIONS */}
+          {activeCategory === 'credits' && (
+            <div className="space-y-4 animate-fadeIn">
+              {/* Header Banner */}
+              <div className="bg-gradient-to-r from-amber-950/80 via-stone-950 to-purple-950/80 p-4 rounded-xl border border-amber-500/40 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-serif font-bold text-amber-300 flex items-center gap-2">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    <span>Project Credits & Vision</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-purple-300 bg-purple-950/80 border border-purple-700/60 px-2 py-0.5 rounded-full font-bold">
+                    Core Contributors
+                  </span>
+                </div>
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Pen & Paper RPG Companion is built for Dungeon Masters, players, and tabletop roleplaying enthusiasts worldwide.
+                </p>
+              </div>
+
+              {/* Developer Card: Freeze */}
+              <div className="bg-stone-950 p-4 rounded-xl border border-amber-500/30 space-y-3 relative overflow-hidden group hover:border-amber-500/60 transition">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-300 font-serif font-bold text-lg shadow">
+                      <Code2 className="w-5 h-5 text-amber-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-serif font-bold text-base text-amber-100">Freeze</h4>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          Lead Developer
+                        </span>
+                      </div>
+                      <p className="text-xs text-stone-400">Lead Full-Stack Developer & Systems Architect</p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed bg-stone-900/60 p-2.5 rounded-lg border border-stone-800">
+                  Engineered the multi-system ruleset mechanics, WebRTC party voice, initiative tracker, interactive knowledge graph, and sound synthesizer.
+                </p>
+
+                <div className="flex items-center justify-between pt-1 border-t border-stone-800">
+                  <div className="flex items-center gap-2 text-xs text-stone-400 font-mono">
+                    <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Discord:</span>
+                    <span className="text-indigo-300 font-bold bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/80">
+                      @freezecoaching
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => handleCopyHandle('freezecoaching')}
+                    className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 hover:text-amber-300 rounded-lg text-xs transition flex items-center gap-1 font-mono"
+                  >
+                    {copiedHandle === 'freezecoaching' ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-300 font-bold">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-stone-400" />
+                        <span>Copy Discord</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Visionary Card: ChaosDwarf */}
+              <div className="bg-stone-950 p-4 rounded-xl border border-purple-500/30 space-y-3 relative overflow-hidden group hover:border-purple-500/60 transition">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-purple-300 font-serif font-bold text-lg shadow">
+                      <Crown className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-serif font-bold text-base text-purple-100">ChaosDwarf</h4>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                          Project Creator
+                        </span>
+                      </div>
+                      <p className="text-xs text-stone-400">Original Idea & Concept Creator</p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed bg-stone-900/60 p-2.5 rounded-lg border border-stone-800">
+                  Conceived the original vision for a unified digital tabletop companion bringing D&D 5e, 3.5e, Pathfinder, Shadowrun, and Call of Cthulhu into one digital workspace.
+                </p>
+
+                <div className="flex items-center justify-between pt-1 border-t border-stone-800">
+                  <div className="flex items-center gap-2 text-xs text-stone-400 font-mono">
+                    <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Discord:</span>
+                    <span className="text-indigo-300 font-bold bg-indigo-950/80 px-2 py-0.5 rounded border border-indigo-800/80">
+                      @chaosdwarf7
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => handleCopyHandle('chaosdwarf7')}
+                    className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 hover:text-purple-300 rounded-lg text-xs transition flex items-center gap-1 font-mono"
+                  >
+                    {copiedHandle === 'chaosdwarf7' ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-300 font-bold">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-stone-400" />
+                        <span>Copy Discord</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Special Thanks Badge */}
+              <div className="p-3 bg-stone-950 rounded-xl border border-stone-800 text-center text-stone-400 text-xs flex items-center justify-center gap-2">
+                <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
+                <span>Special thanks to the TRPG community and tabletop gaming groups everywhere!</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}
@@ -735,6 +890,8 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           <span className="text-[11px] text-stone-500 font-mono">
             {activeCategory === 'sound'
               ? (muted ? '🔇 Sound disabled' : `🔊 Active (${volume}% volume)`)
+              : activeCategory === 'credits'
+              ? '🏆 Pen & Paper RPG Companion Credits'
               : `⚙️ App Options (${storageStats.sizeKB} KB Cache)`}
           </span>
           <button
