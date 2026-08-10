@@ -1,86 +1,27 @@
 import { AbilityName, AbilityScores, CharacterData, GearItem, RuleEdition, Skill } from '../types';
+import {
+  getAbilityModifier,
+  formatModifier,
+  getProficiencyBonus,
+  getSavingThrowBonus,
+  getSkillBonus
+} from './calculators/abilityCalculators';
 
-export function getAbilityModifier(score: number): number {
-  const num = Number(score);
-  const safeScore = isNaN(num) ? 10 : num;
-  return Math.floor((safeScore - 10) / 2);
-}
+export {
+  getAbilityModifier,
+  formatModifier,
+  getProficiencyBonus,
+  getSavingThrowBonus,
+  getSkillBonus
+};
 
-export function formatModifier(mod: number): string {
-  const num = Number(mod);
-  const safeMod = isNaN(num) ? 0 : num;
-  return safeMod >= 0 ? `+${safeMod}` : `${safeMod}`;
-}
+export {
+  OFFICIAL_DAMAGE_TYPES,
+  getDamageTypeMeta,
+  type DamageTypeMeta
+} from '../data/damageTypeData';
 
-export function getProficiencyBonus(level: number): number {
-  const num = Number(level);
-  const safeLvl = isNaN(num) || num < 1 ? 1 : num;
-  return Math.ceil(1 + safeLvl / 4);
-}
 
-export interface DamageTypeMeta {
-  name: string;
-  icon: string;
-  badgeBg: string;
-  badgeText: string;
-  badgeBorder: string;
-  description: string;
-}
-
-export const OFFICIAL_DAMAGE_TYPES: DamageTypeMeta[] = [
-  { name: 'Acid', icon: '🧪', badgeBg: 'bg-lime-950', badgeText: 'text-lime-300', badgeBorder: 'border-lime-600/50', description: 'Corrosive enzymes, dragon breath, or black pudding' },
-  { name: 'Bludgeoning', icon: '🔨', badgeBg: 'bg-stone-800', badgeText: 'text-stone-200', badgeBorder: 'border-stone-600/50', description: 'Blunt force attacks—hammers, falling, or constriction' },
-  { name: 'Cold', icon: '❄️', badgeBg: 'bg-cyan-950', badgeText: 'text-cyan-300', badgeBorder: 'border-cyan-600/50', description: 'Infernal frost, ice storms, or cone of cold' },
-  { name: 'Fire', icon: '🔥', badgeBg: 'bg-orange-950', badgeText: 'text-orange-300', badgeBorder: 'border-orange-600/50', description: 'Flame, intense heat, or dragon breath' },
-  { name: 'Force', icon: '🌀', badgeBg: 'bg-indigo-950', badgeText: 'text-indigo-300', badgeBorder: 'border-indigo-600/50', description: 'Pure magic focused into damaging pressure (e.g. Eldritch Blast)' },
-  { name: 'Lightning', icon: '⚡', badgeBg: 'bg-amber-950', badgeText: 'text-amber-300', badgeBorder: 'border-amber-600/50', description: 'Electrical energy bolts or lightning bolts' },
-  { name: 'Necrotic', icon: '💀', badgeBg: 'bg-purple-950', badgeText: 'text-purple-300', badgeBorder: 'border-purple-600/50', description: 'Withered vitality, shadow energy, or undead decay' },
-  { name: 'Piercing', icon: '🗡️', badgeBg: 'bg-zinc-800', badgeText: 'text-zinc-200', badgeBorder: 'border-zinc-500/50', description: 'Puncturing attacks—arrows, spears, or monster fangs' },
-  { name: 'Poison', icon: '☣️', badgeBg: 'bg-emerald-950', badgeText: 'text-emerald-300', badgeBorder: 'border-emerald-600/50', description: 'Venoms, toxic gases, or poisonous stings' },
-  { name: 'Psychic', icon: '🧠', badgeBg: 'bg-fuchsia-950', badgeText: 'text-fuchsia-300', badgeBorder: 'border-fuchsia-600/50', description: 'Psionic strikes or mental anguish' },
-  { name: 'Radiant', icon: '✨', badgeBg: 'bg-yellow-950', badgeText: 'text-yellow-300', badgeBorder: 'border-yellow-600/50', description: 'Searing holy light, celestial radiance, or divine smites' },
-  { name: 'Slashing', icon: '⚔️', badgeBg: 'bg-rose-950', badgeText: 'text-rose-300', badgeBorder: 'border-rose-600/50', description: 'Cutting weapons—swords, axes, or claws' },
-  { name: 'Thunder', icon: '💥', badgeBg: 'bg-sky-950', badgeText: 'text-sky-300', badgeBorder: 'border-sky-600/50', description: 'Concussive burst of sound, shockwaves, or thunderwave' }
-];
-
-export function getDamageTypeMeta(typeName?: string): DamageTypeMeta {
-  if (!typeName) {
-    return { name: 'Untyped', icon: '⚔️', badgeBg: 'bg-stone-800', badgeText: 'text-stone-300', badgeBorder: 'border-stone-700', description: 'Standard damage' };
-  }
-  const found = OFFICIAL_DAMAGE_TYPES.find(d => d.name.toLowerCase() === typeName.toLowerCase());
-  if (found) return found;
-  return { name: typeName, icon: '✨', badgeBg: 'bg-stone-800', badgeText: 'text-amber-200', badgeBorder: 'border-stone-700', description: `${typeName} damage` };
-}
-
-export function getSavingThrowBonus(
-  abilityName: AbilityName,
-  abilities: AbilityScores,
-  savingThrowProficiencies: AbilityName[],
-  level: number
-): number {
-  const mod = getAbilityModifier(abilities[abilityName]?.score || 10);
-  const isProf = savingThrowProficiencies.includes(abilityName);
-  const profBonus = isProf ? getProficiencyBonus(level) : 0;
-  return mod + profBonus;
-}
-
-export function getSkillBonus(
-  skill: Skill,
-  abilities: AbilityScores,
-  level: number
-): number {
-  const abilityScore = abilities[skill.ability]?.score || 10;
-  const mod = getAbilityModifier(abilityScore);
-  const prof = getProficiencyBonus(level);
-
-  if (skill.expertise) {
-    return mod + prof * 2;
-  }
-  if (skill.proficient) {
-    return mod + prof;
-  }
-  return mod;
-}
 
 export function getPassivePerception(char: CharacterData): number {
   const effectiveLevel = getEffectiveLevel(char);
@@ -149,72 +90,11 @@ export function getSecondaryXp(char: CharacterData): number {
   return thresholds[secLevel] || 0;
 }
 
-export function getRequiredLevelForSpellSlotLevel(slotLevel: number, char: CharacterData): number {
-  const cls = (char.characterClass || '').toLowerCase();
-  const secCls = (char.optionalRules?.secondaryClass || '').toLowerCase();
+export {
+  getRequiredLevelForSpellSlotLevel,
+  getMaxUnlockedSpellSlotLevel
+} from './calculators/spellCalculators';
 
-  const isHalfCaster = cls.includes('paladin') || cls.includes('ranger') || secCls.includes('paladin') || secCls.includes('ranger');
-  const isArtificer = cls.includes('artificer') || secCls.includes('artificer');
-  const isThirdCaster = cls.includes('knight') || cls.includes('trickster') || secCls.includes('knight') || secCls.includes('trickster');
-
-  if (isHalfCaster) {
-    if (slotLevel === 1) return 2;
-    if (slotLevel === 2) return 5;
-    if (slotLevel === 3) return 9;
-    if (slotLevel === 4) return 13;
-    if (slotLevel === 5) return 17;
-    return 20;
-  }
-
-  if (isArtificer) {
-    if (slotLevel === 1) return 1;
-    if (slotLevel === 2) return 5;
-    if (slotLevel === 3) return 9;
-    if (slotLevel === 4) return 13;
-    if (slotLevel === 5) return 17;
-    return 20;
-  }
-
-  if (isThirdCaster) {
-    if (slotLevel === 1) return 3;
-    if (slotLevel === 2) return 7;
-    if (slotLevel === 3) return 13;
-    if (slotLevel === 4) return 19;
-    return 20;
-  }
-
-  // Full Caster / Warlock / Standard
-  return Math.max(1, (slotLevel * 2) - 1);
-}
-
-export function getMaxUnlockedSpellSlotLevel(char: CharacterData): number {
-  if (!char.isSpellcaster && (!char.spellSlots || char.spellSlots.length === 0)) {
-    return 0;
-  }
-
-  const effectiveLevel = getCombinedLevel(char);
-  let maxSlotByLevel = 0;
-
-  for (let lvl = 1; lvl <= 9; lvl++) {
-    if (effectiveLevel >= getRequiredLevelForSpellSlotLevel(lvl, char)) {
-      maxSlotByLevel = lvl;
-    } else {
-      break;
-    }
-  }
-
-  // If character has custom spell slots already granted, check the highest level slot with max > 0
-  let maxExistingSlotLevel = 0;
-  if (char.spellSlots && char.spellSlots.length > 0) {
-    char.spellSlots.forEach(s => {
-      if (s.max > 0 && s.level > maxExistingSlotLevel) {
-        maxExistingSlotLevel = s.level;
-      }
-    });
-  }
-
-  return Math.max(maxSlotByLevel, maxExistingSlotLevel);
-}
 
 export function getUnallocatedXp(char: CharacterData): number {
   if (!char.optionalRules?.useMulticlassing || !char.optionalRules?.secondaryClass) {
