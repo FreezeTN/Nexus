@@ -53,7 +53,9 @@ import {
   Volume2,
   VolumeX,
   Settings,
-  Command
+  Command,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
@@ -87,6 +89,10 @@ interface HeaderProps {
   onOpenAudioModal?: () => void;
   onOpenCommandPalette?: () => void;
   onOpenExtensionManager?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
   activeTab?: TabId;
 }
 
@@ -114,6 +120,10 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAudioModal,
   onOpenCommandPalette,
   onOpenExtensionManager,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
   activeTab
 }) => {
   const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
@@ -741,6 +751,35 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Unified Global App Menu Toolbar */}
           <div className="flex items-center p-0.5 bg-stone-950/90 border border-stone-800 rounded-xl shadow-inner divide-x divide-stone-800">
+            {/* Undo / Redo Controls */}
+            {onUndo && (
+              <button
+                onClick={onUndo}
+                disabled={!canUndo}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                  canUndo ? 'hover:bg-stone-800 text-amber-300 cursor-pointer' : 'text-stone-600 opacity-40 cursor-not-allowed'
+                }`}
+                title="Undo last change (Ctrl+Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline text-[10px] font-mono">Undo</span>
+              </button>
+            )}
+
+            {onRedo && (
+              <button
+                onClick={onRedo}
+                disabled={!canRedo}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold transition ${
+                  canRedo ? 'hover:bg-stone-800 text-amber-300 cursor-pointer' : 'text-stone-600 opacity-40 cursor-not-allowed'
+                }`}
+                title="Redo change (Ctrl+Y or Cmd+Shift+Z)"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline text-[10px] font-mono">Redo</span>
+              </button>
+            )}
+
             {onOpenCommandPalette && (
               <button
                 onClick={onOpenCommandPalette}

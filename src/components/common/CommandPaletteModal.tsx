@@ -12,11 +12,17 @@ import {
   Command, 
   X,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Package,
+  Scroll,
+  Skull
 } from 'lucide-react';
 import { CharacterData, RuleEdition } from '../../types';
 import { systemRegistry } from '../../systems';
 import { eventBus } from '../../events/eventBus';
+import { PRESET_5E_SPELLS } from '../../data/presetSpells';
+import { PRESET_DND_ITEMS } from '../../data/presetItems';
+import { OFFICIAL_BULK_MONSTERS } from '../../data/srdRulesLibrary';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -35,7 +41,7 @@ interface CommandPaletteModalProps {
 interface CommandItem {
   id: string;
   title: string;
-  category: 'Actions' | 'Characters' | 'Systems' | 'Navigation';
+  category: 'Actions' | 'Characters' | 'Spells' | 'Items' | 'Monsters' | 'Systems' | 'Navigation';
   description?: string;
   icon: React.ReactNode;
   action: () => void;
@@ -197,6 +203,51 @@ export function CommandPaletteModal({
         action: () => {
           onClose();
           onOpenOptions();
+        }
+      });
+    });
+
+    // Add Spells to universal index
+    PRESET_5E_SPELLS.slice(0, 40).forEach((spell) => {
+      list.push({
+        id: `spell-${spell.name}`,
+        title: spell.name,
+        category: 'Spells',
+        description: `Level ${spell.level === 0 ? 'Cantrip' : spell.level} ${spell.school} • ${spell.castingTime}`,
+        icon: <Scroll className="w-4 h-4 text-purple-400" />,
+        action: () => {
+          onClose();
+          onNavigateTab('spells');
+        }
+      });
+    });
+
+    // Add Preset Items to universal index
+    PRESET_DND_ITEMS.slice(0, 40).forEach((item) => {
+      list.push({
+        id: `item-${item.name}`,
+        title: item.name,
+        category: 'Items',
+        description: `${item.category || 'Equipment'} • ${item.weight || 0} lbs`,
+        icon: <Package className="w-4 h-4 text-emerald-400" />,
+        action: () => {
+          onClose();
+          onNavigateTab('gear');
+        }
+      });
+    });
+
+    // Add SRD Monsters to universal index
+    OFFICIAL_BULK_MONSTERS.slice(0, 40).forEach((monster) => {
+      list.push({
+        id: `monster-${monster.name}`,
+        title: monster.name,
+        category: 'Monsters',
+        description: `CR ${monster.challengeRating || '1/2'} • ${monster.race || 'Beast'} • AC ${monster.armorClass} • HP ${monster.hpMax}`,
+        icon: <Skull className="w-4 h-4 text-rose-400" />,
+        action: () => {
+          onClose();
+          onNavigateTab('dm');
         }
       });
     });

@@ -23,11 +23,22 @@ export interface SystemCharacterEngine {
   getAbilityModifier(score: number): number;
 }
 
+export interface RollResultSummary {
+  total: number;
+  rolls: number[];
+  formula: string;
+  isSuccess?: boolean;
+  isCriticalSuccess?: boolean;
+  isCriticalFailure?: boolean;
+  summaryText: string;
+}
+
 export interface SystemCombatEngine {
   getInitiativeFormula(char: CharacterData): string;
   getAttackBonus(itemOrAttack: GearItem | Attack, char: CharacterData): number;
   getDamageFormula(itemOrAttack: GearItem | Attack, char: CharacterData): string;
   getRollModel?(actionType: 'attack' | 'check' | 'save', itemOrAttack: GearItem | Attack | undefined, char: CharacterData): RollModel;
+  resolveRollModel?(rollModel: RollModel): RollResultSummary;
   supportsSanityCheck?: boolean;
   supportsConditionMonitors?: boolean;
 }

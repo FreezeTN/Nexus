@@ -11,7 +11,9 @@ import {
   Zap,
   Info,
   Globe,
-  Trash2
+  Trash2,
+  FileText,
+  BookOpen
 } from 'lucide-react';
 import { RuleEdition } from '../../types';
 import { systemRegistry } from '../../systems';
@@ -30,7 +32,8 @@ export function ExtensionManagerModal({
   enabledSystems,
   onToggleSystem
 }: ExtensionManagerModalProps) {
-  const [activeTab, setActiveTab] = useState<'extensions' | 'events' | 'architecture'>('extensions');
+  const [activeTab, setActiveTab] = useState<'extensions' | 'events' | 'architecture' | 'docs'>('extensions');
+  const [selectedDoc, setSelectedDoc] = useState<'architecture' | 'pluginApi' | 'state' | 'events' | 'addingSystem'>('architecture');
   const eventHistory = useEventHistory();
 
   if (!isOpen) return null;
@@ -103,6 +106,18 @@ export function ExtensionManagerModal({
           >
             <Code2 className="w-4 h-4 text-purple-400" />
             SDK Specifications
+          </button>
+
+          <button
+            onClick={() => setActiveTab('docs')}
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-2 ${
+              activeTab === 'docs'
+                ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
+                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+            }`}
+          >
+            <BookOpen className="w-4 h-4 text-amber-400" />
+            Developer Docs (/docs)
           </button>
         </div>
 
@@ -291,6 +306,124 @@ export function ExtensionManagerModal({
                 <p className="text-stone-400 leading-relaxed">
                   Instead of hardcoding cross-component state synchronization, features register domain subscribers using <code className="text-amber-300">eventBus.on(eventType, callback)</code>.
                 </p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'docs' && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-stone-800">
+                <button
+                  onClick={() => setSelectedDoc('architecture')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition shrink-0 ${
+                    selectedDoc === 'architecture' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-stone-900 text-stone-400'
+                  }`}
+                >
+                  📄 Architecture.md
+                </button>
+                <button
+                  onClick={() => setSelectedDoc('pluginApi')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition shrink-0 ${
+                    selectedDoc === 'pluginApi' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-stone-900 text-stone-400'
+                  }`}
+                >
+                  📄 Plugin_API.md
+                </button>
+                <button
+                  onClick={() => setSelectedDoc('state')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition shrink-0 ${
+                    selectedDoc === 'state' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-stone-900 text-stone-400'
+                  }`}
+                >
+                  📄 State_Management.md
+                </button>
+                <button
+                  onClick={() => setSelectedDoc('events')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition shrink-0 ${
+                    selectedDoc === 'events' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-stone-900 text-stone-400'
+                  }`}
+                >
+                  📄 Event_System.md
+                </button>
+                <button
+                  onClick={() => setSelectedDoc('addingSystem')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition shrink-0 ${
+                    selectedDoc === 'addingSystem' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' : 'bg-stone-900 text-stone-400'
+                  }`}
+                >
+                  📄 Adding_a_System.md
+                </button>
+              </div>
+
+              <div className="p-4 bg-stone-950 border border-stone-800 rounded-xl space-y-3">
+                {selectedDoc === 'architecture' && (
+                  <div className="space-y-2 text-xs font-sans text-stone-300">
+                    <h3 className="font-serif font-bold text-sm text-amber-300">/docs/Architecture.md</h3>
+                    <p className="text-stone-400">Decoupled system registry architecture, multi-ruleset plugin contracts, central event bus, and undo/redo history engine.</p>
+                    <pre className="p-3 bg-stone-900 border border-stone-800 rounded-lg font-mono text-[11px] text-amber-200/90 whitespace-pre-wrap overflow-x-auto">
+{`# Pen & Paper Platform Architecture
+Platform Architecture consists of 5 modular layers:
+1. Plugin Registry (systemRegistry)
+2. Domain Event Bus (eventBus)
+3. State Management & History Stack (useHistoryState)
+4. Universal Command Indexing (CommandPaletteModal)
+5. Pinned Workspace Customization`}
+                    </pre>
+                  </div>
+                )}
+
+                {selectedDoc === 'pluginApi' && (
+                  <div className="space-y-2 text-xs font-sans text-stone-300">
+                    <h3 className="font-serif font-bold text-sm text-purple-300">/docs/Plugin_API.md</h3>
+                    <p className="text-stone-400">Complete GameSystemPlugin, RollModel, and sub-engine interface specifications.</p>
+                    <pre className="p-3 bg-stone-900 border border-stone-800 rounded-lg font-mono text-[11px] text-purple-200/90 whitespace-pre-wrap overflow-x-auto">
+{`interface GameSystemPlugin {
+  id: RuleEdition;
+  name: string;
+  shortName: string;
+  category: 'fantasy' | 'cyberpunk' | 'horror' | 'tactical' | 'universal';
+  characterEngine: SystemCharacterEngine;
+  combatEngine: SystemCombatEngine;
+  spellEngine: SystemSpellEngine;
+  data: SystemDataCatalog;
+}`}
+                    </pre>
+                  </div>
+                )}
+
+                {selectedDoc === 'addingSystem' && (
+                  <div className="space-y-2 text-xs font-sans text-stone-300">
+                    <h3 className="font-serif font-bold text-sm text-emerald-300">/docs/Adding_a_System.md</h3>
+                    <p className="text-stone-400">Step-by-step developer guide for adding new TRPG systems without modifying core UI code.</p>
+                    <pre className="p-3 bg-stone-900 border border-stone-800 rounded-lg font-mono text-[11px] text-emerald-200/90 whitespace-pre-wrap overflow-x-auto">
+{`1. Add edition key to RuleEdition in /src/types.ts
+2. Create plugin file in /src/systems/plugins/myPlugin.ts
+3. Export GameSystemPlugin conforming object
+4. Register via systemRegistry.registerSystem(myPlugin)`}
+                    </pre>
+                  </div>
+                )}
+
+                {selectedDoc === 'events' && (
+                  <div className="space-y-2 text-xs font-sans text-stone-300">
+                    <h3 className="font-serif font-bold text-sm text-cyan-300">/docs/Event_System.md</h3>
+                    <p className="text-stone-400">Decoupled Pub/Sub event bus for domain listeners and real-time logs.</p>
+                    <pre className="p-3 bg-stone-900 border border-stone-800 rounded-lg font-mono text-[11px] text-cyan-200/90 whitespace-pre-wrap overflow-x-auto">
+{`eventBus.emit('DiceRolled', { formula: '1d20+5', total: 23 });
+useEventListener('DiceRolled', (payload) => console.log(payload));`}
+                    </pre>
+                  </div>
+                )}
+
+                {selectedDoc === 'state' && (
+                  <div className="space-y-2 text-xs font-sans text-stone-300">
+                    <h3 className="font-serif font-bold text-sm text-amber-300">/docs/State_Management.md</h3>
+                    <p className="text-stone-400">Atomic snapshot stack for full session undo/redo and storage sync.</p>
+                    <pre className="p-3 bg-stone-900 border border-stone-800 rounded-lg font-mono text-[11px] text-stone-300 whitespace-pre-wrap overflow-x-auto">
+{`const { state, setPresent, undo, redo, canUndo, canRedo } = useHistoryState(initialChar);`}
+                    </pre>
+                  </div>
+                )}
               </div>
             </div>
           )}

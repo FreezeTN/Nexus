@@ -10,6 +10,7 @@ import { HybridHeritageModal } from '../modals/HybridHeritageModal';
 import { recalculateCharacterAC } from '../../utils/dndCalculations';
 
 import { CharacterHeaderSummary } from './sheet1/CharacterHeaderSummary';
+import { WorkspaceCustomizer } from '../common/WorkspaceCustomizer';
 import { AbilityScoresPanel } from './sheet1/AbilityScoresPanel';
 import { SavingThrows35ePanel } from './sheet1/SavingThrows35ePanel';
 import { SanityMadnessPanel } from './sheet1/SanityMadnessPanel';
@@ -45,6 +46,16 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Pinned Workspace Customizer Dashboard */}
+      <WorkspaceCustomizer
+        character={character}
+        onNavigateTab={(tab) => {
+          const navEvent = new CustomEvent('penpaper_navigate_tab', { detail: tab });
+          window.dispatchEvent(navEvent);
+        }}
+        onRollDice={(formula) => onRoll(`Workspace Roll ${formula}`, 20, 1, 0, 'normal')}
+      />
+
       {/* SECTION 1: Character Summary Header */}
       <CharacterHeaderSummary
         character={character}

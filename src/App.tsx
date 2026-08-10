@@ -23,6 +23,7 @@ import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
 import { CommandPaletteModal } from './components/common/CommandPaletteModal';
 import { ExtensionManagerModal } from './components/modals/ExtensionManagerModal';
 import { eventBus } from './events/eventBus';
+import { useHistoryState } from './utils/useHistoryState';
 import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Crown } from 'lucide-react';
@@ -89,7 +90,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const [characters, setCharacters] = useState<CharacterData[]>(() => {
+  const initialCharacters = (() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY_CHARACTERS);
       if (saved) {
@@ -114,7 +115,16 @@ export default function App() {
       console.error('Failed to load characters from localStorage', e);
     }
     return SAMPLE_CHARACTERS;
-  });
+  })();
+
+  const {
+    state: characters,
+    setPresent: setCharacters,
+    undo: undoCharacters,
+    redo: redoCharacters,
+    canUndo: canUndoCharacters,
+    canRedo: canRedoCharacters
+  } = useHistoryState<CharacterData[]>(initialCharacters);
 
   const [activeCharacterId, setActiveCharacterId] = useState<string>(() => {
     try {
@@ -663,6 +673,10 @@ export default function App() {
         onOpenAudioModal={() => setShowAudioModal(true)}
         onOpenCommandPalette={() => setShowCommandPalette(true)}
         onOpenExtensionManager={() => setShowExtensionManager(true)}
+        onUndo={undoCharacters}
+        onRedo={redoCharacters}
+        canUndo={canUndoCharacters}
+        canRedo={canRedoCharacters}
         activeTab={activeTab}
       />
 
