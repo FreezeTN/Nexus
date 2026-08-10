@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RuleEdition } from '../../types';
 import { changelogData } from '../../data/changelogData';
+import { systemRegistry } from '../../systems';
 import { 
   BookOpen, 
   ShieldAlert, 
@@ -966,71 +967,20 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
 
           {/* Edition & View Selection Toggle Tabs */}
           <div className="bg-stone-950/90 p-1.5 rounded-2xl border border-amber-600/40 flex flex-wrap items-center gap-1.5 shrink-0 shadow-lg">
-            {(!enabledSystems || enabledSystems.includes('5e')) && (
+            {systemRegistry.getAllSystems().filter(sys => !enabledSystems || enabledSystems.includes(sys.id)).map((sys) => (
               <button
-                onClick={() => setGuideEdition('5e')}
+                key={sys.id}
+                onClick={() => setGuideEdition(sys.id)}
                 className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                  guideEdition === '5e'
+                  guideEdition === sys.id
                     ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
                     : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
                 }`}
               >
-                <Award className="w-3.5 h-3.5" />
-                D&D 5e
+                <span>{sys.icon}</span>
+                <span>{sys.shortName}</span>
               </button>
-            )}
-            {(!enabledSystems || enabledSystems.includes('3.5e')) && (
-              <button
-                onClick={() => setGuideEdition('3.5e')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                  guideEdition === '3.5e'
-                    ? 'bg-amber-600 text-stone-950 shadow-md ring-1 ring-amber-400'
-                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
-                }`}
-              >
-                <Swords className="w-3.5 h-3.5" />
-                D&D 3.5e
-              </button>
-            )}
-            {(!enabledSystems || enabledSystems.includes('shadowrun')) && (
-              <button
-                onClick={() => setGuideEdition('shadowrun')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                  guideEdition === 'shadowrun'
-                    ? 'bg-cyan-500 text-stone-950 shadow-md ring-1 ring-cyan-300'
-                    : 'text-stone-400 hover:text-cyan-300 hover:bg-stone-900'
-                }`}
-              >
-                <Cpu className="w-3.5 h-3.5 text-cyan-400" />
-                Shadowrun
-              </button>
-            )}
-            {(!enabledSystems || enabledSystems.includes('pathfinder')) && (
-              <button
-                onClick={() => setGuideEdition('pathfinder')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                  guideEdition === 'pathfinder'
-                    ? 'bg-purple-600 text-stone-950 shadow-md ring-1 ring-purple-300'
-                    : 'text-stone-400 hover:text-purple-300 hover:bg-stone-900'
-                }`}
-              >
-                <BookOpen className="w-3.5 h-3.5 text-purple-400" />
-                Pathfinder
-              </button>
-            )}
-            {(!enabledSystems || enabledSystems.includes('cthulhu')) && (
-              <button
-                onClick={() => setGuideEdition('cthulhu')}
-                className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${
-                  guideEdition === 'cthulhu'
-                    ? 'bg-emerald-600 text-stone-950 shadow-md ring-1 ring-emerald-300'
-                    : 'text-stone-400 hover:text-emerald-300 hover:bg-stone-900'
-                }`}
-              >
-                <Skull className="w-3.5 h-3.5 text-emerald-400" />
-                Cthulhu
-              </button>
-            )}
+            ))}
             <button
               onClick={() => setGuideEdition('conversion')}
               className={`px-3 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 ${

@@ -54,17 +54,26 @@ export const cthulhu7ePlugin: GameSystemPlugin = {
       const dex = char.abilities?.DEX?.score || 50;
       return `DEX ${dex}`;
     },
-    getAttackBonus(itemOrAttack: GearItem | Attack) {
+    getAttackBonus(itemOrAttack: GearItem | Attack, char: CharacterData) {
       if ('attackBonus' in itemOrAttack) {
         return itemOrAttack.attackBonus;
       }
       return 50;
     },
-    getDamageFormula(itemOrAttack: GearItem | Attack) {
+    getDamageFormula(itemOrAttack: GearItem | Attack, char: CharacterData) {
       if ('damage' in itemOrAttack) {
         return itemOrAttack.damage;
       }
       return itemOrAttack.weaponStats?.damage || '1D6 + Build DB';
+    },
+    getRollModel(actionType, itemOrAttack, char) {
+      const target = itemOrAttack ? cthulhu7ePlugin.combatEngine.getAttackBonus(itemOrAttack, char) : 50;
+      return {
+        kind: 'percentile',
+        targetPercentage: target,
+        hardTarget: Math.floor(target / 2),
+        extremeTarget: Math.floor(target / 5)
+      };
     },
     supportsSanityCheck: true,
     supportsConditionMonitors: false

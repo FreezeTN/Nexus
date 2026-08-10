@@ -9,11 +9,15 @@ import {
   RACE_OPTIONS_BY_SYSTEM,
   CLASS_OPTIONS_BY_SYSTEM,
   SUBCLASS_MAP_BY_SYSTEM,
+  getRacesForSystem,
+  getClassesForSystem,
+  getSubclassesForSystemClass,
   ALIGNMENT_OPTIONS,
   HERO_NAMES,
   MONSTER_NAMES,
   BACKGROUND_OPTIONS
 } from './newCharacter/newCharacterData';
+import { systemRegistry } from '../../systems';
 
 interface NewCharacterModalProps {
   onClose: () => void;
@@ -37,10 +41,10 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     : initialEdition;
 
   const [edition, setEdition] = useState<RuleEdition>(startEdition);
-  const initialRaces = RACE_OPTIONS_BY_SYSTEM[initialEdition] || RACE_OPTIONS_BY_SYSTEM['5e'];
-  const initialClasses = CLASS_OPTIONS_BY_SYSTEM[initialEdition] || CLASS_OPTIONS_BY_SYSTEM['5e'];
+  const initialRaces = getRacesForSystem(initialEdition);
+  const initialClasses = getClassesForSystem(initialEdition);
   const initialClass = initialClasses[0];
-  const initialSubclasses = (SUBCLASS_MAP_BY_SYSTEM[initialEdition] && SUBCLASS_MAP_BY_SYSTEM[initialEdition][initialClass]) || ['General'];
+  const initialSubclasses = getSubclassesForSystemClass(initialEdition, initialClass);
 
   const [name, setName] = useState('');
   const [race, setRace] = useState(initialRaces[0]);
@@ -85,12 +89,12 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   // System switch handler - auto updates race, class, and subclass options
   const handleSystemChange = (newEd: RuleEdition) => {
     setEdition(newEd);
-    const races = RACE_OPTIONS_BY_SYSTEM[newEd] || RACE_OPTIONS_BY_SYSTEM['5e'];
-    const classes = CLASS_OPTIONS_BY_SYSTEM[newEd] || CLASS_OPTIONS_BY_SYSTEM['5e'];
+    const races = getRacesForSystem(newEd);
+    const classes = getClassesForSystem(newEd);
     const newRace = races[0];
     const newClass = classes[0];
-    const subMap = SUBCLASS_MAP_BY_SYSTEM[newEd] || SUBCLASS_MAP_BY_SYSTEM['5e'];
-    const newSubclass = (subMap[newClass] || ['General'])[0];
+    const availableSubclasses = getSubclassesForSystemClass(newEd, newClass);
+    const newSubclass = availableSubclasses[0];
 
     setRace(newRace);
     setCharacterClass(newClass);
@@ -106,8 +110,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   // Handle class change & auto update subclass options for current system
   const handleClassChange = (newClass: string) => {
     setCharacterClass(newClass);
-    const subMap = SUBCLASS_MAP_BY_SYSTEM[edition] || SUBCLASS_MAP_BY_SYSTEM['5e'];
-    const availableSubclasses = subMap[newClass] || ['General'];
+    const availableSubclasses = getSubclassesForSystemClass(edition, newClass);
     if (availableSubclasses.length > 0) {
       setSubclass(availableSubclasses[0]);
     }
@@ -443,51 +446,23 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
               <span className="text-[11px] text-theme-light font-mono">Theme updates dynamically</span>
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {[
-                {
-                  id: '5e' as RuleEdition,
-                  name: 'D&D 5th Edition (5e)',
-                  desc: 'Proficiency Bonus, Advantage/Disadvantage, Gold Theme.',
-                  color: 'border-amber-500 bg-amber-950/60 text-amber-200'
-                },
-                {
-                  id: '3.5e' as RuleEdition,
-                  name: 'D&D 3.5 Edition (3.5e)',
-                  desc: 'BAB, Fort/Ref/Will Saves, Skill Ranks, Crimson Theme.',
-                  color: 'border-rose-500 bg-rose-950/60 text-rose-200'
-                },
-                {
-                  id: 'shadowrun' as RuleEdition,
-                  name: 'Shadowrun',
-                  desc: 'Cyberware, Decking, Rigging, Cyberpunk Neon Cyan Theme.',
-                  color: 'border-cyan-500 bg-cyan-950/60 text-cyan-200'
-                },
-                {
-                  id: 'pathfinder' as RuleEdition,
-                  name: 'Pathfinder 2e',
-                  desc: '3-Action System, Proficiency Tiers, Royal Purple Theme.',
-                  color: 'border-purple-500 bg-purple-950/60 text-purple-200'
-                },
-                {
-                  id: 'cthulhu' as RuleEdition,
-                  name: 'Call of Cthulhu',
-                  desc: 'Sanity Tracking, d100 Skills, Eldritch Emerald Theme.',
-                  color: 'border-emerald-500 bg-emerald-950/60 text-emerald-200'
-                },
-              ].filter(sys => !enabledSystems || enabledSystems.includes(sys.id)).map((sys) => (
+              {systemRegistry.getAllSystems().filter(sys => !enabledSystems || enabledSystems.includes(sys.id)).map((sys) => (
                 <button
                   key={sys.id}
                   type="button"
                   onClick={() => handleSystemChange(sys.id)}
                   className={`p-2.5 rounded-lg border text-left transition flex flex-col justify-between ${
                     edition === sys.id
-                      ? `${sys.color} shadow-md ring-1 ring-current`
+                      ? `${sys.badgeColor} shadow-md ring-1 ring-current`
                       : 'bg-stone-900 border-stone-800 text-stone-400 hover:bg-stone-800 hover:text-stone-200'
                   }`}
                 >
                   <div>
-                    <div className="font-serif font-bold text-xs">{sys.name}</div>
-                    <div className="text-[10px] opacity-80 mt-0.5">{sys.desc}</div>
+                    <div className="font-serif font-bold text-xs flex items-center gap-1.5">
+                      <span>{sys.icon}</span>
+                      <span>{sys.name}</span>
+                    </div>
+                    <div className="text-[10px] opacity-80 mt-0.5">{sys.description}</div>
                   </div>
                 </button>
               ))}

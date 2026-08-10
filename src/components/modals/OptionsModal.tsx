@@ -33,6 +33,7 @@ import {
 import { CharacterData, RuleEdition } from '../../types';
 import { UserProfile } from '../../lib/firebase';
 import { convertCharacterEdition } from '../../utils/dndCalculations';
+import { systemRegistry } from '../../systems';
 import {
   isSoundEnabled,
   setSoundEnabled,
@@ -686,23 +687,17 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                         </p>
 
                         <div className="space-y-2 pt-1">
-                          {[
-                            { id: '5e' as RuleEdition, title: 'D&D 5th Edition (5e)', desc: 'Standard 5e stats, proficiency bonuses, and 18 skills.' },
-                            { id: '3.5e' as RuleEdition, title: 'D&D 3.5 Edition (3.5e)', desc: 'Base Attack Bonus (BAB), Fort/Ref/Will saves, Touch AC, and 30+ skill ranks.' },
-                            { id: 'shadowrun' as RuleEdition, title: 'Shadowrun 5e', desc: 'Cyberware, Essence, Matrix/Decking, Physical/Stun monitors, Nuyen & Karma.' },
-                            { id: 'pathfinder' as RuleEdition, title: 'Pathfinder 2e', desc: '3-Action combat, proficiency ranks, and tactical fantasy features.' },
-                            { id: 'cthulhu' as RuleEdition, title: 'Call of Cthulhu (7e)', desc: 'Sanity points, Eldritch horror tracking, and d100 skill percentiles.' },
-                          ].map((edition) => {
-                            const isCurrent = (activeCharacter.edition || '5e') === edition.id;
+                          {systemRegistry.getAllSystems().map((sys) => {
+                            const isCurrent = (activeCharacter.edition || '5e') === sys.id;
 
                             return (
                               <button
-                                key={edition.id}
+                                key={sys.id}
                                 disabled={isCurrent}
                                 onClick={() => {
-                                  const updated = convertCharacterEdition(activeCharacter, edition.id);
+                                  const updated = convertCharacterEdition(activeCharacter, sys.id);
                                   if (onUpdateCharacter) onUpdateCharacter(updated);
-                                  if (onSystemChange) onSystemChange(edition.id);
+                                  if (onSystemChange) onSystemChange(sys.id);
                                 }}
                                 className={`w-full p-3 rounded-xl border text-left transition flex items-center justify-between ${
                                   isCurrent
@@ -712,14 +707,14 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                               >
                                 <div>
                                   <div className="font-serif font-bold text-xs flex items-center gap-2">
-                                    <span>{edition.title}</span>
+                                    <span>{sys.icon} {sys.name} ({sys.shortName})</span>
                                     {isCurrent && (
                                       <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold px-1.5 py-0.2 rounded">
                                         CURRENT
                                       </span>
                                     )}
                                   </div>
-                                  <p className="text-[11px] text-stone-400 mt-0.5">{edition.desc}</p>
+                                  <p className="text-[11px] text-stone-400 mt-0.5">{sys.description}</p>
                                 </div>
                                 {!isCurrent && <ChevronRight className="w-4 h-4 text-purple-400 shrink-0" />}
                               </button>

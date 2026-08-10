@@ -76,6 +76,10 @@ export const pathfinder2ePlugin: GameSystemPlugin = {
       const dmg = itemOrAttack.weaponStats?.damage || '1d8';
       return `${dmg}${strMod !== 0 ? (strMod > 0 ? `+${strMod}` : `${strMod}`) : ''}`;
     },
+    getRollModel(actionType, itemOrAttack, char) {
+      const atk = itemOrAttack ? pathfinder2ePlugin.combatEngine.getAttackBonus(itemOrAttack, char) : 0;
+      return { kind: 'd20', modifier: atk, formula: `1d20${atk >= 0 ? '+' : ''}${atk}`, targetType: 'AC' };
+    },
     supportsSanityCheck: false,
     supportsConditionMonitors: false
   },

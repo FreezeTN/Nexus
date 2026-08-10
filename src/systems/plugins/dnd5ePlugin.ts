@@ -83,6 +83,10 @@ export const dnd5ePlugin: GameSystemPlugin = {
       const dmg = itemOrAttack.weaponStats?.damage || '1d6';
       return `${dmg}${statMod !== 0 ? (statMod > 0 ? `+${statMod}` : `${statMod}`) : ''}`;
     },
+    getRollModel(actionType, itemOrAttack, char) {
+      const atk = itemOrAttack ? dnd5ePlugin.combatEngine.getAttackBonus(itemOrAttack, char) : 0;
+      return { kind: 'd20', modifier: atk, formula: `1d20${atk >= 0 ? '+' : ''}${atk}`, targetType: 'AC' };
+    },
     supportsSanityCheck: false,
     supportsConditionMonitors: false
   },

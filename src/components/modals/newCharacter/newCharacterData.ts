@@ -1,4 +1,26 @@
 import { RuleEdition } from '../../../types';
+import { systemRegistry } from '../../../systems';
+
+export function getRacesForSystem(edition: RuleEdition): string[] {
+  const plugin = systemRegistry.getSystem(edition);
+  if (plugin?.data?.races && plugin.data.races.length > 0) {
+    return plugin.data.races;
+  }
+  return RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e'];
+}
+
+export function getClassesForSystem(edition: RuleEdition): string[] {
+  const plugin = systemRegistry.getSystem(edition);
+  if (plugin?.data?.classes && plugin.data.classes.length > 0) {
+    return plugin.data.classes;
+  }
+  return CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e'];
+}
+
+export function getSubclassesForSystemClass(edition: RuleEdition, clsName: string): string[] {
+  const map = SUBCLASS_MAP_BY_SYSTEM[edition] || SUBCLASS_MAP_BY_SYSTEM['5e'];
+  return map[clsName] || ['General'];
+}
 
 export const RACE_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {
   '5e': [

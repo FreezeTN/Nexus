@@ -53,13 +53,9 @@ export function getSpellAttackBonus(char: CharacterData): number {
   return profBonus + abilityMod + itemBonus;
 }
 
-export function getCombinedLevel(char: CharacterData): number {
-  if (char.optionalRules?.useMulticlassing) {
-    const secLvl = char.optionalRules.secondaryLevel || 1;
-    return char.level + Math.max(1, secLvl);
-  }
-  return char.level;
-}
+import { getCombinedLevel } from './calculators/levelCalculators';
+
+export { getCombinedLevel };
 
 export function getEffectiveLevel(char: CharacterData): number {
   return getCombinedLevel(char);

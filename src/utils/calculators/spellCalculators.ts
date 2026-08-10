@@ -1,12 +1,8 @@
 import { CharacterData } from '../../types';
+import { getCombinedLevel } from './levelCalculators';
 
-export function getCombinedLevel(char: CharacterData): number {
-  if (char.optionalRules?.useMulticlassing) {
-    const secLvl = char.optionalRules.secondaryLevel || 1;
-    return char.level + Math.max(1, secLvl);
-  }
-  return char.level;
-}
+export { getCombinedLevel };
+
 
 export function getRequiredLevelForSpellSlotLevel(slotLevel: number, char: CharacterData): number {
   const cls = (char.characterClass || '').toLowerCase();

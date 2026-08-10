@@ -77,6 +77,10 @@ export const shadowrun5ePlugin: GameSystemPlugin = {
       }
       return '9P (AP -2)';
     },
+    getRollModel(actionType, itemOrAttack, char) {
+      const dice = itemOrAttack ? shadowrun5ePlugin.combatEngine.getAttackBonus(itemOrAttack, char) : ((char.shadowrun?.agi || 3) + 4);
+      return { kind: 'dicePool', diceCount: dice, successTarget: 5, glitchThreshold: Math.floor(dice / 2) };
+    },
     supportsSanityCheck: false,
     supportsConditionMonitors: true
   },

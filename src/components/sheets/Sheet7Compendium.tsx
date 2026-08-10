@@ -3,6 +3,7 @@ import { CharacterData, Spell, Feat, ClassFeature, GearItem, RuleEdition } from 
 import { getAbilityModifier, formatModifier } from '../../utils/dndCalculations';
 import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
+import { systemRegistry } from '../../systems';
 import {
   CompendiumItem,
   CompendiumCategory,
@@ -100,11 +101,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
       // System filter
       if (selectedSystem !== 'all') {
         const itemEdition = item.edition || '5e';
-        if (selectedSystem === '5e' && itemEdition !== '5e') return false;
-        if (selectedSystem === '3.5e' && itemEdition !== '3.5e') return false;
-        if (selectedSystem === 'pathfinder' && itemEdition !== 'pathfinder') return false;
-        if (selectedSystem === 'shadowrun' && itemEdition !== 'shadowrun') return false;
-        if (selectedSystem === 'cthulhu' && itemEdition !== 'cthulhu') return false;
+        if (itemEdition !== selectedSystem) return false;
       } else if (enabledSystems && enabledSystems.length > 0) {
         const itemEdition = (item.edition || '5e') as RuleEdition;
         if (!enabledSystems.includes(itemEdition)) return false;
@@ -327,11 +324,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
             </span>
             {[
               { id: 'all', label: 'Active Systems' },
-              { id: '5e', label: 'D&D 5e' },
-              { id: '3.5e', label: '3.5e' },
-              { id: 'pathfinder', label: 'Pathfinder' },
-              { id: 'shadowrun', label: 'Shadowrun' },
-              { id: 'cthulhu', label: 'Call of Cthulhu' }
+              ...systemRegistry.getAllSystems().map(sys => ({ id: sys.id, label: sys.shortName }))
             ]
               .filter(sys => sys.id === 'all' || !enabledSystems || enabledSystems.includes(sys.id as RuleEdition))
               .map((sys) => (
