@@ -14,11 +14,36 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.2.0',
+    date: 'August 2026',
+    title: 'Workspace Customizer, Undo/Redo Engine, Universal Indexing & Architecture Docs',
+    badge: 'Latest Release',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '📌 Pinned Workspace Customizer',
+        detail: 'Interactive customizable workspace dashboard at the top of character sheets. Allows pinning and arranging quick widgets for Vitals, Initiative, Scratchpad, Quests, and Dice Trays.'
+      },
+      {
+        category: '↩️ Atomic Undo / Redo History Engine',
+        detail: 'Integrated useHistoryState timeline hook with 30-snapshot atomic stack rollback, Ctrl+Z / Ctrl+Y / Cmd+Shift+Z keyboard shortcut bindings, and header controls.'
+      },
+      {
+        category: '🔍 Expanded Universal Command Indexing',
+        detail: 'Command Palette (Ctrl+K) now indexes SRD spells, equipment items, and monster compendiums in addition to characters, system plugins, and navigation actions.'
+      },
+      {
+        category: '📚 Developer Architectural Specs (/docs)',
+        detail: 'Added comprehensive documentation covering Architecture.md, Plugin_API.md, State_Management.md, Event_System.md, and Adding_a_System.md with an interactive docs reader in the Extension Manager.'
+      }
+    ]
+  },
+  {
     version: 'v3.1.0',
     date: 'August 2026',
     title: 'Global Command Palette (Ctrl+K), Central Event Bus & Extension SDK',
-    badge: 'Latest Release',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Feature Update',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
     highlights: [
       {
         category: '⚡ Global Command Palette (Ctrl+K)',

@@ -24,7 +24,7 @@ import {
   deleteDoc,
   onSnapshot,
   serverTimestamp,
-  getDocFromServer
+  setLogLevel
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { CharacterData, OptionalRulesConfig } from '../types';
@@ -58,6 +58,13 @@ function initDb() {
 }
 
 export const db = initDb();
+
+// Suppress non-fatal Firestore network warning logs
+try {
+  setLogLevel('error');
+} catch (e) {
+  // Ignore if setLogLevel is unhandled
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -111,30 +118,6 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   };
   console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
 }
-
-// Validate Connection to Firestore on startup
-async function testFirestoreConnection() {
-  try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error: any) {
-    const errMsg = error?.message || String(error);
-    const errCode = error?.code || '';
-    if (
-      errCode === 'unavailable' ||
-      errCode === 'failed-precondition' ||
-      errMsg.includes('offline') ||
-      errMsg.includes('unavailable') ||
-      errMsg.includes('Could not reach Cloud Firestore')
-    ) {
-      console.info('Firestore is operating in local/offline fallback mode.');
-    } else {
-      console.info('Firestore connection test note:', errMsg);
-    }
-  }
-}
-testFirestoreConnection().catch((err) => {
-  console.info('Firestore connection test status:', err?.message || err);
-});
 
 function getGoogleProvider(): GoogleAuthProvider {
   return new GoogleAuthProvider();
