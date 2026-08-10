@@ -275,6 +275,23 @@ MILESTONE 20: COMPLETE APPLICATION USER MANUAL, SCROLL ENGINE & BUILD FIXES
 * Production Build Output Optimization:
   - Fixed Vite build configuration in `vite.config.ts` (`outDir: 'dist'`, `emptyOutDir: true`) ensuring application artifacts compile cleanly into the `dist/` directory for Cloud Run container hosting and sharing.
 
+--------------------------------------------------------------------------------
+MILESTONE 21: OBSIDIAN RPG CAMPAIGN GRAPH, UNIFIED SEARCH & PERFORMANCE VIRTUALIZATION
+--------------------------------------------------------------------------------
+* Obsidian-Style Interactive TTRPG Knowledge Graph (`CampaignGraphModal.tsx`):
+  - Engineered an interactive canvas/SVG network graph visualizer with force physics physics simulation and draggable nodes.
+  - Interconnects campaign entities across 9 domains: PCs, Monsters, NPCs, Locations, Factions, Quests, Items, Sessions, and Spells.
+  - Includes hover connection highlights, entity relationship labels, side inspector drawer, category filter chips, and custom node/link creator.
+
+* Unified Omnipresent Search & Cached Search Indexer (`searchIndexer.ts`):
+  - Upgraded Command Palette (`CommandPaletteModal.tsx`) with a high-performance cached inverted term indexer.
+  - Aggregates instant results across Monsters (CR/AC/HP), Spells (Level/School), Equipment, Quests, Locations, Factions, NPCs, Notes, and System Actions.
+  - Features real-time category filter buttons (`All`, `Monsters`, `Spells`, `Items`, `Quests`, `Locations`, `Factions`, `NPCs`, `Actions`, `Characters`).
+
+* Performance Optimization & Code Splitting (`VirtualList.tsx`):
+  - Implemented React lazy loading (`React.lazy`) and `<Suspense>` boundary code-splitting for heavy modals (`CampaignGraphModal`, `DeveloperSdkModal`, `UserManualModal`, `ExtensionManagerModal`, `AudioOptionsModal`, `SessionLobbyModal`, `PartyManagerModal`, `TRPGSystemSelectorModal`).
+  - Added a reusable `VirtualList` viewport windowing component for fast 60fps rendering of large lists and compendium catalogs.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

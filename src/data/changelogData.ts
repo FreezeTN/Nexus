@@ -14,10 +14,52 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v3.6.0',
+    date: 'August 2026',
+    title: 'Integrated WebRTC Party Voice Client, UI Positioning Fixes & Security Hardening',
+    badge: 'Latest Update',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    highlights: [
+      {
+        category: '🎙️ Integrated WebRTC Party Voice Client',
+        detail: 'Embedded peer-to-peer audio voice channel with WebRTC signaling, volume controls per adventurer, push-to-talk keybinds, microphone/audio deafen controls, and fallback custom room code support (e.g. #PARTY1).'
+      },
+      {
+        category: '📐 UI Layout & Non-Overlapping Floating Widgets',
+        detail: 'Relocated floating Party Voice bar to the bottom-left viewport to completely eliminate overlap with the bottom-right Dice Tray button. Added top header quick-access button and dismissal controls (X button).'
+      },
+      {
+        category: '🔒 Firestore Security & Real-Time Connection Resilience',
+        detail: 'Updated Firestore security rules for session subcollections (voice_peers and voice_signals) and added snapshot error callbacks to prevent unhandled permission errors.'
+      }
+    ]
+  },
+  {
+    version: 'v3.5.0',
+    date: 'August 2026',
+    title: 'Obsidian RPG Campaign Graph, Unified Omnipresent Search & Performance Virtualization',
+    badge: 'Major Release',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    highlights: [
+      {
+        category: '🕸️ Obsidian-Style Interactive TTRPG Knowledge Graph',
+        detail: 'Full-screen interactive canvas network graph (CampaignGraphModal.tsx) mapping PCs, Monsters, NPCs, Locations, Factions, Quests, Items, and Session Notes with force physics, draggable nodes, edge relationship links, category filters, and node inspector.'
+      },
+      {
+        category: '🔍 Unified Omnipresent Search & Search Indexer',
+        detail: 'Re-engineered Command Palette (CommandPaletteModal.tsx) powered by a cached search indexer (searchIndexer.ts) aggregating results across Monsters, Spells, Items, Quests, Locations, Factions, NPCs, and Notes with instant category filter chips.'
+      },
+      {
+        category: '⚡ Performance Optimization & Code Splitting',
+        detail: 'Implemented React lazy loading and Suspense code-splitting for heavy modals alongside VirtualList viewport windowing utilities for sub-millisecond rendering performance.'
+      }
+    ]
+  },
+  {
     version: 'v3.4.0',
     date: 'August 2026',
     title: 'Complete Application User Manual, Horizontal Tab Overflow Engine & Build Artifact Fixes',
-    badge: 'Latest Release',
+    badge: 'Feature Update',
     badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
     highlights: [
       {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
 import { CharacterData, DiceRollResult, RuleEdition, Party } from './types';
 import { SAMPLE_CHARACTERS } from './data/defaultCharacters';
 import { DEFAULT_PARTIES } from './data/defaultParties';
@@ -15,20 +15,24 @@ import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
 import { SheetDmOverview } from './components/sheets/SheetDmOverview';
 import { MainMenu } from './components/MainMenu';
 import { NewCharacterModal } from './components/modals/NewCharacterModal';
-import { PartyManagerModal } from './components/modals/PartyManagerModal';
-import { SessionLobbyModal } from './components/modals/SessionLobbyModal';
 import { AuthModal } from './components/modals/AuthModal';
-import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorModal';
-import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
 import { CommandPaletteModal } from './components/common/CommandPaletteModal';
-import { ExtensionManagerModal } from './components/modals/ExtensionManagerModal';
-import { DeveloperSdkModal } from './components/modals/DeveloperSdkModal';
-import { UserManualModal } from './components/modals/UserManualModal';
+import { PartyVoiceWidget } from './components/voice/PartyVoiceWidget';
 import { eventBus } from './events/eventBus';
 import { useHistoryState } from './utils/useHistoryState';
 import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
 import { onAuthStateChanged } from 'firebase/auth';
 import { Crown } from 'lucide-react';
+
+// Lazy Loaded Modal Components for Optimized Initial Bundle & Instant Render
+const CampaignGraphModal = lazy(() => import('./components/modals/CampaignGraphModal').then(m => ({ default: m.CampaignGraphModal })));
+const DeveloperSdkModal = lazy(() => import('./components/modals/DeveloperSdkModal').then(m => ({ default: m.DeveloperSdkModal })));
+const UserManualModal = lazy(() => import('./components/modals/UserManualModal').then(m => ({ default: m.UserManualModal })));
+const ExtensionManagerModal = lazy(() => import('./components/modals/ExtensionManagerModal').then(m => ({ default: m.ExtensionManagerModal })));
+const AudioOptionsModal = lazy(() => import('./components/modals/AudioOptionsModal').then(m => ({ default: m.AudioOptionsModal })));
+const SessionLobbyModal = lazy(() => import('./components/modals/SessionLobbyModal').then(m => ({ default: m.SessionLobbyModal })));
+const PartyManagerModal = lazy(() => import('./components/modals/PartyManagerModal').then(m => ({ default: m.PartyManagerModal })));
+const TRPGSystemSelectorModal = lazy(() => import('./components/modals/TRPGSystemSelectorModal').then(m => ({ default: m.TRPGSystemSelectorModal })));
 import { 
   auth, 
   getUserProfile, 
@@ -121,6 +125,8 @@ export default function App() {
   const [showExtensionManager, setShowExtensionManager] = useState<boolean>(false);
   const [showDeveloperSdk, setShowDeveloperSdk] = useState<boolean>(false);
   const [showUserManualModal, setShowUserManualModal] = useState<boolean>(false);
+  const [showCampaignGraphModal, setShowCampaignGraphModal] = useState<boolean>(false);
+  const [showVoiceModal, setShowVoiceModal] = useState<boolean>(false);
 
   // Global Ctrl+K / Cmd+K listener for Command Palette
   useEffect(() => {
@@ -742,6 +748,7 @@ export default function App() {
         partiesCount={parties.length}
         onOpenPartyManager={() => setShowPartyModal(true)}
         onOpenSessionLobby={() => setShowSessionModal(true)}
+        onOpenCampaignGraph={() => setShowCampaignGraphModal(true)}
         activeSession={activeSession}
         onSelectCharacter={handleSelectCharacter}
         onCreateNewCharacter={handleOpenNewCharacterModal}
@@ -760,6 +767,7 @@ export default function App() {
         onOpenAudioModal={() => setShowAudioModal(true)}
         onOpenCommandPalette={() => setShowCommandPalette(true)}
         onOpenExtensionManager={() => setShowExtensionManager(true)}
+        onOpenVoiceModal={() => setShowVoiceModal(true)}
         onUndo={undoCharacters}
         onRedo={redoCharacters}
         canUndo={canUndoCharacters}
@@ -906,66 +914,6 @@ export default function App() {
         />
       )}
 
-      {/* TRPG System Selector Screen Modal */}
-      <TRPGSystemSelectorModal
-        isOpen={showTRPGSelectorModal}
-        onClose={() => setShowTRPGSelectorModal(false)}
-        enabledSystems={enabledSystems}
-        onSaveSystems={handleSaveTRPGSystems}
-        isInitialSetup={!hasConfiguredSystems}
-      />
-
-      {/* Party Manager Modal */}
-      <PartyManagerModal
-        isOpen={showPartyModal}
-        onClose={() => setShowPartyModal(false)}
-        parties={parties}
-        allCharacters={characters}
-        activeCharacterId={activeCharacter?.id || ''}
-        onUpdateParties={setParties}
-        onSelectCharacter={(charId) => {
-          handleSelectCharacter(charId);
-          setShowPartyModal(false);
-        }}
-        currentUser={currentUser}
-        presenceMap={presenceMap}
-        onUpdateCharacter={handleUpdateCharacter}
-      />
-
-      {/* Session Lobby & Room Code Modal */}
-      <SessionLobbyModal
-        isOpen={showSessionModal}
-        onClose={() => setShowSessionModal(false)}
-        currentUser={currentUser}
-        activeSession={activeSession}
-        activeCharacter={activeCharacter}
-        allCharacters={characters}
-        presenceMap={presenceMap}
-        onSessionChange={(code) => setActiveSessionCode(code)}
-        onSelectCharacter={handleSelectCharacter}
-        onOpenAuthModal={() => setShowAuthModal(true)}
-      />
-
-      {/* User Account & Role Modal */}
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        currentUser={currentUser}
-        onUserChange={setCurrentUser}
-      />
-
-      {/* Audio & Options Modal */}
-      <AudioOptionsModal
-        isOpen={showAudioModal}
-        onClose={() => setShowAudioModal(false)}
-        currentUser={currentUser}
-        activeCharacter={activeCharacter}
-        onUpdateCharacter={handleUpdateCharacter}
-        onSystemChange={handleSystemChange}
-        onExportJson={handleExportJson}
-        onImportJson={handleImportJson}
-      />
-
       {/* Global Command Palette (Ctrl+K / Cmd+K) */}
       <CommandPaletteModal
         isOpen={showCommandPalette}
@@ -978,36 +926,115 @@ export default function App() {
         onOpenAudio={() => setShowAudioModal(true)}
         onOpenExtensionManager={() => setShowExtensionManager(true)}
         onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
+        onOpenCampaignGraph={() => setShowCampaignGraphModal(true)}
         onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
         onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
       />
 
-      {/* Extension & Plugin Manager Modal */}
-      <ExtensionManagerModal
-        isOpen={showExtensionManager}
-        onClose={() => setShowExtensionManager(false)}
-        enabledSystems={enabledSystems}
-        onToggleSystem={(sysId) => {
-          const updated = enabledSystems.includes(sysId)
-            ? enabledSystems.filter(s => s !== sysId)
-            : [...enabledSystems, sysId];
-          setEnabledSystems(updated);
-          localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(updated));
-        }}
-        onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
-      />
+      <Suspense fallback={null}>
+        {/* TRPG System Selector Screen Modal */}
+        <TRPGSystemSelectorModal
+          isOpen={showTRPGSelectorModal}
+          onClose={() => setShowTRPGSelectorModal(false)}
+          enabledSystems={enabledSystems}
+          onSaveSystems={handleSaveTRPGSystems}
+          isInitialSetup={!hasConfiguredSystems}
+        />
 
-      {/* Developer SDK & Architecture Center Modal */}
-      <DeveloperSdkModal
-        isOpen={showDeveloperSdk}
-        onClose={() => setShowDeveloperSdk(false)}
-      />
+        {/* Party Manager Modal */}
+        <PartyManagerModal
+          isOpen={showPartyModal}
+          onClose={() => setShowPartyModal(false)}
+          parties={parties}
+          allCharacters={characters}
+          activeCharacterId={activeCharacter?.id || ''}
+          onUpdateParties={setParties}
+          onSelectCharacter={(charId) => {
+            handleSelectCharacter(charId);
+            setShowPartyModal(false);
+          }}
+          currentUser={currentUser}
+          presenceMap={presenceMap}
+          onUpdateCharacter={handleUpdateCharacter}
+        />
 
-      {/* Complete User Manual Modal */}
-      <UserManualModal
-        isOpen={showUserManualModal}
-        onClose={() => setShowUserManualModal(false)}
-      />
+        {/* Session Lobby & Room Code Modal */}
+        <SessionLobbyModal
+          isOpen={showSessionModal}
+          onClose={() => setShowSessionModal(false)}
+          currentUser={currentUser}
+          activeSession={activeSession}
+          activeCharacter={activeCharacter}
+          allCharacters={characters}
+          presenceMap={presenceMap}
+          onSessionChange={(code) => setActiveSessionCode(code)}
+          onSelectCharacter={handleSelectCharacter}
+          onOpenAuthModal={() => setShowAuthModal(true)}
+        />
+
+        {/* User Account & Role Modal */}
+        <AuthModal
+          isOpen={showAuthModal}
+          onClose={() => setShowAuthModal(false)}
+          currentUser={currentUser}
+          onUserChange={setCurrentUser}
+        />
+
+        {/* Audio & Options Modal */}
+        <AudioOptionsModal
+          isOpen={showAudioModal}
+          onClose={() => setShowAudioModal(false)}
+          currentUser={currentUser}
+          activeCharacter={activeCharacter}
+          onUpdateCharacter={handleUpdateCharacter}
+          onSystemChange={handleSystemChange}
+          onExportJson={handleExportJson}
+          onImportJson={handleImportJson}
+        />
+
+        {/* Extension & Plugin Manager Modal */}
+        <ExtensionManagerModal
+          isOpen={showExtensionManager}
+          onClose={() => setShowExtensionManager(false)}
+          enabledSystems={enabledSystems}
+          onToggleSystem={(sysId) => {
+            const updated = enabledSystems.includes(sysId)
+              ? enabledSystems.filter(s => s !== sysId)
+              : [...enabledSystems, sysId];
+            setEnabledSystems(updated);
+            localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(updated));
+          }}
+          onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
+        />
+
+        {/* Developer SDK & Architecture Center Modal */}
+        <DeveloperSdkModal
+          isOpen={showDeveloperSdk}
+          onClose={() => setShowDeveloperSdk(false)}
+        />
+
+        {/* Complete User Manual Modal */}
+        <UserManualModal
+          isOpen={showUserManualModal}
+          onClose={() => setShowUserManualModal(false)}
+        />
+
+        {/* Obsidian-Style RPG Campaign Knowledge Graph Modal */}
+        <CampaignGraphModal
+          isOpen={showCampaignGraphModal}
+          onClose={() => setShowCampaignGraphModal(false)}
+          onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
+        />
+
+        {/* Integrated Party WebRTC Voice Client Widget */}
+        <PartyVoiceWidget
+          activeSession={activeSession}
+          currentUser={currentUser}
+          activeCharacterName={activeCharacter?.name}
+          isOpenModal={showVoiceModal}
+          onCloseModal={() => setShowVoiceModal(false)}
+        />
+      </Suspense>
     </div>
   );
 }

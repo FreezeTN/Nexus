@@ -55,7 +55,9 @@ import {
   Settings,
   Command,
   Undo2,
-  Redo2
+  Redo2,
+  Network,
+  Radio
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
@@ -71,6 +73,7 @@ interface HeaderProps {
   partiesCount?: number;
   onOpenPartyManager?: () => void;
   onOpenSessionLobby?: () => void;
+  onOpenCampaignGraph?: () => void;
   activeSession?: GameSession | null;
   onSelectCharacter: (id: string) => void;
   onCreateNewCharacter: (category?: 'character' | 'monster' | 'vendor') => void;
@@ -89,6 +92,7 @@ interface HeaderProps {
   onOpenAudioModal?: () => void;
   onOpenCommandPalette?: () => void;
   onOpenExtensionManager?: () => void;
+  onOpenVoiceModal?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -102,6 +106,7 @@ export const Header: React.FC<HeaderProps> = ({
   partiesCount = 0,
   onOpenPartyManager,
   onOpenSessionLobby,
+  onOpenCampaignGraph,
   activeSession,
   onSelectCharacter,
   onCreateNewCharacter,
@@ -120,6 +125,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAudioModal,
   onOpenCommandPalette,
   onOpenExtensionManager,
+  onOpenVoiceModal,
   onUndo,
   onRedo,
   canUndo = false,
@@ -791,6 +797,17 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
 
+            {onOpenCampaignGraph && (
+              <button
+                onClick={onOpenCampaignGraph}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-stone-800 text-amber-300 font-bold text-xs transition cursor-pointer"
+                title="Open Obsidian-Style RPG Campaign Knowledge Graph Network"
+              >
+                <Network className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Graph View</span>
+              </button>
+            )}
+
             {onOpenExtensionManager && (
               <button
                 onClick={onOpenExtensionManager}
@@ -823,6 +840,17 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : (
                   <span>Session Lobby</span>
                 )}
+              </button>
+            )}
+
+            {onOpenVoiceModal && (
+              <button
+                onClick={onOpenVoiceModal}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-stone-800 text-indigo-300 font-bold text-xs transition cursor-pointer"
+                title="Open Party WebRTC Integrated Voice Client"
+              >
+                <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                <span className="hidden md:inline">Party Voice</span>
               </button>
             )}
 

@@ -859,6 +859,16 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           detail: 'Features real-time Web Audio synthesis for 12 dynamic triggers: Dice Rolls, Weapon Hit, Critical Hit Chime, Miss/Parry Whoosh, Fire Roar, Cold Shimmer, Lightning Thunder, Acid Sizzle, Healing Arpeggio, Spell Cast, Level Up Fanfare, and Death Bell.'
         },
         {
+          name: 'Integrated WebRTC Party Voice Client',
+          action: 'Top Header "Party Voice" / Bottom Floating Bar',
+          detail: 'Peer-to-peer live voice chat integrated into multiplayer sessions or custom room codes (#PARTY1). Features push-to-talk keybinds, microphone mute, audio deafen, speaker pulse animations, and per-adventurer volume control sliders.'
+        },
+        {
+          name: 'Non-Overlapping Bottom-Left Voice Bar',
+          action: 'Floating Dock & Header Toggle',
+          detail: 'Positioned on the bottom-left of the screen so it never overlaps the bottom-right Dice Tray button. Includes a close/dismiss (X) button and header bar shortcut for quick access.'
+        },
+        {
           name: 'Persistent Sound Storage',
           action: 'Browser Local Storage',
           detail: 'Volume settings and mute toggles are saved automatically in your browser and restored across sessions.'
@@ -1007,6 +1017,11 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           name: 'DM Active Crown Indicator',
           action: 'Header Crown Badge',
           detail: 'Displays a purple Crown badge whenever a Dungeon Master is actively supervising or viewing a sheet. Player access remains unlocked while DM is viewing.'
+        },
+        {
+          name: 'Integrated WebRTC Voice Channels',
+          action: 'Header "Party Voice" / Voice Widget',
+          detail: 'Connect instantly to party voice channels linked to your session code or custom room codes with real-time peer-to-peer audio and signaling.'
         }
       ]
     },

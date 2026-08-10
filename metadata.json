@@ -1,6 +1,8 @@
 {
   "name": "D&D Character Sheet",
   "description": "A comprehensive multi-edition D&D character sheet supporting both 5e and 3.5e rulesets, featuring Stats, Combat, Gear, Spells, and Character Details with auto-calculated modifiers, saving throws, skill ranks, and live dice rolling.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": [
+    "microphone"
+  ],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

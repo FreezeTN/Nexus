@@ -19,15 +19,13 @@ import {
   Skull,
   MapPin,
   FileText,
-  Users
+  Users,
+  Network
 } from 'lucide-react';
-import { CharacterData, RuleEdition } from '../../types';
+import { CharacterData } from '../../types';
 import { systemRegistry } from '../../systems';
 import { eventBus } from '../../events/eventBus';
-import { PRESET_5E_SPELLS } from '../../data/presetSpells';
-import { PRESET_DND_ITEMS } from '../../data/presetItems';
-import { OFFICIAL_BULK_MONSTERS } from '../../data/srdRulesLibrary';
-import { DND_CONDITIONS } from '../../data/conditionsData';
+import { searchIndexer } from '../../utils/searchIndexer';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -40,6 +38,7 @@ interface CommandPaletteModalProps {
   onOpenAudio: () => void;
   onOpenExtensionManager: () => void;
   onOpenDeveloperSdk?: () => void;
+  onOpenCampaignGraph?: () => void;
   onNavigateTab: (tabId: any) => void;
   onRollDice?: () => void;
 }
@@ -64,23 +63,38 @@ export function CommandPaletteModal({
   onOpenAudio,
   onOpenExtensionManager,
   onOpenDeveloperSdk,
+  onOpenCampaignGraph,
   onNavigateTab,
   onRollDice
 }: CommandPaletteModalProps) {
   const [query, setQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setQuery('');
+      setSelectedCategory('All');
       setSelectedIndex(0);
+      searchIndexer.initializeIndex(characters);
       setTimeout(() => inputRef.current?.focus(), 50);
     }
-  }, [isOpen]);
+  }, [isOpen, characters]);
 
   const allCommands = useMemo<CommandItem[]>(() => {
     const list: CommandItem[] = [
+      {
+        id: 'action-campaign-graph',
+        title: 'Open Interactive Campaign Knowledge Graph',
+        category: 'Actions',
+        description: 'Obsidian-style visual network of monsters, locations, factions, and quests',
+        icon: <Network className="w-4 h-4 text-amber-400" />,
+        action: () => {
+          onClose();
+          if (onOpenCampaignGraph) onOpenCampaignGraph();
+        }
+      },
       {
         id: 'action-new-char',
         title: 'Create New Character',
@@ -225,66 +239,6 @@ export function CommandPaletteModal({
       });
     });
 
-    // Add Spells to universal index
-    PRESET_5E_SPELLS.slice(0, 40).forEach((spell) => {
-      list.push({
-        id: `spell-${spell.name}`,
-        title: spell.name,
-        category: 'Spells',
-        description: `Level ${spell.level === 0 ? 'Cantrip' : spell.level} ${spell.school} • ${spell.castingTime}`,
-        icon: <Scroll className="w-4 h-4 text-purple-400" />,
-        action: () => {
-          onClose();
-          onNavigateTab('spells');
-        }
-      });
-    });
-
-    // Add Preset Items to universal index
-    PRESET_DND_ITEMS.slice(0, 40).forEach((item) => {
-      list.push({
-        id: `item-${item.name}`,
-        title: item.name,
-        category: 'Items',
-        description: `${item.category || 'Equipment'} • ${item.weight || 0} lbs`,
-        icon: <Package className="w-4 h-4 text-emerald-400" />,
-        action: () => {
-          onClose();
-          onNavigateTab('gear');
-        }
-      });
-    });
-
-    // Add SRD Monsters to universal index
-    OFFICIAL_BULK_MONSTERS.slice(0, 40).forEach((monster) => {
-      list.push({
-        id: `monster-${monster.name}`,
-        title: monster.name,
-        category: 'Monsters',
-        description: `CR ${monster.challengeRating || '1/2'} • ${monster.race || 'Beast'} • AC ${monster.armorClass} • HP ${monster.hpMax}`,
-        icon: <Skull className="w-4 h-4 text-rose-400" />,
-        action: () => {
-          onClose();
-          onNavigateTab('dm');
-        }
-      });
-    });
-
-    // Add Conditions & Status Effects to universal index
-    DND_CONDITIONS.forEach((cond) => {
-      list.push({
-        id: `cond-${cond.id}`,
-        title: `Condition: ${cond.name}`,
-        category: 'Conditions',
-        description: cond.summary,
-        icon: <ShieldAlert className="w-4 h-4 text-amber-400" />,
-        action: () => {
-          onClose();
-          onNavigateTab('notes');
-        }
-      });
-    });
-
     // Add Sample Campaign Quests
     const SAMPLE_QUESTS = [
       { id: 'q1', title: 'The Lost Mine of Phandelver', status: 'Active', location: 'Phandalin' },
@@ -349,19 +303,54 @@ export function CommandPaletteModal({
   }, [characters, activeCharacter, onClose, onSelectCharacter, onOpenNewCharacter, onOpenOptions, onOpenAudio, onOpenExtensionManager, onNavigateTab, onRollDice]);
 
   const filtered = useMemo(() => {
-    if (!query.trim()) return allCommands;
-    const q = query.toLowerCase();
+    if (selectedCategory !== 'All' || query.trim()) {
+      const indexedResults = searchIndexer.search(query, selectedCategory);
+      if (indexedResults.length > 0) {
+        return indexedResults.map((r) => {
+          let icon = <FileText className="w-4 h-4 text-stone-400" />;
+          if (r.category === 'Monsters') icon = <Skull className="w-4 h-4 text-rose-400" />;
+          else if (r.category === 'Spells') icon = <Scroll className="w-4 h-4 text-purple-400" />;
+          else if (r.category === 'Items') icon = <Package className="w-4 h-4 text-emerald-400" />;
+          else if (r.category === 'Quests') icon = <Scroll className="w-4 h-4 text-purple-400" />;
+          else if (r.category === 'Locations') icon = <MapPin className="w-4 h-4 text-emerald-400" />;
+          else if (r.category === 'Factions') icon = <ShieldAlert className="w-4 h-4 text-indigo-400" />;
+          else if (r.category === 'NPCs') icon = <Users className="w-4 h-4 text-cyan-400" />;
+          else if (r.category === 'Characters') icon = <span className="text-sm">👤</span>;
+
+          return {
+            id: r.id,
+            title: r.title,
+            category: r.category as any,
+            description: r.description,
+            icon,
+            action: () => {
+              onClose();
+              if (r.actionData.type === 'navigate_tab' && r.actionData.target) {
+                onNavigateTab(r.actionData.target);
+              } else if (r.actionData.type === 'select_character' && r.actionData.payload) {
+                onSelectCharacter(r.actionData.payload);
+              }
+            }
+          };
+        });
+      }
+    }
+
+    // Default fallback to allCommands
+    const q = query.toLowerCase().trim();
     return allCommands.filter(
       cmd =>
-        cmd.title.toLowerCase().includes(q) ||
-        cmd.category.toLowerCase().includes(q) ||
-        (cmd.description && cmd.description.toLowerCase().includes(q))
+        (selectedCategory === 'All' || cmd.category === selectedCategory) &&
+        (!q ||
+          cmd.title.toLowerCase().includes(q) ||
+          cmd.category.toLowerCase().includes(q) ||
+          (cmd.description && cmd.description.toLowerCase().includes(q)))
     );
-  }, [allCommands, query]);
+  }, [allCommands, query, selectedCategory, onClose, onNavigateTab, onSelectCharacter]);
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [query]);
+  }, [query, selectedCategory]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -389,26 +378,45 @@ export function CommandPaletteModal({
         onKeyDown={handleKeyDown}
       >
         {/* Search Header */}
-        <div className="p-4 border-b border-stone-800 flex items-center gap-3 bg-stone-950/80">
-          <Search className="w-5 h-5 text-amber-500 shrink-0" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Type a command, character, action or system... (e.g. Roll, Create, DM)"
-            className="w-full bg-transparent text-stone-100 placeholder-stone-500 text-sm font-sans focus:outline-none"
-          />
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-stone-800 text-[10px] font-mono text-stone-400 border border-stone-700">
-              <Command className="w-3 h-3" /> K
-            </span>
-            <button
-              onClick={onClose}
-              className="p-1 rounded-lg hover:bg-stone-800 text-stone-400 hover:text-stone-200 transition"
-            >
-              <X className="w-4 h-4" />
-            </button>
+        <div className="p-4 border-b border-stone-800 flex flex-col gap-2.5 bg-stone-950/80">
+          <div className="flex items-center gap-3">
+            <Search className="w-5 h-5 text-amber-500 shrink-0" />
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search anything: dragon, fireball, sword, phandalin, roll, DM..."
+              className="w-full bg-transparent text-stone-100 placeholder-stone-500 text-sm font-sans focus:outline-none"
+            />
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded bg-stone-800 text-[10px] font-mono text-stone-400 border border-stone-700">
+                <Command className="w-3 h-3" /> K
+              </span>
+              <button
+                onClick={onClose}
+                className="p-1 rounded-lg hover:bg-stone-800 text-stone-400 hover:text-stone-200 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Category Filter Chips */}
+          <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scrollbar-none pt-1">
+            {['All', 'Monsters', 'Spells', 'Items', 'Quests', 'Locations', 'Factions', 'NPCs', 'Actions', 'Characters'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-serif font-bold transition whitespace-nowrap shrink-0 ${
+                  selectedCategory === cat
+                    ? 'bg-amber-600 text-stone-950 shadow ring-1 ring-amber-400'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/80'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
         </div>
 
