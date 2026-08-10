@@ -4,12 +4,15 @@ import { ShadowrunSpellsComplexForms } from '../shadowrun/ShadowrunSpellsComplex
 import { SpellcastingStatsPanel } from './sheet4/SpellcastingStatsPanel';
 import { SpellbookListPanel } from './sheet4/SpellbookListPanel';
 import { SpellTargetModal } from '../modals/SpellTargetModal';
+import { TransformationModal } from '../modals/TransformationModal';
+import { CompanionModal } from '../modals/CompanionModal';
 
 interface Sheet4Props {
   character: CharacterData;
   allCharacters?: CharacterData[];
   currentUser?: { role?: string; displayName?: string } | null;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onAddMonsterToRoster?: (monster: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage: (label: string, expression: string) => void;
 }
@@ -19,10 +22,13 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
   allCharacters = [],
   currentUser,
   onUpdateCharacter,
+  onAddMonsterToRoster,
   onRoll,
   onRollDamage
 }) => {
   const [targetModalSpell, setTargetModalSpell] = useState<any | null>(null);
+  const [showTransformationModal, setShowTransformationModal] = useState(false);
+  const [showCompanionModal, setShowCompanionModal] = useState(false);
 
   const handleConfirmCastSpellTarget = (spellToCast: any, selectedTargetIds: string[], condName: string) => {
     const updatedSlots = spellToCast.level > 0
@@ -65,6 +71,7 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
       <ShadowrunSpellsComplexForms
         character={character}
         onUpdateCharacter={onUpdateCharacter}
+        onRollPool={(label, pool) => onRoll(label, 6, pool, 0, 'normal')}
       />
     );
   }
@@ -85,16 +92,42 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
         onRoll={onRoll}
         onRollDamage={onRollDamage}
         setTargetModalSpell={setTargetModalSpell}
+        onOpenShapeshift={() => setShowTransformationModal(true)}
+        onOpenSummonCompanion={() => setShowCompanionModal(true)}
       />
 
       {/* Target & Status Effect Modal */}
       {targetModalSpell && (
         <SpellTargetModal
           spell={targetModalSpell}
+          caster={character}
           allCharacters={allCharacters.length > 0 ? allCharacters : [character]}
-          currentCharacterId={character.id}
-          onConfirm={(spell, targetIds, conditionName) => handleConfirmCastSpellTarget(spell, targetIds, conditionName)}
+          onConfirmCast={(spell, targetIds, conditionName) => handleConfirmCastSpellTarget(spell, targetIds, conditionName)}
           onClose={() => setTargetModalSpell(null)}
+        />
+      )}
+
+      {/* Shapeshift Engine Modal */}
+      {showTransformationModal && (
+        <TransformationModal
+          isOpen={true}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onClose={() => setShowTransformationModal(false)}
+        />
+      )}
+
+      {/* Companion Summon Engine Modal */}
+      {showCompanionModal && (
+        <CompanionModal
+          isOpen={true}
+          character={character}
+          edition={character.edition}
+          onUpdateCharacter={onUpdateCharacter}
+          onAddMonsterToRoster={onAddMonsterToRoster}
+          onClose={() => setShowCompanionModal(false)}
+          onRoll={onRoll}
+          onRollDamage={onRollDamage}
         />
       )}
     </div>

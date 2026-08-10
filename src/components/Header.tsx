@@ -688,13 +688,14 @@ export const Header: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Right: Rest, Export, Import Action Controls */}
-        <div className="flex items-center gap-2">
+        {/* Right: Character Sheet Actions & Global App Toolbar */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Character Action Group */}
           {showCharacterHeader && (
-            <>
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setShowRestModal('short')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-200 border border-amber-600/30 rounded-lg text-xs font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-200 border border-amber-600/30 rounded-lg text-xs font-semibold transition cursor-pointer"
                 title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Short Rest: 8 Hours' : 'Standard Short Rest: 1 Hour'}
               >
                 <Sun className="w-4 h-4 text-amber-400" />
@@ -706,7 +707,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               <button
                 onClick={() => setShowRestModal('long')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40 rounded-lg text-xs font-semibold transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40 rounded-lg text-xs font-semibold transition cursor-pointer"
                 title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Long Rest: 7 Days' : 'Standard Long Rest: 8 Hours'}
               >
                 <Moon className="w-4 h-4 text-amber-300" />
@@ -715,75 +716,82 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">7d</span>
                 )}
               </button>
-            </>
-          )}
 
-          {currentUser && onOpenSessionLobby && (
-            <button
-              onClick={onOpenSessionLobby}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow ${
-                activeSession
-                  ? 'bg-amber-950/90 hover:bg-amber-900 border border-amber-500 text-amber-200 animate-pulse'
-                  : 'bg-stone-800 hover:bg-stone-700 border border-stone-700 text-amber-300'
-              }`}
-              title="Open Multiplayer Campaign Session Lobby & 6-Digit Room Code"
-            >
-              <Users className={`w-4 h-4 ${activeSession ? 'text-emerald-400' : 'text-amber-400'}`} />
-              {activeSession ? (
-                <>
-                  <span>Room: <strong className="font-mono text-amber-300">{activeSession.code}</strong></span>
-                  <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono font-extrabold">
-                    {activeSession.members?.length || 1} Live
-                  </span>
-                </>
-              ) : (
-                <span>Session Lobby</span>
+              {currentUser && (
+                <button
+                  onClick={() => setShowStatblockModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition shadow cursor-pointer"
+                  title="Open Printable Statblock View"
+                >
+                  <BookOpen className="w-4 h-4 text-amber-400" />
+                  <span className="hidden sm:inline font-serif font-bold">Printable Statblock</span>
+                </button>
               )}
-            </button>
+            </div>
           )}
 
-          {onOpenAudioModal && (
+          {showCharacterHeader && (
+            <div className="h-6 w-px bg-stone-800 mx-0.5 hidden lg:block" />
+          )}
+
+          {/* Unified Global App Menu Toolbar */}
+          <div className="flex items-center p-0.5 bg-stone-950/90 border border-stone-800 rounded-xl shadow-inner divide-x divide-stone-800">
+            {currentUser && onOpenSessionLobby && (
+              <button
+                onClick={onOpenSessionLobby}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                  activeSession
+                    ? 'bg-amber-950/90 text-amber-200 animate-pulse'
+                    : 'hover:bg-stone-800 text-amber-300'
+                }`}
+                title="Open Multiplayer Campaign Session Lobby & 6-Digit Room Code"
+              >
+                <Users className={`w-4 h-4 ${activeSession ? 'text-emerald-400' : 'text-amber-400'}`} />
+                {activeSession ? (
+                  <>
+                    <span>Room: <strong className="font-mono text-amber-300">{activeSession.code}</strong></span>
+                    <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-1.5 py-0.2 rounded font-mono font-extrabold">
+                      {activeSession.members?.length || 1} Live
+                    </span>
+                  </>
+                ) : (
+                  <span>Session Lobby</span>
+                )}
+              </button>
+            )}
+
+            {onOpenAudioModal && (
+              <button
+                onClick={onOpenAudioModal}
+                className={`px-3 py-1.5 rounded-lg transition text-xs flex items-center gap-1.5 font-bold cursor-pointer ${
+                  isSoundEnabled()
+                    ? 'hover:bg-stone-800 text-amber-300'
+                    : 'bg-rose-950/80 text-rose-300'
+                }`}
+                title="Options (Sound & App Settings)"
+              >
+                <Settings className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Options</span>
+              </button>
+            )}
+
             <button
-              onClick={onOpenAudioModal}
-              className={`p-2 rounded-lg border transition text-xs flex items-center gap-1.5 shadow ${
-                isSoundEnabled()
-                  ? 'bg-stone-800 hover:bg-stone-700 text-amber-300 border-stone-700'
-                  : 'bg-rose-950/80 hover:bg-rose-900 text-rose-300 border-rose-800/80'
+              onClick={handleTriggerInstall}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer ${
+                isStandalone
+                  ? 'text-emerald-300 font-bold'
+                  : deferredPrompt
+                  ? 'bg-amber-900/90 hover:bg-amber-800 text-amber-100 animate-pulse'
+                  : 'hover:bg-stone-800 text-amber-300'
               }`}
-              title="Options (Sound & App Settings)"
+              title={isStandalone ? 'App Installed (Running Standalone)' : 'Install App locally as PWA (Desktop or Mobile)'}
             >
-              <Settings className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline font-bold">Options</span>
+              <Laptop className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">
+                {isStandalone ? 'App Installed' : 'Install App'}
+              </span>
             </button>
-          )}
-
-          <button
-            onClick={handleTriggerInstall}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition ${
-              isStandalone
-                ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-300'
-                : deferredPrompt
-                ? 'bg-amber-900/90 hover:bg-amber-800 border-amber-500 text-amber-100 shadow-md animate-pulse'
-                : 'bg-stone-800 hover:bg-stone-700 border-stone-700 text-amber-300'
-            }`}
-            title={isStandalone ? 'App Installed (Running Standalone)' : 'Install App locally as PWA (Desktop or Mobile)'}
-          >
-            <Laptop className="w-4 h-4 text-amber-400" />
-            <span className="hidden sm:inline">
-              {isStandalone ? 'App Installed' : 'Install App'}
-            </span>
-          </button>
-
-          {currentUser && showCharacterHeader && (
-            <button
-              onClick={() => setShowStatblockModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition shadow"
-              title="Open Printable Statblock View"
-            >
-              <BookOpen className="w-4 h-4 text-amber-400" />
-              <span className="hidden sm:inline font-serif font-bold">Printable Statblock</span>
-            </button>
-          )}
+          </div>
         </div>
       </div>
 

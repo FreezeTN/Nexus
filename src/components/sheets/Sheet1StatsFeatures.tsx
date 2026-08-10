@@ -5,6 +5,7 @@ import { ShadowrunStatsPanel } from '../shadowrun/ShadowrunStatsPanel';
 import { ShadowrunSkillsPanel } from '../shadowrun/ShadowrunSkillsPanel';
 import { LevelProgressionModal } from '../modals/LevelProgressionModal';
 import { TransformationModal } from '../modals/TransformationModal';
+import { CompanionModal } from '../modals/CompanionModal';
 import { HybridHeritageModal } from '../modals/HybridHeritageModal';
 import { recalculateCharacterAC } from '../../utils/dndCalculations';
 
@@ -21,6 +22,7 @@ interface Sheet1Props {
   currentUser?: { role?: string; displayName?: string } | null;
   activeSession?: GameSession | null;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onAddMonsterToRoster?: (monster: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
 }
 
@@ -29,12 +31,14 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   currentUser,
   activeSession,
   onUpdateCharacter,
+  onAddMonsterToRoster,
   onRoll
 }) => {
   const [editingAbilities, setEditingAbilities] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [showLevelProgressionModal, setShowLevelProgressionModal] = useState(false);
   const [showTransformationModal, setShowTransformationModal] = useState(false);
+  const [showCompanionModal, setShowCompanionModal] = useState(false);
   const [showHybridHeritageModal, setShowHybridHeritageModal] = useState(false);
 
   const isDmRole = currentUser?.role === 'DM';
@@ -51,6 +55,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
         setEditingAbilities={setEditingAbilities}
         setShowHybridHeritageModal={setShowHybridHeritageModal}
         setShowTransformationModal={setShowTransformationModal}
+        setShowCompanionModal={setShowCompanionModal}
         setShowLevelProgressionModal={setShowLevelProgressionModal}
       />
 
@@ -244,11 +249,15 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 character={character}
                 isDmRole={isDmRole}
                 onUpdateCharacter={onUpdateCharacter}
+                onOpenShapeshift={() => setShowTransformationModal(true)}
+                onOpenSummonCompanion={() => setShowCompanionModal(true)}
               />
 
               <FeatsPanel
                 character={character}
                 onUpdateCharacter={onUpdateCharacter}
+                onOpenShapeshift={() => setShowTransformationModal(true)}
+                onOpenSummonCompanion={() => setShowCompanionModal(true)}
               />
             </div>
           </div>
@@ -269,9 +278,22 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
 
       {showTransformationModal && (
         <TransformationModal
+          isOpen={true}
           character={character}
           onUpdateCharacter={onUpdateCharacter}
           onClose={() => setShowTransformationModal(false)}
+        />
+      )}
+
+      {showCompanionModal && (
+        <CompanionModal
+          isOpen={true}
+          character={character}
+          edition={character.edition}
+          onUpdateCharacter={onUpdateCharacter}
+          onAddMonsterToRoster={onAddMonsterToRoster}
+          onClose={() => setShowCompanionModal(false)}
+          onRoll={onRoll}
         />
       )}
 

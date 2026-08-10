@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { CharacterData, Spell } from '../../types';
 import { getEffectiveMaxHp } from '../../utils/dndCalculations';
-import { Wand2, Sparkles, CheckSquare, Square, Shield, X, Users } from 'lucide-react';
+import { isShapeshiftAbility } from '../../data/transformationData';
+import { isCompanionSummonAbility } from '../../data/companionData';
+import { Wand2, Sparkles, CheckSquare, Square, Shield, X, Users, PawPrint } from 'lucide-react';
 
 interface SpellTargetModalProps {
   spell: Spell;
@@ -107,6 +109,36 @@ export const SpellTargetModal: React.FC<SpellTargetModalProps> = ({
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto flex-1">
           
+          {/* Shapeshift Engine Banner if spell allows transformation */}
+          {isShapeshiftAbility(spell.name, spell.description) && (
+            <div className="bg-emerald-950/90 border border-emerald-500/60 p-3 rounded-xl flex items-center justify-between text-xs text-emerald-200 shadow">
+              <div className="flex items-center gap-2">
+                <PawPrint className="w-5 h-5 text-emerald-400 shrink-0" />
+                <div>
+                  <div className="font-bold text-emerald-300">Shapeshifting Spell Detected</div>
+                  <div className="text-[11px] text-emerald-200/80">
+                    Use the <strong>Shapeshift Engine</strong> on your sheet header or spellbook to transform form stats!
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Summoning Companion Banner if spell summons familiar or companion */}
+          {isCompanionSummonAbility(spell.name, spell.description) && (
+            <div className="bg-teal-950/90 border border-teal-500/60 p-3 rounded-xl flex items-center justify-between text-xs text-teal-200 shadow">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🦅</span>
+                <div>
+                  <div className="font-bold text-teal-300">Summon / Companion Spell Detected</div>
+                  <div className="text-[11px] text-teal-200/80">
+                    Use the <strong>Summon Companion Engine</strong> on your sheet header or spellbook to conjure and add your companion directly into your Campaign Roster!
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Status Condition Field */}
           <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-2">
             <label className="block text-xs font-bold text-stone-300 flex items-center justify-between">

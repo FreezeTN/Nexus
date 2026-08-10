@@ -3,14 +3,14 @@ import { CharacterData, TransformationForm, Attack } from '../../types';
 import { PRESET_TRANSFORMATION_FORMS, applyTransformation, revertTransformation, updateActiveTransformation } from '../../data/transformationData';
 
 interface TransformationModalProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
 }
 
 export const TransformationModal: React.FC<TransformationModalProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
   character,
   onUpdateCharacter,
@@ -180,7 +180,7 @@ export const TransformationModal: React.FC<TransformationModalProps> = ({
           <div className="flex items-center gap-3">
             <span className="text-3xl">🐾</span>
             <div>
-              <h2 className="text-xl font-bold text-amber-200">Transformation & Natural Weapons Engine</h2>
+              <h2 className="text-xl font-bold text-amber-200">Shapeshift Engine</h2>
               <p className="text-xs text-stone-400">
                 Wild Shape, Polymorph, Lycanthropy & Shapechange form management with auto-injected Natural Weapons
               </p>
@@ -196,15 +196,15 @@ export const TransformationModal: React.FC<TransformationModalProps> = ({
 
         {/* Active Transformation Status Banner if transformed */}
         {isTransformed && activeForm && (
-          <div className="bg-purple-950/80 border-b border-purple-700/60 p-4 flex flex-col gap-3">
+          <div className="bg-emerald-950/80 border-b border-emerald-700/60 p-4 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <span className="text-3xl">🐺</span>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-purple-200 uppercase tracking-wide">Active Form:</span>
+                    <span className="text-sm font-bold text-emerald-200 uppercase tracking-wide">Active Form:</span>
                     <span className="text-lg font-extrabold text-amber-300">{activeForm.name}</span>
-                    <span className="text-xs bg-purple-900 border border-purple-500 text-purple-200 px-2 py-0.5 rounded-full font-bold">
+                    <span className="text-xs bg-emerald-900 border border-emerald-500 text-emerald-200 px-2 py-0.5 rounded-full font-bold">
                       {activeForm.type}
                     </span>
                   </div>
@@ -222,7 +222,7 @@ export const TransformationModal: React.FC<TransformationModalProps> = ({
                       handleStartEditActiveForm();
                     }
                   }}
-                  className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 border border-purple-400 text-purple-100 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow"
+                  className="px-3 py-1.5 bg-emerald-900 hover:bg-emerald-800 border border-emerald-400 text-emerald-100 font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow"
                 >
                   <span>⚙️</span> {editingActiveForm ? 'Cancel Editing' : 'Edit Live Form Stats'}
                 </button>
@@ -349,8 +349,33 @@ export const TransformationModal: React.FC<TransformationModalProps> = ({
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1">
           {activeTab === 'presets' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {PRESET_TRANSFORMATION_FORMS.map(form => (
+            <div className="space-y-4">
+              {/* Edition Rules Banner */}
+              <div className="bg-amber-950/40 border border-amber-600/40 p-3 rounded-xl text-xs text-amber-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">📜</span>
+                  <div>
+                    <span className="font-bold text-amber-300">
+                      {character.edition === '3.5e' ? '3.5e Wild Shape & Polymorph Rules Active' : '5e Wild Shape & Polymorph Rules Active'}
+                    </span>
+                    <p className="text-[11px] text-stone-300 mt-0.5">
+                      {character.edition === '3.5e'
+                        ? '3.5e Rule: You retain your true Hit Points & Hit Dice (healing 1 HP/level on transformation). You gain physical stats (STR/DEX/CON), Natural Armor, and Base Attack Bonus natural attack routines.'
+                        : '5e Rule: You gain the form\'s Hit Points as a temporary HP pool. Excess damage carries over to your normal HP pool. Mental stats (INT/WIS/CHA) are retained.'}
+                    </p>
+                  </div>
+                </div>
+                <span className="bg-amber-900/80 border border-amber-500/50 text-amber-200 text-[10px] px-2 py-0.5 rounded font-mono font-bold uppercase">
+                  {character.edition || '5e'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {PRESET_TRANSFORMATION_FORMS.filter(form => {
+                  if (!form.edition || form.edition === 'both') return true;
+                  if (character.edition === '3.5e') return form.edition === '3.5e';
+                  return form.edition === '5e';
+                }).map(form => (
                 <div
                   key={form.id}
                   className="bg-stone-950 border border-stone-800 hover:border-amber-500/50 rounded-xl p-4 transition flex flex-col justify-between space-y-3 shadow"
@@ -422,7 +447,8 @@ export const TransformationModal: React.FC<TransformationModalProps> = ({
                 </div>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
           {activeTab === 'custom' && (
             <div className="space-y-5">

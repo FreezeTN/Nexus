@@ -9,6 +9,8 @@ import {
   closeGameSession, 
   updateSessionMemberCharacter,
   updateSessionOptionalRules,
+  addParticipantCharacterToSession,
+  removeParticipantCharacterFromSession,
   CharacterPresence 
 } from '../../lib/firebase';
 import { 
@@ -23,6 +25,7 @@ import {
   LogOut, 
   Power, 
   Plus, 
+  Trash2,
   Key, 
   UserCheck, 
   Share2, 
@@ -393,11 +396,15 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
   );
   const [isUpdatingRules, setIsUpdatingRules] = useState<boolean>(false);
   const [rulesSavedSuccess, setRulesSavedSuccess] = useState<boolean>(false);
+  const [selectedParticipantCharIds, setSelectedParticipantCharIds] = useState<string[]>([]);
+  const [selectedAddParticipantCharId, setSelectedAddParticipantCharId] = useState<string>('');
+  const [isAddingParticipant, setIsAddingParticipant] = useState<boolean>(false);
 
   const activeEdition = activeCharacter?.edition || '5e';
   const playerCharacters = allCharacters.filter(c => 
     !c.isMonster && 
     !c.isVendor && 
+    c.characterClass?.toLowerCase() !== 'monster' &&
     (c.edition || '5e') === activeEdition
   );
 
@@ -482,14 +489,45 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
         displayName: currentUser?.displayName || 'Dungeon Master'
       };
 
-      const newSession = await createGameSession(userObj, newSessionName || 'Campaign Session', sessionOptionalRules);
+      const initialChars = allCharacters
+        .filter(c => selectedParticipantCharIds.includes(c.id))
+        .map(c => ({ id: c.id, name: c.name }));
+
+      const newSession = await createGameSession(userObj, newSessionName || 'Campaign Session', sessionOptionalRules, initialChars);
       onSessionChange(newSession.code);
       setTab('current');
       setNewSessionName('');
+      setSelectedParticipantCharIds([]);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to create session.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleAddParticipantToActiveSession = async () => {
+    if (!activeSession || !selectedAddParticipantCharId) return;
+    const char = allCharacters.find(c => c.id === selectedAddParticipantCharId);
+    if (!char) return;
+    setIsAddingParticipant(true);
+    setErrorMsg(null);
+    try {
+      await addParticipantCharacterToSession(activeSession.code, { id: char.id, name: char.name });
+      setSelectedAddParticipantCharId('');
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to add participant character to session.');
+    } finally {
+      setIsAddingParticipant(false);
+    }
+  };
+
+  const handleRemoveParticipantFromSession = async (memberUid: string) => {
+    if (!activeSession) return;
+    setErrorMsg(null);
+    try {
+      await removeParticipantCharacterFromSession(activeSession.code, memberUid);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to remove member from session.');
     }
   };
 
@@ -746,11 +784,53 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
               </div>
 
               {/* Roster List */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs font-mono uppercase font-bold text-stone-400">
                   <span>Connected Group Members ({activeSession.members?.length || 0})</span>
                   <span>Active Campaign Session</span>
                 </div>
+
+                {/* DM Participant Quick Add */}
+                {isDmOfSession && (
+                  <div className="bg-stone-950 p-3 rounded-xl border border-purple-800/50 space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span className="text-xs font-serif font-bold text-purple-300 flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5 text-purple-400" /> Add Participant Characters to Session (NPCs / Unassigned PCs)
+                      </span>
+                      <span className="text-[10px] text-stone-400">
+                        Include characters in session roster without requiring a live player login
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={selectedAddParticipantCharId}
+                        onChange={(e) => setSelectedAddParticipantCharId(e.target.value)}
+                        className="bg-stone-900 border border-stone-700 text-stone-200 rounded-lg text-xs px-2.5 py-1.5 focus:outline-none focus:border-purple-500 shrink-0 max-w-full sm:max-w-xs"
+                      >
+                        <option value="">Select an existing player character to add...</option>
+                        {playerCharacters.map(c => {
+                          const isAlreadyInSession = (activeSession.members || []).some(m => m.characterId === c.id);
+                          return (
+                            <option key={c.id} value={c.id} disabled={isAlreadyInSession}>
+                              {c.name} (Lvl {c.level} {c.characterClass}){isAlreadyInSession ? ' - Already in Session' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={handleAddParticipantToActiveSession}
+                        disabled={!selectedAddParticipantCharId || isAddingParticipant}
+                        className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 disabled:opacity-50 text-purple-100 rounded-lg text-xs font-bold transition flex items-center gap-1 border border-purple-600/50 cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-purple-300" />
+                        <span>{isAddingParticipant ? 'Adding...' : 'Add to Session Roster'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 gap-2.5">
                   {(activeSession.members || []).map((m) => {
@@ -783,6 +863,9 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                               {isUserMe && (
                                 <span className="text-[10px] font-mono bg-stone-800 text-stone-300 px-1.5 py-0.2 rounded">You</span>
                               )}
+                              {m.isUnassignedParticipant && (
+                                <span className="text-[10px] font-mono bg-purple-950/80 text-purple-300 border border-purple-700/60 px-1.5 py-0.2 rounded">NPC/PC Participant</span>
+                              )}
                             </div>
                             <div className="text-xs text-stone-400">
                               {m.role === 'DM' ? 'Campaign Controller & Host' : (
@@ -792,23 +875,37 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                           </div>
                         </div>
 
-                        {/* Character Quick Stats Preview */}
-                        {charObj && m.role !== 'DM' && (
-                          <div className="flex items-center gap-3 text-xs font-mono bg-stone-900/80 border border-stone-800 px-3 py-1.5 rounded-xl">
-                            <div className="flex items-center gap-1 text-emerald-300 font-bold">
-                              <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/30" />
-                              <span>{charObj.hpCurrent} / {getEffectiveMaxHp(charObj)}</span>
+                        <div className="flex items-center gap-2">
+                          {/* Character Quick Stats Preview */}
+                          {charObj && m.role !== 'DM' && (
+                            <div className="flex items-center gap-3 text-xs font-mono bg-stone-900/80 border border-stone-800 px-3 py-1.5 rounded-xl">
+                              <div className="flex items-center gap-1 text-emerald-300 font-bold">
+                                <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/30" />
+                                <span>{charObj.hpCurrent} / {getEffectiveMaxHp(charObj)}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-amber-300 font-bold">
+                                <Shield className="w-3.5 h-3.5 text-amber-500" />
+                                <span>AC {charObj.armorClass}</span>
+                              </div>
+                              <div className="flex items-center gap-1 text-stone-300">
+                                <Eye className="w-3.5 h-3.5 text-blue-400" />
+                                <span>PP {getPassivePerception(charObj)}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1 text-amber-300 font-bold">
-                              <Shield className="w-3.5 h-3.5 text-amber-500" />
-                              <span>AC {charObj.armorClass}</span>
-                            </div>
-                            <div className="flex items-center gap-1 text-stone-300">
-                              <Eye className="w-3.5 h-3.5 text-blue-400" />
-                              <span>PP {getPassivePerception(charObj)}</span>
-                            </div>
-                          </div>
-                        )}
+                          )}
+
+                          {/* DM Remove Participant button */}
+                          {isDmOfSession && m.role !== 'DM' && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveParticipantFromSession(m.uid)}
+                              className="p-2 bg-stone-900 hover:bg-rose-950 text-stone-400 hover:text-rose-300 rounded-lg border border-stone-800 hover:border-rose-800 transition cursor-pointer"
+                              title="Remove participant from session"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -966,6 +1063,45 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                       placeholder="e.g. Curse of Strahd - Session 12"
                       className="w-full bg-stone-900 border border-stone-700 rounded-xl px-3.5 py-2.5 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"
                     />
+                  </div>
+
+                  {/* Pre-add Existing Characters */}
+                  <div className="space-y-2 pt-2 border-t border-stone-800">
+                    <label className="block text-xs font-mono uppercase text-stone-300 font-bold flex items-center gap-1.5">
+                      <Users className="w-3.5 h-3.5 text-purple-400" /> Pre-add Existing Characters to Session (NPCs / Participant PCs)
+                    </label>
+                    <p className="text-[11px] text-stone-400 leading-tight">
+                      Select any existing player characters to automatically include in this session's roster from the start (does not require an active player login):
+                    </p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-2.5 bg-stone-900/80 border border-stone-800 rounded-xl">
+                      {playerCharacters.length === 0 ? (
+                        <span className="text-xs text-stone-500 italic p-1">No player characters found for current ruleset</span>
+                      ) : (
+                        playerCharacters.map(c => {
+                          const isChecked = selectedParticipantCharIds.includes(c.id);
+                          return (
+                            <label key={c.id} className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
+                              isChecked ? 'bg-purple-950/60 border-purple-600 text-purple-200 font-semibold' : 'bg-stone-950/60 border-stone-800 text-stone-300 hover:border-stone-700'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedParticipantCharIds(prev => [...prev, c.id]);
+                                  } else {
+                                    setSelectedParticipantCharIds(prev => prev.filter(id => id !== c.id));
+                                  }
+                                }}
+                                className="accent-purple-500 w-3.5 h-3.5 rounded"
+                              />
+                              <span className="truncate">{c.name} (Lvl {c.level} {c.characterClass})</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
                   </div>
 
                   {/* Campaign Rules Initial Selector */}

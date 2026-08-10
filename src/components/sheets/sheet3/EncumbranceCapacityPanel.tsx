@@ -21,6 +21,12 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
   const encumbrance = getEncumbranceDetails(character);
   const weightBreakdown = getWeightBreakdown(character);
 
+  const isEncumbered = encumbrance.status !== 'Normal';
+  const coinCount = (character.wealth?.cp || 0) + (character.wealth?.sp || 0) + (character.wealth?.ep || 0) + (character.wealth?.gp || 0) + (character.wealth?.pp || 0);
+  const coinWeight = coinCount * 0.02;
+
+  const penaltyDescription = `Speed Penalty: -${encumbrance.speedPenalty} ft${encumbrance.hasDisadvantage ? ' & Disadvantage on physical checks/saves' : ''}`;
+
   const weightPercentage = Math.min(100, Math.round((totalWeight / (carryingCap || 1)) * 100));
 
   return (
@@ -30,11 +36,11 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
       storageKey="sheet3_encumbrance"
       headerExtra={
         <div className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border ${
-          encumbrance.isEncumbered
+          isEncumbered
             ? 'bg-rose-950 text-rose-300 border-rose-600/60 animate-pulse'
             : 'bg-emerald-950 text-emerald-300 border-emerald-600/50'
         }`}>
-          {encumbrance.statusText} ({totalWeight.toFixed(1)} / {carryingCap} lbs)
+          {encumbrance.status} ({totalWeight.toFixed(1)} / {carryingCap} lbs)
         </div>
       }
     >
@@ -61,12 +67,12 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
         </div>
 
         {/* Encumbrance Details */}
-        {encumbrance.isEncumbered && (
+        {isEncumbered && (
           <div className="bg-rose-950/60 border border-rose-600/50 p-3 rounded-xl flex items-center gap-2 text-rose-200 text-xs">
             <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
             <div>
               <strong className="block font-sans font-bold">Encumbrance Penalty Active!</strong>
-              <p className="text-[11px] text-rose-300 font-sans">{encumbrance.penaltyDescription}</p>
+              <p className="text-[11px] text-rose-300 font-sans">{penaltyDescription}</p>
             </div>
           </div>
         )}
@@ -79,11 +85,11 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
           </div>
           <div className="bg-stone-950 p-2 rounded-xl border border-stone-800">
             <span className="text-stone-500 block text-[9px] uppercase">Carried / Inventory</span>
-            <span className="font-bold text-stone-200">{weightBreakdown.backpackWeight.toFixed(1)} lbs</span>
+            <span className="font-bold text-stone-200">{weightBreakdown.carriedWeight.toFixed(1)} lbs</span>
           </div>
           <div className="bg-stone-950 p-2 rounded-xl border border-stone-800">
             <span className="text-stone-500 block text-[9px] uppercase">Coin Weight</span>
-            <span className="font-bold text-stone-300">{weightBreakdown.coinWeight.toFixed(1)} lbs</span>
+            <span className="font-bold text-stone-300">{coinWeight.toFixed(1)} lbs</span>
           </div>
           <div className="bg-stone-950 p-2 rounded-xl border border-stone-800">
             <span className="text-stone-500 block text-[9px] uppercase">Stored Away (Stash)</span>

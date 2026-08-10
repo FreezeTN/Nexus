@@ -30,21 +30,42 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
   };
 
   const handleSlotChange = (level: number, current: number, max?: number) => {
-    const updatedSlots = character.spellSlots.map(s => {
-      if (s.level === level) {
-        return {
-          ...s,
-          current: Math.max(0, current),
-          max: max !== undefined ? Math.max(0, max) : s.max
-        };
-      }
-      return s;
-    });
+    const existingSlots = character.spellSlots || [];
+    const existingSlot = existingSlots.find(s => s.level === level);
+
+    let targetMax = max !== undefined ? Math.max(0, max) : (existingSlot?.max ?? 0);
+    let targetCurrent = Math.max(0, current);
+
+    // If remaining slots is increased beyond max, auto-expand max to fit
+    if (targetCurrent > targetMax) {
+      targetMax = targetCurrent;
+    }
+
+    let updatedSlots;
+    if (existingSlot) {
+      updatedSlots = existingSlots.map(s => {
+        if (s.level === level) {
+          return {
+            ...s,
+            current: targetCurrent,
+            max: targetMax
+          };
+        }
+        return s;
+      });
+    } else {
+      updatedSlots = [
+        ...existingSlots,
+        { level, current: targetCurrent, max: targetMax }
+      ].sort((a, b) => a.level - b.level);
+    }
+
     onUpdateCharacter({ ...character, spellSlots: updatedSlots });
   };
 
   const handleRestoreAllSlots = () => {
-    const restored = character.spellSlots.map(s => ({ ...s, current: s.max }));
+    const existing = character.spellSlots || [];
+    const restored = existing.map(s => ({ ...s, current: s.max }));
     onUpdateCharacter({ ...character, spellSlots: restored });
   };
 
@@ -121,32 +142,55 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
                 <div key={lvl} className="bg-stone-950 p-2 rounded-xl border border-stone-800 text-center space-y-1">
                   <span className="text-[10px] text-amber-400 font-bold block uppercase">Lvl {lvl}</span>
 
-                  <div className="flex items-center justify-center gap-1">
-                    <button
-                      onClick={() => handleSlotChange(lvl, slot.current - 1)}
-                      className="w-5 h-5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 font-bold rounded text-xs flex items-center justify-center"
-                    >
-                      -
-                    </button>
-                    <span className="font-bold text-amber-200 text-xs w-5">{slot.current}</span>
-                    <button
-                      onClick={() => handleSlotChange(lvl, slot.current + 1)}
-                      className="w-5 h-5 bg-amber-900/80 hover:bg-amber-800 border border-amber-600/50 text-amber-100 font-bold rounded text-xs flex items-center justify-center"
-                    >
-                      +
-                    </button>
+                  {/* Current Slots */}
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] text-stone-500 font-sans block">Remaining</span>
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => handleSlotChange(lvl, slot.current - 1)}
+                        className="w-5 h-5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 font-bold rounded text-xs flex items-center justify-center cursor-pointer active:scale-95 transition"
+                        title="Decrease remaining slots"
+                      >
+                        -
+                      </button>
+                      <span className="font-bold text-amber-200 text-xs w-5 text-center">{slot.current}</span>
+                      <button
+                        onClick={() => handleSlotChange(lvl, slot.current + 1)}
+                        className="w-5 h-5 bg-amber-900/80 hover:bg-amber-800 border border-amber-600/50 text-amber-100 font-bold rounded text-xs flex items-center justify-center cursor-pointer active:scale-95 transition"
+                        title="Increase remaining slots"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="text-[9px] text-stone-500 flex items-center justify-center gap-0.5">
-                    <span>/</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={slot.max}
-                      onChange={(e) => handleSlotChange(lvl, slot.current, parseInt(e.target.value) || 0)}
-                      className="w-6 bg-transparent text-center font-bold text-stone-400 border-b border-stone-800 p-0"
-                      title="Max slots"
-                    />
+                  {/* Max Slots Controls */}
+                  <div className="pt-1 border-t border-stone-800/80 space-y-0.5">
+                    <span className="text-[9px] text-stone-500 font-sans block">Max Slots</span>
+                    <div className="flex items-center justify-center gap-0.5">
+                      <button
+                        onClick={() => handleSlotChange(lvl, Math.min(slot.current, Math.max(0, slot.max - 1)), Math.max(0, slot.max - 1))}
+                        className="w-4 h-4 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-400 hover:text-stone-200 font-bold rounded text-[10px] flex items-center justify-center cursor-pointer transition"
+                        title="Decrease max slots"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="0"
+                        value={slot.max}
+                        onChange={(e) => handleSlotChange(lvl, slot.current, parseInt(e.target.value) || 0)}
+                        className="w-5 bg-transparent text-center font-bold text-stone-300 border-b border-stone-700 p-0 text-[11px] focus:outline-none"
+                        title="Max slots"
+                      />
+                      <button
+                        onClick={() => handleSlotChange(lvl, slot.current, slot.max + 1)}
+                        className="w-4 h-4 bg-stone-800 hover:bg-stone-700 border border-stone-600 text-stone-200 font-bold rounded text-[10px] flex items-center justify-center cursor-pointer transition"
+                        title="Increase max slots"
+                      >
+                        +
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

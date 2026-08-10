@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Attack, CharacterData } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { COMBAT_CHEAT_SHEET } from '../../../data/dndRulesData';
+import { isShapeshiftAbility } from '../../../data/transformationData';
+import { isCompanionSummonAbility } from '../../../data/companionData';
 import {
   formatModifier,
   OFFICIAL_DAMAGE_TYPES,
@@ -33,6 +35,8 @@ interface AttacksSpellsPanelProps {
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage: (label: string, expression: string) => void;
   setTargetModalSpell: (spell: any) => void;
+  onOpenShapeshift?: () => void;
+  onOpenSummonCompanion?: () => void;
 }
 
 export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
@@ -40,7 +44,9 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   onUpdateCharacter,
   onRoll,
   onRollDamage,
-  setTargetModalSpell
+  setTargetModalSpell,
+  onOpenShapeshift,
+  onOpenSummonCompanion
 }) => {
   const [cheatCategory, setCheatCategory] = useState<'All' | 'Action' | 'Bonus Action' | 'Reaction' | 'Maneuver' | 'Condition'>('All');
   const [searchQuery, setSearchQuery] = useState('');
@@ -223,7 +229,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                   <div className="space-y-1 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-serif font-bold text-amber-200 text-sm">{atk.name}</span>
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${meta.bgColor} ${meta.color} ${meta.borderColor}`}>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${meta.badgeBg} ${meta.badgeText} ${meta.badgeBorder}`}>
                         {atk.damageType}
                       </span>
                       <span className="text-[10px] text-stone-400 font-mono">
@@ -323,12 +329,34 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                       {spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`}
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleCastCombatSpell(spell)}
-                    className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-600/50 rounded-lg font-bold transition shrink-0"
-                  >
-                    Cast
-                  </button>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {isShapeshiftAbility(spell.name, spell.description) && (
+                      <button
+                        onClick={onOpenShapeshift}
+                        className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                        title="Launch Shapeshift Engine"
+                      >
+                        <span>🐾</span>
+                        <span>Shapeshift</span>
+                      </button>
+                    )}
+                    {isCompanionSummonAbility(spell.name, spell.description) && (
+                      <button
+                        onClick={onOpenSummonCompanion}
+                        className="px-2 py-1 bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                        title="Launch Animal Companion & Familiar Engine"
+                      >
+                        <span>🦅</span>
+                        <span>Summon</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleCastCombatSpell(spell)}
+                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-600/50 rounded-lg font-bold transition"
+                    >
+                      Cast
+                    </button>
+                  </div>
                 </div>
               ))}
               {character.spells.filter(s => s.prepared !== false).length === 0 && (
@@ -392,7 +420,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                     className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
                   >
                     {OFFICIAL_DAMAGE_TYPES.map(dt => (
-                      <option key={dt} value={dt}>{dt}</option>
+                      <option key={dt.name} value={dt.name}>{dt.name}</option>
                     ))}
                   </select>
                 </div>
@@ -482,12 +510,12 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
               {COMBAT_CHEAT_SHEET.filter(rule => {
                 const matchCat = cheatCategory === 'All' || rule.category === cheatCategory;
-                const matchSearch = rule.title.toLowerCase().includes(searchQuery.toLowerCase()) || rule.description.toLowerCase().includes(searchQuery.toLowerCase());
+                const matchSearch = rule.name.toLowerCase().includes(searchQuery.toLowerCase()) || rule.description.toLowerCase().includes(searchQuery.toLowerCase());
                 return matchCat && matchSearch;
               }).map(rule => (
                 <div key={rule.id} className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-serif font-bold text-amber-200 text-sm">{rule.title}</span>
+                    <span className="font-serif font-bold text-amber-200 text-sm">{rule.name}</span>
                     <span className="text-[10px] font-mono bg-stone-800 px-2 py-0.5 rounded text-stone-400">
                       {rule.category}
                     </span>

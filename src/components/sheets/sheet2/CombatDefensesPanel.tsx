@@ -42,6 +42,7 @@ interface CombatDefensesPanelProps {
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   setShowMaxHpInspector: (val: boolean) => void;
   setShowTransformationModal: (val: boolean) => void;
+  setShowCompanionModal?: (val: boolean) => void;
   setShowRestModal: (val: boolean) => void;
 }
 
@@ -51,6 +52,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   onRoll,
   setShowMaxHpInspector,
   setShowTransformationModal,
+  setShowCompanionModal,
   setShowRestModal
 }) => {
   const effectiveMaxHp = getEffectiveMaxHp(character);
@@ -170,12 +172,6 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
           <HpOrb
             hpCurrent={character.hpCurrent}
             hpMax={effectiveMaxHp}
-            hpTemp={character.hpTemp || 0}
-            onUpdateHp={(newHp, newTemp) => onUpdateCharacter({
-              ...character,
-              hpCurrent: newHp,
-              hpTemp: newTemp
-            })}
           />
 
           <div className="w-full grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-stone-800 text-xs font-mono">
@@ -218,7 +214,9 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
             <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-500/30 flex flex-col items-center justify-center relative group">
               <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">Armor Class</span>
               <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{character.armorClass}</span>
-              <span className="text-[9px] text-stone-500 truncate max-w-full">{getArmorClassBreakdown(character)}</span>
+              <span className="text-[9px] text-stone-500 truncate max-w-full">
+                {getArmorClassBreakdown(character).explanation || `Base ${getArmorClassBreakdown(character).baseAc}`}
+              </span>
             </div>
 
             {/* Initiative */}
@@ -241,8 +239,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 <Footprints className="w-4 h-4 text-sky-400 shrink-0" />
                 {speedInfo.effectiveSpeed} <span className="text-xs font-normal">ft</span>
               </span>
-              <span className="text-[9px] text-stone-500 truncate max-w-full" title={speedInfo.speedSourceNote}>
-                {speedInfo.speedSourceNote}
+              <span className="text-[9px] text-stone-500 truncate max-w-full" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
+                {speedInfo.reasons?.join('; ') || speedInfo.status || 'Base speed'}
               </span>
             </div>
           </div>
@@ -328,18 +326,32 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
           </div>
 
           {/* Active Transformation / Wild Shape Quick Bar */}
-          <button
-            onClick={() => setShowTransformationModal(true)}
-            className="w-full bg-purple-950/60 hover:bg-purple-900/80 border border-purple-600/40 p-2 rounded-xl text-purple-200 text-xs font-bold transition flex items-center justify-between"
-          >
-            <span className="flex items-center gap-1.5">
-              <span>🐾</span>
-              <span>
-                {character.activeTransformation ? `Form: ${character.activeTransformation.form.name}` : 'Wild Shape / Lycanthropy Engine'}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setShowTransformationModal(true)}
+              className="w-full bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-600/40 p-2 rounded-xl text-emerald-200 text-xs font-bold transition flex items-center justify-between"
+            >
+              <span className="flex items-center gap-1.5">
+                <span>🐾</span>
+                <span>
+                  {character.activeTransformation ? `Form: ${character.activeTransformation.form.name}` : 'Shapeshift'}
+                </span>
               </span>
-            </span>
-            <span className="text-[10px] text-purple-400 font-mono">Configure →</span>
-          </button>
+              <span className="text-[10px] text-emerald-400 font-mono">→</span>
+            </button>
+            {setShowCompanionModal && (
+              <button
+                onClick={() => setShowCompanionModal(true)}
+                className="w-full bg-teal-950/60 hover:bg-teal-900/80 border border-teal-600/40 p-2 rounded-xl text-teal-200 text-xs font-bold transition flex items-center justify-between"
+              >
+                <span className="flex items-center gap-1.5">
+                  <span>🦅</span>
+                  <span>Summon Engine</span>
+                </span>
+                <span className="text-[10px] text-teal-400 font-mono">→</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -354,9 +366,9 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
             <span className="text-amber-400 font-serif font-bold text-xs block font-sans">Damage Resistances (50% Damage)</span>
             <div className="text-stone-300 flex flex-wrap gap-1 pt-1">
               {getCharacterResistances(character).length > 0 ? (
-                getCharacterResistances(character).map(r => (
-                  <span key={r} className="bg-stone-900 text-amber-200 border border-amber-800/50 px-2 py-0.5 rounded text-[11px]">
-                    {r}
+                getCharacterResistances(character).map((r, idx) => (
+                  <span key={`${r.type}-${idx}`} className="bg-stone-900 text-amber-200 border border-amber-800/50 px-2 py-0.5 rounded text-[11px]">
+                    {r.type} {r.source ? `(${r.source})` : ''}
                   </span>
                 ))
               ) : (
@@ -369,9 +381,9 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
             <span className="text-emerald-400 font-serif font-bold text-xs block font-sans">Damage Immunities (0 Damage)</span>
             <div className="text-stone-300 flex flex-wrap gap-1 pt-1">
               {getCharacterImmunities(character).length > 0 ? (
-                getCharacterImmunities(character).map(i => (
-                  <span key={i} className="bg-stone-900 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded text-[11px]">
-                    {i}
+                getCharacterImmunities(character).map((i, idx) => (
+                  <span key={`${i.type}-${idx}`} className="bg-stone-900 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded text-[11px]">
+                    {i.type} {i.source ? `(${i.source})` : ''}
                   </span>
                 ))
               ) : (
@@ -383,7 +395,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
           <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-1">
             <span className="text-sky-400 font-serif font-bold text-xs block font-sans">Damage Reduction (DR)</span>
             <div className="text-sky-200 font-bold text-sm pt-1">
-              -{calculateCharacterTotalDR(character)} Flat Damage Reduced
+              -{calculateCharacterTotalDR(character).totalDR} Flat Damage Reduced
             </div>
           </div>
         </div>

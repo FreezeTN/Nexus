@@ -13,11 +13,11 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
   character,
   onUpdateCharacter
 }) => {
-  const handleCurrencyChange = (coinType: keyof CharacterData['currency'], value: number) => {
+  const handleCurrencyChange = (coinType: keyof CharacterData['wealth'], value: number) => {
     onUpdateCharacter({
       ...character,
-      currency: {
-        ...character.currency,
+      wealth: {
+        ...character.wealth,
         [coinType]: Math.max(0, value)
       }
     });
@@ -45,7 +45,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
             <input
               type="number"
               min="0"
-              value={character.currency?.cp || 0}
+              value={character.wealth?.cp || 0}
               onChange={(e) => handleCurrencyChange('cp', parseInt(e.target.value) || 0)}
               className="w-full bg-stone-900 border border-stone-700 rounded text-center text-amber-600 font-bold p-1 text-sm"
             />
@@ -58,7 +58,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
             <input
               type="number"
               min="0"
-              value={character.currency?.sp || 0}
+              value={character.wealth?.sp || 0}
               onChange={(e) => handleCurrencyChange('sp', parseInt(e.target.value) || 0)}
               className="w-full bg-stone-900 border border-stone-700 rounded text-center text-slate-200 font-bold p-1 text-sm"
             />
@@ -71,7 +71,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
             <input
               type="number"
               min="0"
-              value={character.currency?.ep || 0}
+              value={character.wealth?.ep || 0}
               onChange={(e) => handleCurrencyChange('ep', parseInt(e.target.value) || 0)}
               className="w-full bg-stone-900 border border-stone-700 rounded text-center text-sky-300 font-bold p-1 text-sm"
             />
@@ -84,7 +84,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
             <input
               type="number"
               min="0"
-              value={character.currency?.gp || 0}
+              value={character.wealth?.gp || 0}
               onChange={(e) => handleCurrencyChange('gp', parseInt(e.target.value) || 0)}
               className="w-full bg-stone-900 border border-amber-600/60 rounded text-center text-amber-300 font-bold p-1 text-sm"
             />
@@ -97,7 +97,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
             <input
               type="number"
               min="0"
-              value={character.currency?.pp || 0}
+              value={character.wealth?.pp || 0}
               onChange={(e) => handleCurrencyChange('pp', parseInt(e.target.value) || 0)}
               className="w-full bg-stone-900 border border-stone-700 rounded text-center text-purple-200 font-bold p-1 text-sm"
             />

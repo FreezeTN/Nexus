@@ -45,6 +45,14 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
 
   // Edit Party State
   const [editingPartyId, setEditingPartyId] = useState<string | null>(null);
+  const activeCharObj = allCharacters.find(c => c.id === activeCharacterId);
+  const activeEdition = activeCharObj?.edition || '5e';
+  const playerCharacters = allCharacters.filter(c => 
+    !c.isMonster && 
+    !c.isVendor && 
+    c.characterClass?.toLowerCase() !== 'monster' &&
+    (c.edition || '5e') === activeEdition
+  );
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
 
@@ -274,7 +282,7 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
                   <div>
                     <label className="block text-stone-300 font-bold mb-2">Select Initial Members</label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-stone-900 border border-stone-800 rounded-xl">
-                      {allCharacters.map(char => {
+                      {playerCharacters.map(char => {
                         const isSelected = newPartyMemberIds.includes(char.id);
                         return (
                           <button
@@ -624,7 +632,7 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                    {allCharacters.map(char => {
+                    {playerCharacters.map(char => {
                       const isInParty = currentParty.characterIds.includes(char.id);
                       return (
                         <button

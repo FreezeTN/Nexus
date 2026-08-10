@@ -866,11 +866,61 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
   // App Release Notes & Version History Changelog Data
   const changelogData = [
     {
+      version: 'v2.5.2',
+      date: 'August 2026',
+      title: 'DM Overview Navigation, Spell Slot Tracker Engine & UI Cleanup',
+      badge: 'Latest Release',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      highlights: [
+        {
+          category: '🗺️ DM Overview Tab Navigation',
+          detail: 'Relocated the DM Overview sheet tab directly between Combat and Gear & Wealth in the main navigation bar for smoother Dungeon Master campaign oversight.'
+        },
+        {
+          category: '🪄 Spell Slot Tracker Controls',
+          detail: 'Enhanced Spell Slot Tracker buttons (- / + and max slot edits) to dynamically instantiate and expand missing or uninitialized spell slot levels on the fly.'
+        },
+        {
+          category: '🐾 Header Actions & Transformation Display',
+          detail: 'Streamlined sheet header controls to display active transformation status when transformed, keeping character headers clean while preserving Shapeshift buttons inside Class Features, Spells, and Feats.'
+        },
+        {
+          category: '⚡ Offline Listener Resiliency',
+          detail: 'Improved Firestore background sync logging and resilience for seamless offline mode operation when network connections drop.'
+        }
+      ]
+    },
+    {
+      version: 'v2.5.1',
+      date: 'August 2026',
+      title: 'Spell Class Requirements Engine & DM Bypass Override',
+      badge: 'Feature Update',
+      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+      highlights: [
+        {
+          category: '📜 Class & Level Requirement Verification',
+          detail: 'Automated 3.5e and 5e spell level vs character level verification for Wizard, Sorcerer, Cleric, Druid, Bard, Paladin, and Ranger spell lists.'
+        },
+        {
+          category: '🏷️ Spell Eligibility Status Badges',
+          detail: 'Interactive visual status badges (Ready for Class, Req Level X+, Cross-Class) displayed on active spells and SRD library presets.'
+        },
+        {
+          category: '🧙 My Class Preset Filtering',
+          detail: 'One-click "My Class" filter in the SRD Spells Catalog to instantly view spells tailored to your character\'s active class.'
+        },
+        {
+          category: '👑 DM Bypass Mode & Warning Overrides',
+          detail: 'DM Bypass toggle button in the spell catalog and interactive requirement confirmation modal to allow adding cross-class or high-level spells for DM custom house rules and magic items.'
+        }
+      ]
+    },
+    {
       version: 'v2.5.0',
       date: 'August 2026',
       title: 'DM Presence Unlocking, Options Control & Spellbook Enhancements',
-      badge: 'Latest Release',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+      badge: 'Major Feature',
+      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
       highlights: [
         {
           category: '👑 DM Active Presence Unlocking',
@@ -912,7 +962,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     },
     {
       version: 'v2.4.0',
-      date: 'July 2026',
+      date: 'August 2026',
       title: 'Procedural Sound Synthesizer & Max HP Inspector',
       badge: 'Major Feature',
       badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
@@ -933,7 +983,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     },
     {
       version: 'v2.3.0',
-      date: 'June 2026',
+      date: 'August 2026',
       title: 'Multi-TRPG Systems & Instant Conversion',
       badge: 'Core Platform',
       badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
@@ -954,7 +1004,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     },
     {
       version: 'v2.2.0',
-      date: 'May 2026',
+      date: 'August 2026',
       title: 'Firebase Live Sessions & Party Manager',
       badge: 'Multiplayer',
       badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
@@ -971,7 +1021,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     },
     {
       version: 'v2.1.0',
-      date: 'April 2026',
+      date: 'August 2026',
       title: 'Encounter Tracker & Attack Resolver',
       badge: 'Combat Engine',
       badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
@@ -987,8 +1037,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
       ]
     },
     {
-      version: 'v2.0.0',
-      date: 'March 2026',
+      version: 'v1.0.0',
+      date: 'August 2026',
       title: 'UI Modernization & Animated HP Orb',
       badge: 'Initial Release',
       badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',

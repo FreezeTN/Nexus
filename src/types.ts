@@ -304,6 +304,9 @@ export interface Spell {
   saveType?: string; // e.g. 'DEX', 'WIS', 'CON'
   damage?: string; // e.g. '3d6', '8d6'
   damageType?: string; // Acid, Cold, Fire, Force, Lightning, Necrotic, Piercing, Poison, Psychic, Radiant, Slashing, Thunder, etc.
+  edition?: '5e' | '3.5e' | 'both';
+  classLevels?: Record<string, number>; // e.g. { 'Bard': 2, 'Sor/Wiz': 3, 'Cleric': 3 }
+  classLevelsStr?: string; // e.g. "Brd 2, Sor/Wiz 3, Clr 3"
 }
 
 export interface SpellSlots {
@@ -473,6 +476,7 @@ export interface TransformationForm {
   id: string;
   name: string;
   type: 'Wild Shape' | 'Polymorph' | 'Shapechange' | 'Lycanthropy' | 'Vampire Form' | 'Custom';
+  edition?: '5e' | '3.5e' | 'both';
   sizeCategory?: 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan';
   formHpMax: number;
   formHpCurrent: number;

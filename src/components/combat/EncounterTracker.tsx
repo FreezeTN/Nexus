@@ -755,13 +755,14 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
 
       {/* Attack Resolver Component */}
       <AttackResolver
-        attackerCharacter={activeAttackerCharacter}
-        allCombatants={combatants}
-        onApplyDamage={(targetId, damageAmount, isHeal) => {
-          handleAdjustHp(targetId, isHeal ? damageAmount : -damageAmount);
+        character={activeAttackerCharacter}
+        combatants={combatants}
+        activeCombatantId={activeCombatant?.id}
+        onApplyDamageToCombatant={(targetId, damageAmount) => {
+          handleAdjustHp(targetId, -damageAmount);
         }}
         onRoll={onRoll}
-        onAddLogEntry={addLogEntry}
+        onLogAction={(category, message, actor) => addLogEntry(category, message, actor)}
       />
 
       {/* Combatant Roster */}

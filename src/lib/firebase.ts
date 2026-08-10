@@ -326,12 +326,12 @@ export async function logoutUser(): Promise<void> {
  * Cloud Characters helper functions
  */
 export async function saveCharacterToCloud(userId: string, character: CharacterData): Promise<void> {
-  if (!userId || userId.startsWith('guest_')) return;
+  if (!character || !character.id) return;
   try {
     const charDocRef = doc(db, 'characters', character.id);
     await setDoc(charDocRef, {
       id: character.id,
-      ownerId: userId,
+      ownerId: userId || 'session_user',
       name: character.name,
       edition: character.edition || '5e',
       level: character.level || 1,
@@ -342,6 +342,33 @@ export async function saveCharacterToCloud(userId: string, character: CharacterD
     }, { merge: true });
   } catch (err) {
     console.warn('Could not save character to cloud:', err);
+  }
+}
+
+export function subscribeToCharacterDoc(
+  characterId: string,
+  onUpdate: (charData: CharacterData) => void
+): () => void {
+  if (!characterId) return () => {};
+  try {
+    const docRef = doc(db, 'characters', characterId);
+    return onSnapshot(
+      docRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          if (data && data.data) {
+            onUpdate(data.data as CharacterData);
+          }
+        }
+      },
+      (err) => {
+        console.info('Character doc listener info:', err?.message || err);
+      }
+    );
+  } catch (err) {
+    console.warn('Error subscribing to character doc:', err);
+    return () => {};
   }
 }
 
@@ -649,6 +676,7 @@ export interface SessionMember {
   characterId?: string;
   characterName?: string;
   joinedAt: string;
+  isUnassignedParticipant?: boolean;
 }
 
 export interface GameSession {
@@ -681,7 +709,8 @@ export function generateRoomCode(): string {
 export async function createGameSession(
   user: { uid: string; displayName: string },
   sessionName: string,
-  optionalRules?: OptionalRulesConfig
+  optionalRules?: OptionalRulesConfig,
+  initialParticipantCharacters: { id: string; name: string }[] = []
 ): Promise<GameSession> {
   const code = generateRoomCode();
   const timestamp = new Date().toISOString();
@@ -693,6 +722,21 @@ export async function createGameSession(
     joinedAt: timestamp
   };
 
+  const participantMembers: SessionMember[] = initialParticipantCharacters.map(c => ({
+    uid: `npc_char_${c.id}`,
+    displayName: `${c.name} (NPC / PC Participant)`,
+    role: 'Player',
+    characterId: c.id,
+    characterName: c.name,
+    joinedAt: timestamp,
+    isUnassignedParticipant: true
+  }));
+
+  const members = [dmMember, ...participantMembers];
+  const activeCharacterIds = Array.from(
+    new Set(members.map(m => m.characterId).filter(Boolean) as string[])
+  );
+
   const newSession: GameSession = {
     id: code,
     code: code,
@@ -700,8 +744,8 @@ export async function createGameSession(
     dmUid: user.uid,
     dmName: user.displayName,
     status: 'active',
-    members: [dmMember],
-    activeCharacterIds: [],
+    members,
+    activeCharacterIds,
     optionalRules: optionalRules || {},
     createdAt: timestamp,
     updatedAt: timestamp
@@ -897,6 +941,84 @@ export async function closeGameSession(sessionCode: string, dmUid: string): Prom
 
   await updateDoc(sessionRef, {
     status: 'closed',
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Add an unassigned existing player character or NPC to a session as a participant (DM function)
+ */
+export async function addParticipantCharacterToSession(
+  sessionCode: string,
+  character: { id: string; name: string }
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  const snap = await getDoc(sessionRef);
+
+  if (!snap.exists()) return;
+  const session = snap.data() as GameSession;
+
+  const timestamp = new Date().toISOString();
+  const participantUid = `npc_char_${character.id}`;
+
+  let updatedMembers = [...(session.members || [])];
+  const existingIndex = updatedMembers.findIndex(
+    m => m.characterId === character.id || m.uid === participantUid
+  );
+
+  const participantMember: SessionMember = {
+    uid: participantUid,
+    displayName: `${character.name} (Participant)`,
+    role: 'Player',
+    characterId: character.id,
+    characterName: character.name,
+    joinedAt: timestamp,
+    isUnassignedParticipant: true
+  };
+
+  if (existingIndex >= 0) {
+    updatedMembers[existingIndex] = participantMember;
+  } else {
+    updatedMembers.push(participantMember);
+  }
+
+  const activeCharacterIds = Array.from(
+    new Set(updatedMembers.map(m => m.characterId).filter(Boolean) as string[])
+  );
+
+  await updateDoc(sessionRef, {
+    members: updatedMembers,
+    activeCharacterIds,
+    updatedAt: timestamp
+  });
+}
+
+/**
+ * Remove a participant character from a session
+ */
+export async function removeParticipantCharacterFromSession(
+  sessionCode: string,
+  characterIdOrUid: string
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  const snap = await getDoc(sessionRef);
+
+  if (!snap.exists()) return;
+  const session = snap.data() as GameSession;
+
+  const updatedMembers = (session.members || []).filter(
+    m => m.uid !== characterIdOrUid && m.characterId !== characterIdOrUid
+  );
+
+  const activeCharacterIds = Array.from(
+    new Set(updatedMembers.map(m => m.characterId).filter(Boolean) as string[])
+  );
+
+  await updateDoc(sessionRef, {
+    members: updatedMembers,
+    activeCharacterIds,
     updatedAt: new Date().toISOString()
   });
 }

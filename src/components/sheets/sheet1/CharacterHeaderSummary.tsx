@@ -9,6 +9,7 @@ import {
   getSecondaryXp,
   getUnallocatedXp
 } from '../../../utils/dndCalculations';
+import { canCharacterShapeshift, canCharacterSummonCompanion } from '../../../utils/classProgressionUtils';
 import {
   Skull,
   Store,
@@ -27,6 +28,7 @@ interface CharacterHeaderSummaryProps {
   setEditingAbilities: (val: boolean) => void;
   setShowHybridHeritageModal: (val: boolean) => void;
   setShowTransformationModal: (val: boolean) => void;
+  setShowCompanionModal?: (val: boolean) => void;
   setShowLevelProgressionModal: (val: boolean) => void;
 }
 
@@ -39,6 +41,7 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
   setEditingAbilities,
   setShowHybridHeritageModal,
   setShowTransformationModal,
+  setShowCompanionModal,
   setShowLevelProgressionModal
 }) => {
   return (
@@ -275,14 +278,16 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => setShowTransformationModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-950/90 hover:bg-purple-900 text-purple-200 border border-purple-500/60 rounded-xl text-xs font-bold transition shadow-md cursor-pointer"
-          title="Open Transformation Engine (Wild Shape, Polymorph, Lycanthropy, Natural Weapons)"
-        >
-          <span>🐾</span>
-          <span>{character.activeTransformation ? `Form: ${character.activeTransformation.form.name}` : 'Transformation Engine'}</span>
-        </button>
+        {character.activeTransformation && (
+          <button
+            onClick={() => setShowTransformationModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-950/90 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-xl text-xs font-bold transition shadow-md cursor-pointer"
+            title="Open Active Transformation Form"
+          >
+            <span>🐾</span>
+            <span>Form: {character.activeTransformation.form.name}</span>
+          </button>
+        )}
         <button
           onClick={() => setShowLevelProgressionModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/90 hover:bg-amber-900 text-amber-200 border border-amber-500/50 rounded-xl text-xs font-bold transition shadow-md"

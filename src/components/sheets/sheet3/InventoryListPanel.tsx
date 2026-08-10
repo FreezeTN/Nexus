@@ -53,13 +53,13 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const [newItemWeight, setNewItemWeight] = useState<number>(1);
   const [newItemCost, setNewItemCost] = useState<number>(10);
   const [newItemNotes, setNewItemNotes] = useState('');
-  const [newItemType, setNewItemType] = useState<'Weapon' | 'Armor' | 'Shield' | 'Potion' | 'Scroll' | 'Wand' | 'Container' | 'Ammunition' | 'Tool' | 'Ring' | 'Amulet' | 'General'>('General');
+  const [newItemType, setNewItemType] = useState<'Weapon' | 'Armor' | 'Misc'>('Misc');
   const [presetSearch, setPresetSearch] = useState('');
 
   const getItemCategory = (item: GearItem): 'Weapon' | 'Armor' | 'Magic' | 'Misc' => {
-    if (item.itemType === 'Armor' || item.itemType === 'Shield') return 'Armor';
+    if (item.itemType === 'Armor') return 'Armor';
     if (item.itemType === 'Weapon') return 'Weapon';
-    if (['Potion', 'Scroll', 'Wand', 'Ring', 'Amulet'].includes(item.itemType || '')) return 'Magic';
+    if (item.isMagic) return 'Magic';
 
     const name = item.name.toLowerCase();
     if (name.includes('armor') || name.includes('shield') || name.includes('chainmail') || name.includes('plate')) return 'Armor';
@@ -122,6 +122,25 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     }));
   };
 
+  const handleToggleAttuned = (id: string) => {
+    const updatedInventory = character.inventory.map(item => {
+      if (item.id === id) {
+        const nextAttuned = !item.attuned;
+        return {
+          ...item,
+          attuned: nextAttuned,
+          isMagic: nextAttuned ? true : item.isMagic
+        };
+      }
+      return item;
+    });
+
+    onUpdateCharacter(recalculateCharacterAC({
+      ...character,
+      inventory: updatedInventory
+    }));
+  };
+
   const handleUpdateQuantity = (id: string, delta: number) => {
     const updated = character.inventory.map(item => {
       if (item.id === id) {
@@ -147,7 +166,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       id: 'gear-' + Date.now(),
       name: newItemName,
       quantity: newItemQty,
-      weightLbs: newItemWeight,
+      weight: newItemWeight,
       costGp: newItemCost,
       equipped: false,
       stored: false,
@@ -166,9 +185,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       saveCustomCompendiumEntry({
         id: 'comp-gear-' + newItem.id,
         name: newItem.name,
-        category: 'equipment',
+        category: 'items',
         edition: character.edition || '5e',
-        description: `${newItem.itemType || 'General'} item weighing ${newItem.weightLbs} lbs. ${newItem.notes || ''}`,
+        description: `${newItem.itemType || 'General'} item weighing ${newItem.weight} lbs. ${newItem.notes || ''}`,
         source: 'Custom Inventory Item',
         isCustom: true,
         tags: [character.edition || '5e', newItem.itemType || 'General'],
@@ -186,17 +205,20 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     setShowAddItemModal(false);
   };
 
-  const handleAddPresetItem = (preset: Partial<GearItem>) => {
+  const handleAddPresetItem = (preset: any) => {
     const newItem: GearItem = {
       id: 'gear-preset-' + Date.now() + Math.random().toString(36).substring(2, 6),
       name: preset.name || 'SRD Equipment',
       quantity: 1,
-      weightLbs: preset.weightLbs || 1,
+      weight: preset.weight || 1,
       costGp: preset.costGp || 0,
       equipped: false,
       stored: false,
       notes: preset.notes || '',
-      itemType: preset.itemType || 'General'
+      itemType: (preset.category === 'Weapon' || preset.category === 'Armor') ? preset.category : 'Misc',
+      armorAc: preset.armorAc,
+      armorType: preset.armorType,
+      weaponStats: preset.weaponStats
     };
 
     onUpdateCharacter(recalculateCharacterAC({
@@ -495,7 +517,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
 
                     <button
                       onClick={() => handleToggleStored(item.id)}
-                      className={`flex items-center gap-1 transition px-1.5 py-0.5 rounded border text-[10px] font-mono ${
+                      className={`flex items-center gap-1 transition px-1.5 py-0.5 rounded border text-[10px] font-mono cursor-pointer ${
                         item.stored
                           ? 'bg-blue-950/80 text-blue-300 border-blue-500 font-bold'
                           : 'bg-stone-900 text-stone-500 border-stone-800 hover:text-stone-300'
@@ -506,9 +528,27 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                       <span>{item.stored ? 'STASH' : 'CARRY'}</span>
                     </button>
 
+                    <button
+                      onClick={() => handleToggleAttuned(item.id)}
+                      className={`flex items-center gap-1 transition px-1.5 py-0.5 rounded border text-[10px] font-mono cursor-pointer ${
+                        item.attuned
+                          ? 'bg-purple-950/90 text-purple-200 border-purple-500 font-bold shadow'
+                          : 'bg-stone-900 text-stone-500 border-stone-800 hover:text-stone-300'
+                      }`}
+                      title={item.attuned ? 'Attuned Magic Item (Active Bond)' : 'Click to Attune Magic Item'}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      <span>{item.attuned ? 'ATTUNED' : 'ATTUNE'}</span>
+                    </button>
+
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-amber-200 text-sm truncate">{item.name}</span>
+                        {item.attuned && (
+                          <span className="text-[10px] text-purple-300 bg-purple-950/80 px-1.5 py-0.2 rounded border border-purple-600/60 font-bold flex items-center gap-1">
+                            <Sparkles className="w-3 h-3 text-purple-300" /> Attuned
+                          </span>
+                        )}
                         {item.itemType && (
                           <span className="text-[10px] text-stone-400 bg-stone-900 px-1.5 py-0.2 rounded border border-stone-800">
                             {item.itemType}
@@ -540,7 +580,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                     </div>
 
                     <span className="text-stone-400 text-[11px]">
-                      {((item.weightLbs || 0) * (item.quantity || 1)).toFixed(1)} lbs
+                      {((item.weight || 0) * (item.quantity || 1)).toFixed(1)} lbs
                     </span>
 
                     <span className="text-amber-400 font-bold text-[11px]">
@@ -630,17 +670,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                   onChange={(e: any) => setNewItemType(e.target.value)}
                   className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
                 >
-                  <option value="General">General Adventuring Gear</option>
+                  <option value="Misc">General Adventuring Gear / Misc</option>
                   <option value="Weapon">Weapon</option>
-                  <option value="Armor">Armor</option>
-                  <option value="Shield">Shield</option>
-                  <option value="Potion">Potion / Consumable</option>
-                  <option value="Scroll">Magic Scroll</option>
-                  <option value="Wand">Wand / Staff</option>
-                  <option value="Ring">Ring / Amulet</option>
-                  <option value="Container">Container / Backpack</option>
-                  <option value="Ammunition">Ammunition</option>
-                  <option value="Tool">Tool / Artisan Kit</option>
+                  <option value="Armor">Armor / Shield</option>
                 </select>
               </div>
 
@@ -676,7 +708,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                     >
                       <div>
                         <div className="font-bold text-amber-200">{preset.name}</div>
-                        <div className="text-[10px] text-stone-400 font-mono">{preset.weightLbs} lbs | {preset.costGp} GP</div>
+                        <div className="text-[10px] text-stone-400 font-mono">{preset.weight} lbs | {preset.costGp} GP</div>
                       </div>
                       <span className="text-amber-400 text-xs font-bold">+ Add</span>
                     </button>
@@ -737,8 +769,8 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                 <input
                   type="number"
                   step="0.1"
-                  value={editingItem.weightLbs || 0}
-                  onChange={(e) => setEditingItem({ ...editingItem, weightLbs: parseFloat(e.target.value) || 0 })}
+                  value={editingItem.weight || 0}
+                  onChange={(e) => setEditingItem({ ...editingItem, weight: parseFloat(e.target.value) || 0 })}
                   className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
                 />
               </div>

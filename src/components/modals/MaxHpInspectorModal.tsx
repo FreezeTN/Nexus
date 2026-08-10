@@ -4,14 +4,14 @@ import { getMaxHpBreakdown } from '../../utils/dndCalculations';
 import { Heart, Shield, Sparkles, X, Plus, Minus, Zap, RefreshCw, AlertTriangle, Info } from 'lucide-react';
 
 interface MaxHpInspectorModalProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
 }
 
 export const MaxHpInspectorModal: React.FC<MaxHpInspectorModalProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
   character,
   onUpdateCharacter

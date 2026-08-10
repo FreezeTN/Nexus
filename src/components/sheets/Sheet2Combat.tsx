@@ -7,6 +7,7 @@ import { EncounterTracker } from '../combat/EncounterTracker';
 import { MaxHpInspectorModal } from '../modals/MaxHpInspectorModal';
 import { SpellTargetModal } from '../modals/SpellTargetModal';
 import { TransformationModal } from '../modals/TransformationModal';
+import { CompanionModal } from '../modals/CompanionModal';
 
 import { CombatDefensesPanel } from './sheet2/CombatDefensesPanel';
 import { AttacksSpellsPanel } from './sheet2/AttacksSpellsPanel';
@@ -18,6 +19,7 @@ interface Sheet2Props {
   currentUser?: UserProfile | null;
   onOpenPartyManager?: () => void;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onAddMonsterToRoster?: (monster: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage: (label: string, expression: string) => void;
 }
@@ -29,11 +31,13 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   currentUser,
   onOpenPartyManager,
   onUpdateCharacter,
+  onAddMonsterToRoster,
   onRoll,
   onRollDamage
 }) => {
   const [showRestModal, setShowRestModal] = useState(false);
   const [showTransformationModal, setShowTransformationModal] = useState(false);
+  const [showCompanionModal, setShowCompanionModal] = useState(false);
   const [showMaxHpInspector, setShowMaxHpInspector] = useState(false);
   const [targetModalSpell, setTargetModalSpell] = useState<any | null>(null);
 
@@ -85,6 +89,17 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
 
   return (
     <div className="space-y-6 pb-12">
+      {/* Combat Defenses, HP & Saves */}
+      <CombatDefensesPanel
+        character={character}
+        onUpdateCharacter={onUpdateCharacter}
+        onRoll={onRoll}
+        setShowMaxHpInspector={setShowMaxHpInspector}
+        setShowTransformationModal={setShowTransformationModal}
+        setShowCompanionModal={setShowCompanionModal}
+        setShowRestModal={setShowRestModal}
+      />
+
       {/* Interactive Encounter & Initiative Tracker */}
       <EncounterTracker
         character={character}
@@ -96,16 +111,6 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
         onRoll={onRoll}
       />
 
-      {/* Combat Defenses, HP & Saves */}
-      <CombatDefensesPanel
-        character={character}
-        onUpdateCharacter={onUpdateCharacter}
-        onRoll={onRoll}
-        setShowMaxHpInspector={setShowMaxHpInspector}
-        setShowTransformationModal={setShowTransformationModal}
-        setShowRestModal={setShowRestModal}
-      />
-
       {/* Attacks, Spells & Quick Combat Panel */}
       <AttacksSpellsPanel
         character={character}
@@ -113,6 +118,8 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
         onRoll={onRoll}
         onRollDamage={onRollDamage}
         setTargetModalSpell={setTargetModalSpell}
+        onOpenShapeshift={() => setShowTransformationModal(true)}
+        onOpenSummonCompanion={() => setShowCompanionModal(true)}
       />
 
       {/* MODALS */}
@@ -127,24 +134,39 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
       {showMaxHpInspector && (
         <MaxHpInspectorModal
           character={character}
+          onUpdateCharacter={onUpdateCharacter}
           onClose={() => setShowMaxHpInspector(false)}
         />
       )}
 
       {showTransformationModal && (
         <TransformationModal
+          isOpen={true}
           character={character}
           onUpdateCharacter={onUpdateCharacter}
           onClose={() => setShowTransformationModal(false)}
         />
       )}
 
+      {showCompanionModal && (
+        <CompanionModal
+          isOpen={true}
+          character={character}
+          edition={character.edition}
+          onUpdateCharacter={onUpdateCharacter}
+          onAddMonsterToRoster={onAddMonsterToRoster}
+          onClose={() => setShowCompanionModal(false)}
+          onRoll={onRoll}
+          onRollDamage={onRollDamage}
+        />
+      )}
+
       {targetModalSpell && (
         <SpellTargetModal
           spell={targetModalSpell}
+          caster={character}
           allCharacters={allCharacters.length > 0 ? allCharacters : [character]}
-          currentCharacterId={character.id}
-          onConfirm={(spell, targetIds, conditionName) => handleConfirmCastSpellTarget(spell, targetIds, conditionName)}
+          onConfirmCast={(spell, targetIds, conditionName) => handleConfirmCastSpellTarget(spell, targetIds, conditionName)}
           onClose={() => setTargetModalSpell(null)}
         />
       )}

@@ -1,6 +1,6 @@
 import { CharacterData, Spell, Feat, ClassFeature } from '../types';
 import { OFFICIAL_BULK_MONSTERS, OFFICIAL_5E_FEATS, OFFICIAL_35E_FEATS, OFFICIAL_5E_CLASS_FEATURES, OFFICIAL_35E_CLASS_FEATURES } from './srdRulesLibrary';
-import { PRESET_5E_SPELLS } from './presetSpells';
+import { PRESET_5E_SPELLS, PRESET_35E_SPELLS } from './presetSpells';
 
 export type CompendiumCategory = 'monsters' | 'spells' | 'items' | 'classes' | 'feats' | 'features' | 'skills';
 
@@ -657,6 +657,20 @@ export function getInitialBaseCompendium(): CompendiumItem[] {
       description: `Level ${s.level === 0 ? 'Cantrip' : s.level} ${s.school || 'Magic'} • Casting Time: ${s.castingTime || '1 action'}. Range: ${s.range || 'Touch'}. ${s.description}`,
       source: 'SRD 5e',
       tags: [`Level ${s.level}`, s.school, '5e'].filter(Boolean) as string[],
+      spellData: s
+    });
+  });
+
+  PRESET_35E_SPELLS.forEach((s) => {
+    const classInfo = s.classLevelsStr ? ` • Classes: [ ${s.classLevelsStr} ]` : '';
+    items.push({
+      id: 'comp-spl-35-' + s.id,
+      name: s.name,
+      category: 'spells',
+      edition: '3.5e',
+      description: `Level ${s.level} ${s.school || 'Magic'}${classInfo} • Casting Time: ${s.castingTime || '1 standard action'}. Range: ${s.range || 'Touch'}. ${s.description}`,
+      source: 'd20SRD (3.5e)',
+      tags: [`Level ${s.level}`, s.school, s.classLevelsStr || '', '3.5e'].filter(Boolean) as string[],
       spellData: s
     });
   });

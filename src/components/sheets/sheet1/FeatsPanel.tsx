@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { CharacterData, Feat } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { saveCustomCompendiumEntry } from '../../../data/compendiumData';
+import { isShapeshiftAbility } from '../../../data/transformationData';
+import { isCompanionSummonAbility } from '../../../data/companionData';
 import {
   OFFICIAL_5E_FEATS,
   OFFICIAL_35E_FEATS
@@ -11,11 +13,15 @@ import { Star, Plus, Trash2, Search } from 'lucide-react';
 interface FeatsPanelProps {
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onOpenShapeshift?: () => void;
+  onOpenSummonCompanion?: () => void;
 }
 
 export const FeatsPanel: React.FC<FeatsPanelProps> = ({
   character,
-  onUpdateCharacter
+  onUpdateCharacter,
+  onOpenShapeshift,
+  onOpenSummonCompanion
 }) => {
   const [showAddFeatModal, setShowAddFeatModal] = useState(false);
   const [featModalTab, setFeatModalTab] = useState<'official' | 'custom'>('official');
@@ -109,12 +115,34 @@ export const FeatsPanel: React.FC<FeatsPanelProps> = ({
               >
                 <div className="flex items-center justify-between">
                   <div className="font-serif font-bold text-amber-200 text-sm">{feat.name}</div>
-                  <button
-                    onClick={() => handleDeleteFeat(feat.id)}
-                    className="text-stone-500 hover:text-rose-400 p-1 transition"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {isShapeshiftAbility(feat.name, feat.description) && (
+                      <button
+                        onClick={onOpenShapeshift}
+                        className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                        title="Launch Shapeshift Engine"
+                      >
+                        <span>🐾</span>
+                        <span>Shapeshift</span>
+                      </button>
+                    )}
+                    {isCompanionSummonAbility(feat.name, feat.description) && (
+                      <button
+                        onClick={onOpenSummonCompanion}
+                        className="px-2.5 py-1 bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                        title="Launch Animal Companion & Familiar Engine"
+                      >
+                        <span>🦅</span>
+                        <span>Summon</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleDeleteFeat(feat.id)}
+                      className="text-stone-500 hover:text-rose-400 p-1 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
                 <p className="text-stone-300 text-xs leading-relaxed">{feat.description}</p>
               </div>

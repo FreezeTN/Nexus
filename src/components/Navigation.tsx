@@ -1,9 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown } from 'lucide-react';
 import { RuleEdition } from '../types';
-import { UserProfile } from '../lib/firebase';
+import { UserProfile, GameSession } from '../lib/firebase';
 
-export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7';
+export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
 
 interface NavigationProps {
   activeTab: TabId;
@@ -12,6 +12,8 @@ interface NavigationProps {
   edition?: RuleEdition;
   currentUser?: UserProfile | null;
   hasActiveCharacter?: boolean;
+  isDm?: boolean;
+  activeSession?: GameSession | null;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -20,7 +22,9 @@ export const Navigation: React.FC<NavigationProps> = ({
   isSpellcaster,
   edition = '5e',
   currentUser,
-  hasActiveCharacter = true
+  hasActiveCharacter = true,
+  isDm = false,
+  activeSession = null
 }) => {
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
@@ -122,6 +126,13 @@ export const Navigation: React.FC<NavigationProps> = ({
         : 'Attacks, Combat Quick View, Actions & Maneuvers Cheat Sheet',
       icon: Crosshair
     },
+    ...(isDm && activeSession ? [{
+      id: 'sheetDm' as TabId,
+      title: 'DM Overview',
+      description: 'Party Monitor, Base Stats & Live DM Overrides',
+      icon: Crown,
+      badge: 'DM Only'
+    }] : []),
     {
       id: 'sheet3' as TabId,
       title: isShadowrun

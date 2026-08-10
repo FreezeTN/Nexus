@@ -12,6 +12,7 @@ import { Sheet4Spells } from './components/sheets/Sheet4Spells';
 import { Sheet5DescriptionNotes } from './components/sheets/Sheet5DescriptionNotes';
 import { Sheet6UserGuide } from './components/sheets/Sheet6UserGuide';
 import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
+import { SheetDmOverview } from './components/sheets/SheetDmOverview';
 import { MainMenu } from './components/MainMenu';
 import { NewCharacterModal } from './components/modals/NewCharacterModal';
 import { PartyManagerModal } from './components/modals/PartyManagerModal';
@@ -31,6 +32,7 @@ import {
   deleteCharacterFromCloud,
   subscribeToCharacterPresence,
   updateCharacterPresence,
+  subscribeToCharacterDoc,
   CharacterPresence,
   UserRole,
   GameSession,
@@ -216,11 +218,53 @@ export default function App() {
   }, [rawActiveCharacter, activeSession?.optionalRules]);
   const currentSystemTheme: RuleEdition = previewTheme || activeCharacter?.edition || '5e';
 
+  const isDm = Boolean(currentUser && activeSession && activeSession.dmUid === currentUser.uid);
+
   useEffect(() => {
     if (!activeCharacter && ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5'].includes(activeTab)) {
       setActiveTab('menu');
     }
   }, [activeCharacter, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === 'sheetDm' && (!isDm || !activeSession)) {
+      setActiveTab('sheet1');
+    }
+  }, [activeTab, isDm, activeSession]);
+
+  // Realtime Firestore character subscription for active session characters
+  useEffect(() => {
+    if (!activeSession || !activeSession.members || activeSession.members.length === 0) return;
+
+    const charIds = Array.from(
+      new Set(activeSession.members.map(m => m.characterId).filter(Boolean) as string[])
+    );
+
+    if (charIds.length === 0) return;
+
+    const unsubs = charIds.map(id => {
+      return subscribeToCharacterDoc(id, (updatedCloudChar) => {
+        setCharacters(prev => {
+          const index = prev.findIndex(c => c.id === updatedCloudChar.id);
+          if (index >= 0) {
+            const existing = prev[index];
+            if (JSON.stringify(existing) === JSON.stringify(updatedCloudChar)) {
+              return prev;
+            }
+            const copy = [...prev];
+            copy[index] = updatedCloudChar;
+            return copy;
+          } else {
+            return [updatedCloudChar, ...prev];
+          }
+        });
+      });
+    });
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [activeSession]);
 
   const handleSaveTRPGSystems = (selected: RuleEdition[]) => {
     setEnabledSystems(selected);
@@ -611,6 +655,8 @@ export default function App() {
         edition={currentSystemTheme}
         currentUser={currentUser}
         hasActiveCharacter={!!activeCharacter}
+        isDm={isDm}
+        activeSession={activeSession}
       />
 
       {/* Main Content Body */}
@@ -639,6 +685,9 @@ export default function App() {
             currentUser={currentUser}
             activeSession={activeSession}
             onUpdateCharacter={handleUpdateCharacter}
+            onAddMonsterToRoster={(monster) => {
+              setCharacters(prev => [...prev, monster]);
+            }}
             onRoll={handleRoll}
           />
         )}
@@ -651,6 +700,9 @@ export default function App() {
             currentUser={currentUser}
             onOpenPartyManager={() => setShowPartyModal(true)}
             onUpdateCharacter={handleUpdateCharacter}
+            onAddMonsterToRoster={(monster) => {
+              setCharacters(prev => [...prev, monster]);
+            }}
             onRoll={handleRoll}
             onRollDamage={handleRollDamage}
           />
@@ -670,6 +722,9 @@ export default function App() {
             allCharacters={characters}
             currentUser={currentUser}
             onUpdateCharacter={handleUpdateCharacter}
+            onAddMonsterToRoster={(monster) => {
+              setCharacters(prev => [...prev, monster]);
+            }}
             onRoll={handleRoll}
             onRollDamage={handleRollDamage}
           />
@@ -697,6 +752,15 @@ export default function App() {
               setCharacters(prev => [...prev, monster]);
             }}
             enabledSystems={enabledSystems}
+          />
+        )}
+
+        {activeTab === 'sheetDm' && isDm && activeSession && (
+          <SheetDmOverview
+            activeSession={activeSession}
+            allCharacters={characters}
+            currentUser={currentUser}
+            onUpdateCharacter={handleUpdateCharacter}
           />
         )}
       </main>
