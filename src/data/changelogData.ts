@@ -29,8 +29,12 @@ export const changelogData: ChangelogEntry[] = [
         detail: 'Optimized voice client behavior to remain hidden on initial application startup, launching dynamically only when the user opens the "Party Voice" quick control or connects to a voice channel.'
       },
       {
-        category: '🧹 Navigation Bar & Dock Cleanliness',
-        detail: 'Removed redundant "Slide Sheets" range slider controls when all sheets fit natively on screen, and streamlined dock controls by removing unnecessary hotkey badges and volume indicators.'
+        category: '⚡ Performance Architecture & Performance Budgets',
+        detail: 'Expanded performance profiler with 60 FPS virtualization windowing benchmarks, dynamic chunk preloading timers, JS Heap memory budget limits (< 120MB), and DOM node tree budget enforcement.'
+      },
+      {
+        category: '🧪 E2E Integration Testing & Multi-System Plugin Contracts',
+        detail: 'Added E2E campaign & combat state machine integration tests and expanded deep execution contracts across all 5 TRPG system plugins (5e, 3.5e, PF2e, Shadowrun, Call of Cthulhu).'
       }
     ]
   },

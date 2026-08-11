@@ -539,7 +539,7 @@ export const myCustomPlugin: GameSystemPlugin = {
                     )}
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
-                    Data-driven latency profiling across Campaign Loading, Search Indexing, Graph Rendering, Plugin Initialization, and Voice Startup.
+                    Data-driven latency profiling across Campaign Loading, Search Indexing, Virtualization, Dynamic Preloads, Heap Memory, and DOM Nodes.
                   </p>
                 </div>
                 <button
@@ -551,6 +551,40 @@ export const myCustomPlugin: GameSystemPlugin = {
                   {isBenchmarking ? 'Profiling...' : 'Run Benchmarks'}
                 </button>
               </div>
+
+              {/* Performance Budgets & Limits Matrix */}
+              {profilerReport?.budgets && (
+                <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-sm font-semibold text-slate-200">Performance Budgets & Limits Enforcement</h4>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {profilerReport.budgets.map((b) => (
+                      <div key={b.id} className="bg-slate-900/90 border border-slate-800 p-3 rounded-lg space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-slate-300">{b.name}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${
+                            b.status === 'passed' ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300'
+                          }`}>
+                            {b.status}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-slate-500">Target: {b.targetBudget}</span>
+                          <span className="text-emerald-400 font-semibold">{b.actualMetric}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                            style={{ width: `${Math.min(100, Math.max(10, b.marginPercentage))}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {profilerReport && (
                 <div className="space-y-4">
