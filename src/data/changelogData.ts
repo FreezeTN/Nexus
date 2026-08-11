@@ -33,8 +33,8 @@ export const changelogData: ChangelogEntry[] = [
         detail: 'Expanded performance profiler with 60 FPS virtualization windowing benchmarks, dynamic chunk preloading timers, JS Heap memory budget limits (< 120MB), and DOM node tree budget enforcement.'
       },
       {
-        category: '🧪 E2E Integration Testing & Multi-System Plugin Contracts',
-        detail: 'Added E2E campaign & combat state machine integration tests and expanded deep execution contracts across all 5 TRPG system plugins (5e, 3.5e, PF2e, Shadowrun, Call of Cthulhu).'
+        category: '🧪 3-Layer Test Suite: Unit, Integration & Automated Playwright E2E Pipeline',
+        detail: 'Introduced full 3-layer testing harness: Unit tests for Spell Save DCs, Slots & Damage Modifiers; Integration tests for Campaign -> Character -> Gear -> Combat -> Persistence flow; and an automated Playwright-spec E2E pipeline.'
       }
     ]
   },

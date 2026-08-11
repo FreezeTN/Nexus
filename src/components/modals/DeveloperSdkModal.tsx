@@ -53,6 +53,8 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
   const [simFormula, setSimFormula] = useState('1d20+7');
   const [simTotal, setSimTotal] = useState(19);
 
+  const [testFilter, setTestFilter] = useState<'all' | 'unit' | 'integration' | 'e2e'>('all');
+
   useEffect(() => {
     if (isOpen) {
       // Run quick checks on open
@@ -736,8 +738,8 @@ export const myCustomPlugin: GameSystemPlugin = {
             <div className="space-y-4">
               <div className="flex items-center justify-between bg-slate-950/80 border border-slate-800 p-4 rounded-xl">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-200">Architecture Test Harness</h3>
-                  <p className="text-xs text-slate-400">Validates EventBus, Plugin Registry, Version Specs, and Rule Engines.</p>
+                  <h3 className="text-sm font-semibold text-slate-200">Architecture Test Harness & Pipeline Suite</h3>
+                  <p className="text-xs text-slate-400">Automated coverage across Unit, Integration, and Playwright E2E pipeline specs.</p>
                 </div>
                 <button
                   onClick={handleRunTests}
@@ -749,35 +751,86 @@ export const myCustomPlugin: GameSystemPlugin = {
                 </button>
               </div>
 
+              {/* Category Filter Pills */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+                <button
+                  onClick={() => setTestFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                    testFilter === 'all'
+                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  All Tests ({testResults.length})
+                </button>
+                <button
+                  onClick={() => setTestFilter('unit')}
+                  className={`px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                    testFilter === 'unit'
+                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Unit Tests ({testResults.filter(t => t.category === 'UnitTests' || t.category === 'RuleEngines' || t.category === 'EventBus').length})
+                </button>
+                <button
+                  onClick={() => setTestFilter('integration')}
+                  className={`px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                    testFilter === 'integration'
+                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  Integration Tests ({testResults.filter(t => t.category === 'IntegrationTests' || t.category === 'Services' || t.category === 'Repositories' || t.category === 'PluginRegistry').length})
+                </button>
+                <button
+                  onClick={() => setTestFilter('e2e')}
+                  className={`px-3 py-1.5 rounded-lg border font-medium transition-colors ${
+                    testFilter === 'e2e'
+                      ? 'bg-indigo-600/30 text-indigo-300 border-indigo-500/50'
+                      : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                  }`}
+                >
+                  End-to-End Playwright Spec ({testResults.filter(t => t.category === 'E2ETests' || t.category === 'PluginContracts' || t.category === 'PerformanceProfiling').length})
+                </button>
+              </div>
+
               <div className="space-y-2">
-                {testResults.map((test) => (
-                  <div
-                    key={test.id}
-                    className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
-                      test.passed
-                        ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
-                        : 'bg-rose-950/20 border-rose-500/30 text-rose-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {test.passed ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                      ) : (
-                        <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
-                      )}
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-slate-200">{test.name}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-slate-800 text-slate-400">
-                            {test.category}
-                          </span>
+                {testResults
+                  .filter((test) => {
+                    if (testFilter === 'unit') return test.category === 'UnitTests' || test.category === 'RuleEngines' || test.category === 'EventBus';
+                    if (testFilter === 'integration') return test.category === 'IntegrationTests' || test.category === 'Services' || test.category === 'Repositories' || test.category === 'PluginRegistry';
+                    if (testFilter === 'e2e') return test.category === 'E2ETests' || test.category === 'PluginContracts' || test.category === 'PerformanceProfiling';
+                    return true;
+                  })
+                  .map((test) => (
+                    <div
+                      key={test.id}
+                      className={`p-3 rounded-xl border flex items-center justify-between text-xs ${
+                        test.passed
+                          ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-200'
+                          : 'bg-rose-950/20 border-rose-500/30 text-rose-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {test.passed ? (
+                          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-rose-400 shrink-0" />
+                        )}
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-slate-200">{test.name}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-slate-900 border border-slate-800 text-indigo-300">
+                              {test.category}
+                            </span>
+                          </div>
+                          <p className="text-slate-400 mt-0.5">{test.message}</p>
                         </div>
-                        <p className="text-slate-400 mt-0.5">{test.message}</p>
                       </div>
+                      <span className="font-mono text-slate-500">{test.durationMs}ms</span>
                     </div>
-                    <span className="font-mono text-slate-500">{test.durationMs}ms</span>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           )}
