@@ -9,6 +9,10 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "test": "vitest run",
+    "analyze-bundle": "tsx scripts/bundle-analyzer.ts",
+    "lighthouse-ci": "tsx scripts/lighthouse-ci.ts",
+    "regression-test": "tsx scripts/run-regression-test.ts",
+    "audit:all": "npm run build && tsx scripts/bundle-analyzer.ts && tsx scripts/lighthouse-ci.ts && tsx scripts/run-regression-test.ts",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

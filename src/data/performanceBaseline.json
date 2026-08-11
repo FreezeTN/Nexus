@@ -1,0 +1,41 @@
+{
+  "version": "v0.9.5",
+  "timestamp": 1786400000000,
+  "metrics": {
+    "campaign_loading": {
+      "avgMs": 1.8,
+      "maxAllowedMs": 2.2,
+      "unit": "s"
+    },
+    "search_indexing": {
+      "avgMs": 0.11,
+      "maxAllowedMs": 0.15,
+      "unit": "s"
+    },
+    "graph_rendering": {
+      "avgMs": 0.083,
+      "maxAllowedMs": 0.12,
+      "unit": "s"
+    },
+    "plugin_initialization": {
+      "avgMs": 0.052,
+      "maxAllowedMs": 0.08,
+      "unit": "s"
+    },
+    "memory_heap_mb": {
+      "avgMb": 220,
+      "maxAllowedMb": 280,
+      "unit": "MB"
+    },
+    "dom_nodes": {
+      "count": 2400,
+      "maxAllowedCount": 3500,
+      "unit": "nodes"
+    },
+    "fps": {
+      "current": 60,
+      "minAllowed": 55,
+      "unit": "fps"
+    }
+  }
+}

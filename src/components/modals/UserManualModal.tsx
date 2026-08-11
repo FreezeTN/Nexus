@@ -332,7 +332,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
               <h2 className="text-base sm:text-lg font-serif font-bold text-amber-100 flex items-center gap-2">
                 <span>Complete Application User Manual</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full">
-                  v0.9.5
+                  v1.0.0
                 </span>
               </h2>
               <p className="text-xs text-stone-400 hidden sm:block">

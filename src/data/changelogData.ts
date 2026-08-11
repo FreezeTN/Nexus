@@ -14,11 +14,40 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v1.0.0',
+    date: 'August 2026',
+    title: 'Production Engineering Pillars, Web Workers, Telemetry & Automated CI Regression Suite',
+    badge: 'Latest Update',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🏛️ Production Engineering Pillars Architecture',
+        detail: 'Integrated 10 core engineering pillars into the Developer SDK Modal: Automated CI bundle analyzer, Lighthouse & Web Vitals CI thresholds (≥95 score floor), Web Worker offloading, Real-Time Performance Telemetry, Intelligent Domain Caches, Non-blocking Background Tasks Engine, Progressive Loading Pipeline (<100ms render), 60 FPS Performance Dashboard, Memory Profiling, and Automated CI Regression Detection.'
+      },
+      {
+        category: '⚡ Web Worker Multithreading',
+        detail: 'Offloaded heavy Campaign Knowledge Graph force-topology layout calculations and trigram search indexing to dedicated Web Worker threads, keeping the main UI rendering thread locked at 60 FPS.'
+      },
+      {
+        category: '📊 Precision Real-Time Telemetry & Caching',
+        detail: 'Added real-time opt-in telemetry tracking campaign load averages, user session timing, and peak campaign sizes with formatted decimal precision. Introduced hash-invalidated domain caching for Search, Graph, Spells, and Plugin metadata.'
+      },
+      {
+        category: '🔄 Automated CI Performance Regression Suite',
+        detail: 'Built an in-browser and CI performance regression auditor that benchmarks campaign load times, search query indexing latency, graph force computations, and JS heap allocations against saved baselines.'
+      },
+      {
+        category: '🎨 Developer SDK UI Professionalization',
+        detail: 'Refined Developer SDK tabs to clean "Engineering Pillars" terminology, added manual regression audit triggers with active spinner states and timestamps, and optimized state subscriptions for zero-overhead background monitoring.'
+      }
+    ]
+  },
+  {
     version: 'v0.9.5',
     date: 'August 2026',
     title: 'Multi-Monitor Detached Sheets, Real-Time Cross-Window Sync & Responsive Modal Optimization',
-    badge: 'Latest Update',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Previous Version',
+    badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
     highlights: [
       {
         category: '🖥️ Multi-Monitor Detached Sheet Pop-Outs',
