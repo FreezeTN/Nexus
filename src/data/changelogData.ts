@@ -14,11 +14,32 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v4.0.0',
+    date: 'August 2026',
+    title: 'Streamlined Navigation Layout, Quick Vitals Swap & On-Demand Voice Client',
+    badge: 'Latest Update',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🔄 Character Sheets & Quick Vitals Header Swapping',
+        detail: 'Reorganized top header layout hierarchy so primary Sheet Navigation tabs (Stats & Features, Combat, Gear, Spells, Notes) take top row priority, placing the Quick Vitals & Combat Stats Bar directly beneath for intuitive access.'
+      },
+      {
+        category: '🎙️ On-Demand Party Voice Client Launch',
+        detail: 'Optimized voice client behavior to remain hidden on initial application startup, launching dynamically only when the user opens the "Party Voice" quick control or connects to a voice channel.'
+      },
+      {
+        category: '🧹 Navigation Bar & Dock Cleanliness',
+        detail: 'Removed redundant "Slide Sheets" range slider controls when all sheets fit natively on screen, and streamlined dock controls by removing unnecessary hotkey badges and volume indicators.'
+      }
+    ]
+  },
+  {
     version: 'v3.9.0',
     date: 'August 2026',
     title: 'Enterprise Architecture, Plugin Contract Verification & Data-Driven Subsystem Profiler',
-    badge: 'Latest Update',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Previous Version',
+    badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
     highlights: [
       {
         category: '🧭 Left Vertical Hub, Guide & Compendium Dock Sidebar',
