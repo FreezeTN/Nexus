@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { eventBus, useEventHistory } from '../../events/eventBus';
 import { systemRegistry } from '../../systems/registry';
 import { runArchitectureTests, TestResult } from '../../tests/systemTestSuite';
+import { verifyPluginContracts, PluginContractVerificationSummary } from '../../systems/pluginContractVerifier';
+import { performanceProfiler, OperationProfileSummary, PerformanceBenchmarkReport } from '../../utils/performanceProfiler';
 import {
   Code,
   BookOpen,
@@ -22,7 +24,12 @@ import {
   Cpu,
   FolderTree,
   ShieldCheck,
-  Download
+  Download,
+  Gauge,
+  CheckSquare,
+  RefreshCw,
+  Sliders,
+  Sparkles
 } from 'lucide-react';
 
 interface DeveloperSdkModalProps {
@@ -31,10 +38,13 @@ interface DeveloperSdkModalProps {
 }
 
 export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'sdk' | 'package' | 'events' | 'tests' | 'example'>('sdk');
+  const [activeTab, setActiveTab] = useState<'sdk' | 'package' | 'contracts' | 'profiler' | 'events' | 'tests' | 'example'>('sdk');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [isTesting, setIsTesting] = useState(false);
+  const [contractSummary, setContractSummary] = useState<PluginContractVerificationSummary | null>(null);
+  const [profilerReport, setProfilerReport] = useState<PerformanceBenchmarkReport | null>(null);
+  const [isBenchmarking, setIsBenchmarking] = useState(false);
   const eventLogs = useEventHistory();
 
   // Test Event Simulator State
@@ -45,8 +55,10 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
 
   useEffect(() => {
     if (isOpen) {
-      // Run quick check on open
+      // Run quick checks on open
       runArchitectureTests().then(results => setTestResults(results));
+      setContractSummary(verifyPluginContracts());
+      performanceProfiler.runBenchmarkSuite().then(report => setProfilerReport(report));
     }
   }, [isOpen]);
 
@@ -62,7 +74,19 @@ export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, on
     setIsTesting(true);
     const results = await runArchitectureTests();
     setTestResults(results);
+    setContractSummary(verifyPluginContracts());
     setIsTesting(false);
+  };
+
+  const handleRunContracts = () => {
+    setContractSummary(verifyPluginContracts());
+  };
+
+  const handleRunProfilerBenchmarks = async () => {
+    setIsBenchmarking(true);
+    const report = await performanceProfiler.runBenchmarkSuite();
+    setProfilerReport(report);
+    setIsBenchmarking(false);
   };
 
   const handleFireSimulatedEvent = () => {
@@ -226,26 +250,48 @@ export const myCustomPlugin: GameSystemPlugin = {
             Hello World Plugin
           </button>
           <button
+            onClick={() => setActiveTab('contracts')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'contracts'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <CheckSquare className="w-4 h-4 text-amber-400" />
+            Plugin Contracts Verification
+          </button>
+          <button
+            onClick={() => setActiveTab('profiler')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'profiler'
+                ? 'border-indigo-500 text-indigo-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Gauge className="w-4 h-4 text-emerald-400" />
+            Performance Profiler
+          </button>
+          <button
             onClick={() => setActiveTab('events')}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'events'
                 ? 'border-indigo-500 text-indigo-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <Zap className="w-4 h-4" />
-            Event Bus Inspector ({eventLogs.length})
+            Event Bus ({eventLogs.length})
           </button>
           <button
             onClick={() => setActiveTab('tests')}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'tests'
                 ? 'border-indigo-500 text-indigo-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
             <ShieldCheck className="w-4 h-4" />
-            Automated Tests
+            Architecture Suite
           </button>
         </div>
 
@@ -363,6 +409,194 @@ export const myCustomPlugin: GameSystemPlugin = {
               <pre className="text-xs font-mono bg-slate-950 p-4 rounded-xl border border-slate-800 text-indigo-200 max-h-[500px] overflow-y-auto">
                 {helloWorldSnippet}
               </pre>
+            </div>
+          )}
+
+          {/* TAB 4: Plugin Contracts Verification */}
+          {activeTab === 'contracts' && (
+            <div className="space-y-6">
+              <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-xl flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CheckSquare className="w-5 h-5 text-amber-400" />
+                    <h3 className="text-base font-semibold text-slate-100">Plugin API Contract Verification Suite</h3>
+                    {contractSummary && (
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                        contractSummary.allContractsPassed
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                      }`}>
+                        {contractSummary.allContractsPassed ? '100% Compliant' : 'Contract Mismatch'}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Automated contract verification for every registered TRPG plugin: registration, metadata exposure, engine capabilities, and version compatibility.
+                  </p>
+                </div>
+                <button
+                  onClick={handleRunContracts}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  Re-Verify Matrix
+                </button>
+              </div>
+
+              {contractSummary && (
+                <div className="space-y-4">
+                  {contractSummary.checks.map((check) => (
+                    <div
+                      key={check.pluginId}
+                      className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3 hover:border-slate-700 transition-colors"
+                    >
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🎲</span>
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-200">{check.pluginName}</h4>
+                            <p className="text-xs font-mono text-indigo-400">ID: {check.pluginId}</p>
+                          </div>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-md text-xs font-medium flex items-center gap-1.5 ${
+                          check.overallPassed
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        }`}>
+                          {check.overallPassed ? <CheckCircle2 className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
+                          {check.overallPassed ? 'Passed All Contracts' : 'Failed Verification'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div className="p-2.5 bg-slate-900/80 rounded border border-slate-800/80 flex items-start gap-2">
+                          {check.registersCorrectly ? (
+                            <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                          ) : (
+                            <X className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-semibold text-slate-200">1. Registers Correctly</p>
+                            <p className="text-slate-400 text-[11px] mt-0.5">{check.details.registrationMessage}</p>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 bg-slate-900/80 rounded border border-slate-800/80 flex items-start gap-2">
+                          {check.exposesMetadata ? (
+                            <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                          ) : (
+                            <X className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-semibold text-slate-200">2. Exposes Metadata</p>
+                            <p className="text-slate-400 text-[11px] mt-0.5">{check.details.metadataMessage}</p>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 bg-slate-900/80 rounded border border-slate-800/80 flex items-start gap-2">
+                          {check.implementsCapabilities ? (
+                            <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                          ) : (
+                            <X className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-semibold text-slate-200">3. Implements Capabilities</p>
+                            <p className="text-slate-400 text-[11px] mt-0.5">{check.details.capabilitiesMessage}</p>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 bg-slate-900/80 rounded border border-slate-800/80 flex items-start gap-2">
+                          {check.passesCompatibility ? (
+                            <Check className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" />
+                          ) : (
+                            <X className="w-4 h-4 text-rose-400 mt-0.5 shrink-0" />
+                          )}
+                          <div>
+                            <p className="font-semibold text-slate-200">4. Passes Compatibility Checks</p>
+                            <p className="text-slate-400 text-[11px] mt-0.5">{check.details.compatibilityMessage}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: Performance Profiler */}
+          {activeTab === 'profiler' && (
+            <div className="space-y-6">
+              <div className="bg-slate-950/80 border border-slate-800 p-5 rounded-xl flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Gauge className="w-5 h-5 text-emerald-400" />
+                    <h3 className="text-base font-semibold text-slate-100">Subsystem Performance Profiler</h3>
+                    {profilerReport && (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Score: {profilerReport.overallScore} / 100
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Data-driven latency profiling across Campaign Loading, Search Indexing, Graph Rendering, Plugin Initialization, and Voice Startup.
+                  </p>
+                </div>
+                <button
+                  onClick={handleRunProfilerBenchmarks}
+                  disabled={isBenchmarking}
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isBenchmarking ? 'animate-spin' : ''}`} />
+                  {isBenchmarking ? 'Profiling...' : 'Run Benchmarks'}
+                </button>
+              </div>
+
+              {profilerReport && (
+                <div className="space-y-4">
+                  {profilerReport.summaries.map((summary) => (
+                    <div
+                      key={summary.operation}
+                      className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-slate-200">{summary.label}</h4>
+                          <p className="text-xs text-slate-400">{summary.description}</p>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-md text-xs font-medium uppercase tracking-wide ${
+                          summary.status === 'optimal'
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                            : summary.status === 'acceptable'
+                            ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
+                        }`}>
+                          {summary.status}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                        <div>
+                          <p className="text-slate-500">Average Latency</p>
+                          <p className="text-sm font-mono font-semibold text-emerald-400">{summary.avgDurationMs} ms</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-500">Min / Max</p>
+                          <p className="text-sm font-mono text-slate-300">{summary.minDurationMs} / {summary.maxDurationMs} ms</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-500">Last Latency</p>
+                          <p className="text-sm font-mono text-indigo-300">{summary.lastDurationMs} ms</p>
+                        </div>
+                        <div>
+                          <p className="text-slate-500">Sample Count</p>
+                          <p className="text-sm font-mono text-slate-300">{summary.sampleCount} runs</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -529,3 +763,5 @@ export const myCustomPlugin: GameSystemPlugin = {
     </div>
   );
 };
+
+export default DeveloperSdkModal;

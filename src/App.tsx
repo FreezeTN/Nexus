@@ -4,6 +4,8 @@ import { SAMPLE_CHARACTERS } from './data/defaultCharacters';
 import { DEFAULT_PARTIES } from './data/defaultParties';
 import { Header } from './components/Header';
 import { Navigation, TabId } from './components/Navigation';
+import { QuickStatsBar } from './components/QuickStatsBar';
+import { SidebarDock } from './components/SidebarDock';
 import { DiceRoller } from './components/DiceRoller';
 import { Sheet1StatsFeatures } from './components/sheets/Sheet1StatsFeatures';
 import { Sheet2Combat } from './components/sheets/Sheet2Combat';
@@ -25,14 +27,14 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { Crown } from 'lucide-react';
 
 // Lazy Loaded Modal Components for Optimized Initial Bundle & Instant Render
-const CampaignGraphModal = lazy(() => import('./components/modals/CampaignGraphModal').then(m => ({ default: m.CampaignGraphModal })));
-const DeveloperSdkModal = lazy(() => import('./components/modals/DeveloperSdkModal').then(m => ({ default: m.DeveloperSdkModal })));
-const UserManualModal = lazy(() => import('./components/modals/UserManualModal').then(m => ({ default: m.UserManualModal })));
-const ExtensionManagerModal = lazy(() => import('./components/modals/ExtensionManagerModal').then(m => ({ default: m.ExtensionManagerModal })));
-const AudioOptionsModal = lazy(() => import('./components/modals/AudioOptionsModal').then(m => ({ default: m.AudioOptionsModal })));
-const SessionLobbyModal = lazy(() => import('./components/modals/SessionLobbyModal').then(m => ({ default: m.SessionLobbyModal })));
-const PartyManagerModal = lazy(() => import('./components/modals/PartyManagerModal').then(m => ({ default: m.PartyManagerModal })));
-const TRPGSystemSelectorModal = lazy(() => import('./components/modals/TRPGSystemSelectorModal').then(m => ({ default: m.TRPGSystemSelectorModal })));
+const CampaignGraphModal = lazy(() => import('./components/modals/CampaignGraphModal').then(m => ({ default: m.CampaignGraphModal as React.ComponentType<any> })));
+const DeveloperSdkModal = lazy(() => import('./components/modals/DeveloperSdkModal').then(m => ({ default: (m.default || m.DeveloperSdkModal) as React.ComponentType<any> })));
+const UserManualModal = lazy(() => import('./components/modals/UserManualModal').then(m => ({ default: m.UserManualModal as React.ComponentType<any> })));
+const ExtensionManagerModal = lazy(() => import('./components/modals/ExtensionManagerModal').then(m => ({ default: m.ExtensionManagerModal as React.ComponentType<any> })));
+const AudioOptionsModal = lazy(() => import('./components/modals/AudioOptionsModal').then(m => ({ default: m.AudioOptionsModal as React.ComponentType<any> })));
+const SessionLobbyModal = lazy(() => import('./components/modals/SessionLobbyModal').then(m => ({ default: m.SessionLobbyModal as React.ComponentType<any> })));
+const PartyManagerModal = lazy(() => import('./components/modals/PartyManagerModal').then(m => ({ default: m.PartyManagerModal as React.ComponentType<any> })));
+const TRPGSystemSelectorModal = lazy(() => import('./components/modals/TRPGSystemSelectorModal').then(m => ({ default: m.TRPGSystemSelectorModal as React.ComponentType<any> })));
 import { 
   auth, 
   getUserProfile, 
@@ -788,20 +790,53 @@ export default function App() {
         activeTab={activeTab}
       />
 
-      {/* 5 Sheets Navigation Tab Bar */}
-      <Navigation
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        isSpellcaster={activeCharacter?.isSpellcaster || false}
-        edition={currentSystemTheme}
-        currentUser={currentUser}
-        hasActiveCharacter={!!activeCharacter}
-        isDm={isDm}
-        activeSession={activeSession}
-      />
+      {/* Main App Workspace Layout Container with Left Sidebar Dock */}
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-4 flex flex-col lg:flex-row gap-5 items-start">
+        {/* Left Vertical Dock Sidebar */}
+        <SidebarDock
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          edition={currentSystemTheme}
+          onUndo={undoCharacters}
+          onRedo={redoCharacters}
+          canUndo={canUndoCharacters}
+          canRedo={canRedoCharacters}
+          onOpenCommandPalette={() => setShowCommandPalette(true)}
+          onOpenCampaignGraph={() => setShowCampaignGraphModal(true)}
+          onOpenExtensionManager={() => setShowExtensionManager(true)}
+          onOpenSessionLobby={() => setShowSessionModal(true)}
+          onOpenVoiceModal={() => setShowVoiceModal(true)}
+          onOpenAudioModal={() => setShowAudioModal(true)}
+          currentUser={currentUser}
+          activeSession={activeSession}
+        />
 
-      {/* Main Content Body */}
-      <main className="max-w-7xl mx-auto px-4 pt-6">
+        {/* Right Main Content Area */}
+        <div className="flex-1 min-w-0 w-full space-y-4">
+          {/* Navigation Tab Bar */}
+          <Navigation
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            isSpellcaster={activeCharacter?.isSpellcaster || false}
+            edition={currentSystemTheme}
+            currentUser={currentUser}
+            hasActiveCharacter={!!activeCharacter}
+            isDm={isDm}
+            activeSession={activeSession}
+          />
+
+          {/* Quick Vitals & Combat Stats Bar */}
+          {currentUser && activeCharacter && activeTab !== 'menu' && (
+            <QuickStatsBar
+              activeCharacter={activeCharacter}
+              edition={currentSystemTheme}
+              onUpdateCharacter={handleUpdateCharacter}
+              onRollInitiative={handleRollInitiative}
+            />
+          )}
+
+          {/* Main Content Body */}
+          <main className="w-full">
         {activeTab === 'menu' && (
           <MainMenu
             characters={characters}
@@ -905,6 +940,8 @@ export default function App() {
           />
         )}
       </main>
+        </div>
+      </div>
 
       {/* Floating Interactive Dice Roller */}
       <DiceRoller

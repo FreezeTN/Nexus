@@ -33,20 +33,11 @@ export const Navigation: React.FC<NavigationProps> = ({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-  const [scrollProgress, setScrollProgress] = useState(0);
-
   const checkScroll = () => {
     if (!scrollRef.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
     setCanScrollLeft(scrollLeft > 5);
     setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 5);
-
-    const maxScroll = scrollWidth - clientWidth;
-    if (maxScroll > 0) {
-      setScrollProgress(Math.min(100, Math.max(0, (scrollLeft / maxScroll) * 100)));
-    } else {
-      setScrollProgress(0);
-    }
   };
 
   useEffect(() => {
@@ -73,23 +64,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     });
   };
 
-  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!scrollRef.current) return;
-    const value = parseFloat(e.target.value);
-    const { scrollWidth, clientWidth } = scrollRef.current;
-    const maxScroll = scrollWidth - clientWidth;
-    scrollRef.current.scrollLeft = (value / 100) * maxScroll;
-    setScrollProgress(value);
-  };
-
   const allTabs = [
-    {
-      id: 'menu' as TabId,
-      title: 'Main Menu',
-      description: 'System Selection & Campaign Hub',
-      icon: Sparkles,
-      badge: 'Hub'
-    },
     {
       id: 'sheet1' as TabId,
       title: isShadowrun
@@ -187,46 +162,19 @@ export const Navigation: React.FC<NavigationProps> = ({
         ? 'Personal Description, Ideology, Phobias & Traumas'
         : 'Appearance, Backstory, Traits, Notes',
       icon: ScrollText
-    },
-    {
-      id: 'sheet6' as TabId,
-      title: isShadowrun
-        ? 'Shadowrun Guide'
-        : isPathfinder
-        ? 'Pathfinder Guide'
-        : isCthulhu
-        ? 'Cthulhu Guide'
-        : 'User Guide',
-      description: isShadowrun
-        ? 'Shadowrun 5e Mechanics, Dice Pools & Rules'
-        : isPathfinder
-        ? 'Pathfinder 2e System Reference'
-        : isCthulhu
-        ? 'Call of Cthulhu 7e Rulebook'
-        : 'User Manual, Audio Options & Release Changelog',
-      icon: BookOpen
-    },
-    {
-      id: 'sheet7' as TabId,
-      title: 'Compendium',
-      description: 'Dynamic SRD & Custom Library for Monsters, Spells, Items, Classes, Feats & Features',
-      icon: Library,
-      badge: 'SRD'
     }
   ];
 
-  // Filter tabs: if not logged in, only menu & guide; if no active character selected, hide character sheet tabs
+  // Filter tabs: if no active character selected, hide character sheet tabs
   const tabs = allTabs.filter(t => {
-    if (!currentUser) {
-      return t.id === 'menu' || t.id === 'sheet6';
-    }
     if (!hasActiveCharacter) {
-      // Hide character sheets (sheet1 - sheet5) when no character is selected
-      const characterSheets = ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5'];
+      const characterSheets = ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5', 'sheetDm'];
       if (characterSheets.includes(t.id)) return false;
     }
     return true;
   });
+
+  if (tabs.length === 0) return null;
 
   return (
     <nav className={`bg-stone-950 border-b border-stone-800 ${currentUser ? 'sticky top-[108px] z-30 shadow-md' : 'relative z-10'}`}>
@@ -301,26 +249,6 @@ export const Navigation: React.FC<NavigationProps> = ({
         >
           <ChevronRight className="w-4 h-4" />
         </button>
-      </div>
-
-      {/* Horizontal Sheet Slider Bar */}
-      <div className="max-w-7xl mx-auto px-4 pb-1.5 pt-0.5 flex items-center gap-2 text-[10px] text-stone-500 border-t border-stone-900/80">
-        <span className="font-mono text-stone-400 shrink-0 select-none flex items-center gap-1">
-          <ChevronLeft className="w-3 h-3 text-amber-500/70" /> Slide Sheets <ChevronRight className="w-3 h-3 text-amber-500/70" />
-        </span>
-        <input
-          type="range"
-          min="0"
-          max="100"
-          step="0.5"
-          value={scrollProgress}
-          onChange={handleSliderChange}
-          className="w-full h-1.5 bg-stone-900 rounded-lg appearance-none cursor-pointer accent-amber-500 hover:accent-amber-400 focus:outline-none"
-          title="Slide across character sheets"
-        />
-        <span className="font-mono text-stone-400 shrink-0 text-[10px]">
-          {Math.round(scrollProgress)}%
-        </span>
       </div>
     </nav>
   );

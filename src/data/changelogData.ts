@@ -16,10 +16,22 @@ export const changelogData: ChangelogEntry[] = [
   {
     version: 'v3.9.0',
     date: 'August 2026',
-    title: 'Enterprise Domain Decomposition, Repository Abstraction, Domain Services & Branded Nominal Types',
+    title: 'Enterprise Architecture, Plugin Contract Verification & Data-Driven Subsystem Profiler',
     badge: 'Latest Update',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     highlights: [
+      {
+        category: '🧭 Left Vertical Hub, Guide & Compendium Dock Sidebar',
+        detail: 'Utilized empty left screen space by moving top header action controls and core reference sheets (Hub, User Guide / System Rules, and Compendium SRD) into a dedicated vertical left sidebar dock, leaving the top tab bar purely dedicated to character sheets.'
+      },
+      {
+        category: '📋 Plugin API Contract Testing Suite',
+        detail: 'Implemented automated verification for every registered TRPG plugin (registration check, metadata exposure, capabilities implementation, and version compatibility checks).'
+      },
+      {
+        category: '⚡ Data-Driven Subsystem Performance Profiler',
+        detail: 'Built a central performance profiler utility and benchmark suite measuring campaign loading, search indexing, graph rendering, plugin initialization, and voice startup latency.'
+      },
       {
         category: '🧩 Domain Decomposition & Standardized Systems Layout',
         detail: 'Decomposed monolithic calculations into dedicated, single-responsibility rules engine modules under src/systems/dnd5e/ (abilities, classes, spellcasting, combat), establishing clean system boundaries.'
@@ -35,10 +47,6 @@ export const changelogData: ChangelogEntry[] = [
       {
         category: '🏷️ Branded Nominal Type Safety & Enriched Plugin Contracts',
         detail: 'Added nominal brand types (CharacterId, CampaignId, QuestId, ItemId, SpellId, UserId) to prevent ID mixing, and enhanced GameSystemPlugin contracts with permissions, capabilities, version constraints, and config validation.'
-      },
-      {
-        category: '🧪 Automated Architecture Test Harness',
-        detail: 'Expanded systemTestSuite.ts with asynchronous automated architecture tests verifying storage repository strategy resolution and domain service event pipelines.'
       }
     ]
   },

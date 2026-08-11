@@ -51,7 +51,7 @@ export const PartyVoiceWidget: React.FC<PartyVoiceWidgetProps> = ({
   const [userVolumes, setUserVolumes] = useState<Record<string, number>>({});
 
   const [customRoomCode, setCustomRoomCode] = useState<string>('PARTY1');
-  const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  const [isDismissed, setIsDismissed] = useState<boolean>(true);
 
   const displayRoomCode = (activeSession?.code || customRoomCode || 'PARTY1').trim().toUpperCase();
 
@@ -106,12 +106,14 @@ export const PartyVoiceWidget: React.FC<PartyVoiceWidgetProps> = ({
     };
   }, []);
 
-  // Reset dismissed state when modal is toggled open
+  // Sync dismissed state with modal visibility and active voice connection
   useEffect(() => {
-    if (isOpenModal) {
+    if (isOpenModal || isConnected) {
       setIsDismissed(false);
+    } else {
+      setIsDismissed(true);
     }
-  }, [isOpenModal]);
+  }, [isOpenModal, isConnected]);
 
   // Handle Join / Leave Voice
   const handleToggleVoiceConnection = async () => {

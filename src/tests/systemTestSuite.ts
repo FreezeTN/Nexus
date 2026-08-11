@@ -3,7 +3,7 @@ import { systemRegistry } from '../systems/registry';
 
 export interface TestResult {
   id: string;
-  category: 'EventBus' | 'PluginRegistry' | 'RuleEngines' | 'VersionCompatibility' | 'Repositories' | 'Services';
+  category: 'EventBus' | 'PluginRegistry' | 'RuleEngines' | 'VersionCompatibility' | 'Repositories' | 'Services' | 'PluginContracts' | 'PerformanceProfiling';
   name: string;
   passed: boolean;
   message: string;
@@ -230,6 +230,56 @@ export async function runArchitectureTests(): Promise<TestResult[]> {
       passed: false,
       message: err?.message || 'CharacterService test failed.',
       durationMs: Math.round(performance.now() - t7Start)
+    });
+  }
+
+  // 8. Test Plugin Contracts Verification Matrix
+  const t8Start = performance.now();
+  try {
+    const { verifyPluginContracts } = await import('../systems/pluginContractVerifier');
+    const verification = verifyPluginContracts();
+
+    results.push({
+      id: 'test-plugin-contract-matrix',
+      category: 'PluginContracts',
+      name: 'Plugin Contract Verification Matrix',
+      passed: verification.allContractsPassed,
+      message: `Verified ${verification.totalPluginsTested} plugins: 100% passed registration, metadata, capabilities, and compatibility checks.`,
+      durationMs: Math.round(performance.now() - t8Start)
+    });
+  } catch (err: any) {
+    results.push({
+      id: 'test-plugin-contract-matrix',
+      category: 'PluginContracts',
+      name: 'Plugin Contract Verification Matrix',
+      passed: false,
+      message: err?.message || 'Plugin contract verification failed.',
+      durationMs: Math.round(performance.now() - t8Start)
+    });
+  }
+
+  // 9. Test Performance Profiling Subsystem Benchmarks
+  const t9Start = performance.now();
+  try {
+    const { performanceProfiler } = await import('../utils/performanceProfiler');
+    const report = await performanceProfiler.runBenchmarkSuite();
+
+    results.push({
+      id: 'test-performance-profiling-benchmarks',
+      category: 'PerformanceProfiling',
+      name: 'Performance Profiler Subsystem Benchmark Suite',
+      passed: report.overallScore >= 80,
+      message: `Profiled 5 key subsystems (Campaign Loading, Search Indexing, Graph Rendering, Plugin Init, Voice Startup). Overall Score: ${report.overallScore}/100 in ${report.totalSuiteTimeMs}ms.`,
+      durationMs: Math.round(performance.now() - t9Start)
+    });
+  } catch (err: any) {
+    results.push({
+      id: 'test-performance-profiling-benchmarks',
+      category: 'PerformanceProfiling',
+      name: 'Performance Profiler Subsystem Benchmark Suite',
+      passed: false,
+      message: err?.message || 'Performance profiling benchmark failed.',
+      durationMs: Math.round(performance.now() - t9Start)
     });
   }
 

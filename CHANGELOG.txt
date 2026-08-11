@@ -303,6 +303,10 @@ MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIE
   - Formulated `ICharacterRepository` contract alongside `LocalCharacterRepository`, `FirebaseCharacterRepository`, and `CharacterRepositoryProvider`.
   - Abstracted persistence mechanisms so UI components interact with storage via clean, swappable interfaces.
 
+* Left Vertical Hub & Controls Dock Sidebar (`src/components/SidebarDock.tsx`):
+  - Relocated global header action tools (Undo/Redo, Command Palette, Campaign Graph, SDK/Plugins, Session Lobby, Voice, Options, PWA Install) to a dedicated vertical left sidebar dock.
+  - Integrated the former "Main Menu" sheet button into the top of the left dock as the primary "Hub" navigation trigger.
+
 * Domain Services & Event-Driven Engine (`src/services/`):
   - Built `CharacterService` and `CombatService` to encapsulate domain workflows (level progression, inventory modifications, HP updates, encounter initialization).
   - Integrated automatic `EventBus` event emission (`ItemAdded`, `CharacterUpdated`, `CharacterLevelUp`, `CombatStarted`).
@@ -311,8 +315,14 @@ MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIE
   - Introduced nominal brand types (`CharacterId`, `CampaignId`, `QuestId`, `ItemId`, `SpellId`, `UserId`) to prevent ID mixing bugs.
   - Expanded `GameSystemPlugin` interfaces with capabilities, permissions, version compatibility checks, and configuration validators.
 
+* Plugin Contract Verification Matrix (`src/systems/pluginContractVerifier.ts`):
+  - Automated verification verifying that every plugin registers correctly, exposes metadata, implements required capabilities, and passes compatibility checks.
+
+* Subsystem Performance Profiler (`src/utils/performanceProfiler.ts`):
+  - Data-driven performance profiler and benchmark suite measuring campaign loading, search indexing, graph rendering, plugin initialization, and voice startup latency.
+
 * Asynchronous Automated Architecture Test Harness (`src/tests/systemTestSuite.ts`):
-  - Extended the architecture test suite with asynchronous unit checks for repository strategy resolution and domain service event dispatching.
+  - Extended the architecture test suite with asynchronous unit checks for repository strategy resolution, domain service event dispatching, plugin contract verification, and subsystem performance benchmarks.
 
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG

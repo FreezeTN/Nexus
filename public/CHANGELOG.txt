@@ -184,6 +184,8 @@ MILESTONE 12: ELEMENTAL & COMBAT DAMAGE IMMUNITIES
 --------------------------------------------------------------------------------
 MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIES
 --------------------------------------------------------------------------------
+* Left Vertical Hub & Controls Dock Sidebar (`src/components/SidebarDock.tsx`):
+  - Moved top action controls (Undo/Redo, Command Palette, Campaign Graph, SDK/Plugins, Session Lobby, Voice, Options, PWA Install) into a left vertical sidebar dock, and relocated the "Main Menu" sheet into the dock as "Hub".
 * Domain Decomposition & Rules System Layout (`src/systems/dnd5e/`):
   - Decomposed monolithic calculations into isolated, single-responsibility rules modules (`abilities.ts`, `classes.ts`, `spellcasting.ts`, `combat.ts`).
 * Storage Strategy Abstraction & Repository Pattern (`src/repositories/`):
@@ -192,6 +194,10 @@ MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIE
   - Created `CharacterService` and `CombatService` encapsulating business workflows with automatic `EventBus` notifications.
 * Branded Nominal Types & Enhanced Plugin Architecture (`src/types.ts` & `src/systems/types.ts`):
   - Introduced branded nominal IDs (`CharacterId`, `CampaignId`, `QuestId`, etc.) and expanded plugin contracts with permissions and config validation.
+* Plugin Contract Verification Suite (`src/systems/pluginContractVerifier.ts`):
+  - Added automated contract tests verifying registration, metadata exposure, capabilities implementation, and version compatibility across all plugins.
+* Subsystem Performance Profiler (`src/utils/performanceProfiler.ts`):
+  - Built data-driven latency profiler and benchmark suite covering campaign loading, search indexing, graph rendering, plugin initialization, and voice startup.
 
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
