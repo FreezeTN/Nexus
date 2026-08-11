@@ -12,7 +12,10 @@ import {
   Radio,
   Settings,
   Laptop,
-  ChevronRight
+  ChevronRight,
+  ChevronLeft,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 import { TabId } from './Navigation';
 import { UserProfile, GameSession } from '../lib/firebase';
@@ -60,6 +63,23 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('penpaper_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleCollapse = () => {
+    setIsCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('penpaper_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -116,13 +136,205 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
     ? 'Call of Cthulhu 7e'
     : 'Manual & System Reference';
 
+  // COLLAPSED / PHASED OUT MODE
+  if (isCollapsed) {
+    return (
+      <aside className="w-full lg:w-16 shrink-0 select-none transition-all duration-300 ease-in-out">
+        <div className="bg-stone-950/90 border border-stone-800/90 backdrop-blur-md rounded-2xl shadow-2xl p-2 flex flex-col items-center space-y-2">
+          {/* Phase In / Expand Toggle Button */}
+          <button
+            onClick={toggleCollapse}
+            className="w-full py-2 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 transition cursor-pointer shadow-sm group flex items-center justify-center gap-2"
+            title="Phase In / Expand Vertical Menu"
+          >
+            <PanelLeftOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+            <span className="lg:hidden text-xs font-bold font-serif">Phase In Menu</span>
+          </button>
+
+          <div className="w-full h-px bg-stone-800/80 my-0.5" />
+
+          {/* Navigation Quick Icon Rail */}
+          <div className="flex flex-row lg:flex-col items-center justify-center gap-1.5 w-full flex-wrap">
+            {/* Hub Icon */}
+            <button
+              onClick={() => onTabChange('menu')}
+              className={`p-2 rounded-xl border transition-all cursor-pointer group ${
+                isHubActive
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-stone-400 hover:text-amber-300'
+              }`}
+              title="Hub (Systems & Roster)"
+            >
+              <Sparkles className="w-4 h-4" />
+            </button>
+
+            {/* User Guide Icon */}
+            <button
+              onClick={() => onTabChange('sheet6')}
+              className={`p-2 rounded-xl border transition-all cursor-pointer group ${
+                isGuideActive
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-stone-400 hover:text-amber-300'
+              }`}
+              title={guideTitle}
+            >
+              <BookOpen className="w-4 h-4" />
+            </button>
+
+            {/* Compendium Icon */}
+            <button
+              onClick={() => onTabChange('sheet7')}
+              className={`p-2 rounded-xl border transition-all cursor-pointer group ${
+                isCompendiumActive
+                  ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-stone-400 hover:text-amber-300'
+              }`}
+              title="Compendium (Monsters, Spells & Items)"
+            >
+              <Library className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="w-full h-px bg-stone-800/80 my-0.5" />
+
+          {/* Quick Actions Icon Rail */}
+          <div className="flex flex-row lg:flex-col items-center justify-center gap-1.5 w-full flex-wrap">
+            {/* Undo */}
+            <button
+              onClick={onUndo}
+              disabled={!canUndo}
+              className={`p-2 rounded-xl border text-xs transition ${
+                canUndo
+                  ? 'bg-stone-900 hover:bg-stone-800 text-amber-300 border-stone-800 hover:border-amber-600/40 cursor-pointer'
+                  : 'bg-stone-900/40 text-stone-600 border-transparent cursor-not-allowed opacity-40'
+              }`}
+              title="Undo (Ctrl+Z)"
+            >
+              <Undo2 className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Redo */}
+            <button
+              onClick={onRedo}
+              disabled={!canRedo}
+              className={`p-2 rounded-xl border text-xs transition ${
+                canRedo
+                  ? 'bg-stone-900 hover:bg-stone-800 text-amber-300 border-stone-800 hover:border-amber-600/40 cursor-pointer'
+                  : 'bg-stone-900/40 text-stone-600 border-transparent cursor-not-allowed opacity-40'
+              }`}
+              title="Redo (Ctrl+Y)"
+            >
+              <Redo2 className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Command Palette */}
+            {onOpenCommandPalette && (
+              <button
+                onClick={onOpenCommandPalette}
+                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-amber-400 transition cursor-pointer"
+                title="Command Palette (Ctrl+K)"
+              >
+                <Command className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Campaign Graph */}
+            {onOpenCampaignGraph && (
+              <button
+                onClick={onOpenCampaignGraph}
+                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-amber-400 transition cursor-pointer"
+                title="Campaign Knowledge Graph"
+              >
+                <Network className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* SDK / Plugins */}
+            {onOpenExtensionManager && (
+              <button
+                onClick={onOpenExtensionManager}
+                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-indigo-400 transition cursor-pointer"
+                title="SDK / Plugins Manager"
+              >
+                <Layers className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Session Lobby */}
+            {currentUser && onOpenSessionLobby && (
+              <button
+                onClick={onOpenSessionLobby}
+                className={`p-2 rounded-xl border transition cursor-pointer ${
+                  activeSession
+                    ? 'bg-emerald-950/60 border-emerald-600/60 text-emerald-300 animate-pulse'
+                    : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
+                }`}
+                title={activeSession ? `Multiplayer Session (Room: ${activeSession.code})` : 'Multiplayer Session Lobby'}
+              >
+                <Users className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Party Voice */}
+            {onOpenVoiceModal && (
+              <button
+                onClick={onOpenVoiceModal}
+                className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-emerald-400 transition cursor-pointer"
+                title="Party WebRTC Voice Chat"
+              >
+                <Radio className="w-4 h-4 animate-pulse" />
+              </button>
+            )}
+
+            {/* Options */}
+            {onOpenAudioModal && (
+              <button
+                onClick={onOpenAudioModal}
+                className={`p-2 rounded-xl border transition cursor-pointer ${
+                  isSoundEnabled()
+                    ? 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
+                    : 'bg-rose-950/60 border-rose-800/80 text-rose-300'
+                }`}
+                title="Options & Audio Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Install PWA */}
+            <button
+              onClick={handleTriggerInstall}
+              className={`p-2 rounded-xl border transition cursor-pointer ${
+                isStandalone
+                  ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
+                  : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
+              }`}
+              title={isStandalone ? 'App Installed' : 'Install PWA App'}
+            >
+              <Laptop className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  // EXPANDED MODE
   return (
-    <aside className="w-full lg:w-60 shrink-0 select-none">
+    <aside className="w-full lg:w-60 shrink-0 select-none transition-all duration-300 ease-in-out">
       <div className="bg-stone-950/90 border border-stone-800/90 backdrop-blur-md rounded-2xl shadow-2xl p-2.5 sm:p-3 space-y-3">
         {/* TOP: NAVIGATION & SYSTEM GUIDES (Hub, User Guide, Compendium) */}
         <div className="space-y-1.5">
           <div className="px-1 flex items-center justify-between text-[11px] font-bold text-stone-400 uppercase tracking-wider">
             <span>Navigation & Rules</span>
+            <button
+              onClick={toggleCollapse}
+              className="p-1 rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/50 text-stone-400 hover:text-amber-300 transition cursor-pointer shadow-sm group flex items-center gap-1 text-[10px] normal-case"
+              title="Phase out / collapse vertical menu"
+            >
+              <PanelLeftClose className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-300" />
+              <span className="hidden sm:inline text-[10px] text-stone-400 group-hover:text-amber-300 font-mono">Phase Out</span>
+            </button>
           </div>
 
           {/* Hub */}
@@ -215,7 +427,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
         {/* TOOLBAR ACTIONS HEADER */}
         <div className="px-1 flex items-center justify-between text-[11px] font-bold text-stone-400 uppercase tracking-wider">
           <span>Quick Controls</span>
-          <span className="text-[10px] font-mono text-stone-600">v3.9.0</span>
+          <span className="text-[10px] font-mono text-stone-600">v0.9.5</span>
         </div>
 
         {/* VERTICAL BUTTON STACK */}

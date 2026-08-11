@@ -1230,7 +1230,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
           </div>
 
           {/* Edition & View Selection Toggle Tabs */}
-          <div className="bg-stone-950/90 p-1.5 rounded-2xl border border-amber-600/40 flex items-center gap-1.5 w-full max-w-full overflow-x-auto no-scrollbar scrollbar-none shadow-lg">
+          <div className="bg-stone-950/90 p-1.5 rounded-2xl border border-amber-600/40 flex items-center gap-1.5 w-full max-w-full overflow-x-auto scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent shadow-lg pr-4">
             <button
               onClick={() => setGuideEdition('manual')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
@@ -1289,6 +1289,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
               <History className="w-3.5 h-3.5 text-amber-400" />
               <span>Changelog</span>
             </button>
+            <div className="w-8 shrink-0 h-1" />
           </div>
         </div>
 
@@ -1303,7 +1304,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={
                   guideEdition === 'changelog'
-                    ? 'Search release notes (e.g. v2.5.0, DM, audio)...'
+                    ? 'Search release notes (e.g. v0.9.0, DM, audio)...'
                     : `Search ${guideEdition} functions (e.g. roll, volume, skill, hp)...`
                 }
                 className="w-full bg-stone-950/90 border border-stone-800 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"

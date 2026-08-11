@@ -318,8 +318,8 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
             )}
           </div>
 
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-none py-1 shrink-0">
-            <span className="text-xs font-mono text-stone-400 flex items-center gap-1">
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent py-1 shrink-0 max-w-full pr-4">
+            <span className="text-xs font-mono text-stone-400 flex items-center gap-1 shrink-0">
               <Filter className="w-3.5 h-3.5 text-amber-400" /> System:
             </span>
             {[
@@ -331,7 +331,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               <button
                 key={sys.id}
                 onClick={() => setSelectedSystem(sys.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition whitespace-nowrap shrink-0 ${
                   selectedSystem === sys.id
                     ? 'bg-amber-500/20 border-amber-500 text-amber-300'
                     : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
@@ -340,11 +340,12 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                 {sys.label}
               </button>
             ))}
+            <div className="w-6 shrink-0 h-1" />
           </div>
         </div>
 
         {/* CATEGORY TABS */}
-        <div className="mt-4 flex items-center gap-2 overflow-x-auto scrollbar-none pt-2">
+        <div className="mt-4 flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent pt-2 pb-2 pr-4">
           {[
             { id: 'all' as const, label: 'All Entries', icon: Layers, count: categoryCounts.all },
             { id: 'monsters' as const, label: 'Monsters & NPCs', icon: Crown, count: categoryCounts.monsters },
@@ -375,6 +376,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               </button>
             );
           })}
+          <div className="w-8 shrink-0 h-1" />
         </div>
       </div>
 

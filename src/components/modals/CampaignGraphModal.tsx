@@ -541,13 +541,13 @@ export function CampaignGraphModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-hidden animate-fadeIn">
-      <div className="bg-stone-900 border border-amber-600/50 rounded-3xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-amber-500/20">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-hidden animate-fadeIn">
+      <div className="bg-stone-900 border border-amber-600/50 rounded-2xl w-full max-w-5xl max-h-[86vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-amber-500/20">
         
         {/* Header Bar */}
-        <div className="p-4 sm:p-5 bg-stone-950 border-b border-stone-800 flex items-center justify-between gap-4 shrink-0">
+        <div className="px-5 py-3.5 bg-stone-950 border-b border-stone-800 flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/30 rounded-2xl text-indigo-400">
+            <div className="p-2 bg-indigo-500/10 border border-indigo-500/30 rounded-xl text-indigo-400">
               <Network className="w-6 h-6" />
             </div>
             <div>
@@ -616,7 +616,7 @@ export function CampaignGraphModal({
           </div>
 
           {/* Category Filter Chips */}
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar scrollbar-none pb-1 sm:pb-0">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent pb-1 pr-4">
             {['All', 'Monsters', 'NPCs', 'Locations', 'Factions', 'Quests', 'Items', 'Sessions', 'Timelines'].map((cat) => (
               <button
                 key={cat}
@@ -630,6 +630,7 @@ export function CampaignGraphModal({
                 {cat}
               </button>
             ))}
+            <div className="w-6 shrink-0 h-1" />
           </div>
         </div>
 

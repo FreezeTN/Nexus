@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown } from 'lucide-react';
+import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink } from 'lucide-react';
 import { RuleEdition } from '../types';
 import { UserProfile, GameSession } from '../lib/firebase';
 
@@ -8,6 +8,7 @@ export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5
 interface NavigationProps {
   activeTab: TabId;
   onTabChange: (tab: TabId) => void;
+  onDetachTab?: (tab: TabId) => void;
   isSpellcaster: boolean;
   edition?: RuleEdition;
   currentUser?: UserProfile | null;
@@ -19,6 +20,7 @@ interface NavigationProps {
 export const Navigation: React.FC<NavigationProps> = ({
   activeTab,
   onTabChange,
+  onDetachTab,
   isSpellcaster,
   edition = '5e',
   currentUser,
@@ -204,36 +206,58 @@ export const Navigation: React.FC<NavigationProps> = ({
             const isActive = activeTab === tab.id;
 
             return (
-              <button
+              <div
                 key={tab.id}
                 data-active={isActive ? "true" : "false"}
-                onClick={() => onTabChange(tab.id)}
-                className={`flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border transition whitespace-nowrap text-left shrink-0 ${
+                className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition whitespace-nowrap text-left shrink-0 ${
                   isActive
                     ? 'bg-theme-dark border-theme-strong text-theme-text shadow-md font-medium shadow-theme-glow ring-1 ring-amber-500/30'
                     : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
                 }`}
               >
-                <div
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isActive ? 'bg-theme-accent text-stone-950 font-bold' : 'bg-stone-800 text-stone-400'
-                  }`}
+                <button
+                  onClick={() => onTabChange(tab.id)}
+                  className="flex items-center gap-2 cursor-pointer focus:outline-none"
                 >
-                  <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm font-serif font-bold leading-tight">
-                    {tab.title}
-                  </span>
-                  {tab.badge && (
-                    <span className="text-[9px] bg-purple-900/80 text-purple-200 px-1 py-0.2 rounded font-bold">
-                      {tab.badge}
+                  <div
+                    className={`p-1.5 rounded-lg transition-colors ${
+                      isActive ? 'bg-theme-accent text-stone-950 font-bold' : 'bg-stone-800 text-stone-400'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs sm:text-sm font-serif font-bold leading-tight">
+                      {tab.title}
                     </span>
-                  )}
-                </div>
-              </button>
+                    {tab.badge && (
+                      <span className="text-[9px] bg-purple-900/80 text-purple-200 px-1 py-0.2 rounded font-bold">
+                        {tab.badge}
+                      </span>
+                    )}
+                  </div>
+                </button>
+
+                {onDetachTab && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDetachTab(tab.id);
+                    }}
+                    title={`Detach ${tab.title} to popup window / secondary screen`}
+                    className={`p-1 rounded-md transition hover:scale-110 ${
+                      isActive
+                        ? 'text-amber-400 hover:text-amber-200 hover:bg-amber-500/20'
+                        : 'text-stone-500 opacity-60 hover:opacity-100 hover:text-amber-300 hover:bg-stone-800'
+                    }`}
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             );
           })}
+          <div className="w-4 shrink-0 h-1" />
         </div>
 
         {/* Right Scroll Button */}
@@ -249,6 +273,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         >
           <ChevronRight className="w-4 h-4" />
         </button>
+
       </div>
     </nav>
   );

@@ -616,7 +616,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                   </div>
                   <div className="bg-stone-900 p-2 rounded border border-stone-800">
                     <span className="text-stone-500 block text-[10px]">VERSION</span>
-                    <span className="text-amber-300 font-bold">v2.5.0-hydra</span>
+                    <span className="text-amber-300 font-bold">v0.9.5-hydra</span>
                   </div>
                 </div>
               </div>

@@ -15,6 +15,13 @@ import { Sheet5DescriptionNotes } from './components/sheets/Sheet5DescriptionNot
 import { Sheet6UserGuide } from './components/sheets/Sheet6UserGuide';
 import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
 import { SheetDmOverview } from './components/sheets/SheetDmOverview';
+import { DetachedHeaderBanner } from './components/common/DetachedHeaderBanner';
+import {
+  getDetachedParams,
+  openDetachedWindow,
+  broadcastStateUpdate,
+  useDetachedSyncListener
+} from './utils/useDetachedSync';
 import { MainMenu } from './components/MainMenu';
 import { NewCharacterModal } from './components/modals/NewCharacterModal';
 import { AuthModal } from './components/modals/AuthModal';
@@ -204,7 +211,13 @@ export default function App() {
     canRedo: canRedoCharacters
   } = useHistoryState<CharacterData[]>(initialCharacters);
 
+  const detachedParams = useMemo(() => getDetachedParams(), []);
+  const isDetachedWindow = Boolean(detachedParams.detachedTab);
+
   const [activeCharacterId, setActiveCharacterId] = useState<string>(() => {
+    if (detachedParams.initialCharId && characters.some(c => c.id === detachedParams.initialCharId)) {
+      return detachedParams.initialCharId;
+    }
     try {
       const savedId = localStorage.getItem(STORAGE_KEY_ACTIVE);
       if (savedId && characters.some(c => c.id === savedId)) return savedId;
@@ -214,7 +227,12 @@ export default function App() {
     return '';
   });
 
-  const [activeTab, setActiveTab] = useState<TabId>('sheet1');
+  const [activeTab, setActiveTab] = useState<TabId>(() => {
+    if (detachedParams.detachedTab) {
+      return normalizeTabId(detachedParams.detachedTab);
+    }
+    return 'sheet1';
+  });
   const [showNewCharacterModal, setShowNewCharacterModal] = useState(false);
   const [showPartyModal, setShowPartyModal] = useState(false);
   const [newCharCategory, setNewCharCategory] = useState<'character' | 'monster' | 'vendor'>('character');
@@ -293,6 +311,23 @@ export default function App() {
       console.error('Failed to save parties to localStorage', e);
     }
   }, [parties]);
+
+  // Real-time cross-window / secondary monitor synchronization
+  useDetachedSyncListener((syncedChars, syncedActiveId, syncedParties) => {
+    if (syncedChars && syncedChars.length > 0) {
+      setCharacters(syncedChars);
+    }
+    if (syncedActiveId) {
+      setActiveCharacterId(syncedActiveId);
+    }
+    if (syncedParties) {
+      setParties(syncedParties);
+    }
+  });
+
+  const handleDetachTab = (tabId: TabId) => {
+    openDetachedWindow(tabId, activeCharacterId, activeSessionCode);
+  };
 
   const handleOpenNewCharacterModal = (category: 'character' | 'monster' | 'vendor' = 'character') => {
     if (!currentUser) {
@@ -553,7 +588,11 @@ export default function App() {
     }
 
     const recalculated = recalculateCharacterAC(finalChar);
-    setCharacters(prev => prev.map(c => c.id === recalculated.id ? recalculated : c));
+    setCharacters(prev => {
+      const updatedList = prev.map(c => c.id === recalculated.id ? recalculated : c);
+      broadcastStateUpdate(updatedList, activeCharacterId, parties);
+      return updatedList;
+    });
     if (recalculated.id === activeCharacterId && recalculated.edition) {
       setPreviewTheme(recalculated.edition);
     }
@@ -744,6 +783,128 @@ export default function App() {
     handleRoll(`${activeCharacter.name} Initiative`, 20, 1, activeCharacter.initiativeBonus, 'normal');
   };
 
+  if (isDetachedWindow) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-100 font-sans selection:bg-amber-600 selection:text-stone-950" data-theme={currentSystemTheme}>
+        <DetachedHeaderBanner
+          detachedTab={activeTab}
+          onTabChange={setActiveTab}
+          activeCharacter={activeCharacter}
+          characters={characters}
+          onSelectCharacter={handleSelectCharacter}
+          isDm={isDm}
+          sessionCode={activeSessionCode}
+        />
+
+        <main className="w-full max-w-[1600px] mx-auto p-3 sm:p-6">
+          {activeTab === 'sheetDm' && (
+            activeSession ? (
+              <SheetDmOverview
+                activeSession={activeSession}
+                allCharacters={characters}
+                currentUser={currentUser}
+                onUpdateCharacter={handleUpdateCharacter}
+                onDetach={() => handleDetachTab('sheetDm')}
+              />
+            ) : (
+              <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 text-center space-y-3">
+                <Crown className="w-8 h-8 text-amber-400 mx-auto" />
+                <h2 className="text-lg font-serif font-bold text-amber-200">DM Overview Detached View</h2>
+                <p className="text-sm text-stone-400 max-w-md mx-auto">
+                  To view live DM Party Overrides, start or join an active game session from the Session Lobby in the main window.
+                </p>
+              </div>
+            )
+          )}
+
+          {activeTab === 'sheet1' && activeCharacter && (
+            <Sheet1StatsFeatures
+              character={activeCharacter}
+              currentUser={currentUser}
+              activeSession={activeSession}
+              onUpdateCharacter={handleUpdateCharacter}
+              onAddMonsterToRoster={(monster) => {
+                setCharacters(prev => [...prev, monster]);
+              }}
+              onRoll={handleRoll}
+            />
+          )}
+
+          {activeTab === 'sheet2' && activeCharacter && (
+            <Sheet2Combat
+              character={activeCharacter}
+              allCharacters={characters}
+              parties={parties}
+              currentUser={currentUser}
+              onOpenPartyManager={() => setShowPartyModal(true)}
+              onUpdateCharacter={handleUpdateCharacter}
+              onAddMonsterToRoster={(monster) => {
+                setCharacters(prev => [...prev, monster]);
+              }}
+              onRoll={handleRoll}
+              onRollDamage={handleRollDamage}
+            />
+          )}
+
+          {activeTab === 'sheet3' && activeCharacter && (
+            <Sheet3GearWealth
+              character={activeCharacter}
+              onUpdateCharacter={handleUpdateCharacter}
+              onRollDamage={handleRollDamage}
+            />
+          )}
+
+          {activeTab === 'sheet4' && activeCharacter && (
+            <Sheet4Spells
+              character={activeCharacter}
+              allCharacters={characters}
+              currentUser={currentUser}
+              onUpdateCharacter={handleUpdateCharacter}
+              onAddMonsterToRoster={(monster) => {
+                setCharacters(prev => [...prev, monster]);
+              }}
+              onRoll={handleRoll}
+              onRollDamage={handleRollDamage}
+            />
+          )}
+
+          {activeTab === 'sheet5' && activeCharacter && (
+            <Sheet5DescriptionNotes
+              character={activeCharacter}
+              onUpdateCharacter={handleUpdateCharacter}
+            />
+          )}
+
+          {activeTab === 'sheet6' && (
+            <Sheet6UserGuide
+              edition={currentSystemTheme}
+              enabledSystems={enabledSystems}
+            />
+          )}
+
+          {activeTab === 'sheet7' && (
+            <Sheet7Compendium
+              activeCharacter={activeCharacter}
+              onUpdateCharacter={handleUpdateCharacter}
+              onAddMonsterToRoster={(monster) => {
+                setCharacters(prev => [...prev, monster]);
+              }}
+              enabledSystems={enabledSystems}
+            />
+          )}
+        </main>
+
+        <DiceRoller
+          rollLogs={rollLogs}
+          onRoll={handleRoll}
+          onClearLogs={() => setRollLogs([])}
+          activeRollResult={activeRollResult}
+          onOpenAudioModal={() => setShowAudioModal(true)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-stone-950 text-stone-100 font-sans selection:bg-amber-600 selection:text-stone-950 transition-colors duration-300" data-theme={currentSystemTheme}>
       {/* Top DM Active Banner Indicator */}
@@ -817,6 +978,7 @@ export default function App() {
           <Navigation
             activeTab={activeTab}
             onTabChange={setActiveTab}
+            onDetachTab={handleDetachTab}
             isSpellcaster={activeCharacter?.isSpellcaster || false}
             edition={currentSystemTheme}
             currentUser={currentUser}
@@ -937,6 +1099,7 @@ export default function App() {
             allCharacters={characters}
             currentUser={currentUser}
             onUpdateCharacter={handleUpdateCharacter}
+            onDetach={() => handleDetachTab('sheetDm')}
           />
         )}
       </main>

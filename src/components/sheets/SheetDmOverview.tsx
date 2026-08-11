@@ -29,7 +29,8 @@ import {
   Skull,
   UserCheck,
   Check,
-  X
+  X,
+  ExternalLink
 } from 'lucide-react';
 
 import { KnowledgeGraphCard, KnowledgeEntity } from '../common/KnowledgeGraphCard';
@@ -39,6 +40,7 @@ interface SheetDmOverviewProps {
   allCharacters: CharacterData[];
   currentUser: UserProfile | null;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onDetach?: () => void;
 }
 
 const COMMON_CONDITIONS = [
@@ -63,7 +65,8 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
   activeSession,
   allCharacters,
   currentUser,
-  onUpdateCharacter
+  onUpdateCharacter,
+  onDetach
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [quickAmountMap, setQuickAmountMap] = useState<Record<string, string>>({});
@@ -251,6 +254,17 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
               <Heart className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/30" />
               <span>Party +10 HP</span>
             </button>
+
+            {onDetach && (
+              <button
+                onClick={onDetach}
+                className="px-3 py-1.5 bg-purple-900/80 hover:bg-purple-800 border border-purple-500/50 text-purple-100 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                title="Pop out DM Overview into a separate window for secondary screen / monitor"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-purple-300" />
+                <span>Pop Out to 2nd Screen</span>
+              </button>
+            )}
           </div>
         </div>
 

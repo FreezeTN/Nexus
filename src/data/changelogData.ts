@@ -14,11 +14,36 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
-    version: 'v4.0.0',
+    version: 'v0.9.5',
     date: 'August 2026',
-    title: 'Streamlined Navigation Layout, Quick Vitals Swap & On-Demand Voice Client',
+    title: 'Multi-Monitor Detached Sheets, Real-Time Cross-Window Sync & Responsive Modal Optimization',
     badge: 'Latest Update',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🖥️ Multi-Monitor Detached Sheet Pop-Outs',
+        detail: 'Allowed any character sheet tab (Stats, Combat, Gear, Spells, Notes, Compendium, DM Overview) to be detached as a standalone popup window for secondary monitor and dual-display DM setups.'
+      },
+      {
+        category: '⚡ Cross-Window Real-Time State Synchronization',
+        detail: 'Integrated BroadcastChannel and storage listeners ensuring HP changes, spell slot usages, inventory updates, and party overrides sync instantaneously across all detached popup windows and main browser sessions.'
+      },
+      {
+        category: '📌 Detached Header Control Banner',
+        detail: 'Added a dedicated top banner for detached pop-out windows featuring quick sheet tab switching, character roster selector, live sync status badge, room code indicator, and window controls.'
+      },
+      {
+        category: '📐 Responsive Modal Layouts & Ceiling Optimization',
+        detail: 'Optimized modal container dimensions, padding, and max-height ceilings across Developer SDK, Options, Campaign Graph, User Manual, and Extension Manager dialogs for optimal viewability on all display resolutions.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.0',
+    date: 'August 2026',
+    title: 'Streamlined Navigation Layout, Quick Vitals Swap & On-Demand Voice Client',
+    badge: 'Previous Version',
+    badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
     highlights: [
       {
         category: '🔄 Character Sheets & Quick Vitals Header Swapping',
@@ -39,7 +64,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.9.0',
+    version: 'v0.8.5',
     date: 'August 2026',
     title: 'Enterprise Architecture, Plugin Contract Verification & Data-Driven Subsystem Profiler',
     badge: 'Previous Version',
@@ -76,7 +101,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.8.0',
+    version: 'v0.8.0',
     date: 'August 2026',
     title: 'Project Credits Tab, Knowledge Graph Node Editing & Active Speaker Combat Highlighting',
     badge: 'Previous Version',
@@ -97,7 +122,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.7.0',
+    version: 'v0.7.5',
     date: 'August 2026',
     title: 'Campaign Relationship Tree Diagram & WebRTC ICE Auto-Restart Resilience',
     badge: 'Previous Version',
@@ -114,7 +139,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.6.0',
+    version: 'v0.7.0',
     date: 'August 2026',
     title: 'Integrated WebRTC Party Voice Client, UI Positioning Fixes & Security Hardening',
     badge: 'Previous Version',
@@ -135,10 +160,10 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.5.0',
+    version: 'v0.6.5',
     date: 'August 2026',
     title: 'Obsidian RPG Campaign Graph, Unified Omnipresent Search & Performance Virtualization',
-    badge: 'Major Release',
+    badge: 'Beta Milestone',
     badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
     highlights: [
       {
@@ -156,7 +181,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.4.0',
+    version: 'v0.6.0',
     date: 'August 2026',
     title: 'Complete Application User Manual, Horizontal Tab Overflow Engine & Build Artifact Fixes',
     badge: 'Feature Update',
@@ -177,7 +202,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.3.1',
+    version: 'v0.5.5',
     date: 'August 2026',
     title: 'Versioned Extension Marketplace, Guest Mode & Dashboard Routing',
     badge: 'Feature Update',
@@ -206,7 +231,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.3.0',
+    version: 'v0.5.0',
     date: 'August 2026',
     title: 'First-Class Plugin Ecosystem, Universal Search Everywhere & Interconnected Knowledge Graph',
     badge: 'Feature Update',
@@ -227,7 +252,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.2.0',
+    version: 'v0.4.5',
     date: 'August 2026',
     title: 'Workspace Customizer, Undo/Redo Engine, Universal Indexing & Architecture Docs',
     badge: 'Feature Update',
@@ -252,7 +277,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.1.0',
+    version: 'v0.4.0',
     date: 'August 2026',
     title: 'Global Command Palette (Ctrl+K), Central Event Bus & Extension SDK',
     badge: 'Feature Update',
@@ -277,7 +302,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v3.0.0',
+    version: 'v0.3.5',
     date: 'August 2026',
     title: 'RPG System Plugin SDK Architecture & Core Refactoring',
     badge: 'Architecture Upgrade',
@@ -298,7 +323,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v2.5.2',
+    version: 'v0.3.2',
     date: 'August 2026',
     title: 'DM Overview Navigation, Spell Slot Tracker Engine & UI Cleanup',
     badge: 'Feature Update',
@@ -323,7 +348,7 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v2.5.1',
+    version: 'v0.3.1',
     date: 'August 2026',
     title: 'Spell Class Requirements Engine & DM Bypass Override',
     badge: 'Feature Update',
@@ -348,10 +373,10 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v2.5.0',
+    version: 'v0.3.0',
     date: 'August 2026',
     title: 'DM Presence Unlocking, Options Control & Spellbook Enhancements',
-    badge: 'Major Feature',
+    badge: 'Alpha Milestone',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     highlights: [
       {
@@ -393,10 +418,10 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v2.4.0',
+    version: 'v0.2.5',
     date: 'August 2026',
     title: 'Procedural Sound Synthesizer & Max HP Inspector',
-    badge: 'Major Feature',
+    badge: 'Pre-Alpha',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     highlights: [
       {
@@ -414,10 +439,10 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v2.3.0',
+    version: 'v0.2.0',
     date: 'August 2026',
     title: 'Multi-TRPG Systems & Instant Conversion',
-    badge: 'Core Platform',
+    badge: 'Pre-Alpha',
     badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
     highlights: [
       {
@@ -435,10 +460,10 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v2.2.0',
+    version: 'v0.1.5',
     date: 'August 2026',
     title: 'Firebase Live Sessions & Party Manager',
-    badge: 'Multiplayer',
+    badge: 'Pre-Alpha',
     badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
     highlights: [
       {
@@ -452,10 +477,10 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v2.1.0',
+    version: 'v0.1.2',
     date: 'August 2026',
     title: 'Encounter Tracker & Attack Resolver',
-    badge: 'Combat Engine',
+    badge: 'Pre-Alpha',
     badgeColor: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
     highlights: [
       {
@@ -469,10 +494,10 @@ export const changelogData: ChangelogEntry[] = [
     ]
   },
   {
-    version: 'v1.0.0',
+    version: 'v0.1.0',
     date: 'August 2026',
     title: 'UI Modernization & Animated HP Orb',
-    badge: 'Initial Release',
+    badge: 'Prototype Start',
     badgeColor: 'bg-stone-500/20 text-stone-300 border-stone-500/40',
     highlights: [
       {
