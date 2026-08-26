@@ -216,8 +216,8 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
               <h1 className="text-lg sm:text-xl font-serif font-bold text-amber-200 tracking-wide">
                 DM Party Live Dashboard
               </h1>
-              <span className="text-xs font-mono bg-purple-950 text-purple-300 border border-purple-700/60 px-2 py-0.5 rounded-full font-bold">
-                Session {activeSession.code}
+              <span className="text-xs font-serif bg-purple-950 text-purple-300 border border-purple-700/60 px-2.5 py-0.5 rounded-full font-bold">
+                Campaign: {activeSession.name}
               </span>
             </div>
             <p className="text-xs text-stone-400 max-w-2xl">
@@ -296,7 +296,7 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
           <Users className="w-10 h-10 text-stone-600 mx-auto" />
           <h2 className="text-base font-serif font-bold text-amber-200">No Characters Currently in Session</h2>
           <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
-            Players joining session <span className="font-mono text-amber-300">{activeSession.code}</span> will automatically appear here once they assign their characters. You can also pre-add participant characters in the Session Lobby Modal.
+            Players joining campaign <strong className="text-amber-300 font-serif">{activeSession.name}</strong> will automatically appear here once they assign their characters. You can also pre-add participant characters in the Session Lobby Modal.
           </p>
         </div>
       ) : filteredCharacters.length === 0 ? (

@@ -5,6 +5,8 @@ import { WealthCurrencyPanel } from './sheet3/WealthCurrencyPanel';
 import { MagicAttunementPanel } from './sheet3/MagicAttunementPanel';
 import { EncumbranceCapacityPanel } from './sheet3/EncumbranceCapacityPanel';
 import { InventoryListPanel } from './sheet3/InventoryListPanel';
+import { useLayoutCustomization } from '../../utils/layoutCustomization';
+import { EmptyLayoutState } from '../common/EmptyLayoutState';
 
 interface Sheet3Props {
   character: CharacterData;
@@ -19,7 +21,12 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   onRoll,
   onRollDamage
 }) => {
+  const { isVisible } = useLayoutCustomization();
+
   if (character.edition === 'shadowrun') {
+    if (!isVisible('sr_matrix')) {
+      return <EmptyLayoutState sheetName="Gear & Matrix" />;
+    }
     return (
       <ShadowrunMatrixRiggingPanel
         character={character}
@@ -29,31 +36,50 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
     );
   }
 
+  const showWealth = isVisible('s3_wealthCurrency');
+  const showAttunement = isVisible('s3_magicAttunement');
+  const showEncumbrance = isVisible('s3_encumbrance');
+  const showInventory = isVisible('s3_inventoryList');
+
+  const hasAnyVisible = showWealth || showAttunement || showEncumbrance || showInventory;
+
+  if (!hasAnyVisible) {
+    return <EmptyLayoutState sheetName="Gear & Wealth" />;
+  }
+
   return (
     <div className="space-y-6 pb-12">
       {/* SECTION 1: Wealth & Currency */}
-      <WealthCurrencyPanel
-        character={character}
-        onUpdateCharacter={onUpdateCharacter}
-      />
+      {showWealth && (
+        <WealthCurrencyPanel
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
 
       {/* SECTION 2: Magic Item Attunement Slots */}
-      <MagicAttunementPanel
-        character={character}
-        onUpdateCharacter={onUpdateCharacter}
-      />
+      {showAttunement && (
+        <MagicAttunementPanel
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
 
       {/* SECTION 3: Carrying Capacity & Encumbrance */}
-      <EncumbranceCapacityPanel
-        character={character}
-      />
+      {showEncumbrance && (
+        <EncumbranceCapacityPanel
+          character={character}
+        />
+      )}
 
       {/* SECTION 4: Inventory Equipment List */}
-      <InventoryListPanel
-        character={character}
-        onUpdateCharacter={onUpdateCharacter}
-        onRollDamage={onRollDamage}
-      />
+      {showInventory && (
+        <InventoryListPanel
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRollDamage={onRollDamage}
+        />
+      )}
     </div>
   );
 };

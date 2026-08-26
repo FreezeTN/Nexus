@@ -39,6 +39,14 @@ export const changelogData: ChangelogEntry[] = [
       {
         category: '🎨 Developer SDK UI Professionalization',
         detail: 'Refined Developer SDK tabs to clean "Engineering Pillars" terminology, added manual regression audit triggers with active spinner states and timestamps, and optimized state subscriptions for zero-overhead background monitoring.'
+      },
+      {
+        category: '🧹 Streamlined Character Management',
+        detail: 'Removed obsolete TRPG character conversion systems in favor of pure, native ruleset architectures for each supported TRPG system.'
+      },
+      {
+        category: '🏷️ Clean Campaign Session Dock Display',
+        detail: 'Streamlined the active multiplayer session dock button to dedicate full width to the campaign name without truncation, removing redundant live count badges.'
       }
     ]
   },

@@ -10,6 +10,7 @@ interface AddCombatantModalProps {
   allCharacters?: CharacterData[];
   parties?: Party[];
   activeEdition: RuleEdition;
+  initialType?: 'ally' | 'enemy';
   onClose: () => void;
   onAddCombatant: (combatant: Combatant) => void;
   onAddPartyToEncounter: (party: Party) => void;
@@ -20,6 +21,7 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   allCharacters = [],
   parties = [],
   activeEdition,
+  initialType = 'enemy',
   onClose,
   onAddCombatant,
   onAddPartyToEncounter
@@ -30,7 +32,7 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   const [newInit, setNewInit] = useState<number>(10);
   const [newAc, setNewAc] = useState<number>(14);
   const [newHp, setNewHp] = useState<number>(20);
-  const [newType, setNewType] = useState<'ally' | 'enemy'>('enemy');
+  const [newType, setNewType] = useState<'ally' | 'enemy'>(initialType);
   const [newMonsterXpReward, setNewMonsterXpReward] = useState<number>(450);
   const [newPortraitUrl, setNewPortraitUrl] = useState<string>('');
 

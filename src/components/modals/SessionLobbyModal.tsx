@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CharacterData, OptionalRulesConfig } from '../../types';
+import { CharacterData, OptionalRulesConfig, CampaignSaveFile } from '../../types';
 import { 
   UserProfile, 
   GameSession, 
@@ -11,7 +11,11 @@ import {
   updateSessionOptionalRules,
   addParticipantCharacterToSession,
   removeParticipantCharacterFromSession,
-  CharacterPresence 
+  CharacterPresence,
+  saveCampaignProgress,
+  loadHostCampaignSaves,
+  deleteCampaignSave,
+  saveCharacterToCloud
 } from '../../lib/firebase';
 import { 
   Users, 
@@ -22,6 +26,7 @@ import {
   Shield, 
   Heart, 
   Eye, 
+  EyeOff,
   LogOut, 
   Power, 
   Plus, 
@@ -42,7 +47,16 @@ import {
   Crosshair,
   Lock,
   Sliders,
-  RefreshCw
+  RefreshCw,
+  Save,
+  Download,
+  Upload,
+  FolderOpen,
+  History,
+  CheckCircle2,
+  Clock,
+  FileText,
+  Bookmark
 } from 'lucide-react';
 import { getPassivePerception, getEffectiveMaxHp } from '../../utils/dndCalculations';
 
@@ -363,12 +377,14 @@ interface SessionLobbyModalProps {
   onClose: () => void;
   currentUser: UserProfile | null;
   activeSession: GameSession | null;
+  activeSessionCode?: string | null;
   activeCharacter?: CharacterData | null;
   allCharacters: CharacterData[];
   presenceMap?: Record<string, CharacterPresence>;
   onSessionChange: (sessionCode: string | null) => void;
   onSelectCharacter: (charId: string) => void;
   onOpenAuthModal?: () => void;
+  onLoadCampaignSave?: (save: CampaignSaveFile) => void;
 }
 
 export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
@@ -376,14 +392,16 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
   onClose,
   currentUser,
   activeSession,
+  activeSessionCode,
   activeCharacter,
   allCharacters,
   presenceMap = {},
   onSessionChange,
   onSelectCharacter,
-  onOpenAuthModal
+  onOpenAuthModal,
+  onLoadCampaignSave
 }) => {
-  const [tab, setTab] = useState<'current' | 'join' | 'create'>('current');
+  const [tab, setTab] = useState<'current' | 'join' | 'create' | 'saves'>('current');
   const [joinCode, setJoinCode] = useState('');
   const [selectedCharId, setSelectedCharId] = useState(activeCharacter?.id || '');
   const [newSessionName, setNewSessionName] = useState('');
@@ -399,6 +417,19 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
   const [selectedParticipantCharIds, setSelectedParticipantCharIds] = useState<string[]>([]);
   const [selectedAddParticipantCharId, setSelectedAddParticipantCharId] = useState<string>('');
   const [isAddingParticipant, setIsAddingParticipant] = useState<boolean>(false);
+  const [showRoomCode, setShowRoomCode] = useState<boolean>(true);
+  const [confirmingEnd, setConfirmingEnd] = useState<boolean>(false);
+  const [confirmDeleteSaveId, setConfirmDeleteSaveId] = useState<string | null>(null);
+
+  // Campaign Saves State
+  const [hostSaves, setHostSaves] = useState<CampaignSaveFile[]>([]);
+  const [isLoadingSaves, setIsLoadingSaves] = useState<boolean>(false);
+  const [showSaveModal, setShowSaveModal] = useState<boolean>(false);
+  const [saveName, setSaveName] = useState<string>('');
+  const [saveNotes, setSaveNotes] = useState<string>('');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [lastSavedId, setLastSavedId] = useState<string | null>(null);
 
   const activeEdition = activeCharacter?.edition || '5e';
   const playerCharacters = allCharacters.filter(c => 
@@ -407,6 +438,25 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
     c.characterClass?.toLowerCase() !== 'monster' &&
     (c.edition || '5e') === activeEdition
   );
+
+  const fetchHostSaves = async () => {
+    setIsLoadingSaves(true);
+    try {
+      const uid = currentUser?.uid || 'dm_local';
+      const saves = await loadHostCampaignSaves(uid);
+      setHostSaves(saves);
+    } catch (e) {
+      console.warn('Failed to load host saves', e);
+    } finally {
+      setIsLoadingSaves(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchHostSaves();
+    }
+  }, [isOpen, currentUser?.uid]);
 
   useEffect(() => {
     if (activeCharacter?.id && !activeCharacter.isMonster && !activeCharacter.isVendor) {
@@ -557,12 +607,15 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
   };
 
   const handleCloseSession = async () => {
-    if (!activeSession || !currentUser?.uid) return;
-    if (!window.confirm('Are you sure you want to end this session for all players?')) return;
+    if (!activeSession) return;
     try {
-      await closeGameSession(activeSession.code, currentUser.uid);
-    } catch (e) {}
+      const dmUid = currentUser?.uid || activeSession.dmUid || 'dm_local';
+      await closeGameSession(activeSession.code, activeSession.dmUid || dmUid);
+    } catch (e) {
+      console.warn('Could not close session in database:', e);
+    }
     onSessionChange(null);
+    setConfirmingEnd(false);
     setTab('join');
   };
 
@@ -580,8 +633,160 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
     }
   };
 
-  const isDmOfSession = activeSession && currentUser && activeSession.dmUid === currentUser.uid;
-  const activeTab = (!activeSession && tab === 'current') ? 'join' : tab;
+  // Campaign Save Implementation (DM only)
+  const handleOpenSaveDialog = () => {
+    if (!activeSession) return;
+    const defaultName = `${activeSession.name} - Checkpoint (${new Date().toLocaleDateString()})`;
+    setSaveName(defaultName);
+    setSaveNotes('');
+    setSaveSuccessMsg(null);
+    setShowSaveModal(true);
+  };
+
+  const handleConfirmSaveCampaign = async () => {
+    if (!activeSession) return;
+    setIsSaving(true);
+    setErrorMsg(null);
+
+    try {
+      // Filter all characters strictly to the corresponding TRPG ruleset
+      const trpgCharacters = allCharacters.filter(c => (c.edition || '5e') === activeEdition);
+
+      const sessionMemberCharIds = new Set(
+        (activeSession.members || [])
+          .map(m => m.characterId)
+          .filter(Boolean) as string[]
+      );
+      (activeSession.activeCharacterIds || []).forEach(id => sessionMemberCharIds.add(id));
+
+      // Captured characters: only characters of the matching TRPG edition
+      const capturedCharacters = trpgCharacters.filter(c => 
+        sessionMemberCharIds.has(c.id) || 
+        c.id === selectedCharId || 
+        (c.isMonster !== true && c.characterClass?.toLowerCase() !== 'monster' && c.isVendor !== true)
+      );
+
+      // Fallback to all characters of this TRPG if no specific player characters matched
+      const finalCaptured = capturedCharacters.length > 0 ? capturedCharacters : trpgCharacters;
+
+      const saveId = `save_${activeSession.code}_${Date.now()}`;
+      const saveFile: CampaignSaveFile = {
+        id: saveId,
+        name: saveName.trim() || `${activeSession.name} Checkpoint`,
+        sessionCode: activeSession.code,
+        hostUid: currentUser?.uid || activeSession.dmUid || 'dm_local',
+        hostName: currentUser?.displayName || activeSession.dmName || 'Dungeon Master',
+        savedAt: new Date().toISOString(),
+        edition: activeEdition,
+        notes: saveNotes.trim(),
+        session: {
+          name: activeSession.name,
+          code: activeSession.code,
+          optionalRules: sessionOptionalRules,
+          members: (activeSession.members || []).map(m => ({
+            uid: m.uid,
+            displayName: m.displayName,
+            role: m.role,
+            characterId: m.characterId,
+            characterName: m.characterName,
+            isUnassignedParticipant: m.isUnassignedParticipant
+          })),
+          activeCharacterIds: activeSession.activeCharacterIds || []
+        },
+        characters: finalCaptured
+      };
+
+      await saveCampaignProgress(saveFile);
+      setLastSavedId(saveId);
+      setSaveSuccessMsg(`Campaign progress saved successfully as "${saveFile.name}"!`);
+      await fetchHostSaves();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to save campaign progress.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleLoadSave = async (save: CampaignSaveFile) => {
+    if (!save) return;
+    setIsSaving(true);
+    setErrorMsg(null);
+    try {
+      if (onLoadCampaignSave) {
+        await onLoadCampaignSave(save);
+      }
+      if (save.sessionCode) {
+        onSessionChange(save.sessionCode);
+      }
+      setSaveSuccessMsg(`Campaign checkpoint "${save.name}" loaded successfully!`);
+      setTab('current');
+      setShowSaveModal(false);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to load campaign checkpoint.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteSave = async (saveId: string) => {
+    try {
+      await deleteCampaignSave(saveId);
+      setConfirmDeleteSaveId(null);
+      await fetchHostSaves();
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Failed to delete campaign save.');
+    }
+  };
+
+  const handleExportSaveJson = (save: CampaignSaveFile) => {
+    const filename = `CampaignSave_${save.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_${save.sessionCode}.json`;
+    const jsonStr = JSON.stringify(save, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportSaveJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target?.result as string) as CampaignSaveFile;
+        if (parsed && parsed.name && parsed.characters && Array.isArray(parsed.characters)) {
+          parsed.id = parsed.id || `imported_save_${Date.now()}`;
+          parsed.hostUid = currentUser?.uid || 'dm_local';
+          await saveCampaignProgress(parsed);
+          await fetchHostSaves();
+          setSaveSuccessMsg(`Successfully imported "${parsed.name}" checkpoint!`);
+          setTab('saves');
+        } else {
+          setErrorMsg('Invalid Campaign Save File structure.');
+        }
+      } catch (err: any) {
+        setErrorMsg('Failed to parse campaign save JSON file.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const isDmOfSession = Boolean(
+    activeSession && (
+      (currentUser?.uid && activeSession.dmUid === currentUser.uid) ||
+      currentUser?.role === 'DM' ||
+      !activeSession.dmUid ||
+      activeSession.dmUid.startsWith('dm_')
+    )
+  );
+  const hasActiveSession = Boolean(activeSession || activeSessionCode);
+  const activeTab = (!hasActiveSession && tab === 'current') ? 'join' : tab;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
@@ -610,44 +815,72 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
         </div>
 
         {/* Tab Selection Bar */}
-        <div className="flex border-b border-stone-800 bg-stone-950/40 px-4 pt-2 gap-2 text-xs font-bold">
-          {activeSession && (
+        <div className="border-b border-stone-800 bg-stone-950/60 p-2.5 sm:px-4">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 text-xs font-bold">
+            {hasActiveSession && (
+              <button
+                onClick={() => setTab('current')}
+                className={`px-3.5 py-2 rounded-xl transition flex items-center gap-2 shrink-0 ${
+                  activeTab === 'current'
+                    ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
+                    : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60 bg-stone-900/50 border border-stone-800'
+                }`}
+              >
+                <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
+                <span className="truncate max-w-[150px] sm:max-w-[200px]">
+                  {activeSession ? `Active (${activeSession.name})` : `Active (${activeSessionCode})`}
+                </span>
+              </button>
+            )}
+
             <button
-              onClick={() => setTab('current')}
-              className={`px-4 py-2.5 rounded-t-xl transition flex items-center gap-2 ${
-                activeTab === 'current'
+              onClick={() => setTab('join')}
+              className={`px-3.5 py-2 rounded-xl transition flex items-center gap-2 shrink-0 ${
+                activeTab === 'join'
                   ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
-                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60 bg-stone-900/50 border border-stone-800'
               }`}
             >
-              <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-              <span>Active Session ({activeSession.code})</span>
+              <Key className="w-3.5 h-3.5 shrink-0" />
+              <span>Join Room</span>
             </button>
-          )}
 
-          <button
-            onClick={() => setTab('join')}
-            className={`px-4 py-2.5 rounded-t-xl transition flex items-center gap-2 ${
-              activeTab === 'join'
-                ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-            }`}
-          >
-            <Key className="w-3.5 h-3.5" />
-            <span>Join with Room Code</span>
-          </button>
+            <button
+              onClick={() => setTab('create')}
+              className={`px-3.5 py-2 rounded-xl transition flex items-center gap-2 shrink-0 ${
+                activeTab === 'create'
+                  ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60 bg-stone-900/50 border border-stone-800'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 shrink-0" />
+              <span>Host Campaign (DM)</span>
+            </button>
 
-          <button
-            onClick={() => setTab('create')}
-            className={`px-4 py-2.5 rounded-t-xl transition flex items-center gap-2 ${
-              activeTab === 'create'
-                ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/50'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Host New Campaign (DM)</span>
-          </button>
+            <button
+              onClick={() => {
+                setTab('saves');
+                fetchHostSaves();
+              }}
+              className={`px-3.5 py-2 rounded-xl transition flex items-center gap-2 shrink-0 ${
+                activeTab === 'saves'
+                  ? 'bg-amber-600 text-stone-950 font-extrabold shadow-md'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/60 bg-stone-900/50 border border-stone-800'
+              }`}
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>Campaign Saves (DM)</span>
+              {hostSaves.length > 0 && (
+                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full border ${
+                  activeTab === 'saves'
+                    ? 'bg-stone-950 text-amber-400 border-stone-900'
+                    : 'bg-amber-950 text-amber-300 border-amber-700/60'
+                }`}>
+                  {hostSaves.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Content Body */}
@@ -659,7 +892,8 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
           )}
 
           {/* TAB 1: ACTIVE SESSION LOBBY */}
-          {activeTab === 'current' && activeSession && (
+          {activeTab === 'current' && (
+            activeSession ? (
             <div className="space-y-5">
               {/* Session Banner */}
               <div className="bg-stone-950 border border-amber-600/40 rounded-2xl p-4 md:p-5 space-y-3 relative overflow-hidden">
@@ -680,18 +914,28 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                     </h3>
                   </div>
 
-                  {/* Room Code Display Box */}
+                  {/* Room Code Display Box with Streamer Hide/Reveal Toggle */}
                   <div className="bg-stone-900/90 border border-stone-700 p-3 rounded-xl flex items-center gap-3">
                     <div>
-                      <div className="text-[9px] font-mono text-stone-400 uppercase tracking-widest">6-Digit Room Code</div>
+                      <div className="text-[9px] font-mono text-stone-400 uppercase tracking-widest flex items-center justify-between gap-2">
+                        <span>Room Code</span>
+                        <button
+                          onClick={() => setShowRoomCode(!showRoomCode)}
+                          className="text-stone-400 hover:text-amber-300 transition flex items-center gap-1 text-[9px] font-sans font-medium cursor-pointer"
+                          title={showRoomCode ? "Hide room code (Streamer Mode)" : "Reveal room code"}
+                        >
+                          {showRoomCode ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          <span>{showRoomCode ? 'Hide' : 'Reveal'}</span>
+                        </button>
+                      </div>
                       <div className="text-2xl font-mono font-black text-amber-300 tracking-widest">
-                        {activeSession.code}
+                        {showRoomCode ? activeSession.code : '••••••'}
                       </div>
                     </div>
                     <div className="flex flex-col gap-1">
                       <button
                         onClick={handleCopyCode}
-                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-lg text-xs font-bold transition flex items-center gap-1"
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
                         title="Copy Room Code"
                       >
                         {copiedCode ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -699,7 +943,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                       </button>
                       <button
                         onClick={handleCopyLink}
-                        className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-medium transition flex items-center gap-1"
+                        className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-medium transition flex items-center gap-1 cursor-pointer"
                         title="Copy direct invite URL"
                       >
                         {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
@@ -763,21 +1007,53 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                   )}
 
                   <div className="flex items-center gap-2">
+                    {isDmOfSession && (
+                      <button
+                        type="button"
+                        onClick={handleOpenSaveDialog}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold rounded-lg text-xs transition flex items-center gap-1.5 shadow-md shadow-amber-950/40 cursor-pointer"
+                        title="Save current campaign checkpoint & character states"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>Save Progress</span>
+                      </button>
+                    )}
                     <button
                       onClick={handleLeave}
-                      className="px-3 py-1 bg-stone-800 hover:bg-rose-900/60 text-stone-300 hover:text-rose-200 rounded-lg text-xs font-semibold transition flex items-center gap-1"
+                      className="px-3 py-1 bg-stone-800 hover:bg-rose-900/60 text-stone-300 hover:text-rose-200 rounded-lg text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
                     >
                       <LogOut className="w-3.5 h-3.5" />
                       <span>Leave Session</span>
                     </button>
                     {isDmOfSession && (
-                      <button
-                        onClick={handleCloseSession}
-                        className="px-3 py-1 bg-rose-900/80 hover:bg-rose-800 text-rose-100 rounded-lg text-xs font-bold transition flex items-center gap-1"
-                      >
-                        <Power className="w-3.5 h-3.5" />
-                        <span>End Session (DM)</span>
-                      </button>
+                      confirmingEnd ? (
+                        <div className="flex items-center gap-1 animate-fade-in">
+                          <button
+                            onClick={handleCloseSession}
+                            className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-lg cursor-pointer"
+                            title="Confirm and end session for all players"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Confirm End?</span>
+                          </button>
+                          <button
+                            onClick={() => setConfirmingEnd(false)}
+                            className="p-1 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-lg text-xs transition cursor-pointer"
+                            title="Cancel"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmingEnd(true)}
+                          className="px-3 py-1 bg-rose-900/80 hover:bg-rose-800 text-rose-100 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                          title="End multiplayer session for all players"
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          <span>End Session (DM)</span>
+                        </button>
+                      )
                     )}
                   </div>
                 </div>
@@ -968,6 +1244,17 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                 )}
               </div>
             </div>
+            ) : (
+              <div className="bg-stone-950/80 border border-stone-800 rounded-2xl p-8 text-center space-y-3">
+                <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto" />
+                <h3 className="text-base font-serif font-bold text-amber-200">
+                  Connecting to Session {activeSessionCode || ''}...
+                </h3>
+                <p className="text-xs text-stone-400">
+                  Restoring campaign session and synchronizing party character data.
+                </p>
+              </div>
+            )
           )}
 
           {/* TAB 2: JOIN SESSION BY CODE */}
@@ -1130,11 +1417,307 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                       </>
                     )}
                   </button>
+
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTab('saves');
+                        fetchHostSaves();
+                      }}
+                      className="text-xs text-amber-400 hover:text-amber-300 underline font-medium"
+                    >
+                      Or load from a Saved Campaign Checkpoint →
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           )}
+
+          {/* TAB 4: CAMPAIGN SAVES (DM) */}
+          {activeTab === 'saves' && (
+            <div className="space-y-4">
+              <div className="bg-stone-950/80 border border-stone-800 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-stone-800 pb-3">
+                  <div>
+                    <h3 className="font-serif font-bold text-amber-200 text-base flex items-center gap-2">
+                      <FolderOpen className="w-4 h-4 text-amber-500" /> Campaign Save Files & Checkpoints
+                    </h3>
+                    <p className="text-xs text-stone-400 leading-relaxed">
+                      Save-files capture the entire state of your campaign, including character stats, HP, spell slots, inventory, and session rules.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <label className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer border border-stone-700">
+                      <Upload className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Import .json Save</span>
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={handleImportSaveJson}
+                        className="hidden"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={fetchHostSaves}
+                      disabled={isLoadingSaves}
+                      className="p-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl border border-stone-700 transition"
+                      title="Refresh saves list"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoadingSaves ? 'animate-spin' : ''}`} />
+                    </button>
+                  </div>
+                </div>
+
+                {saveSuccessMsg && (
+                  <div className="p-3 bg-emerald-950/80 border border-emerald-600/70 rounded-xl text-xs text-emerald-200 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{saveSuccessMsg}</span>
+                    </div>
+                    {lastSavedId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const s = hostSaves.find(x => x.id === lastSavedId);
+                          if (s) handleExportSaveJson(s);
+                        }}
+                        className="text-[11px] underline font-bold text-emerald-300 hover:text-emerald-100 flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" /> Download JSON
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {isLoadingSaves ? (
+                  <div className="py-12 text-center text-xs text-stone-400 flex flex-col items-center gap-2">
+                    <RefreshCw className="w-6 h-6 text-amber-400 animate-spin" />
+                    <span>Loading saved campaign checkpoints...</span>
+                  </div>
+                ) : hostSaves.length === 0 ? (
+                  <div className="py-10 text-center space-y-3 bg-stone-900/40 rounded-xl border border-stone-800/80 p-6">
+                    <div className="p-3 bg-stone-800/50 rounded-2xl w-fit mx-auto text-stone-500">
+                      <FolderOpen className="w-8 h-8" />
+                    </div>
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-serif font-bold text-stone-300">No Campaign Saves Yet</h4>
+                      <p className="text-xs text-stone-400 max-w-md mx-auto">
+                        While in an active session, DMs can click <strong>"Save Progress"</strong> to create restore points. You can also import an existing <code>.json</code> save file.
+                      </p>
+                    </div>
+                    {activeSession && isDmOfSession && (
+                      <button
+                        type="button"
+                        onClick={handleOpenSaveDialog}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl text-xs font-bold transition shadow-md inline-flex items-center gap-1.5"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Save Current Session Now</span>
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {hostSaves.map((save) => {
+                      const charCount = save.characters?.length || 0;
+                      const activeRulesCount = Object.values(save.session?.optionalRules || {}).filter(Boolean).length;
+                      const savedDate = new Date(save.savedAt);
+                      const isRecent = Date.now() - savedDate.getTime() < 86400000;
+
+                      return (
+                        <div
+                          key={save.id}
+                          className="bg-stone-900 border border-stone-800 hover:border-amber-700/60 rounded-xl p-4 transition space-y-3 shadow-md"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-serif font-bold text-amber-200 text-sm">
+                                  {save.name}
+                                </h4>
+                                <span className="text-[10px] font-mono font-bold bg-amber-950 text-amber-400 border border-amber-800 px-2 py-0.2 rounded-full">
+                                  #{save.sessionCode}
+                                </span>
+                                <span className="text-[10px] font-mono uppercase bg-stone-800 text-stone-300 px-1.5 py-0.2 rounded">
+                                  {save.edition || '5e'}
+                                </span>
+                                {isRecent && (
+                                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-1.5 py-0.2 rounded-full">
+                                    Recent
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="text-[11px] text-stone-400 flex items-center gap-2 mt-0.5">
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-stone-500" />
+                                  {savedDate.toLocaleDateString()} at {savedDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span>•</span>
+                                <span>Host: {save.hostName}</span>
+                                <span>•</span>
+                                <span className="text-emerald-400 font-mono">{charCount} Characters Saved</span>
+                                {activeRulesCount > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="text-amber-300 font-mono">{activeRulesCount} Variant Rules</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleLoadSave(save)}
+                                className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-amber-950/30 cursor-pointer"
+                                title="Restore characters & resume this campaign"
+                              >
+                                <Sparkles className="w-3.5 h-3.5" />
+                                <span>Load & Resume</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleExportSaveJson(save)}
+                                className="p-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white rounded-xl border border-stone-700 transition cursor-pointer"
+                                title="Download JSON Save File"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+
+                              {confirmDeleteSaveId === save.id ? (
+                                <div className="flex items-center gap-1 bg-rose-950/90 p-0.5 rounded-xl border border-rose-600/80 animate-fadeIn">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSave(save.id)}
+                                    className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer"
+                                    title="Confirm permanent deletion"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    <span>Delete?</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfirmDeleteSaveId(null)}
+                                    className="p-1 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-lg transition cursor-pointer"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeleteSaveId(save.id)}
+                                  className="p-1.5 bg-stone-800 hover:bg-rose-950 text-stone-400 hover:text-rose-300 rounded-xl border border-stone-700 hover:border-rose-800 transition cursor-pointer"
+                                  title="Delete Checkpoint"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Notes */}
+                          {save.notes && (
+                            <div className="bg-stone-950/70 border border-stone-800/80 rounded-lg p-2.5 text-xs text-stone-300 flex items-start gap-2">
+                              <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                              <span className="leading-relaxed">{save.notes}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Save Checkpoint Dialog Modal Overlay */}
+        {showSaveModal && activeSession && (
+          <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-stone-900 border border-amber-600/50 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl animate-fade-in text-xs">
+              <div className="flex items-center justify-between border-b border-stone-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-amber-500/20 text-amber-400 rounded-xl border border-amber-500/30">
+                    <Save className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-serif font-bold text-amber-200 text-sm">Save Campaign Checkpoint</h3>
+                    <p className="text-[11px] text-stone-400">Snapshot campaign state & all player character sheets</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  className="p-1 text-stone-400 hover:text-white rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-[11px] font-mono uppercase text-stone-300 font-bold mb-1">
+                    Checkpoint Name
+                  </label>
+                  <input
+                    type="text"
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    placeholder="e.g. Session 14 - Boss Defeated"
+                    className="w-full bg-stone-950 border border-stone-700 rounded-xl px-3 py-2 text-stone-100 placeholder-stone-600 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-mono uppercase text-stone-300 font-bold mb-1">
+                    DM Campaign Notes (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={saveNotes}
+                    onChange={(e) => setSaveNotes(e.target.value)}
+                    placeholder="e.g. Party rested at Blue Water Inn; 450 gp looted; Strahd encounter pending..."
+                    className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-stone-100 placeholder-stone-600 focus:outline-none focus:border-amber-500 resize-none"
+                  />
+                </div>
+
+                <div className="bg-stone-950/80 p-3 rounded-xl border border-stone-800 flex items-center justify-between text-xs text-stone-400">
+                  <span>Captures current state for all {playerCharacters.length} {activeEdition === '3.5e' ? 'D&D 3.5e' : 'D&D 5e'} party characters</span>
+                  <span className="text-emerald-400 font-mono font-bold">Auto-Captured</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  className="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl font-bold transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmSaveCampaign}
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-stone-950 rounded-xl font-bold transition flex items-center gap-1.5 shadow-lg"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                  <span>{isSaving ? 'Saving Progress...' : 'Confirm & Save Checkpoint'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="p-4 border-t border-stone-800 bg-stone-950/80 flex items-center justify-between text-xs text-stone-400">
@@ -1150,3 +1733,5 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
     </div>
   );
 };
+
+export default SessionLobbyModal;

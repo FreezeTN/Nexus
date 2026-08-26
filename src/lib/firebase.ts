@@ -11,6 +11,8 @@ import {
   updateProfile,
   User 
 } from 'firebase/auth';
+
+export { onAuthStateChanged };
 import { 
   getFirestore, 
   doc, 
@@ -22,12 +24,13 @@ import {
   where, 
   getDocs, 
   deleteDoc,
+  deleteField,
   onSnapshot,
   serverTimestamp,
   setLogLevel
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { CharacterData, OptionalRulesConfig } from '../types';
+import { CharacterData, OptionalRulesConfig, CampaignSaveFile } from '../types';
 
 export type UserRole = 'Player' | 'DM';
 
@@ -58,6 +61,42 @@ function initDb() {
 }
 
 export const db = initDb();
+
+/**
+ * Recursively cleans an object for Firestore by converting undefined values to deleteField() (if merging)
+ * or omitting them completely so Firestore's setDoc/updateDoc never fails on unsupported undefined values.
+ */
+export function sanitizeForFirestore<T = any>(obj: T, useDeleteField = false): any {
+  if (obj === undefined) {
+    return useDeleteField ? deleteField() : undefined;
+  }
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item, false));
+  }
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+
+  const cleaned: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val === undefined) {
+      if (useDeleteField) {
+        cleaned[key] = deleteField();
+      }
+    } else {
+      const nested = sanitizeForFirestore(val, useDeleteField);
+      if (nested !== undefined) {
+        cleaned[key] = nested;
+      }
+    }
+  }
+  return cleaned;
+}
 
 // Suppress non-fatal Firestore network warning logs
 try {
@@ -164,7 +203,7 @@ export async function createOrUpdateUserProfile(
   };
 
   try {
-    await setDoc(userDocRef, profileData, { merge: true });
+    await setDoc(userDocRef, sanitizeForFirestore(profileData), { merge: true });
   } catch (err) {
     console.warn('Could not save user profile to Firestore:', err);
   }
@@ -312,7 +351,7 @@ export async function saveCharacterToCloud(userId: string, character: CharacterD
   if (!character || !character.id) return;
   try {
     const charDocRef = doc(db, 'characters', character.id);
-    await setDoc(charDocRef, {
+    await setDoc(charDocRef, sanitizeForFirestore({
       id: character.id,
       ownerId: userId || 'session_user',
       name: character.name,
@@ -322,7 +361,7 @@ export async function saveCharacterToCloud(userId: string, character: CharacterD
       race: character.race || 'Human',
       data: character,
       updatedAt: new Date().toISOString()
-    }, { merge: true });
+    }), { merge: true });
   } catch (err) {
     console.warn('Could not save character to cloud:', err);
   }
@@ -567,7 +606,7 @@ export async function updateCharacterPresence(
         entry.updatedAt = timestamp;
         localMap[cId] = entry;
         try {
-          setDoc(doc(db, 'presence', cId), entry, { merge: true });
+          setDoc(doc(db, 'presence', cId), sanitizeForFirestore(entry, true), { merge: true });
         } catch {}
       }
     }
@@ -591,7 +630,7 @@ export async function updateCharacterPresence(
     localMap[previousCharacterId] = prevEntry;
 
     try {
-      await setDoc(doc(db, 'presence', previousCharacterId), prevEntry, { merge: true });
+      await setDoc(doc(db, 'presence', previousCharacterId), sanitizeForFirestore(prevEntry, true), { merge: true });
     } catch {}
   }
 
@@ -642,7 +681,7 @@ export async function updateCharacterPresence(
 
   // Sync to Firestore
   try {
-    await setDoc(doc(db, 'presence', characterId), newEntry, { merge: true });
+    await setDoc(doc(db, 'presence', characterId), sanitizeForFirestore(newEntry, true), { merge: true });
   } catch (err) {
     console.warn('Could not sync character presence to Firestore:', err);
   }
@@ -816,7 +855,7 @@ export async function joinGameSessionByCode(
     updatedAt: timestamp
   };
 
-  await setDoc(sessionRef, updatedSession, { merge: true });
+  await setDoc(sessionRef, sanitizeForFirestore(updatedSession), { merge: true });
   return updatedSession;
 }
 
@@ -1004,5 +1043,223 @@ export async function removeParticipantCharacterFromSession(
     activeCharacterIds,
     updatedAt: new Date().toISOString()
   });
+}
+
+const STORAGE_KEY_CAMPAIGN_SAVES = 'dnd_campaign_saves_v1';
+
+/**
+ * Save complete campaign progress snapshot (Characters, HP, Spell Slots, Session Rules, Members)
+ * Saves to both Firestore (`campaign_saves` collection) and localStorage fallback.
+ */
+export async function saveCampaignProgress(saveData: CampaignSaveFile): Promise<CampaignSaveFile> {
+  const sanitized = sanitizeForFirestore(saveData);
+
+  // 1. Save to Firestore
+  try {
+    const saveDocRef = doc(db, 'campaign_saves', saveData.id);
+    await setDoc(saveDocRef, sanitized, { merge: true });
+  } catch (err) {
+    console.warn('Could not save campaign progress to Firestore:', err);
+  }
+
+  // 2. Save to localStorage fallback
+  try {
+    const localSaves = getLocalCampaignSaves();
+    const existingIndex = localSaves.findIndex(s => s.id === saveData.id);
+    if (existingIndex >= 0) {
+      localSaves[existingIndex] = saveData;
+    } else {
+      localSaves.unshift(saveData);
+    }
+    localStorage.setItem(STORAGE_KEY_CAMPAIGN_SAVES, JSON.stringify(localSaves));
+  } catch (e) {
+    console.warn('Could not cache campaign save to localStorage:', e);
+  }
+
+  return saveData;
+}
+
+/**
+ * Helper to retrieve local storage campaign saves
+ */
+export function getLocalCampaignSaves(): CampaignSaveFile[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_CAMPAIGN_SAVES);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {}
+  return [];
+}
+
+/**
+ * Load all campaign saves accessible to a host (by hostUid or local history)
+ */
+export async function loadHostCampaignSaves(hostUid: string): Promise<CampaignSaveFile[]> {
+  const localSaves = getLocalCampaignSaves();
+  const savesMap = new Map<string, CampaignSaveFile>();
+
+  // Add local saves first
+  localSaves.forEach(s => {
+    if (!hostUid || s.hostUid === hostUid || s.hostUid.startsWith('dm_') || s.hostUid.startsWith('guest_') || hostUid.startsWith('guest_')) {
+      savesMap.set(s.id, s);
+    }
+  });
+
+  // Query Firestore for cloud-saved campaign files
+  try {
+    const savesCol = collection(db, 'campaign_saves');
+    const q = query(savesCol, where('hostUid', '==', hostUid));
+    const querySnapshot = await getDocs(q);
+    querySnapshot.forEach(docSnap => {
+      const data = docSnap.data() as CampaignSaveFile;
+      if (data && data.id) {
+        savesMap.set(data.id, data);
+      }
+    });
+  } catch (err) {
+    // If query by hostUid fails or host is guest, try general listing or local fallback
+    try {
+      const savesCol = collection(db, 'campaign_saves');
+      const allSnaps = await getDocs(savesCol);
+      allSnaps.forEach(docSnap => {
+        const data = docSnap.data() as CampaignSaveFile;
+        if (data && data.id && (data.hostUid === hostUid || hostUid.startsWith('guest_') || data.hostUid.startsWith('guest_'))) {
+          savesMap.set(data.id, data);
+        }
+      });
+    } catch (e) {
+      console.warn('Firestore campaign_saves fetch error, using local fallback:', e);
+    }
+  }
+
+  const result = Array.from(savesMap.values());
+  // Sort newest first
+  result.sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+  return result;
+}
+
+/**
+ * Load a single campaign save file by ID
+ */
+export async function loadCampaignSaveFile(saveId: string): Promise<CampaignSaveFile | null> {
+  // Check local first
+  const local = getLocalCampaignSaves().find(s => s.id === saveId);
+  if (local) return local;
+
+  try {
+    const docRef = doc(db, 'campaign_saves', saveId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return snap.data() as CampaignSaveFile;
+    }
+  } catch (e) {
+    console.warn('Error fetching campaign save from Firestore:', e);
+  }
+  return null;
+}
+
+/**
+ * Delete a campaign save file
+ */
+export async function deleteCampaignSave(saveId: string): Promise<void> {
+  // Remove from Firestore
+  try {
+    await deleteDoc(doc(db, 'campaign_saves', saveId));
+  } catch (e) {}
+
+  // Remove from localStorage
+  try {
+    const localSaves = getLocalCampaignSaves().filter(s => s.id !== saveId);
+    localStorage.setItem(STORAGE_KEY_CAMPAIGN_SAVES, JSON.stringify(localSaves));
+  } catch (e) {}
+}
+
+/**
+ * Restore/Re-host a Multiplayer GameSession from a Campaign Save File
+ */
+export async function restoreGameSessionFromSave(
+  save: CampaignSaveFile,
+  user?: { uid: string; displayName: string } | null
+): Promise<GameSession> {
+  const code = (save.sessionCode || save.session?.code || generateRoomCode()).trim().toUpperCase();
+  const timestamp = new Date().toISOString();
+  const dmUid = user?.uid || save.hostUid || 'dm_local';
+  const dmName = user?.displayName || save.hostName || 'Dungeon Master';
+
+  // Rebuild session members
+  let members: SessionMember[] = (save.session?.members || []).map(m => ({
+    uid: m.uid,
+    displayName: m.displayName,
+    role: m.role || 'Player',
+    characterId: m.characterId,
+    characterName: m.characterName,
+    joinedAt: timestamp,
+    isUnassignedParticipant: m.isUnassignedParticipant
+  }));
+
+  // If members is empty, populate from characters in save
+  if (members.length === 0 && save.characters && save.characters.length > 0) {
+    members = save.characters.map(c => ({
+      uid: `npc_char_${c.id}`,
+      displayName: `${c.name} (Participant)`,
+      role: 'Player',
+      characterId: c.id,
+      characterName: c.name,
+      joinedAt: timestamp,
+      isUnassignedParticipant: true
+    }));
+  }
+
+  // Ensure DM exists in members
+  const dmIndex = members.findIndex(m => m.uid === dmUid || m.role === 'DM');
+  if (dmIndex >= 0) {
+    members[dmIndex] = {
+      ...members[dmIndex],
+      uid: dmUid,
+      displayName: dmName,
+      role: 'DM',
+      joinedAt: timestamp
+    };
+  } else {
+    members.unshift({
+      uid: dmUid,
+      displayName: dmName,
+      role: 'DM',
+      joinedAt: timestamp
+    });
+  }
+
+  const activeCharacterIds = Array.from(
+    new Set(
+      (save.session?.activeCharacterIds && save.session.activeCharacterIds.length > 0)
+        ? save.session.activeCharacterIds
+        : (save.characters?.map(c => c.id) || [])
+    )
+  );
+
+  const restoredSession: GameSession = {
+    id: code,
+    code: code,
+    name: save.name || save.session?.name || 'Restored Campaign Session',
+    dmUid: dmUid,
+    dmName: dmName,
+    status: 'active',
+    members,
+    activeCharacterIds,
+    optionalRules: save.session?.optionalRules || {},
+    createdAt: save.savedAt || timestamp,
+    updatedAt: timestamp
+  };
+
+  try {
+    const sessionRef = doc(db, 'sessions', code);
+    await setDoc(sessionRef, sanitizeForFirestore(restoredSession), { merge: true });
+  } catch (err) {
+    console.warn('Could not write restored session to Firestore (operating in memory / local):', err);
+  }
+
+  return restoredSession;
 }
 

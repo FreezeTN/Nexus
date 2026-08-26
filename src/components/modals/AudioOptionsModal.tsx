@@ -6,7 +6,7 @@ import { UserProfile } from '../../lib/firebase';
 interface AudioOptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialCategory?: 'sound' | 'app' | 'character' | 'credits';
+  initialCategory?: 'sound' | 'app' | 'layout' | 'character' | 'credits';
   currentUser?: UserProfile | null;
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (char: CharacterData) => void;
@@ -20,3 +20,4 @@ export const AudioOptionsModal: React.FC<AudioOptionsModalProps> = (props) => {
 };
 
 export { OptionsModal };
+export default AudioOptionsModal;

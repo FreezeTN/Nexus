@@ -33,6 +33,18 @@
         "memberIds": { "type": "array" },
         "createdAt": { "type": "string" }
       }
+    },
+    "CampaignSave": {
+      "collection": "campaign_saves",
+      "fields": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sessionCode": { "type": "string" },
+        "hostUid": { "type": "string" },
+        "hostName": { "type": "string" },
+        "savedAt": { "type": "string" },
+        "edition": { "type": "string" }
+      }
     }
   },
   "securityIntents": [
@@ -65,6 +77,16 @@
     },
     {
       "entity": "Party",
+      "action": "write",
+      "scope": "authenticated"
+    },
+    {
+      "entity": "CampaignSave",
+      "action": "read",
+      "scope": "authenticated"
+    },
+    {
+      "entity": "CampaignSave",
       "action": "write",
       "scope": "authenticated"
     }

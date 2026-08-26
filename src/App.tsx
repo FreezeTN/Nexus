@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { CharacterData, DiceRollResult, RuleEdition, Party } from './types';
+import { CharacterData, DiceRollResult, RuleEdition, Party, CampaignSaveFile } from './types';
 import { SAMPLE_CHARACTERS } from './data/defaultCharacters';
 import { DEFAULT_PARTIES } from './data/defaultParties';
 import { Header } from './components/Header';
@@ -29,21 +29,21 @@ import { CommandPaletteModal } from './components/common/CommandPaletteModal';
 import { PartyVoiceWidget } from './components/voice/PartyVoiceWidget';
 import { eventBus } from './events/eventBus';
 import { useHistoryState } from './utils/useHistoryState';
-import { convertCharacterEdition, formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
-import { onAuthStateChanged } from 'firebase/auth';
+import { formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
 import { Crown } from 'lucide-react';
 
-// Lazy Loaded Modal Components for Optimized Initial Bundle & Instant Render
-const CampaignGraphModal = lazy(() => import('./components/modals/CampaignGraphModal').then(m => ({ default: m.CampaignGraphModal as React.ComponentType<any> })));
-const DeveloperSdkModal = lazy(() => import('./components/modals/DeveloperSdkModal').then(m => ({ default: (m.default || m.DeveloperSdkModal) as React.ComponentType<any> })));
-const UserManualModal = lazy(() => import('./components/modals/UserManualModal').then(m => ({ default: m.UserManualModal as React.ComponentType<any> })));
-const ExtensionManagerModal = lazy(() => import('./components/modals/ExtensionManagerModal').then(m => ({ default: m.ExtensionManagerModal as React.ComponentType<any> })));
-const AudioOptionsModal = lazy(() => import('./components/modals/AudioOptionsModal').then(m => ({ default: m.AudioOptionsModal as React.ComponentType<any> })));
-const SessionLobbyModal = lazy(() => import('./components/modals/SessionLobbyModal').then(m => ({ default: m.SessionLobbyModal as React.ComponentType<any> })));
-const PartyManagerModal = lazy(() => import('./components/modals/PartyManagerModal').then(m => ({ default: m.PartyManagerModal as React.ComponentType<any> })));
-const TRPGSystemSelectorModal = lazy(() => import('./components/modals/TRPGSystemSelectorModal').then(m => ({ default: m.TRPGSystemSelectorModal as React.ComponentType<any> })));
+// Direct Modal Component Imports
+import { CampaignGraphModal } from './components/modals/CampaignGraphModal';
+import { DeveloperSdkModal } from './components/modals/DeveloperSdkModal';
+import { UserManualModal } from './components/modals/UserManualModal';
+import { ExtensionManagerModal } from './components/modals/ExtensionManagerModal';
+import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
+import { SessionLobbyModal } from './components/modals/SessionLobbyModal';
+import { PartyManagerModal } from './components/modals/PartyManagerModal';
+import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorModal';
 import { 
   auth, 
+  onAuthStateChanged,
   getUserProfile, 
   UserProfile, 
   saveCharacterToCloud, 
@@ -55,7 +55,8 @@ import {
   CharacterPresence,
   UserRole,
   GameSession,
-  subscribeToGameSession
+  subscribeToGameSession,
+  restoreGameSessionFromSave
 } from './lib/firebase';
 
 const STORAGE_KEY_CHARACTERS = 'dnd_app_characters_v5';
@@ -271,6 +272,8 @@ export default function App() {
     const unsubscribe = subscribeToGameSession(activeSessionCode, (session) => {
       if (!session || session.status === 'closed') {
         setActiveSession(null);
+        setActiveSessionCode(null);
+        localStorage.removeItem('dnd_app_session_code_v1');
       } else {
         setActiveSession(session);
       }
@@ -639,6 +642,44 @@ export default function App() {
     // Cloud sync if authenticated
     if (currentUser?.uid) {
       saveCharacterToCloud(currentUser.uid, newChar);
+    }
+  };
+
+  const handleLoadCampaignSave = async (save: CampaignSaveFile) => {
+    if (!save || !save.characters) return;
+
+    setCharacters((prev: CharacterData[]) => {
+      const charMap = new Map<string, CharacterData>();
+      prev.forEach(c => charMap.set(c.id, c));
+      save.characters.forEach(sc => charMap.set(sc.id, sc));
+      const updated = Array.from(charMap.values());
+      try {
+        localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    if (save.edition) {
+      setPreviewTheme(save.edition);
+    }
+
+    if (save.characters.length > 0) {
+      handleSelectCharacter(save.characters[0].id);
+    }
+
+    // Restore multiplayer session state
+    try {
+      const restored = await restoreGameSessionFromSave(
+        save,
+        currentUser ? { uid: currentUser.uid, displayName: currentUser.displayName } : null
+      );
+      setActiveSession(restored);
+      setActiveSessionCode(restored.code);
+    } catch (e) {
+      console.warn('Could not restore session to Firestore, setting code:', e);
+      if (save.sessionCode) {
+        setActiveSessionCode(save.sessionCode);
+      }
     }
   };
 
@@ -1146,102 +1187,122 @@ export default function App() {
 
       <Suspense fallback={null}>
         {/* TRPG System Selector Screen Modal */}
-        <TRPGSystemSelectorModal
-          isOpen={showTRPGSelectorModal}
-          onClose={() => setShowTRPGSelectorModal(false)}
-          enabledSystems={enabledSystems}
-          onSaveSystems={handleSaveTRPGSystems}
-          isInitialSetup={!hasConfiguredSystems}
-        />
+        {showTRPGSelectorModal && (
+          <TRPGSystemSelectorModal
+            isOpen={showTRPGSelectorModal}
+            onClose={() => setShowTRPGSelectorModal(false)}
+            enabledSystems={enabledSystems}
+            onSaveSystems={handleSaveTRPGSystems}
+            isInitialSetup={!hasConfiguredSystems}
+          />
+        )}
 
         {/* Party Manager Modal */}
-        <PartyManagerModal
-          isOpen={showPartyModal}
-          onClose={() => setShowPartyModal(false)}
-          parties={parties}
-          allCharacters={characters}
-          activeCharacterId={activeCharacter?.id || ''}
-          onUpdateParties={setParties}
-          onSelectCharacter={(charId) => {
-            handleSelectCharacter(charId);
-            setShowPartyModal(false);
-          }}
-          currentUser={currentUser}
-          presenceMap={presenceMap}
-          onUpdateCharacter={handleUpdateCharacter}
-        />
+        {showPartyModal && (
+          <PartyManagerModal
+            isOpen={showPartyModal}
+            onClose={() => setShowPartyModal(false)}
+            parties={parties}
+            allCharacters={characters}
+            activeCharacterId={activeCharacter?.id || ''}
+            onUpdateParties={setParties}
+            onSelectCharacter={(charId) => {
+              handleSelectCharacter(charId);
+              setShowPartyModal(false);
+            }}
+            currentUser={currentUser}
+            presenceMap={presenceMap}
+            onUpdateCharacter={handleUpdateCharacter}
+          />
+        )}
 
         {/* Session Lobby & Room Code Modal */}
-        <SessionLobbyModal
-          isOpen={showSessionModal}
-          onClose={() => setShowSessionModal(false)}
-          currentUser={currentUser}
-          activeSession={activeSession}
-          activeCharacter={activeCharacter}
-          allCharacters={characters}
-          presenceMap={presenceMap}
-          onSessionChange={(code) => setActiveSessionCode(code)}
-          onSelectCharacter={handleSelectCharacter}
-          onOpenAuthModal={() => setShowAuthModal(true)}
-        />
+        {showSessionModal && (
+          <SessionLobbyModal
+            isOpen={showSessionModal}
+            onClose={() => setShowSessionModal(false)}
+            currentUser={currentUser}
+            activeSession={activeSession}
+            activeSessionCode={activeSessionCode}
+            activeCharacter={activeCharacter}
+            allCharacters={characters}
+            presenceMap={presenceMap}
+            onSessionChange={(code) => setActiveSessionCode(code)}
+            onSelectCharacter={handleSelectCharacter}
+            onOpenAuthModal={() => setShowAuthModal(true)}
+            onLoadCampaignSave={handleLoadCampaignSave}
+          />
+        )}
 
         {/* User Account & Role Modal */}
-        <AuthModal
-          isOpen={showAuthModal}
-          onClose={() => setShowAuthModal(false)}
-          currentUser={currentUser}
-          onUserChange={setCurrentUser}
-        />
+        {showAuthModal && (
+          <AuthModal
+            isOpen={showAuthModal}
+            onClose={() => setShowAuthModal(false)}
+            currentUser={currentUser}
+            onUserChange={setCurrentUser}
+          />
+        )}
 
         {/* Audio & Options Modal */}
-        <AudioOptionsModal
-          isOpen={showAudioModal}
-          onClose={() => setShowAudioModal(false)}
-          currentUser={currentUser}
-          activeCharacter={activeCharacter}
-          onUpdateCharacter={handleUpdateCharacter}
-          onSystemChange={handleSystemChange}
-          onExportJson={handleExportJson}
-          onImportJson={handleImportJson}
-        />
+        {showAudioModal && (
+          <AudioOptionsModal
+            isOpen={showAudioModal}
+            onClose={() => setShowAudioModal(false)}
+            currentUser={currentUser}
+            activeCharacter={activeCharacter}
+            onUpdateCharacter={handleUpdateCharacter}
+            onSystemChange={handleSystemChange}
+            onExportJson={handleExportJson}
+            onImportJson={handleImportJson}
+          />
+        )}
 
         {/* Extension & Plugin Manager Modal */}
-        <ExtensionManagerModal
-          isOpen={showExtensionManager}
-          onClose={() => setShowExtensionManager(false)}
-          enabledSystems={enabledSystems}
-          onToggleSystem={(sysId) => {
-            const updated = enabledSystems.includes(sysId)
-              ? enabledSystems.filter(s => s !== sysId)
-              : [...enabledSystems, sysId];
-            setEnabledSystems(updated);
-            localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(updated));
-          }}
-          onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
-        />
+        {showExtensionManager && (
+          <ExtensionManagerModal
+            isOpen={showExtensionManager}
+            onClose={() => setShowExtensionManager(false)}
+            enabledSystems={enabledSystems}
+            onToggleSystem={(sysId) => {
+              const updated = enabledSystems.includes(sysId)
+                ? enabledSystems.filter(s => s !== sysId)
+                : [...enabledSystems, sysId];
+              setEnabledSystems(updated);
+              localStorage.setItem(STORAGE_KEY_ENABLED_SYSTEMS, JSON.stringify(updated));
+            }}
+            onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
+          />
+        )}
 
         {/* Developer SDK & Architecture Center Modal */}
-        <DeveloperSdkModal
-          isOpen={showDeveloperSdk}
-          onClose={() => setShowDeveloperSdk(false)}
-        />
+        {showDeveloperSdk && (
+          <DeveloperSdkModal
+            isOpen={showDeveloperSdk}
+            onClose={() => setShowDeveloperSdk(false)}
+          />
+        )}
 
         {/* Complete User Manual Modal */}
-        <UserManualModal
-          isOpen={showUserManualModal}
-          onClose={() => setShowUserManualModal(false)}
-        />
+        {showUserManualModal && (
+          <UserManualModal
+            isOpen={showUserManualModal}
+            onClose={() => setShowUserManualModal(false)}
+          />
+        )}
 
         {/* Obsidian-Style RPG Campaign Knowledge Graph Modal */}
-        <CampaignGraphModal
-          isOpen={showCampaignGraphModal}
-          onClose={() => {
-            setShowCampaignGraphModal(false);
-            setInitialGraphEntityName(undefined);
-          }}
-          initialEntityName={initialGraphEntityName}
-          onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
-        />
+        {showCampaignGraphModal && (
+          <CampaignGraphModal
+            isOpen={showCampaignGraphModal}
+            onClose={() => {
+              setShowCampaignGraphModal(false);
+              setInitialGraphEntityName(undefined);
+            }}
+            initialEntityName={initialGraphEntityName}
+            onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
+          />
+        )}
 
         {/* Integrated Party WebRTC Voice Client Widget */}
         <PartyVoiceWidget

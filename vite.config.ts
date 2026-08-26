@@ -10,6 +10,10 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
+      dedupe: ['react', 'react-dom', 'firebase', 'firebase/app', 'firebase/auth', 'firebase/firestore'],
+    },
+    optimizeDeps: {
+      include: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
     },
     build: {
       outDir: 'dist',

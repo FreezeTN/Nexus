@@ -194,9 +194,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Notifications */}
         {errorMsg && (
-          <div className="mx-6 mt-4 p-3 rounded-lg bg-red-950/70 border border-red-700/60 text-red-200 text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-            <span>{errorMsg}</span>
+          <div className="mx-6 mt-4 p-3.5 rounded-xl bg-red-950/70 border border-red-700/60 text-red-200 text-xs space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="font-semibold">{errorMsg}</p>
+                {errorMsg.includes('Guest Mode') && (
+                  <p className="text-[11px] text-red-300/90 leading-relaxed">
+                    Firebase requires enabling the <em>Email/Password</em> provider in the Firebase Console (Authentication &rarr; Sign-in method). In the meantime, you can continue immediately with Guest Mode or Google Sign-In!
+                  </p>
+                )}
+              </div>
+            </div>
+            {errorMsg.includes('Guest Mode') && (
+              <div className="pt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorMsg(null);
+                    setTab('guest');
+                  }}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold rounded-lg text-xs transition shadow flex items-center gap-1.5"
+                >
+                  <User className="w-3.5 h-3.5" />
+                  <span>Switch to Guest Mode</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
         {successMsg && (
@@ -556,3 +580,5 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     </div>
   );
 };
+
+export default AuthModal;

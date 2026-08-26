@@ -3,6 +3,8 @@ import { CharacterData } from '../../types';
 import { ScrollText, User, Heart, Shield, BookOpen, Users, FileText } from 'lucide-react';
 import { CollapsibleBox } from '../common/CollapsibleBox';
 import { FormattedTextEditor } from '../common/FormattedTextEditor';
+import { useLayoutCustomization } from '../../utils/layoutCustomization';
+import { EmptyLayoutState } from '../common/EmptyLayoutState';
 
 interface Sheet5Props {
   character: CharacterData;
@@ -13,6 +15,8 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
   character,
   onUpdateCharacter
 }) => {
+  const { isVisible } = useLayoutCustomization();
+
   const handleTextChange = (field: keyof CharacterData, value: string) => {
     onUpdateCharacter({
       ...character,
@@ -20,14 +24,26 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
     });
   };
 
+  const showAppearance = isVisible('s5_appearanceDemographics');
+  const showTraits = isVisible('s5_roleplayingTraits');
+  const showBackstory = isVisible('s5_backstory');
+  const showAlliesNotes = isVisible('s5_alliesFactionsNotes');
+
+  const hasAnyVisible = showAppearance || showTraits || showBackstory || showAlliesNotes;
+
+  if (!hasAnyVisible) {
+    return <EmptyLayoutState sheetName="Description & Notes" />;
+  }
+
   return (
     <div className="space-y-6 pb-12">
       {/* SECTION 1: Physical Appearance & Demographics */}
-      <CollapsibleBox
-        title="Character Description & Appearance"
-        icon={<User className="w-5 h-5 text-amber-500" />}
-        storageKey="sheet5_appearance"
-      >
+      {showAppearance && (
+        <CollapsibleBox
+          title="Character Description & Appearance"
+          icon={<User className="w-5 h-5 text-amber-500" />}
+          storageKey="sheet5_appearance"
+        >
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 text-xs pt-2">
           <div>
             <label className="block text-stone-400 mb-1">Gender</label>
@@ -138,131 +154,138 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
           </div>
         </div>
       </CollapsibleBox>
+      )}
 
       {/* SECTION 2: Roleplaying Traits (Personality, Ideals, Bonds, Flaws) */}
-      <CollapsibleBox
-        title="Roleplaying Traits & Personality"
-        icon={<Heart className="w-5 h-5 text-rose-400" />}
-        storageKey="sheet5_traits"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          {/* Personality Traits */}
-          <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
-            <FormattedTextEditor
-              label={
-                <span className="flex items-center gap-2">
-                  <Heart className="w-3.5 h-3.5 text-rose-400" /> Personality Traits
-                </span>
-              }
-              value={character.personalityTraits || ''}
-              onChange={(val) => handleTextChange('personalityTraits', val)}
-              rows={4}
-              placeholder="Quirks, speech mannerisms, habits..."
-            />
-          </div>
+      {showTraits && (
+        <CollapsibleBox
+          title="Roleplaying Traits & Personality"
+          icon={<Heart className="w-5 h-5 text-rose-400" />}
+          storageKey="sheet5_traits"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            {/* Personality Traits */}
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+              <FormattedTextEditor
+                label={
+                  <span className="flex items-center gap-2">
+                    <Heart className="w-3.5 h-3.5 text-rose-400" /> Personality Traits
+                  </span>
+                }
+                value={character.personalityTraits || ''}
+                onChange={(val) => handleTextChange('personalityTraits', val)}
+                rows={4}
+                placeholder="Quirks, speech mannerisms, habits..."
+              />
+            </div>
 
-          {/* Ideals */}
-          <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
-            <FormattedTextEditor
-              label={
-                <span className="flex items-center gap-2">
-                  <Shield className="w-3.5 h-3.5 text-amber-400" /> Ideals
-                </span>
-              }
-              value={character.ideals || ''}
-              onChange={(val) => handleTextChange('ideals', val)}
-              rows={4}
-              placeholder="Core values, moral principles..."
-            />
-          </div>
+            {/* Ideals */}
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+              <FormattedTextEditor
+                label={
+                  <span className="flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-amber-400" /> Ideals
+                  </span>
+                }
+                value={character.ideals || ''}
+                onChange={(val) => handleTextChange('ideals', val)}
+                rows={4}
+                placeholder="Core values, moral principles..."
+              />
+            </div>
 
-          {/* Bonds */}
-          <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
-            <FormattedTextEditor
-              label={
-                <span className="flex items-center gap-2">
-                  <Users className="w-3.5 h-3.5 text-blue-400" /> Bonds
-                </span>
-              }
-              value={character.bonds || ''}
-              onChange={(val) => handleTextChange('bonds', val)}
-              rows={4}
-              placeholder="Connections to people, places, or events..."
-            />
-          </div>
+            {/* Bonds */}
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+              <FormattedTextEditor
+                label={
+                  <span className="flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5 text-blue-400" /> Bonds
+                  </span>
+                }
+                value={character.bonds || ''}
+                onChange={(val) => handleTextChange('bonds', val)}
+                rows={4}
+                placeholder="Connections to people, places, or events..."
+              />
+            </div>
 
-          {/* Flaws */}
-          <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
-            <FormattedTextEditor
-              label={
-                <span className="flex items-center gap-2">
-                  <FileText className="w-3.5 h-3.5 text-purple-400" /> Flaws
-                </span>
-              }
-              value={character.flaws || ''}
-              onChange={(val) => handleTextChange('flaws', val)}
-              rows={4}
-              placeholder="Weaknesses, compulsions, vices..."
-            />
+            {/* Flaws */}
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+              <FormattedTextEditor
+                label={
+                  <span className="flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5 text-purple-400" /> Flaws
+                  </span>
+                }
+                value={character.flaws || ''}
+                onChange={(val) => handleTextChange('flaws', val)}
+                rows={4}
+                placeholder="Weaknesses, compulsions, vices..."
+              />
+            </div>
           </div>
-        </div>
-      </CollapsibleBox>
+        </CollapsibleBox>
+      )}
 
       {/* SECTION 3: Backstory (Hintergrund) */}
-      <CollapsibleBox
-        title="Character Backstory"
-        icon={<BookOpen className="w-5 h-5 text-amber-500" />}
-        storageKey="sheet5_backstory"
-      >
-        <div className="pt-2">
-          <FormattedTextEditor
-            label="Full Backstory & Origins"
-            value={character.backstory || ''}
-            onChange={(val) => handleTextChange('backstory', val)}
-            rows={8}
-            placeholder="Origins, history, defining events, mentors..."
-          />
-        </div>
-      </CollapsibleBox>
+      {showBackstory && (
+        <CollapsibleBox
+          title="Character Backstory"
+          icon={<BookOpen className="w-5 h-5 text-amber-500" />}
+          storageKey="sheet5_backstory"
+        >
+          <div className="pt-2">
+            <FormattedTextEditor
+              label="Full Backstory & Origins"
+              value={character.backstory || ''}
+              onChange={(val) => handleTextChange('backstory', val)}
+              rows={8}
+              placeholder="Origins, history, defining events, mentors..."
+            />
+          </div>
+        </CollapsibleBox>
+      )}
 
       {/* SECTION 4: Allies, Organizations & Notes */}
-      <CollapsibleBox
-        title="Allies, Factions & Campaign Quest Log"
-        icon={<Users className="w-5 h-5 text-emerald-400" />}
-        storageKey="sheet5_allies_notes"
-      >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-          {/* Allies & Organizations */}
-          <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
-            <FormattedTextEditor
-              label={
-                <span className="flex items-center gap-2">
-                  <Users className="w-3.5 h-3.5 text-emerald-400" /> Allies & Factions
-                </span>
-              }
-              value={character.alliesAndOrganizations || ''}
-              onChange={(val) => handleTextChange('alliesAndOrganizations', val)}
-              rows={6}
-              placeholder="Guilds, mercenary groups, allies, contacts..."
-            />
-          </div>
+      {showAlliesNotes && (
+        <CollapsibleBox
+          title="Allies, Factions & Campaign Quest Log"
+          icon={<Users className="w-5 h-5 text-emerald-400" />}
+          storageKey="sheet5_allies_notes"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            {/* Allies & Organizations */}
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+              <FormattedTextEditor
+                label={
+                  <span className="flex items-center gap-2">
+                    <Users className="w-3.5 h-3.5 text-emerald-400" /> Allies & Factions
+                  </span>
+                }
+                value={character.alliesAndOrganizations || ''}
+                onChange={(val) => handleTextChange('alliesAndOrganizations', val)}
+                rows={6}
+                placeholder="Guilds, mercenary groups, allies, contacts..."
+              />
+            </div>
 
-          {/* Campaign Notes */}
-          <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
-            <FormattedTextEditor
-              label={
-                <span className="flex items-center gap-2">
-                  <ScrollText className="w-3.5 h-3.5 text-amber-400" /> Quest Log & Campaign Notes
-                </span>
-              }
-              value={character.additionalNotes || ''}
-              onChange={(val) => handleTextChange('additionalNotes', val)}
-              rows={6}
-              placeholder="Dungeon clues, active quests, party loot agreements..."
-            />
+            {/* Campaign Notes */}
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+              <FormattedTextEditor
+                label={
+                  <span className="flex items-center gap-2">
+                    <ScrollText className="w-3.5 h-3.5 text-amber-400" /> Quest Log & Campaign Notes
+                  </span>
+                }
+                value={character.additionalNotes || ''}
+                onChange={(val) => handleTextChange('additionalNotes', val)}
+                rows={6}
+                placeholder="Dungeon clues, active quests, party loot agreements..."
+              />
+            </div>
           </div>
-        </div>
-      </CollapsibleBox>
+        </CollapsibleBox>
+      )}
     </div>
   );
 };

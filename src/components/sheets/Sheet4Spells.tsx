@@ -6,6 +6,8 @@ import { SpellbookListPanel } from './sheet4/SpellbookListPanel';
 import { SpellTargetModal } from '../modals/SpellTargetModal';
 import { TransformationModal } from '../modals/TransformationModal';
 import { CompanionModal } from '../modals/CompanionModal';
+import { useLayoutCustomization } from '../../utils/layoutCustomization';
+import { EmptyLayoutState } from '../common/EmptyLayoutState';
 
 interface Sheet4Props {
   character: CharacterData;
@@ -29,6 +31,8 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
   const [targetModalSpell, setTargetModalSpell] = useState<any | null>(null);
   const [showTransformationModal, setShowTransformationModal] = useState(false);
   const [showCompanionModal, setShowCompanionModal] = useState(false);
+
+  const { isVisible } = useLayoutCustomization();
 
   const handleConfirmCastSpellTarget = (spellToCast: any, selectedTargetIds: string[], condName: string) => {
     const updatedSlots = spellToCast.level > 0
@@ -67,6 +71,9 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
   };
 
   if (character.edition === 'shadowrun') {
+    if (!isVisible('sr_spells')) {
+      return <EmptyLayoutState sheetName="Spells & Complex Forms" />;
+    }
     return (
       <ShadowrunSpellsComplexForms
         character={character}
@@ -76,25 +83,38 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
     );
   }
 
+  const showStats = isVisible('s4_spellcastingStats');
+  const showSpellbook = isVisible('s4_spellbookList');
+
+  const hasAnyVisible = showStats || showSpellbook;
+
+  if (!hasAnyVisible) {
+    return <EmptyLayoutState sheetName="Spells & Magic" />;
+  }
+
   return (
     <div className="space-y-6 pb-12">
       {/* SECTION 1: Spellcasting Stats & Slot Tracker */}
-      <SpellcastingStatsPanel
-        character={character}
-        onUpdateCharacter={onUpdateCharacter}
-      />
+      {showStats && (
+        <SpellcastingStatsPanel
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
 
       {/* SECTION 2: Spellbook List & Spell Casting */}
-      <SpellbookListPanel
-        character={character}
-        allCharacters={allCharacters}
-        onUpdateCharacter={onUpdateCharacter}
-        onRoll={onRoll}
-        onRollDamage={onRollDamage}
-        setTargetModalSpell={setTargetModalSpell}
-        onOpenShapeshift={() => setShowTransformationModal(true)}
-        onOpenSummonCompanion={() => setShowCompanionModal(true)}
-      />
+      {showSpellbook && (
+        <SpellbookListPanel
+          character={character}
+          allCharacters={allCharacters}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+          onRollDamage={onRollDamage}
+          setTargetModalSpell={setTargetModalSpell}
+          onOpenShapeshift={() => setShowTransformationModal(true)}
+          onOpenSummonCompanion={() => setShowCompanionModal(true)}
+        />
+      )}
 
       {/* Target & Status Effect Modal */}
       {targetModalSpell && (

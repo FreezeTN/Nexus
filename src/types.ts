@@ -528,4 +528,34 @@ export interface ActiveTransformation {
   };
 }
 
+export interface CampaignSaveMemberSummary {
+  uid: string;
+  displayName: string;
+  role: 'Player' | 'DM';
+  characterId?: string;
+  characterName?: string;
+  isUnassignedParticipant?: boolean;
+}
+
+export interface CampaignSaveFile {
+  id: string; // e.g. "save_KUCTEF_1740000000"
+  name: string; // e.g. "Curse of Strahd - Castle Ravenloft Checkpoint"
+  sessionCode: string; // 6-digit room code
+  hostUid: string; // DM's UID
+  hostName: string; // DM's display name
+  savedAt: string; // ISO date timestamp
+  edition: RuleEdition;
+  notes?: string;
+  session: {
+    name: string;
+    code: string;
+    optionalRules?: OptionalRulesConfig;
+    members: CampaignSaveMemberSummary[];
+    activeCharacterIds: string[];
+  };
+  characters: CharacterData[]; // Full snapshot of all characters with updated HP, spell slots, inventory, etc.
+  parties?: Party[];
+  campaignEntities?: any[];
+}
+
 

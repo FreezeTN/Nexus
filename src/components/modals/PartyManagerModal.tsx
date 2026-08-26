@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CharacterData, Party } from '../../types';
 import { Users, Plus, Shield, Heart, Eye, Trash2, Edit3, Check, Swords, UserPlus, UserMinus, Sparkles, X, ChevronRight, Crown, Lock, Pencil } from 'lucide-react';
 import { getPassivePerception, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
@@ -63,7 +63,7 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
   const [editingHpCharId, setEditingHpCharId] = useState<string | null>(null);
   const [editingMaxHpVal, setEditingMaxHpVal] = useState<string>('');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen && (!selectedPartyId || !parties.some(p => p.id === selectedPartyId))) {
       if (parties.length > 0) {
         setSelectedPartyId(parties[0].id);
@@ -680,3 +680,5 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
     </div>
   );
 };
+
+export default PartyManagerModal;

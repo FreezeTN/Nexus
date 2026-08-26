@@ -876,3 +876,5 @@ useEventListener('DiceRolled', (payload) => console.log(payload));`}
     </div>
   );
 }
+
+export default ExtensionManagerModal;

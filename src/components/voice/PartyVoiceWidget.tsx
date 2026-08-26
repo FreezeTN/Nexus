@@ -171,8 +171,8 @@ export const PartyVoiceWidget: React.FC<PartyVoiceWidgetProps> = ({
               <div>
                 <div className="text-xs font-semibold tracking-wide uppercase text-indigo-300 flex items-center gap-1.5">
                   <span>Party Voice Client</span>
-                  <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded border border-indigo-500/30 font-mono font-bold">
-                    #{displayRoomCode}
+                  <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.2 rounded border border-indigo-500/30 font-semibold">
+                    {isConnected ? 'Live Audio' : 'Standby'}
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-400 truncate max-w-[170px]">
@@ -327,6 +327,38 @@ export const PartyVoiceWidget: React.FC<PartyVoiceWidgetProps> = ({
                 Hold <kbd className="px-1.5 py-0.5 bg-indigo-900 border border-indigo-700 rounded text-xs font-mono font-bold text-white">Spacebar</kbd> or <kbd className="px-1.5 py-0.5 bg-indigo-900 border border-indigo-700 rounded text-xs font-mono font-bold text-white">CapsLock</kbd> while speaking.
               </div>
             )}
+
+            {/* Test Audio & Unstick Speaker */}
+            <div className="flex items-center justify-between bg-slate-900 p-2 rounded-xl border border-slate-800">
+              <div>
+                <span className="text-slate-300 font-medium block">Audio Output</span>
+                <span className="text-[10px] text-slate-500">Test sound playback</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  voiceManager.resumeAudio();
+                  try {
+                    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+                    osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
+                    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.35);
+                  } catch (e) {}
+                }}
+                className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 hover:text-white rounded-lg text-[11px] font-medium border border-slate-700 flex items-center gap-1 transition"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                <span>Test Audio</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -429,9 +461,11 @@ export const PartyVoiceWidget: React.FC<PartyVoiceWidgetProps> = ({
                 <div>
                   <h2 className="text-lg font-bold text-white flex items-center gap-2">
                     <span>Party Voice Channel</span>
-                    <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-mono font-bold">
-                      #{displayRoomCode}
-                    </span>
+                    {activeSession?.name && (
+                      <span className="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-500/30 font-medium truncate max-w-[200px]">
+                        {activeSession.name}
+                      </span>
+                    )}
                   </h2>
                   <p className="text-xs text-slate-400">
                     Real-time low-latency WebRTC audio voice client for party session members

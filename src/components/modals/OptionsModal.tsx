@@ -34,11 +34,12 @@ import {
   Heart,
   MessageSquare,
   Copy,
-  Crown
+  Crown,
+  SlidersHorizontal
 } from 'lucide-react';
+import { SheetLayoutOptionsTab } from './options/SheetLayoutOptionsTab';
 import { CharacterData, RuleEdition } from '../../types';
 import { UserProfile } from '../../lib/firebase';
-import { convertCharacterEdition } from '../../utils/dndCalculations';
 import { systemRegistry } from '../../systems';
 import {
   isSoundEnabled,
@@ -62,7 +63,7 @@ import {
 interface OptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialCategory?: 'sound' | 'app' | 'character' | 'credits';
+  initialCategory?: 'sound' | 'app' | 'layout' | 'character' | 'credits';
   currentUser?: UserProfile | null;
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (char: CharacterData) => void;
@@ -82,7 +83,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onExportJson,
   onImportJson
 }) => {
-  const [activeCategory, setActiveCategory] = useState<'sound' | 'app' | 'character' | 'credits'>(initialCategory);
+  const [activeCategory, setActiveCategory] = useState<'sound' | 'app' | 'layout' | 'character' | 'credits'>(initialCategory);
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
   const [volume, setVolumeState] = useState<number>(() => Math.round(getMasterVolume() * 100));
   const [lastPlayed, setLastPlayed] = useState<string | null>(null);
@@ -187,7 +188,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-stone-900 border border-amber-500/50 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-stone-900 border border-amber-500/50 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-amber-950 via-stone-900 to-amber-950 p-4 border-b border-amber-800/50 flex items-center justify-between">
           <div className="flex items-center gap-2.5 text-amber-400 font-serif font-bold text-lg">
@@ -196,65 +197,77 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-lg transition"
+            className="p-1.5 text-stone-400 hover:text-stone-200 hover:bg-stone-800 rounded-lg transition cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Category Navigation Tabs */}
-        <div className="bg-stone-950 px-4 pt-3 border-b border-stone-800 flex items-center gap-2">
+        <div className="bg-stone-950 px-3 pt-2.5 pb-2.5 sm:px-4 border-b border-stone-800 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none flex-wrap">
           <button
             onClick={() => setActiveCategory('sound')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl text-xs font-bold font-serif transition border-t border-x ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
               activeCategory === 'sound'
-                ? 'bg-stone-900 text-amber-300 border-amber-500/50 shadow-sm'
-                : 'bg-stone-950 text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-900/50'
+                ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
             }`}
           >
             {muted ? (
-              <VolumeX className="w-4 h-4 text-rose-400" />
+              <VolumeX className="w-3.5 h-3.5 text-rose-400" />
             ) : (
-              <Volume2 className="w-4 h-4 text-amber-400" />
+              <Volume2 className="w-3.5 h-3.5 text-amber-400" />
             )}
             <span>Sound</span>
           </button>
 
           <button
             onClick={() => setActiveCategory('app')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl text-xs font-bold font-serif transition border-t border-x ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
               activeCategory === 'app'
-                ? 'bg-stone-900 text-amber-300 border-amber-500/50 shadow-sm'
-                : 'bg-stone-950 text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-900/50'
+                ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
             }`}
           >
-            <Smartphone className="w-4 h-4 text-cyan-400" />
+            <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
             <span>App</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('layout')}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
+              activeCategory === 'layout'
+                ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
+            }`}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+            <span>Layout</span>
           </button>
 
           {currentUser && (
             <button
               onClick={() => setActiveCategory('character')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-t-xl text-xs font-bold font-serif transition border-t border-x ${
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
                 activeCategory === 'character'
-                  ? 'bg-stone-900 text-amber-300 border-amber-500/50 shadow-sm'
-                  : 'bg-stone-950 text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-900/50'
+                  ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
+                  : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
               }`}
             >
-              <UserCheck className="w-4 h-4 text-amber-400" />
+              <UserCheck className="w-3.5 h-3.5 text-amber-400" />
               <span>Character</span>
             </button>
           )}
 
           <button
             onClick={() => setActiveCategory('credits')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-t-xl text-xs font-bold font-serif transition border-t border-x ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
               activeCategory === 'credits'
-                ? 'bg-stone-900 text-amber-300 border-amber-500/50 shadow-sm'
-                : 'bg-stone-950 text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-900/50'
+                ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
             }`}
           >
-            <Award className="w-4 h-4 text-purple-400" />
+            <Award className="w-3.5 h-3.5 text-purple-400" />
             <span>Credits</span>
           </button>
         </div>
@@ -623,7 +636,15 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             </div>
           )}
 
-          {/* CATEGORY 3: CHARACTER MANAGEMENT (Import, Export & System Conversion) */}
+          {/* CATEGORY: SHEET LAYOUT & FEATURES CUSTOMIZER */}
+          {activeCategory === 'layout' && (
+            <SheetLayoutOptionsTab
+              activeCharacter={activeCharacter}
+              onSystemChange={onSystemChange}
+            />
+          )}
+
+          {/* CATEGORY 3: CHARACTER MANAGEMENT (Import & Export Backup) */}
           {activeCategory === 'character' && (
             <div className="space-y-5 animate-fadeIn">
               {!currentUser ? (
@@ -631,7 +652,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                   <UserCheck className="w-8 h-8 text-stone-500 mx-auto" />
                   <div className="text-sm font-serif font-bold text-stone-300">Logged Out</div>
                   <p className="text-xs text-stone-400">
-                    Please log in or select a user profile to access character backup, export, import, and ruleset conversion tools.
+                    Please log in or select a user profile to access character backup, export, and import tools.
                   </p>
                 </div>
               ) : (
@@ -666,11 +687,11 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                     </label>
                   </div>
 
-                  {/* CHARACTER EXPORT & CONVERSION (Available when character is selected) */}
+                  {/* CHARACTER EXPORT (Available when character is selected) */}
                   {!activeCharacter ? (
                     <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 text-center space-y-2">
                       <p className="text-xs text-stone-400">
-                        💡 Select a character sheet from the top menu to enable <strong>Export</strong> and <strong>Ruleset Conversion</strong> options.
+                        💡 Select a character sheet from the top menu to enable <strong>Export</strong> options.
                       </p>
                     </div>
                   ) : (
@@ -696,58 +717,6 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                           <Download className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition" />
                           <span>Export {activeCharacter.name} JSON Backup</span>
                         </button>
-                      </div>
-
-                      {/* CONVERT RULESET */}
-                      <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-3">
-                        <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5">
-                          <div className="flex items-center gap-2 text-purple-400 font-serif font-bold text-sm">
-                            <RefreshCw className="w-4 h-4 text-purple-400" />
-                            <span>Convert {activeCharacter.name}'s TRPG Ruleset</span>
-                          </div>
-                          <span className="text-[10px] font-mono text-purple-300 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/60">
-                            System Adaptation
-                          </span>
-                        </div>
-                        <p className="text-xs text-stone-300 leading-relaxed">
-                          Seamlessly adapt <strong className="text-amber-300">{activeCharacter.name}</strong> to your target TRPG mechanics while preserving gear, backstory, notes, and portrait data.
-                        </p>
-
-                        <div className="space-y-2 pt-1">
-                          {systemRegistry.getAllSystems().map((sys) => {
-                            const isCurrent = (activeCharacter.edition || '5e') === sys.id;
-
-                            return (
-                              <button
-                                key={sys.id}
-                                disabled={isCurrent}
-                                onClick={() => {
-                                  const updated = convertCharacterEdition(activeCharacter, sys.id);
-                                  if (onUpdateCharacter) onUpdateCharacter(updated);
-                                  if (onSystemChange) onSystemChange(sys.id);
-                                }}
-                                className={`w-full p-3 rounded-xl border text-left transition flex items-center justify-between ${
-                                  isCurrent
-                                    ? 'bg-stone-900 border-amber-500/50 text-amber-300'
-                                    : 'bg-stone-900/60 hover:bg-stone-800/90 border-stone-800 hover:border-purple-500/60 text-stone-200 hover:text-white cursor-pointer'
-                                }`}
-                              >
-                                <div>
-                                  <div className="font-serif font-bold text-xs flex items-center gap-2">
-                                    <span>{sys.icon} {sys.name} ({sys.shortName})</span>
-                                    {isCurrent && (
-                                      <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono font-bold px-1.5 py-0.2 rounded">
-                                        CURRENT
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-[11px] text-stone-400 mt-0.5">{sys.description}</p>
-                                </div>
-                                {!isCurrent && <ChevronRight className="w-4 h-4 text-purple-400 shrink-0" />}
-                              </button>
-                            );
-                          })}
-                        </div>
                       </div>
                     </>
                   )}

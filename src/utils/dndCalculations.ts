@@ -1593,65 +1593,6 @@ export function rollCompoundDamage(
   };
 }
 
-export function convertCharacterEdition(char: CharacterData, targetEdition: RuleEdition): CharacterData {
-  if (targetEdition === '3.5e') {
-    // Generate 3.5e skills if not already present or converting from 5e
-    const currentSkillsByName = new Map(char.skills.map(s => [s.name, s]));
-    const new35eSkills: Skill[] = DEFAULT_35E_SKILLS_LIST.map(s => {
-      const existing = currentSkillsByName.get(s.name);
-      return {
-        id: 'sk-35-' + s.name.replace(/\s+/g, '-'),
-        name: s.name,
-        ability: s.ability,
-        proficient: false,
-        ranks: existing?.ranks ?? (existing?.proficient ? Math.min(char.level + 3, 4) : 0),
-        miscMod: existing?.miscMod ?? 0,
-        isClassSkill: existing?.isClassSkill ?? true,
-      };
-    });
-
-    return {
-      ...char,
-      edition: '3.5e',
-      bab: char.bab ?? char.level,
-      fortSaveBase: char.fortSaveBase ?? (Math.floor(char.level / 2) + 2),
-      refSaveBase: char.refSaveBase ?? Math.floor(char.level / 3),
-      willSaveBase: char.willSaveBase ?? Math.floor(char.level / 3),
-      skills: new35eSkills,
-    };
-  } else {
-    // Convert back to 5e, shadowrun, pathfinder, or cthulhu
-    const currentSkillsByName = new Map(char.skills.map(s => [s.name, s]));
-    const new5eSkills: Skill[] = DEFAULT_SKILLS_LIST.map(s => {
-      const existing = currentSkillsByName.get(s.name);
-      return {
-        id: 'sk-5e-' + s.name.replace(/\s+/g, '-'),
-        name: s.name,
-        ability: s.ability,
-        proficient: existing ? (existing.proficient || (existing.ranks !== undefined && existing.ranks > 0)) : false,
-        expertise: existing?.expertise || false,
-      };
-    });
-
-    const shadowrunData = targetEdition === 'shadowrun' ? (char.shadowrun || {
-      bod: 5, agi: 5, rea: 4, str: 4, wil: 4, log: 4, int: 4, cha: 3, edg: 3, edgCurrent: 3, ess: 6.0, mag: 0, res: 0,
-      nuyen: 25000, karmaCurrent: 10, karmaTotal: 50, streetCred: 1, notoriety: 0, publicAwareness: 0,
-      physicalBoxesCurrent: 0, stunBoxesCurrent: 0, overflowBoxesCurrent: 0, ballisticArmor: 12, impactArmor: 10,
-      qualities: [{ id: 'q-1', name: 'High Pain Tolerance', type: 'Positive', karmaCost: 7, description: 'Ignores first 1 wound penalty.' }],
-      cyberware: [],
-      srSkills: [],
-      vehicles: []
-    }) : char.shadowrun;
-
-    return {
-      ...char,
-      edition: targetEdition,
-      skills: new5eSkills,
-      shadowrun: shadowrunData
-    };
-  }
-}
-
 export function isHealingSpell(spell: { name: string; description?: string; damageType?: string }): boolean {
   if (spell.damageType === 'Healing') return true;
   const nameLower = spell.name.toLowerCase();

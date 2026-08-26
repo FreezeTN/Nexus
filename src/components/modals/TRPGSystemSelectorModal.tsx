@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RuleEdition } from '../../types';
 import {
   Layers,
@@ -99,6 +99,12 @@ export const TRPGSystemSelectorModal: React.FC<TRPGSystemSelectorModalProps> = (
     enabledSystems.length > 0 ? enabledSystems : ['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu']
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (enabledSystems && enabledSystems.length > 0) {
+      setSelected(enabledSystems);
+    }
+  }, [enabledSystems, isOpen]);
 
   if (!isOpen) return null;
 
@@ -333,3 +339,5 @@ export const TRPGSystemSelectorModal: React.FC<TRPGSystemSelectorModalProps> = (
     </div>
   );
 };
+
+export default TRPGSystemSelectorModal;

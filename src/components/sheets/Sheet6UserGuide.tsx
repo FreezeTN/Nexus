@@ -49,10 +49,10 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState<string>('all');
-  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'manual' | 'conversion' | 'audio' | 'changelog'>(edition);
+  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'manual' | 'audio' | 'changelog'>(edition);
 
   useEffect(() => {
-    if (guideEdition === 'manual' || guideEdition === 'conversion' || guideEdition === 'audio' || guideEdition === 'changelog') return;
+    if (guideEdition === 'manual' || guideEdition === 'audio' || guideEdition === 'changelog') return;
     if (enabledSystems && enabledSystems.length > 0) {
       if (!enabledSystems.includes(guideEdition as RuleEdition)) {
         setGuideEdition(enabledSystems[0]);
@@ -452,9 +452,9 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
       description: '3.5e ruleset management, BAB display, 3.5e saving throws, and HP calculation modes.',
       items: [
         {
-          name: '3.5e Ruleset Badge & Conversion',
+          name: '3.5e Ruleset Badge',
           action: 'Header Edition Badge / Switcher',
-          detail: 'Shows active D&D 3.5e system tag. You can convert any character between rulesets in the Options modal (⚙️) under the Character tab.'
+          detail: 'Shows active D&D 3.5e system tag. Switch active rulesets in the top menu bar.'
         },
         {
           name: 'Base Attack Bonus (BAB)',
@@ -796,44 +796,6 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     }
   ];
 
-  // System Conversion Guide Data
-  const guideSectionsConversion = [
-    {
-      id: 'conv-overview',
-      title: 'TRPG System Conversion Mechanics',
-      icon: RefreshCw,
-      color: 'text-cyan-400',
-      description: 'How characters adapt between D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, and Call of Cthulhu.',
-      items: [
-        {
-          name: 'How to Convert Any Character',
-          action: 'Options Modal (⚙️) → Character Tab',
-          detail: 'Open the Options modal (⚙️), navigate to the Character tab (visible when logged in and a character is selected), and choose your target TRPG system to convert instantly.'
-        },
-        {
-          name: 'D&D 5e ↔ D&D 3.5e Conversion',
-          action: 'Proficiency ↔ BAB & Base Saves',
-          detail: 'Proficiency bonus converts into Base Attack Bonus (BAB) and Fortitude, Reflex, and Will Base Saves. 5e skills adapt to 3.5e skill ranks.'
-        },
-        {
-          name: 'Fantasy (D&D/Pathfinder) ↔ Shadowrun',
-          action: 'Abilities ↔ Body, Agility, Logic, Nuyen',
-          detail: 'Strength & Dexterity map to Body, Agility & Strength; Intelligence & Wisdom map to Logic, Intuition & Willpower. Converts gold to Nuyen (¥25,000 base) and initializes starting Karma (10).'
-        },
-        {
-          name: 'D&D / Fantasy ↔ Call of Cthulhu',
-          action: 'Abilities ↔ Percentile Stats & Sanity',
-          detail: 'Ability scores multiply by 5 to create d100 stats. Initializes Sanity points (WIS × 5) and Madness tracking.'
-        },
-        {
-          name: 'Zero Data Loss Guarantee',
-          action: 'Safe Persistent Storage',
-          detail: 'Your equipment inventory, custom weapons, backstory, spell lists, portrait image URL, and character notes are safely preserved across all conversion changes.'
-        }
-      ]
-    }
-  ];
-
   // Audio & Sound Engine Guide Data
   const guideSectionsAudio = [
     {
@@ -981,8 +943,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
         },
         {
           name: 'Sheet 6: Rules Reference & User Manual',
-          action: 'Formulas, Conversion & Audio',
-          detail: 'Interactive reference featuring mathematical formula breakdowns, system conversion guides, Web Audio sound sandbox, version changelogs, and live manual search.'
+          action: 'Formulas, Rulesets & Audio',
+          detail: 'Interactive reference featuring mathematical formula breakdowns, system ruleset guides, Web Audio sound sandbox, version changelogs, and live manual search.'
         },
         {
           name: 'Sheet 7: SRD Compendium',
@@ -1138,8 +1100,6 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     ? guideSectionsPathfinder
     : guideEdition === 'cthulhu'
     ? guideSectionsCthulhu
-    : guideEdition === 'conversion'
-    ? guideSectionsConversion
     : guideEdition === 'audio'
     ? guideSectionsAudio
     : guideEdition === '3.5e'
@@ -1200,8 +1160,6 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
                 ? 'Pathfinder 2e System Guide'
                 : guideEdition === 'cthulhu'
                 ? 'Call of Cthulhu 7e Horror Guide'
-                : guideEdition === 'conversion'
-                ? 'TRPG System Conversion Guide'
                 : guideEdition === 'audio'
                 ? 'Procedural Web Audio Engine & Sound Options'
                 : guideEdition === 'changelog'
@@ -1217,8 +1175,6 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
                 ? 'Complete manual for Pathfinder 2e mechanics: 3-Action turn economy, Multiple Attack Penalty (MAP), and Four Degrees of Success.'
                 : guideEdition === 'cthulhu'
                 ? 'Complete manual for Call of Cthulhu 7e mechanics: d100 percentile skills, Sanity points (SAN), Bouts of Madness, and Eldritch horror tracking.'
-                : guideEdition === 'conversion'
-                ? 'Comprehensive guide on converting characters seamlessly between D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, and Call of Cthulhu with zero data loss.'
                 : guideEdition === 'audio'
                 ? 'Comprehensive guide to the built-in procedural Web Audio synthesizer, master volume slider, volume presets, sound effect triggers, and sound preferences.'
                 : guideEdition === 'changelog'
@@ -1256,17 +1212,6 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
                 <span>{sys.shortName}</span>
               </button>
             ))}
-            <button
-              onClick={() => setGuideEdition('conversion')}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
-                guideEdition === 'conversion'
-                  ? 'bg-blue-600 text-white shadow-md ring-1 ring-blue-300'
-                  : 'text-stone-400 hover:text-blue-300 hover:bg-stone-900'
-              }`}
-            >
-              <RefreshCw className="w-3.5 h-3.5 text-cyan-300" />
-              <span>System Conversion</span>
-            </button>
             <button
               onClick={() => setGuideEdition('audio')}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${

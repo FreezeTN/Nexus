@@ -160,7 +160,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
         },
         {
           name: 'Sheet 6: Rules Reference & User Manual',
-          detail: 'Interactive manual containing mathematical formula breakdowns, system conversion guides, Web Audio sound sandbox, version changelogs, and live search.'
+          detail: 'Interactive manual containing mathematical formula breakdowns, system ruleset guides, Web Audio sound sandbox, version changelogs, and live search.'
         },
         {
           name: 'Sheet 7: SRD Compendium & Quick Import',
@@ -521,3 +521,5 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
     </div>
   );
 };
+
+export default UserManualModal;

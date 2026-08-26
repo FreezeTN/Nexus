@@ -33,6 +33,10 @@ service cloud.firestore {
     match /presence/{characterId} {
       allow read, create, update, delete: if true;
     }
+
+    match /campaign_saves/{saveId} {
+      allow read, create, update, delete: if true;
+    }
   }
 }
 

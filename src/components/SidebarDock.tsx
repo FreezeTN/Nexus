@@ -20,6 +20,7 @@ import {
 import { TabId } from './Navigation';
 import { UserProfile, GameSession } from '../lib/firebase';
 import { isSoundEnabled } from '../utils/diceAudio';
+import { InstallAppModal } from './modals/InstallAppModal';
 
 interface SidebarDockProps {
   activeTab: TabId;
@@ -63,6 +64,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
 }) => {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [showInstallModal, setShowInstallModal] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('penpaper_sidebar_collapsed') === 'true';
@@ -100,16 +102,30 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
     };
   }, []);
 
-  const handleTriggerInstall = async () => {
+  const handleTriggerInstallPrompt = async () => {
     if (deferredPrompt) {
       await deferredPrompt.prompt();
       const choice = await deferredPrompt.userChoice;
       if (choice.outcome === 'accepted') {
         setDeferredPrompt(null);
       }
-    } else {
-      alert('To install as an app on Desktop or Mobile, open your browser menu (e.g. Chrome/Safari) and select "Install App" or "Add to Home Screen".');
     }
+  };
+
+  const handleTriggerInstall = async () => {
+    if (deferredPrompt) {
+      try {
+        await deferredPrompt.prompt();
+        const choice = await deferredPrompt.userChoice;
+        if (choice.outcome === 'accepted') {
+          setDeferredPrompt(null);
+          return;
+        }
+      } catch (e) {
+        console.warn('Native prompt error, opening install modal:', e);
+      }
+    }
+    setShowInstallModal(true);
   };
 
   const isHubActive = activeTab === 'menu';
@@ -139,17 +155,18 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
   // COLLAPSED / PHASED OUT MODE
   if (isCollapsed) {
     return (
-      <aside className="w-full lg:w-16 shrink-0 select-none transition-all duration-300 ease-in-out">
-        <div className="bg-stone-950/90 border border-stone-800/90 backdrop-blur-md rounded-2xl shadow-2xl p-2 flex flex-col items-center space-y-2">
-          {/* Phase In / Expand Toggle Button */}
-          <button
-            onClick={toggleCollapse}
-            className="w-full py-2 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 transition cursor-pointer shadow-sm group flex items-center justify-center gap-2"
-            title="Phase In / Expand Vertical Menu"
-          >
-            <PanelLeftOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-            <span className="lg:hidden text-xs font-bold font-serif">Phase In Menu</span>
-          </button>
+      <>
+        <aside className="w-full lg:w-16 shrink-0 select-none transition-all duration-300 ease-in-out">
+          <div className="bg-stone-950/90 border border-stone-800/90 backdrop-blur-md rounded-2xl shadow-2xl p-2 flex flex-col items-center space-y-2">
+            {/* Phase In / Expand Toggle Button */}
+            <button
+              onClick={toggleCollapse}
+              className="w-full py-2 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 transition cursor-pointer shadow-sm group flex items-center justify-center gap-2"
+              title="Phase In / Expand Vertical Menu"
+            >
+              <PanelLeftOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span className="lg:hidden text-xs font-bold font-serif">Phase In Menu</span>
+            </button>
 
           <div className="w-full h-px bg-stone-800/80 my-0.5" />
 
@@ -269,7 +286,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                     ? 'bg-emerald-950/60 border-emerald-600/60 text-emerald-300 animate-pulse'
                     : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
                 }`}
-                title={activeSession ? `Multiplayer Session (Room: ${activeSession.code})` : 'Multiplayer Session Lobby'}
+                title={activeSession ? `Campaign Session: ${activeSession.name}` : 'Multiplayer Session Lobby'}
               >
                 <Users className="w-4 h-4" />
               </button>
@@ -316,13 +333,23 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
           </div>
         </div>
       </aside>
-    );
-  }
+
+      <InstallAppModal
+        isOpen={showInstallModal}
+        onClose={() => setShowInstallModal(false)}
+        deferredPrompt={deferredPrompt}
+        isStandalone={isStandalone}
+        onTriggerInstallPrompt={handleTriggerInstallPrompt}
+      />
+    </>
+  );
+}
 
   // EXPANDED MODE
   return (
-    <aside className="w-full lg:w-60 shrink-0 select-none transition-all duration-300 ease-in-out">
-      <div className="bg-stone-950/90 border border-stone-800/90 backdrop-blur-md rounded-2xl shadow-2xl p-2.5 sm:p-3 space-y-3">
+    <>
+      <aside className="w-full lg:w-60 shrink-0 select-none transition-all duration-300 ease-in-out">
+        <div className="bg-stone-950/90 border border-stone-800/90 backdrop-blur-md rounded-2xl shadow-2xl p-2.5 sm:p-3 space-y-3">
         {/* TOP: NAVIGATION & SYSTEM GUIDES (Hub, User Guide, Compendium) */}
         <div className="space-y-1.5">
           <div className="px-1 flex items-center justify-between text-[11px] font-bold text-stone-400 uppercase tracking-wider">
@@ -509,22 +536,15 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
           {currentUser && onOpenSessionLobby && (
             <button
               onClick={onOpenSessionLobby}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border group ${
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border group ${
                 activeSession
                   ? 'bg-emerald-950/60 border-emerald-600/60 text-emerald-200 shadow-md animate-pulse'
                   : 'bg-stone-900/80 hover:bg-stone-800/90 border-stone-800 hover:border-amber-600/40 text-stone-200 hover:text-amber-300'
               }`}
-              title="Open Multiplayer Campaign Session Lobby & 6-Digit Room Code"
+              title={activeSession ? `Campaign: ${activeSession.name} (Click to open Room Menu)` : 'Open Multiplayer Campaign Session Lobby'}
             >
-              <div className="flex items-center gap-2.5">
-                <Users className={`w-4 h-4 ${activeSession ? 'text-emerald-400' : 'text-amber-400'} group-hover:scale-110 transition-transform`} />
-                <span>{activeSession ? `Room: ${activeSession.code}` : 'Session Lobby'}</span>
-              </div>
-              {activeSession && (
-                <span className="px-1.5 py-0.5 bg-emerald-950 text-emerald-300 border border-emerald-700/80 rounded text-[10px] font-mono">
-                  {activeSession.members?.length || 1} Live
-                </span>
-              )}
+              <Users className={`w-4 h-4 shrink-0 ${activeSession ? 'text-emerald-400' : 'text-amber-400'} group-hover:scale-110 transition-transform`} />
+              <span className="truncate flex-1 text-left">{activeSession ? (activeSession.name || 'Campaign Room') : 'Session Lobby'}</span>
             </button>
           )}
 
@@ -580,5 +600,14 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
         </div>
       </div>
     </aside>
+
+    <InstallAppModal
+      isOpen={showInstallModal}
+      onClose={() => setShowInstallModal(false)}
+      deferredPrompt={deferredPrompt}
+      isStandalone={isStandalone}
+      onTriggerInstallPrompt={handleTriggerInstallPrompt}
+    />
+  </>
   );
 };

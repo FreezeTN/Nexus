@@ -584,11 +584,25 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
               onChange={(e) => setSelectedTargetId(e.target.value)}
               className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-xs text-stone-100 font-bold focus:outline-none focus:border-amber-500"
             >
-              {combatants.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.name} (AC {c.armorClass}, HP {c.hpCurrent}/{c.hpMax}) {c.type === 'enemy' ? '[Enemy]' : '[Ally]'}
-                </option>
-              ))}
+              {combatants.filter(c => c.type === 'enemy').length > 0 && (
+                <optgroup label="⚔️ Enemies & Hostiles (Opponents)">
+                  {combatants.filter(c => c.type === 'enemy').map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} (AC {c.armorClass}, HP {c.hpCurrent}/{c.hpMax}) {c.isDefeated ? '💀 [Defeated]' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+
+              {combatants.filter(c => c.type !== 'enemy').length > 0 && (
+                <optgroup label="🛡️ Allies & Party Members">
+                  {combatants.filter(c => c.type !== 'enemy').map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} {c.isPlayerChar ? '(YOU)' : ''} (AC {c.armorClass}, HP {c.hpCurrent}/{c.hpMax})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
               <option value="manual">-- Manual Target AC --</option>
             </select>
           </div>

@@ -3,7 +3,31 @@ import { CharacterData, Party, EncounterEnvironment } from '../../types';
 import { UserProfile } from '../../lib/firebase';
 import { getAbilityModifier, formatModifier, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { getLevelFromTotalXp } from '../../data/levelProgressionData';
-import { Crosshair, Plus, Trash2, ChevronRight, ChevronLeft, Dices, RefreshCw, ScrollText, Users, Compass, X, Mic, Volume2 } from 'lucide-react';
+import {
+  Crosshair,
+  Plus,
+  Trash2,
+  ChevronRight,
+  ChevronLeft,
+  Dices,
+  RefreshCw,
+  ScrollText,
+  Users,
+  Compass,
+  X,
+  Mic,
+  Volume2,
+  Shield,
+  Swords,
+  Skull,
+  Heart,
+  ArrowRightLeft,
+  LayoutGrid,
+  ListFilter,
+  UserPlus,
+  Sparkles,
+  Flame
+} from 'lucide-react';
 import { AttackResolver } from './AttackResolver';
 import { voiceManager, VoicePeerState } from '../../lib/voiceChatService';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
@@ -163,6 +187,8 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   ]);
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addModalInitialType, setAddModalInitialType] = useState<'ally' | 'enemy'>('enemy');
+  const [viewMode, setViewMode] = useState<'teams' | 'timeline'>('teams');
   const [editingMaxHpId, setEditingMaxHpId] = useState<string | null>(null);
   const [editingMaxHpValue, setEditingMaxHpValue] = useState<number | string>('');
 
@@ -192,6 +218,45 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   } | null>(null);
 
   const activeCombatant = combatants[activeTurnIndex];
+
+  // Allies (Team 1) and Enemies (Team 2) from active character's perspective
+  const allies = React.useMemo(() => {
+    return combatants.filter(c => c.isPlayerChar || c.type === 'player' || c.type === 'ally');
+  }, [combatants]);
+
+  const enemies = React.useMemo(() => {
+    return combatants.filter(c => !c.isPlayerChar && c.type === 'enemy');
+  }, [combatants]);
+
+  const isAllyTurn = activeCombatant ? (activeCombatant.isPlayerChar || activeCombatant.type === 'player' || activeCombatant.type === 'ally') : false;
+  const isEnemyTurn = activeCombatant ? (!activeCombatant.isPlayerChar && activeCombatant.type === 'enemy') : false;
+
+  const alliesTotalHp = allies.reduce((sum, c) => sum + (c.hpMax || 1), 0);
+  const alliesCurrentHp = allies.reduce((sum, c) => sum + Math.max(0, c.hpCurrent || 0), 0);
+  const alliesAliveCount = allies.filter(c => c.hpCurrent > 0).length;
+
+  const enemiesTotalHp = enemies.reduce((sum, c) => sum + (c.hpMax || 1), 0);
+  const enemiesCurrentHp = enemies.reduce((sum, c) => sum + Math.max(0, c.hpCurrent || 0), 0);
+  const enemiesAliveCount = enemies.filter(c => c.hpCurrent > 0 && !c.isDefeated).length;
+  const enemiesTotalXp = enemies.reduce((sum, c) => sum + (c.monsterXpReward || 0), 0);
+
+  const handleOpenAddModal = (type: 'ally' | 'enemy' = 'enemy') => {
+    setAddModalInitialType(type);
+    setShowAddModal(true);
+  };
+
+  const handleToggleCombatantType = (id: string) => {
+    setCombatants(prev =>
+      prev.map(c => {
+        if (c.id === id) {
+          const nextType: 'ally' | 'enemy' = c.type === 'enemy' ? 'ally' : 'enemy';
+          addLogEntry('turn', `Switched allegiance for ${c.name} to ${nextType === 'enemy' ? 'Enemy (Team 2)' : 'Ally (Team 1)'}`, c.name);
+          return { ...c, type: nextType };
+        }
+        return c;
+      })
+    );
+  };
 
   const activeAttackerCharacter: CharacterData = React.useMemo(() => {
     if (!activeCombatant) return character;
@@ -603,13 +668,40 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             )}
           </button>
 
+          <div className="flex items-center bg-stone-950 border border-stone-800 rounded-xl p-0.5">
+            <button
+              onClick={() => setViewMode('teams')}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-bold transition ${
+                viewMode === 'teams'
+                  ? 'bg-amber-600 text-stone-950 shadow'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+              title="Team 1 (Allies) vs Team 2 (Enemies) Layout"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Teams (VS)</span>
+            </button>
+            <button
+              onClick={() => setViewMode('timeline')}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-bold transition ${
+                viewMode === 'timeline'
+                  ? 'bg-amber-600 text-stone-950 shadow'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+              title="Unified Turn Timeline"
+            >
+              <ListFilter className="w-3.5 h-3.5" />
+              <span>Timeline</span>
+            </button>
+          </div>
+
           <button
             onClick={handleRollPlayerInitiative}
             className="flex items-center gap-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs px-3 py-1.5 rounded-xl transition shadow"
             title="Roll Initiative d20 + DEX Mod"
           >
             <Dices className="w-3.5 h-3.5" />
-            <span>Roll My Init ({formatModifier(initBonus)})</span>
+            <span>Roll Init ({formatModifier(initBonus)})</span>
           </button>
 
           {onOpenPartyManager && (
@@ -623,13 +715,25 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             </button>
           )}
 
-          <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1 text-xs bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 px-3 py-1.5 rounded-xl font-bold transition"
-          >
-            <Plus className="w-3.5 h-3.5 text-amber-500" />
-            <span>+ Add Target</span>
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => handleOpenAddModal('ally')}
+              className="flex items-center gap-1 text-xs bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 px-2.5 py-1.5 rounded-xl font-bold transition shadow"
+              title="Add Ally / Companion to Team 1"
+            >
+              <Shield className="w-3.5 h-3.5 text-emerald-400" />
+              <span>+ Ally</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenAddModal('enemy')}
+              className="flex items-center gap-1 text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-700/60 px-2.5 py-1.5 rounded-xl font-bold transition shadow"
+              title="Add Enemy / Monster to Team 2"
+            >
+              <Swords className="w-3.5 h-3.5 text-rose-400" />
+              <span>+ Enemy</span>
+            </button>
+          </div>
 
           {showEndConfirm ? (
             <div className="flex items-center gap-1.5 bg-rose-950/90 border border-rose-800 p-1 rounded-xl animate-fadeIn">
@@ -650,11 +754,11 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           ) : (
             <button
               onClick={() => setShowEndConfirm(true)}
-              className="flex items-center gap-1 text-xs bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800/80 px-2.5 py-1.5 rounded-xl font-bold transition shadow"
-              title="End encounter & clear all added combatants"
+              className="flex items-center gap-1 text-xs bg-stone-950 hover:bg-rose-950/70 text-stone-400 hover:text-rose-300 border border-stone-800 px-2.5 py-1.5 rounded-xl font-bold transition"
+              title="End encounter & reset combatants"
             >
-              <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-              <span>End Encounter</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">End</span>
             </button>
           )}
         </div>
@@ -737,27 +841,31 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         </div>
       )}
 
-      {/* Turn Navigation Bar */}
+      {/* Turn Navigation & Battle Stage Bar */}
       {combatants.length > 0 && (
-        <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex items-center justify-between flex-wrap gap-2">
+        <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 flex items-center justify-between flex-wrap gap-3 shadow-md">
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrevTurn}
-              className="p-1.5 bg-stone-900 hover:bg-stone-800 text-stone-200 rounded-lg border border-stone-700 transition"
+              className="p-1.5 bg-stone-900 hover:bg-stone-800 text-stone-200 rounded-lg border border-stone-700 transition shadow"
               title="Previous Turn"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
               onClick={handleNextTurn}
-              className="flex items-center gap-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-lg font-bold text-xs transition shadow"
-              title="Next Turn"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-lg font-bold text-xs transition shadow-md"
+              title="Advance to Next Turn"
             >
               <span>Next Turn</span>
               <ChevronRight className="w-4 h-4" />
             </button>
             <button
-              onClick={() => { setRoundNumber(1); setActiveTurnIndex(0); addLogEntry('turn', 'Round counter reset to Round 1'); }}
+              onClick={() => {
+                setRoundNumber(1);
+                setActiveTurnIndex(0);
+                addLogEntry('turn', 'Round counter reset to Round 1');
+              }}
               className="p-1.5 bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 rounded-lg border border-stone-800 transition"
               title="Reset Round Counter"
             >
@@ -766,10 +874,18 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           </div>
 
           {activeCombatant && (
-            <div className="text-xs text-stone-300 font-mono flex items-center gap-2">
+            <div className="flex items-center gap-2.5 bg-stone-900/90 border border-stone-700/80 px-3 py-1.5 rounded-xl text-xs font-mono">
               <span className="text-stone-400">Current Turn:</span>
-              <strong className="text-amber-300 font-bold">{activeCombatant.name}</strong>
-              <span className="text-stone-500">(Init {isNaN(activeCombatant.initiative) ? 0 : activeCombatant.initiative})</span>
+              <span className={`px-2 py-0.5 rounded-full font-bold text-[11px] flex items-center gap-1 ${
+                isAllyTurn
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/50'
+                  : 'bg-rose-950 text-rose-300 border border-rose-500/50'
+              }`}>
+                {isAllyTurn ? <Shield className="w-3 h-3" /> : <Swords className="w-3 h-3" />}
+                <span>{isAllyTurn ? 'Team 1 (Ally)' : 'Team 2 (Enemy)'}</span>
+              </span>
+              <strong className="text-amber-300 font-bold text-sm">{activeCombatant.name}</strong>
+              <span className="text-stone-500 font-bold">(Init {isNaN(activeCombatant.initiative) ? 0 : activeCombatant.initiative})</span>
             </div>
           )}
         </div>
@@ -787,25 +903,420 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         onLogAction={(category, message, actor) => addLogEntry(category, message, actor)}
       />
 
-      {/* Combatant Roster */}
-      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-        {combatants.map((c, idx) => {
-          const isActive = idx === activeTurnIndex;
-          const isSpeaking = activeSpeakerNames.has(c.name.toLowerCase().trim());
+      {/* Combatant Roster: Team 1 (Allies) vs Team 2 (Enemies) Layout */}
+      {viewMode === 'teams' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          {/* ================= TEAM 1: ALLIES & PARTY (LEFT) ================= */}
+          <div className="bg-stone-950/80 border border-emerald-900/40 rounded-2xl p-3.5 space-y-3 shadow-lg">
+            {/* Team 1 Header */}
+            <div className="flex items-center justify-between border-b border-stone-800 pb-2.5 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-950 border border-emerald-600/50 flex items-center justify-center text-emerald-400 shadow-sm">
+                  <Shield className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif font-bold text-stone-100 text-sm flex items-center gap-2">
+                    <span>Team 1: Allies & Party</span>
+                    {isAllyTurn && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.2 rounded-full font-mono font-bold animate-pulse">
+                        Active Turn
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-[11px] text-stone-400 font-mono">
+                    {alliesAliveCount}/{allies.length} Standing • Total HP: {alliesCurrentHp}/{alliesTotalHp}
+                  </p>
+                </div>
+              </div>
 
-          return (
-            <div
-              key={c.id}
-              className={`p-3 rounded-xl border transition flex items-center justify-between gap-3 flex-wrap ${
-                isSpeaking
-                  ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/20'
-                  : isActive
-                  ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/50 shadow-lg'
-                  : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                {c.portraitUrl || c.type === 'enemy' ? (
+              <button
+                onClick={() => handleOpenAddModal('ally')}
+                className="flex items-center gap-1 text-xs bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 px-2.5 py-1 rounded-xl font-bold transition shadow"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Ally</span>
+              </button>
+            </div>
+
+            {/* Allies Cards List */}
+            <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+              {allies.length === 0 ? (
+                <div className="text-center py-8 px-4 border border-dashed border-stone-800 rounded-xl text-stone-500 space-y-2">
+                  <Shield className="w-8 h-8 mx-auto text-stone-600 opacity-60" />
+                  <p className="text-xs">No allies in this encounter yet.</p>
+                  <button
+                    onClick={() => handleOpenAddModal('ally')}
+                    className="text-xs text-emerald-400 hover:text-emerald-300 font-bold underline"
+                  >
+                    + Add Ally or Party Member
+                  </button>
+                </div>
+              ) : (
+                allies.map((c) => {
+                  const isActive = combatants[activeTurnIndex]?.id === c.id;
+                  const isSpeaking = activeSpeakerNames.has(c.name.toLowerCase().trim());
+                  const globalRank = combatants.findIndex(item => item.id === c.id) + 1;
+                  const hpPercent = Math.max(0, Math.min(100, Math.round((c.hpCurrent / Math.max(1, c.hpMax)) * 100)));
+
+                  return (
+                    <div
+                      key={c.id}
+                      className={`p-3 rounded-xl border transition space-y-2 ${
+                        isSpeaking
+                          ? 'bg-emerald-950/50 border-emerald-500 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/20'
+                          : isActive
+                          ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/60 shadow-lg'
+                          : c.hpCurrent === 0
+                          ? 'bg-stone-950/60 border-rose-900/60 opacity-80'
+                          : 'bg-stone-900/90 border-stone-800 text-stone-300 hover:border-emerald-700/50'
+                      }`}
+                    >
+                      {/* Top Row: Avatar, Info, Badges */}
+                      <div className="flex items-center justify-between gap-2.5 flex-wrap">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative shrink-0">
+                            <img
+                              src={c.portraitUrl || (c.type === 'enemy' ? getMonsterPortraitUrl(c.name) : '/default-avatar.png')}
+                              alt={c.name}
+                              className={`w-10 h-10 rounded-xl object-cover border shadow shrink-0 ${
+                                isSpeaking
+                                  ? 'border-emerald-400 ring-2 ring-emerald-400/60 animate-pulse'
+                                  : isActive
+                                  ? 'border-amber-400 ring-1 ring-amber-400/50'
+                                  : 'border-emerald-600/40'
+                              }`}
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                img.onerror = null;
+                                img.src = generateMonsterSvgPortrait(c?.name);
+                              }}
+                            />
+                            <div className="absolute -bottom-1 -right-1 px-1 min-w-[18px] h-4 rounded bg-emerald-600 text-stone-950 font-mono font-bold text-[9px] border border-emerald-300 shadow flex items-center justify-center" title={`Initiative Roll: ${c.initiative}`}>
+                              {isNaN(c.initiative) ? 0 : c.initiative}
+                            </div>
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate max-w-[150px]">{c.name}</span>
+                              <span className="text-[10px] text-stone-400 font-mono" title="Global Turn Order">
+                                #{globalRank}
+                              </span>
+                              {c.isPlayerChar && (
+                                <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono font-bold">
+                                  YOU
+                                </span>
+                              )}
+                              {isActive && (
+                                <span className="text-[9px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.2 rounded font-mono animate-pulse">
+                                  ACTIVE TURN
+                                </span>
+                              )}
+                              {isSpeaking && (
+                                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 animate-pulse">
+                                  <Mic className="w-2.5 h-2.5 text-emerald-400" /> SPEAKING
+                                </span>
+                              )}
+                              {c.hpCurrent === 0 && (
+                                <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600 px-1.5 py-0.2 rounded font-mono font-bold">
+                                  UNCONSCIOUS
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-[11px] text-stone-400 font-mono flex items-center gap-2 mt-0.5">
+                              <span>AC: <strong className="text-stone-200">{c.armorClass}</strong></span>
+                              <span>HP: <strong className={c.hpCurrent === 0 ? 'text-rose-500 font-bold' : c.hpCurrent <= (c.hpMax / 4) ? 'text-rose-400' : 'text-emerald-400'}>{c.hpCurrent}</strong> / {c.hpMax}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions (HP controls, Allegiance switch, remove) */}
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-0.5 bg-stone-950 border border-stone-800 p-0.5 rounded-lg">
+                            <button
+                              onClick={() => handleAdjustHp(c.id, -5)}
+                              className="px-1.5 py-0.5 bg-rose-950 hover:bg-rose-900 text-rose-200 rounded font-mono font-bold text-[11px]"
+                              title="-5 HP"
+                            >
+                              -5
+                            </button>
+                            <button
+                              onClick={() => handleAdjustHp(c.id, -1)}
+                              className="px-1.5 py-0.5 bg-rose-900/70 hover:bg-rose-800 text-rose-100 rounded font-mono font-bold text-[11px]"
+                              title="-1 HP"
+                            >
+                              -1
+                            </button>
+                            <button
+                              onClick={() => handleAdjustHp(c.id, 1)}
+                              className="px-1.5 py-0.5 bg-emerald-900/70 hover:bg-emerald-800 text-emerald-100 rounded font-mono font-bold text-[11px]"
+                              title="+1 HP"
+                            >
+                              +1
+                            </button>
+                            <button
+                              onClick={() => handleAdjustHp(c.id, 5)}
+                              className="px-1.5 py-0.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 rounded font-mono font-bold text-[11px]"
+                              title="+5 HP"
+                            >
+                              +5
+                            </button>
+                          </div>
+
+                          {!c.isPlayerChar && (
+                            <button
+                              onClick={() => handleToggleCombatantType(c.id)}
+                              className="p-1 bg-stone-950 hover:bg-stone-800 text-stone-400 hover:text-rose-400 border border-stone-800 rounded-lg transition"
+                              title="Switch to Team 2 (Enemy)"
+                            >
+                              <ArrowRightLeft className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {!c.isPlayerChar && (
+                            <button
+                              onClick={() => handleRemoveCombatant(c.id)}
+                              className="p-1 text-stone-500 hover:text-rose-400 transition"
+                              title="Remove from encounter"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Health Progress Bar */}
+                      <div className="w-full bg-stone-950 rounded-full h-1.5 border border-stone-800 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-amber-500' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${hpPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* ================= TEAM 2: ENEMIES & HOSTILES (RIGHT) ================= */}
+          <div className="bg-stone-950/80 border border-rose-900/40 rounded-2xl p-3.5 space-y-3 shadow-lg">
+            {/* Team 2 Header */}
+            <div className="flex items-center justify-between border-b border-stone-800 pb-2.5 flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-rose-950 border border-rose-600/50 flex items-center justify-center text-rose-400 shadow-sm">
+                  <Swords className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-serif font-bold text-stone-100 text-sm flex items-center gap-2">
+                    <span>Team 2: Enemies & Hostiles</span>
+                    {isEnemyTurn && (
+                      <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 px-2 py-0.2 rounded-full font-mono font-bold animate-pulse">
+                        Active Turn
+                      </span>
+                    )}
+                  </h4>
+                  <p className="text-[11px] text-stone-400 font-mono">
+                    {enemiesAliveCount}/{enemies.length} Alive • Pool: <strong className="text-amber-300">+{enemiesTotalXp.toLocaleString()} XP</strong>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => handleOpenAddModal('enemy')}
+                className="flex items-center gap-1 text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-700/60 px-2.5 py-1 rounded-xl font-bold transition shadow"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Enemy</span>
+              </button>
+            </div>
+
+            {/* Enemies Cards List */}
+            <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+              {enemies.length === 0 ? (
+                <div className="text-center py-8 px-4 border border-dashed border-stone-800 rounded-xl text-stone-500 space-y-2">
+                  <Swords className="w-8 h-8 mx-auto text-stone-600 opacity-60" />
+                  <p className="text-xs">No enemies or monsters in this encounter.</p>
+                  <button
+                    onClick={() => handleOpenAddModal('enemy')}
+                    className="text-xs text-rose-400 hover:text-rose-300 font-bold underline"
+                  >
+                    + Add Enemy / Monster Target
+                  </button>
+                </div>
+              ) : (
+                enemies.map((c) => {
+                  const isActive = combatants[activeTurnIndex]?.id === c.id;
+                  const isSpeaking = activeSpeakerNames.has(c.name.toLowerCase().trim());
+                  const globalRank = combatants.findIndex(item => item.id === c.id) + 1;
+                  const isDefeated = c.isDefeated || c.hpCurrent === 0;
+                  const hpPercent = Math.max(0, Math.min(100, Math.round((c.hpCurrent / Math.max(1, c.hpMax)) * 100)));
+
+                  return (
+                    <div
+                      key={c.id}
+                      className={`p-3 rounded-xl border transition space-y-2 ${
+                        isSpeaking
+                          ? 'bg-emerald-950/50 border-emerald-500 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/20'
+                          : isActive
+                          ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/60 shadow-lg'
+                          : isDefeated
+                          ? 'bg-stone-950/50 border-stone-800/80 opacity-60'
+                          : 'bg-stone-900/90 border-stone-800 text-stone-300 hover:border-rose-700/50'
+                      }`}
+                    >
+                      {/* Top Row: Avatar, Info, Badges */}
+                      <div className="flex items-center justify-between gap-2.5 flex-wrap">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative shrink-0">
+                            <img
+                              src={c.portraitUrl || getMonsterPortraitUrl(c.name)}
+                              alt={c.name}
+                              className={`w-10 h-10 rounded-xl object-cover border shadow shrink-0 ${
+                                isSpeaking
+                                  ? 'border-emerald-400 ring-2 ring-emerald-400/60 animate-pulse'
+                                  : isActive
+                                  ? 'border-amber-400 ring-1 ring-amber-400/50'
+                                  : isDefeated
+                                  ? 'border-stone-800 grayscale'
+                                  : 'border-rose-700/50'
+                              }`}
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const img = e.target as HTMLImageElement;
+                                img.onerror = null;
+                                img.src = generateMonsterSvgPortrait(c?.name);
+                              }}
+                            />
+                            <div className="absolute -bottom-1 -right-1 px-1 min-w-[18px] h-4 rounded bg-rose-600 text-stone-950 font-mono font-bold text-[9px] border border-rose-300 shadow flex items-center justify-center" title={`Initiative Roll: ${c.initiative}`}>
+                              {isNaN(c.initiative) ? 0 : c.initiative}
+                            </div>
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate max-w-[150px]">{c.name}</span>
+                              <span className="text-[10px] text-stone-400 font-mono" title="Global Turn Order">
+                                #{globalRank}
+                              </span>
+                              {isActive && (
+                                <span className="text-[9px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.2 rounded font-mono animate-pulse">
+                                  ACTIVE TURN
+                                </span>
+                              )}
+                              {isSpeaking && (
+                                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 animate-pulse">
+                                  <Mic className="w-2.5 h-2.5 text-emerald-400" /> SPEAKING
+                                </span>
+                              )}
+                              {isDefeated && (
+                                <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600/80 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1">
+                                  <Skull className="w-2.5 h-2.5" /> DEFEATED
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-[11px] text-stone-400 font-mono flex items-center gap-2 mt-0.5">
+                              <span>AC: <strong className="text-stone-200">{c.armorClass}</strong></span>
+                              <span>HP: <strong className={isDefeated ? 'text-rose-500 font-bold' : c.hpCurrent <= (c.hpMax / 4) ? 'text-rose-400' : 'text-emerald-400'}>{c.hpCurrent}</strong> / {c.hpMax}</span>
+                              {c.monsterXpReward ? (
+                                <span className="text-amber-300 text-[10px] font-bold">+{c.monsterXpReward} XP</span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions (HP controls, Allegiance switch, remove) */}
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-0.5 bg-stone-950 border border-stone-800 p-0.5 rounded-lg">
+                            <button
+                              onClick={() => handleAdjustHp(c.id, -5)}
+                              className="px-1.5 py-0.5 bg-rose-950 hover:bg-rose-900 text-rose-200 rounded font-mono font-bold text-[11px]"
+                              title="-5 HP"
+                            >
+                              -5
+                            </button>
+                            <button
+                              onClick={() => handleAdjustHp(c.id, -1)}
+                              className="px-1.5 py-0.5 bg-rose-900/70 hover:bg-rose-800 text-rose-100 rounded font-mono font-bold text-[11px]"
+                              title="-1 HP"
+                            >
+                              -1
+                            </button>
+                            <button
+                              onClick={() => handleAdjustHp(c.id, 1)}
+                              className="px-1.5 py-0.5 bg-emerald-900/70 hover:bg-emerald-800 text-emerald-100 rounded font-mono font-bold text-[11px]"
+                              title="+1 HP"
+                            >
+                              +1
+                            </button>
+                            <button
+                              onClick={() => handleAdjustHp(c.id, 5)}
+                              className="px-1.5 py-0.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 rounded font-mono font-bold text-[11px]"
+                              title="+5 HP"
+                            >
+                              +5
+                            </button>
+                          </div>
+
+                          <button
+                            onClick={() => handleToggleCombatantType(c.id)}
+                            className="p-1 bg-stone-950 hover:bg-stone-800 text-stone-400 hover:text-emerald-400 border border-stone-800 rounded-lg transition"
+                            title="Switch to Team 1 (Ally)"
+                          >
+                            <ArrowRightLeft className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            onClick={() => handleRemoveCombatant(c.id)}
+                            className="p-1 text-stone-500 hover:text-rose-400 transition"
+                            title="Remove from encounter"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Health Progress Bar */}
+                      <div className="w-full bg-stone-950 rounded-full h-1.5 border border-stone-800 overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            isDefeated ? 'bg-rose-900' : hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-amber-500' : 'bg-rose-500'
+                          }`}
+                          style={{ width: `${hpPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Unified Timeline View (Optional Switcher) */
+        <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+          {combatants.map((c, idx) => {
+            const isActive = idx === activeTurnIndex;
+            const isSpeaking = activeSpeakerNames.has(c.name.toLowerCase().trim());
+            const isEnemy = c.type === 'enemy' && !c.isPlayerChar;
+
+            return (
+              <div
+                key={c.id}
+                className={`p-3 rounded-xl border transition flex items-center justify-between gap-3 flex-wrap ${
+                  isSpeaking
+                    ? 'bg-emerald-950/40 border-emerald-500 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/20'
+                    : isActive
+                    ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/50 shadow-lg'
+                    : 'bg-stone-950 border-stone-800 text-stone-300 hover:border-stone-700'
+                }`}
+              >
+                <div className="flex items-center gap-3">
                   <div className="relative shrink-0">
                     <img
                       src={c.portraitUrl || getMonsterPortraitUrl(c.name)}
@@ -820,7 +1331,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                         img.src = generateMonsterSvgPortrait(c?.name);
                       }}
                     />
-                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-md flex items-center justify-center font-mono font-bold text-[10px] border shadow ${
+                    <div className={`absolute -bottom-1 -right-1 px-1 h-4 rounded flex items-center justify-center font-mono font-bold text-[9px] border shadow ${
                       c.type === 'player'
                         ? 'bg-amber-500 text-stone-950 border-amber-300'
                         : c.type === 'ally'
@@ -830,93 +1341,90 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                       {isNaN(c.initiative) ? 0 : c.initiative}
                     </div>
                   </div>
-                ) : (
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-xs border ${
-                    isSpeaking
-                      ? 'bg-emerald-500 text-stone-950 border-emerald-300 ring-2 ring-emerald-400/60 animate-pulse'
-                      : c.type === 'player'
-                      ? 'bg-amber-600 text-stone-950 border-amber-400'
-                      : c.type === 'ally'
-                      ? 'bg-emerald-700 text-emerald-100 border-emerald-500'
-                      : 'bg-rose-900 text-rose-200 border-rose-600'
-                  }`}>
-                    {isNaN(c.initiative) ? 0 : c.initiative}
-                  </div>
-                )}
 
-                <div>
-                  <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-2">
-                    <span>{c.name}</span>
-                    {isSpeaking && (
-                      <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 animate-pulse">
-                        <Mic className="w-3 h-3 text-emerald-400" /> SPEAKING
+                  <div>
+                    <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-2">
+                      <span>{c.name}</span>
+                      <span className={`text-[9px] px-1.5 py-0.2 rounded font-mono font-bold ${
+                        isEnemy ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                      }`}>
+                        {isEnemy ? 'Team 2 (Enemy)' : 'Team 1 (Ally)'}
                       </span>
-                    )}
-                    {c.isPlayerChar && (
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono font-bold">
-                        YOU
-                      </span>
-                    )}
-                    {isActive && (
-                      <span className="text-[10px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.2 rounded font-mono animate-pulse">
-                        ACTIVE TURN
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-[11px] text-stone-400 font-mono flex items-center gap-3 mt-0.5 flex-wrap">
-                    <span>AC: <strong className="text-stone-200">{c.armorClass}</strong></span>
-                    <span>HP: <strong className={c.hpCurrent === 0 ? 'text-rose-500 font-bold' : 'text-emerald-400'}>{c.hpCurrent}</strong> / {c.hpMax}</span>
+                      {c.isPlayerChar && (
+                        <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono font-bold">
+                          YOU
+                        </span>
+                      )}
+                      {isActive && (
+                        <span className="text-[10px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.2 rounded font-mono animate-pulse">
+                          ACTIVE TURN
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-stone-400 font-mono flex items-center gap-3 mt-0.5 flex-wrap">
+                      <span>AC: <strong className="text-stone-200">{c.armorClass}</strong></span>
+                      <span>HP: <strong className={c.hpCurrent === 0 ? 'text-rose-500 font-bold' : 'text-emerald-400'}>{c.hpCurrent}</strong> / {c.hpMax}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Actions & HP controls */}
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 p-1 rounded-lg">
-                  <button
-                    onClick={() => handleAdjustHp(c.id, -5)}
-                    className="px-2 py-0.5 bg-rose-950 hover:bg-rose-900 text-rose-200 rounded font-mono font-bold text-xs"
-                    title="-5 HP"
-                  >
-                    -5
-                  </button>
-                  <button
-                    onClick={() => handleAdjustHp(c.id, -1)}
-                    className="px-2 py-0.5 bg-rose-900/80 hover:bg-rose-800 text-rose-100 rounded font-mono font-bold text-xs"
-                    title="-1 HP"
-                  >
-                    -1
-                  </button>
-                  <button
-                    onClick={() => handleAdjustHp(c.id, 1)}
-                    className="px-2 py-0.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 rounded font-mono font-bold text-xs"
-                    title="+1 HP"
-                  >
-                    +1
-                  </button>
-                  <button
-                    onClick={() => handleAdjustHp(c.id, 5)}
-                    className="px-2 py-0.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 rounded font-mono font-bold text-xs"
-                    title="+5 HP"
-                  >
-                    +5
-                  </button>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 p-1 rounded-lg">
+                    <button
+                      onClick={() => handleAdjustHp(c.id, -5)}
+                      className="px-2 py-0.5 bg-rose-950 hover:bg-rose-900 text-rose-200 rounded font-mono font-bold text-xs"
+                      title="-5 HP"
+                    >
+                      -5
+                    </button>
+                    <button
+                      onClick={() => handleAdjustHp(c.id, -1)}
+                      className="px-2 py-0.5 bg-rose-900/80 hover:bg-rose-800 text-rose-100 rounded font-mono font-bold text-xs"
+                      title="-1 HP"
+                    >
+                      -1
+                    </button>
+                    <button
+                      onClick={() => handleAdjustHp(c.id, 1)}
+                      className="px-2 py-0.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 rounded font-mono font-bold text-xs"
+                      title="+1 HP"
+                    >
+                      +1
+                    </button>
+                    <button
+                      onClick={() => handleAdjustHp(c.id, 5)}
+                      className="px-2 py-0.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 rounded font-mono font-bold text-xs"
+                      title="+5 HP"
+                    >
+                      +5
+                    </button>
+                  </div>
+
+                  {!c.isPlayerChar && (
+                    <button
+                      onClick={() => handleToggleCombatantType(c.id)}
+                      className="p-1 bg-stone-900 hover:bg-stone-800 text-stone-400 border border-stone-800 rounded-lg transition"
+                      title="Switch Team"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {!c.isPlayerChar && (
+                    <button
+                      onClick={() => handleRemoveCombatant(c.id)}
+                      className="p-1 text-stone-500 hover:text-rose-400 transition"
+                      title="Remove Combatant"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-
-                {!c.isPlayerChar && (
-                  <button
-                    onClick={() => handleRemoveCombatant(c.id)}
-                    className="p-1 text-stone-500 hover:text-rose-400 transition"
-                    title="Remove Combatant"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Modals */}
       {showLogModal && (
@@ -937,6 +1445,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           allCharacters={allCharacters}
           parties={parties}
           activeEdition={character.edition || '5e'}
+          initialType={addModalInitialType}
           onClose={() => setShowAddModal(false)}
           onAddCombatant={(newComb) => {
             setCombatants(prev => [...prev, newComb].sort((a, b) => b.initiative - a.initiative));

@@ -1098,3 +1098,5 @@ export function CampaignGraphModal({
     </div>
   );
 }
+
+export default CampaignGraphModal;

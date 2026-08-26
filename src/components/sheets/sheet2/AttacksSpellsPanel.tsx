@@ -28,6 +28,7 @@ import {
   Pencil,
   Sparkles
 } from 'lucide-react';
+import { useLayoutCustomization } from '../../../utils/layoutCustomization';
 
 interface AttacksSpellsPanelProps {
   character: CharacterData;
@@ -191,95 +192,103 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
     setTargetModalSpell(spell);
   };
 
+  const { isVisible } = useLayoutCustomization();
+
+  const showAttacks = isVisible('s2_attacksWeapons');
+  const showCombatSpells = isVisible('s2_combatSpellsPotions');
+
   return (
     <div className="space-y-6">
       {/* Weapons & Attacks Panel */}
-      <CollapsibleBox
-        title="Weapons, Spell Attacks & Maneuvers"
-        icon={<Swords className="w-5 h-5 text-amber-500" />}
-        storageKey="sheet2_attacks"
-        headerExtra={
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowCheatSheet(true)}
-              className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-300 rounded-lg text-xs font-bold transition shadow"
-            >
-              <BookMarked className="w-3.5 h-3.5 text-amber-400" /> Actions & Rules
-            </button>
-            <button
-              onClick={() => setShowAddAttackModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/80 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add Attack
-            </button>
-          </div>
-        }
-      >
-        <div className="space-y-3 pt-2">
-          {character.attacks.length === 0 ? (
-            <p className="text-xs text-stone-500 italic py-2">No attacks added yet. Click &quot;Add Attack&quot; to configure weapons or spell attacks.</p>
-          ) : (
-            character.attacks.map((atk) => {
-              const meta = getDamageTypeMeta(atk.damageType);
-              return (
-                <div
-                  key={atk.id}
-                  className="bg-stone-950 border border-stone-800 hover:border-amber-600/50 rounded-xl p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 transition"
-                >
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-serif font-bold text-amber-200 text-sm">{atk.name}</span>
-                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${meta.badgeBg} ${meta.badgeText} ${meta.badgeBorder}`}>
-                        {atk.damageType}
-                      </span>
-                      <span className="text-[10px] text-stone-400 font-mono">
-                        {atk.range}
-                      </span>
+      {showAttacks && (
+        <CollapsibleBox
+          title="Weapons, Spell Attacks & Maneuvers"
+          icon={<Swords className="w-5 h-5 text-amber-500" />}
+          storageKey="sheet2_attacks"
+          headerExtra={
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowCheatSheet(true)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-300 rounded-lg text-xs font-bold transition shadow"
+              >
+                <BookMarked className="w-3.5 h-3.5 text-amber-400" /> Actions & Rules
+              </button>
+              <button
+                onClick={() => setShowAddAttackModal(true)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/80 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition"
+              >
+                <Plus className="w-3.5 h-3.5" /> Add Attack
+              </button>
+            </div>
+          }
+        >
+          <div className="space-y-3 pt-2">
+            {character.attacks.length === 0 ? (
+              <p className="text-xs text-stone-500 italic py-2">No attacks added yet. Click &quot;Add Attack&quot; to configure weapons or spell attacks.</p>
+            ) : (
+              character.attacks.map((atk) => {
+                const meta = getDamageTypeMeta(atk.damageType);
+                return (
+                  <div
+                    key={atk.id}
+                    className="bg-stone-950 border border-stone-800 hover:border-amber-600/50 rounded-xl p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-3 transition"
+                  >
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-serif font-bold text-amber-200 text-sm">{atk.name}</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${meta.badgeBg} ${meta.badgeText} ${meta.badgeBorder}`}>
+                          {atk.damageType}
+                        </span>
+                        <span className="text-[10px] text-stone-400 font-mono">
+                          {atk.range}
+                        </span>
+                      </div>
+
+                      <p className="text-stone-400 text-[11px] leading-relaxed">
+                        {atk.notes || 'Standard weapon or spell attack.'}
+                      </p>
                     </div>
 
-                    <p className="text-stone-400 text-[11px] leading-relaxed">
-                      {atk.notes || 'Standard weapon or spell attack.'}
-                    </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => onRoll(`${atk.name} Attack Roll`, 20, 1, atk.attackBonus, 'normal')}
+                        className="px-3 py-1.5 bg-stone-900 hover:bg-amber-600/80 text-amber-200 hover:text-white rounded-lg font-mono font-bold transition border border-stone-700 flex items-center gap-1"
+                      >
+                        <Crosshair className="w-3.5 h-3.5" />
+                        <span>Attack ({formatModifier(atk.attackBonus)})</span>
+                      </button>
+
+                      <button
+                        onClick={() => onRollDamage(`${atk.name} Damage (${atk.damageType})`, atk.damage)}
+                        className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 rounded-lg font-mono font-bold transition border border-rose-600/50 flex items-center gap-1"
+                      >
+                        <Flame className="w-3.5 h-3.5 text-rose-400" />
+                        <span>Dmg ({atk.damage})</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteAttack(atk.id)}
+                        className="p-1.5 text-stone-500 hover:text-rose-400 transition"
+                        title="Delete Attack"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => onRoll(`${atk.name} Attack Roll`, 20, 1, atk.attackBonus, 'normal')}
-                      className="px-3 py-1.5 bg-stone-900 hover:bg-amber-600/80 text-amber-200 hover:text-white rounded-lg font-mono font-bold transition border border-stone-700 flex items-center gap-1"
-                    >
-                      <Crosshair className="w-3.5 h-3.5" />
-                      <span>Attack ({formatModifier(atk.attackBonus)})</span>
-                    </button>
-
-                    <button
-                      onClick={() => onRollDamage(`${atk.name} Damage (${atk.damageType})`, atk.damage)}
-                      className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 rounded-lg font-mono font-bold transition border border-rose-600/50 flex items-center gap-1"
-                    >
-                      <Flame className="w-3.5 h-3.5 text-rose-400" />
-                      <span>Dmg ({atk.damage})</span>
-                    </button>
-
-                    <button
-                      onClick={() => handleDeleteAttack(atk.id)}
-                      className="p-1.5 text-stone-500 hover:text-rose-400 transition"
-                      title="Delete Attack"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </CollapsibleBox>
+                );
+              })
+            )}
+          </div>
+        </CollapsibleBox>
+      )}
 
       {/* Combat Spells & Consumables Quick Bar */}
-      <CollapsibleBox
-        title="Combat Spells & Potions Quick Bar"
-        icon={<Sparkles className="w-5 h-5 text-amber-500" />}
-        storageKey="sheet2_combat_spells"
-      >
+      {showCombatSpells && (
+        <CollapsibleBox
+          title="Combat Spells & Potions Quick Bar"
+          icon={<Sparkles className="w-5 h-5 text-amber-500" />}
+          storageKey="sheet2_combat_spells"
+        >
         <div className="space-y-4 pt-2 text-xs">
           {/* Healing Potions & Items */}
           <div>
@@ -368,6 +377,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
           </div>
         </div>
       </CollapsibleBox>
+      )}
 
       {/* MODAL: Add Attack */}
       {showAddAttackModal && (

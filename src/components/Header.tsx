@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { CharacterData, RuleEdition } from '../types';
 import { TabId } from './Navigation';
-import { getPassivePerception, getProficiencyBonus, formatModifier, convertCharacterEdition, getEffectiveSpeed, getArmorClassBreakdown, getCombinedLevel, getActiveClassChoice, isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
+import { getPassivePerception, getProficiencyBonus, formatModifier, getEffectiveSpeed, getArmorClassBreakdown, getCombinedLevel, getActiveClassChoice, isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../data/monsterPortraits';
 import { getXpProgressDetails } from '../data/levelProgressionData';
 import { revertTransformation } from '../data/transformationData';

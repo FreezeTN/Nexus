@@ -98,6 +98,7 @@ export interface GameSystemPlugin {
   featureFlags?: Record<string, boolean>;
   dependencies?: Array<{ pluginId: string; name: string; required: boolean }>;
   optionalModules?: Array<{ id: string; name: string; description: string; enabledByDefault?: boolean }>;
+  layoutFeatures?: any[];
   validateConfig?: (config: Record<string, any>) => { valid: boolean; errors?: string[] };
 
   characterEngine: SystemCharacterEngine;

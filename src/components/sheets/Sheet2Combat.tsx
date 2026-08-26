@@ -11,6 +11,8 @@ import { CompanionModal } from '../modals/CompanionModal';
 
 import { CombatDefensesPanel } from './sheet2/CombatDefensesPanel';
 import { AttacksSpellsPanel } from './sheet2/AttacksSpellsPanel';
+import { useLayoutCustomization } from '../../utils/layoutCustomization';
+import { EmptyLayoutState } from '../common/EmptyLayoutState';
 
 interface Sheet2Props {
   character: CharacterData;
@@ -77,6 +79,27 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     setTargetModalSpell(null);
   };
 
+  const { isVisible } = useLayoutCustomization();
+
+  const hasDefensesVisible =
+    isVisible('s2_vitalityHpOrb') ||
+    isVisible('s2_defenseStats') ||
+    isVisible('s2_deathSavesForm') ||
+    isVisible('s2_resistancesDr') ||
+    isVisible('s2_conditionsPanel');
+
+  const hasAttacksVisible =
+    isVisible('s2_attacksWeapons') ||
+    isVisible('s2_combatSpellsPotions');
+
+  const hasAnyVisible = character.edition === 'shadowrun'
+    ? isVisible('sr_combat')
+    : (hasDefensesVisible || isVisible('s2_encounterTracker') || hasAttacksVisible);
+
+  if (!hasAnyVisible) {
+    return <EmptyLayoutState sheetName="Combat & Actions" />;
+  }
+
   if (character.edition === 'shadowrun') {
     return (
       <ShadowrunCombatPanel
@@ -90,37 +113,43 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   return (
     <div className="space-y-6 pb-12">
       {/* Combat Defenses, HP & Saves */}
-      <CombatDefensesPanel
-        character={character}
-        onUpdateCharacter={onUpdateCharacter}
-        onRoll={onRoll}
-        setShowMaxHpInspector={setShowMaxHpInspector}
-        setShowTransformationModal={setShowTransformationModal}
-        setShowCompanionModal={setShowCompanionModal}
-        setShowRestModal={setShowRestModal}
-      />
+      {hasDefensesVisible && (
+        <CombatDefensesPanel
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+          setShowMaxHpInspector={setShowMaxHpInspector}
+          setShowTransformationModal={setShowTransformationModal}
+          setShowCompanionModal={setShowCompanionModal}
+          setShowRestModal={setShowRestModal}
+        />
+      )}
 
       {/* Interactive Encounter & Initiative Tracker */}
-      <EncounterTracker
-        character={character}
-        allCharacters={allCharacters}
-        parties={parties}
-        currentUser={currentUser}
-        onOpenPartyManager={onOpenPartyManager}
-        onUpdateCharacter={onUpdateCharacter}
-        onRoll={onRoll}
-      />
+      {isVisible('s2_encounterTracker') && (
+        <EncounterTracker
+          character={character}
+          allCharacters={allCharacters}
+          parties={parties}
+          currentUser={currentUser}
+          onOpenPartyManager={onOpenPartyManager}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+        />
+      )}
 
       {/* Attacks, Spells & Quick Combat Panel */}
-      <AttacksSpellsPanel
-        character={character}
-        onUpdateCharacter={onUpdateCharacter}
-        onRoll={onRoll}
-        onRollDamage={onRollDamage}
-        setTargetModalSpell={setTargetModalSpell}
-        onOpenShapeshift={() => setShowTransformationModal(true)}
-        onOpenSummonCompanion={() => setShowCompanionModal(true)}
-      />
+      {hasAttacksVisible && (
+        <AttacksSpellsPanel
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+          onRollDamage={onRollDamage}
+          setTargetModalSpell={setTargetModalSpell}
+          onOpenShapeshift={() => setShowTransformationModal(true)}
+          onOpenSummonCompanion={() => setShowCompanionModal(true)}
+        />
+      )}
 
       {/* MODALS */}
       {showRestModal && (

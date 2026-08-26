@@ -126,8 +126,8 @@ export const DetachedHeaderBanner: React.FC<DetachedHeaderBannerProps> = ({
         </div>
 
         {sessionCode && (
-          <span className="hidden md:inline-block text-[10px] font-mono bg-stone-900 text-amber-400 border border-amber-600/30 px-1.5 py-0.5 rounded">
-            ROOM: {sessionCode}
+          <span className="hidden md:inline-block text-[10px] font-mono bg-stone-900 text-emerald-400 border border-emerald-600/30 px-1.5 py-0.5 rounded">
+            ROOM CONNECTED
           </span>
         )}
 
