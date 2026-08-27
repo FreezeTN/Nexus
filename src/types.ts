@@ -193,6 +193,16 @@ export interface OptionalRulesConfig {
   hasPowerfulBuild?: boolean;       // Powerful Build / Little Giant: Counts as 1 size category larger for carrying capacity, push, drag, and lift
   useHalfBreedSystem?: boolean;     // Half-Breed / Hybrid Heritage Ancestry rules (Alpine DM / Homebrew 5e)
   useClassicSRDHalfBreed?: boolean; // Classic SRD Half-Breeds (5e & 3.5e SRD)
+  // Shadowrun rules
+  strictEssenceCap?: boolean;
+  glitchRules?: boolean;
+  directMatrixDamage?: boolean;
+  streetLevelMode?: boolean;
+  // Call of Cthulhu rules
+  majorWounds?: boolean;
+  boutsOfMadness?: boolean;
+  pushedRolls?: boolean;
+  pulpCthulhuMode?: boolean;
 }
 
 export type AbilityName = 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA';

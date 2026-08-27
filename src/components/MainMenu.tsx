@@ -148,6 +148,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       // Character is locked ONLY when another PLAYER (not a DM) is active on it
       const isLockedForPlayer = isPlayerRole && 
         !!activeUserId && 
+        activeUserId !== 'guest_player' &&
         activeUserId !== currentUserId && 
         activeUserId !== dmUserId && 
         activeUserRole !== 'DM';

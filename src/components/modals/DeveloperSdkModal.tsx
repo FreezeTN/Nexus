@@ -298,13 +298,13 @@ export const myCustomPlugin: GameSystemPlugin = {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-semibold text-slate-100">Developer SDK & Architecture Center</h2>
+                <h2 className="text-base font-semibold text-slate-100">Nexus Developer SDK & Architecture Center</h2>
                 <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  v1.5.0 SDK Ready
+                  Nexus v1.5.0 Engine
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Operating System specifications, Plugin Packaging, Decoupled Event Bus & Test Suite
+                Nexus Engine specifications, Plugin Packaging, Decoupled Event Bus & Telemetry Suite
               </p>
             </div>
           </div>

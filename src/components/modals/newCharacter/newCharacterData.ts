@@ -146,19 +146,129 @@ export const SUBCLASS_MAP_BY_SYSTEM: Record<RuleEdition, Record<string, string[]
   }
 };
 
-export const ALIGNMENT_OPTIONS = [
-  'Lawful Good', 'Neutral Good', 'Chaotic Good',
-  'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
-  'Lawful Evil', 'Neutral Evil', 'Chaotic Evil', 'Unaligned'
-];
+export const ALIGNMENT_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {
+  '5e': [
+    'Lawful Good', 'Neutral Good', 'Chaotic Good',
+    'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
+    'Lawful Evil', 'Neutral Evil', 'Chaotic Evil', 'Unaligned'
+  ],
+  '3.5e': [
+    'Lawful Good', 'Neutral Good', 'Chaotic Good',
+    'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
+    'Lawful Evil', 'Neutral Evil', 'Chaotic Evil', 'Unaligned'
+  ],
+  'pathfinder': [
+    'Lawful Good', 'Neutral Good', 'Chaotic Good',
+    'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
+    'Lawful Evil', 'Neutral Evil', 'Chaotic Evil', 'Unaligned'
+  ],
+  'shadowrun': [
+    'Professional (Honor Code)',
+    'Anti-Corp Rebel (Street Punk)',
+    'Mercenary (Highest Nuyen Bidder)',
+    'Robin Hood (Protector of SINless)',
+    'Corporate Loyalist / Double Agent',
+    'Shadow Fixer / Pragmatist',
+    'Survivalist (Look Out For #1)'
+  ],
+  'cthulhu': [
+    'Rational Skeptic & Empiricist',
+    'Academic Scholar & Purist',
+    'Occult Researcher & Believer',
+    'Devout & Religious',
+    'Nihilistic Pragmatist',
+    'Humanitarian & Protector',
+    'Patriotic Federal Agent',
+    'Artistic Visionary'
+  ]
+};
 
-export const HERO_NAMES = [
-  'Sir Gareth the Bold', 'Lyra Bloodmoon', 'Thorin Ironshield', 'Eldrin Sunstrider',
-  'Kaelen Drake', 'Vespera Shadowheart', 'Garrick Stonehammer', 'Astraea Moonfall',
-  'Zephyr Ironwing', 'Morgana Vane', 'Theron Darkwood', 'Varian Skycaller',
-  'Balthazar Grim', 'Cassandra Frost', 'Darin Heavyaxe', 'Sylvia Swiftfoot',
-  'Valerius Silverhand', 'Niamh O’Connor', 'Ragnar Thunderbeard', 'Xander Vance'
-];
+export const ALIGNMENT_OPTIONS = ALIGNMENT_OPTIONS_BY_SYSTEM['5e'];
+
+export const HERO_NAMES_BY_SYSTEM: Record<RuleEdition, string[]> = {
+  '5e': [
+    'Sir Gareth the Bold', 'Lyra Bloodmoon', 'Thorin Ironshield', 'Eldrin Sunstrider',
+    'Kaelen Drake', 'Vespera Shadowheart', 'Garrick Stonehammer', 'Astraea Moonfall',
+    'Zephyr Ironwing', 'Morgana Vane', 'Theron Darkwood', 'Varian Skycaller',
+    'Balthazar Grim', 'Cassandra Frost', 'Darin Heavyaxe', 'Sylvia Swiftfoot',
+    'Valerius Silverhand', 'Niamh O’Connor', 'Ragnar Thunderbeard', 'Xander Vance'
+  ],
+  '3.5e': [
+    'Regdar (Fighter)', 'Mialee (Wizard)', 'Lidda (Rogue)', 'Jozan (Cleric)',
+    'Krusk (Barbarian)', 'Hennet (Sorcerer)', 'Nebin (Illusionist)', 'Ember (Monk)',
+    'Soveliss (Ranger)', 'Vadania (Druid)', 'Gimble (Bard)', 'Alhandra (Paladin)'
+  ],
+  'pathfinder': [
+    'Valeros the Fighter', 'Seoni the Sorceress', 'Merisiel the Rogue', 'Kyra the Cleric',
+    'Ezren the Wizard', 'Amiri the Barbarian', 'Lem the Bard', 'Harsk the Ranger',
+    'Sajan the Monk', 'Fumbus the Alchemist', 'Jirelle the Swashbuckler', 'Feiya the Witch'
+  ],
+  'shadowrun': [
+    'Ghost_Zero', 'Chrome_Viper', 'Null_Pointer', 'Neon_Spectre',
+    'Razor_Jack', 'Hex_Gunslinger', 'Valkyrie_Corpo', 'Wirehead_Sam',
+    'Glitch_Operative', 'Troll_Bouncer', 'Matrix_Phantom', 'Spitfire_Rigger'
+  ],
+  'cthulhu': [
+    'Dr. Arthur Pendleton', 'Evelyn Reed', 'Prof. Walter Gilmour', 'Inspector Thomas Blackwood',
+    'Constance Holloway', 'Capt. Lawrence Vance', 'Beatrice Winthrop', 'Father Jerome O’Malley',
+    'Harvey Montgomery', 'Lillian Delacroix', 'Jonathan Harker-Vane', 'Eleanor Vance'
+  ]
+};
+
+export const HERO_NAMES = HERO_NAMES_BY_SYSTEM['5e'];
+
+export const BACKGROUND_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {
+  '5e': [
+    'Folk Hero', 'Soldier', 'Criminal', 'Sage', 'Acolyte', 'Outlander',
+    'Noble', 'Gladiator', 'Guild Artisan', 'Hermit', 'Urchin', 'Knight', 'Mercenary Veteran'
+  ],
+  '3.5e': [
+    'Folk Hero', 'Soldier', 'Criminal', 'Sage', 'Acolyte', 'Outlander',
+    'Noble', 'Gladiator', 'Guild Artisan', 'Hermit', 'Urchin', 'Knight', 'Mercenary Veteran'
+  ],
+  'pathfinder': [
+    'Field Medic', 'Street Urchin', 'Scholar', 'Warrior', 'Criminal', 'Nomad',
+    'Noble', 'Emissary', 'Farmhand', 'Laborer', 'Tinker', 'Bounty Hunter', 'Gladiator'
+  ],
+  'shadowrun': [
+    'Street Runner', 'Ex-Corpo Security Asset', 'SINless Hacker', 'Military Veteran',
+    'Barrens Scavenger', 'Drone Jockey', 'Smuggler', 'Underground Pit Fighter', 'Bounty Tracker'
+  ],
+  'cthulhu': [
+    'Miskatonic University Faculty', 'Arkham Asylum Alienist', 'Boston High Society',
+    'Police Academy Graduate', 'Expedition Veteran', 'Wealthy Heir / Heiress',
+    'Foreign War Correspondent', 'Occult Bookshop Proprietor', 'Federal Bureau Agent'
+  ]
+};
+
+export const BACKGROUND_OPTIONS = BACKGROUND_OPTIONS_BY_SYSTEM['5e'];
+
+export function getAlignmentsForSystem(edition: RuleEdition): string[] {
+  return ALIGNMENT_OPTIONS_BY_SYSTEM[edition] || ALIGNMENT_OPTIONS_BY_SYSTEM['5e'];
+}
+
+export function getBackgroundsForSystem(edition: RuleEdition): string[] {
+  return BACKGROUND_OPTIONS_BY_SYSTEM[edition] || BACKGROUND_OPTIONS_BY_SYSTEM['5e'];
+}
+
+export function getHeroNamesForSystem(edition: RuleEdition): string[] {
+  return HERO_NAMES_BY_SYSTEM[edition] || HERO_NAMES_BY_SYSTEM['5e'];
+}
+
+export function getNamePlaceholderForSystem(edition: RuleEdition): string {
+  switch (edition) {
+    case 'shadowrun':
+      return 'e.g. Ghost_Zero, Chrome_Viper, Null_Pointer';
+    case 'cthulhu':
+      return 'e.g. Dr. Arthur Pendleton, Evelyn Reed';
+    case 'pathfinder':
+      return 'e.g. Valeros the Fighter, Seoni, Merisiel';
+    case '3.5e':
+      return 'e.g. Regdar, Mialee, Lidda';
+    default:
+      return 'e.g. Sir Gareth, Lyra Bloodmoon';
+  }
+}
 
 export const MONSTER_NAMES = [
   'Ancient Red Dragon', 'Goblin Warchief', 'Beholder Eye Tyrant', 'Mind Flayer Arcanist',
@@ -168,7 +278,3 @@ export const MONSTER_NAMES = [
   'Gargoyle Guardian', 'Redcap Stalker', 'Shadow Demon', 'Manticore Hunter'
 ];
 
-export const BACKGROUND_OPTIONS = [
-  'Folk Hero', 'Soldier', 'Criminal', 'Sage', 'Acolyte', 'Outlander',
-  'Noble', 'Gladiator', 'Guild Artisan', 'Hermit', 'Urchin', 'Knight', 'Mercenary Veteran'
-];

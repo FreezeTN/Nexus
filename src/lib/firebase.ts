@@ -456,7 +456,7 @@ export function sanitizePresenceMap(map: Record<string, CharacterPresence>): Rec
       copy.dmUserName = undefined;
     }
 
-    if (isStale) {
+    if (isStale || copy.activeUserId === 'guest_player') {
       copy.activeUserId = undefined;
       copy.activeUserName = undefined;
       copy.activeUserRole = undefined;
@@ -641,16 +641,28 @@ export async function updateCharacterPresence(
     newEntry.dmUserId = user.uid;
     newEntry.dmUserName = user.displayName;
 
-    // Clear activeUserId if it belonged to the DM so that it does not block players from selecting the character
-    if (newEntry.activeUserId === user.uid || newEntry.activeUserRole === 'DM' || (newEntry.dmUserId && newEntry.activeUserId === newEntry.dmUserId)) {
+    // Clear activeUserId if it belonged to the DM, was guest_player, or had DM role
+    if (
+      !newEntry.activeUserId ||
+      newEntry.activeUserId === user.uid ||
+      newEntry.activeUserId === 'guest_player' ||
+      newEntry.activeUserRole === 'DM' ||
+      (newEntry.dmUserId && newEntry.activeUserId === newEntry.dmUserId)
+    ) {
       newEntry.activeUserId = undefined;
       newEntry.activeUserName = undefined;
       newEntry.activeUserRole = undefined;
     }
   } else {
-    newEntry.activeUserId = user.uid;
-    newEntry.activeUserName = user.displayName;
-    newEntry.activeUserRole = 'Player';
+    if (user.uid !== 'guest_player') {
+      newEntry.activeUserId = user.uid;
+      newEntry.activeUserName = user.displayName;
+      newEntry.activeUserRole = 'Player';
+    } else {
+      newEntry.activeUserId = undefined;
+      newEntry.activeUserName = undefined;
+      newEntry.activeUserRole = undefined;
+    }
 
     // Clear DM active status if current user is not DM or if DM session was set by this user / guest_player / stale
     if (
@@ -1177,6 +1189,29 @@ export async function deleteCampaignSave(saveId: string): Promise<void> {
 }
 
 /**
+ * Extract clean campaign name from a Campaign Save File
+ */
+export function extractCampaignNameFromSave(save: CampaignSaveFile): string {
+  if (save.session?.name && save.session.name.trim()) {
+    const rawSessionName = save.session.name.trim();
+    const cleaned = rawSessionName
+      .replace(/\s*-\s*Checkpoint.*$/i, '')
+      .replace(/\s+Checkpoint.*$/i, '')
+      .trim();
+    return cleaned || rawSessionName;
+  }
+  if (save.name) {
+    const cleaned = save.name
+      .replace(/\s*-\s*Checkpoint.*$/i, '')
+      .replace(/\s+Checkpoint.*$/i, '')
+      .trim();
+    if (cleaned) return cleaned;
+    return save.name.trim();
+  }
+  return 'Campaign Session';
+}
+
+/**
  * Restore/Re-host a Multiplayer GameSession from a Campaign Save File
  */
 export async function restoreGameSessionFromSave(
@@ -1187,6 +1222,7 @@ export async function restoreGameSessionFromSave(
   const timestamp = new Date().toISOString();
   const dmUid = user?.uid || save.hostUid || 'dm_local';
   const dmName = user?.displayName || save.hostName || 'Dungeon Master';
+  const campaignName = extractCampaignNameFromSave(save);
 
   // Rebuild session members
   let members: SessionMember[] = (save.session?.members || []).map(m => ({
@@ -1242,7 +1278,7 @@ export async function restoreGameSessionFromSave(
   const restoredSession: GameSession = {
     id: code,
     code: code,
-    name: save.name || save.session?.name || 'Restored Campaign Session',
+    name: campaignName,
     dmUid: dmUid,
     dmName: dmName,
     status: 'active',

@@ -139,13 +139,13 @@ export function ExtensionManagerModal({
             </div>
             <div>
               <h2 className="font-serif font-bold text-lg text-amber-100 flex items-center gap-2">
-                <span>Plugin & Extension SDK Architecture</span>
+                <span>Nexus Plugin & Extension Engine</span>
                 <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-mono px-2 py-0.5 rounded-full">
                   v3.0 Platform
                 </span>
               </h2>
               <p className="text-xs text-stone-400 font-sans">
-                Modular RPG Rulesets, Extension Metadata, and Central Domain Event Bus Engine
+                Modular RPG Rulesets, Extension Metadata, and Nexus Domain Event Bus Engine
               </p>
             </div>
           </div>

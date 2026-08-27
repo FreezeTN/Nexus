@@ -100,33 +100,33 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
     },
     {
       id: 'rulesets',
-      title: '⚔️ Multi-Edition TRPG Rulesets',
+      title: '⚔️ Nexus Multi-System Rules Engine',
       icon: Layers,
       color: 'text-emerald-400',
-      description: 'Overview of native rule engines: D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, and Custom TRPGs.',
+      description: 'Overview of native Nexus rule engines: D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, and Custom TRPGs.',
       topics: [
         {
-          name: 'D&D 5th Edition (5e)',
+          name: 'Nexus D&D 5e Engine',
           detail: 'Core 5e engine featuring Proficiency Bonus scaling (+2 to +6), Advantage / Disadvantage toggles, 18 standard skill checks, Passive Perception, Concentration tracking, Pact Magic, and 20 preset spells.'
         },
         {
-          name: 'D&D 3.5 Edition (3.5e)',
+          name: 'Nexus D&D 3.5e Classic d20 Engine',
           detail: 'Classic v3.5 ruleset featuring Base Attack Bonus (BAB) progression (+6/+1 iterative attacks), Fortitude/Reflex/Will base save tables, Touch AC, Flat-Footed AC, Skill Points Calculator with Class/Cross-Class caps, Caster Level, Damage Reduction (DR), and Spell Resistance (SR).'
         },
         {
-          name: 'Shadowrun 5e (Cyberpunk)',
+          name: 'Nexus Shadowrun 5e Cyberpunk Engine',
           detail: 'Full d6 dice pool system (Attribute + Skill), Hit threshold (5s and 6s), Glitches, Physical & Stun condition monitors with wound penalties, Cyberware Essence limits (Max 6.00), Cyberdeck Matrix stats, Nuyen (¥), and Karma.'
         },
         {
-          name: 'Pathfinder 2e (PF2e)',
+          name: 'Nexus Pathfinder 2e Tactical Engine',
           detail: 'Tactical 3-Action Turn Economy, Multiple Attack Penalty (MAP: -0, -5, -10), Four Degrees of Success (Critical Success, Success, Failure, Critical Failure), and Proficiency Ranks (Untrained, Trained, Expert, Master, Legendary).'
         },
         {
-          name: 'Call of Cthulhu 7e (Eldritch Horror)',
+          name: 'Nexus Call of Cthulhu 7e Horror Engine',
           detail: 'd100 Percentile Skill Rolls, Sanity Points (SAN = WIS × 5), Bouts of Madness tracking, and Pushed Rolls.'
         },
         {
-          name: 'Custom TRPG Ruleset Engine & Selector',
+          name: 'Nexus Custom Ruleset Engine & Selector',
           detail: 'Use the TRPG System Selector Modal to filter enabled systems or build your own modular TRPG ruleset with custom attribute keys, dice formulas, and sheet layouts.'
         }
       ]
@@ -199,17 +199,17 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
     },
     {
       id: 'extensions',
-      title: '🔌 Extension Marketplace & Custom Plugins',
+      title: '🔌 Nexus Extension Marketplace & Plugin Engine',
       icon: ShoppingBag,
       color: 'text-cyan-400',
       description: 'Extend your applet with modular rulesets, plugin manifests, and developer SDK tools.',
       topics: [
         {
-          name: 'Plugin Manifest Schema (plugin/manifest.json)',
+          name: 'Nexus Plugin Manifest Schema (plugin/manifest.json)',
           detail: 'Full support for standardized plugin manifest metadata including name, version, author, dependencies, app version requirements, and permission declarations.'
         },
         {
-          name: 'Extension Marketplace Catalog',
+          name: 'Nexus Extension Marketplace Catalog',
           detail: 'Open the Extension Manager Modal (🧩) to browse and install curated extensions: Pathfinder 2e Tactical Engine, Cyberpunk Netrunner Suite, Shadowrun Matrix, Call of Cthulhu Sanity, 3D Dice Physics, Soundscape Synthesizer, and Homebrew Creator.'
         },
         {
@@ -217,24 +217,24 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
           detail: 'When new plugin versions are released (e.g., v1.4.2 → v2.0.0), a red notification badge appears on the Marketplace tab with 1-click update buttons.'
         },
         {
-          name: 'Central Event Bus & Developer SDK',
+          name: 'Nexus Central Event Bus & Developer SDK',
           detail: 'Plugin developers can inspect live event history (DICE_ROLLED, HP_CHANGED, SPELL_CAST), test event payloads, and access complete TypeScript SDK specifications.'
         }
       ]
     },
     {
       id: 'companions',
-      title: '🐾 Companions & Transformation Manager',
+      title: '🐾 Nexus Companion & Shapeshift Engines',
       icon: Dog,
       color: 'text-amber-300',
       description: 'Manage pets, familiars, mounts, Wild Shape forms, and polymorph transformations.',
       topics: [
         {
-          name: 'Companion Manager Modal',
+          name: 'Nexus Companion & Summon Engine',
           detail: 'Click "Companions" to add pets, familiars, mounts, homunculi, or summoned creatures. Track separate HP, AC, attacks, and special abilities for each companion.'
         },
         {
-          name: 'Supernatural Transformation & Wild Shape',
+          name: 'Nexus Shapeshift Engine & Wild Shape',
           detail: 'Transform into Beast forms (Wild Shape for Druids), Polymorph targets, Lycanthropes, Vampires, or Liches. Automatically overrides physical stats and grants temporary HP.'
         },
         {
@@ -245,13 +245,13 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
     },
     {
       id: 'dice-audio',
-      title: '🎲 Interactive Dice Roller & Audio Synthesizer',
+      title: '🎲 Nexus Dice & Audio Engines',
       icon: Dices,
       color: 'text-rose-400',
       description: 'Polyhedral dice rolling bar, formula expressions, and Web Audio sound effects.',
       topics: [
         {
-          name: 'Polyhedral Floating Dice Bar',
+          name: 'Nexus Polyhedral Floating Dice Bar',
           detail: 'Floating toolbar providing 1-click access to d4, d6, d8, d10, d12, d20, and d100 with multiplier and modifier inputs.'
         },
         {
@@ -267,7 +267,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
           detail: 'Timestamped history drawer displaying individual dice results, natural 20 critical gold highlights, and natural 1 fumble red highlights.'
         },
         {
-          name: '12 Procedural Web Audio Sound Effects',
+          name: 'Nexus Procedural Web Audio Sound Engine',
           detail: 'Real-time Web Audio sound synthesis for 12 dynamic triggers: Dice Rolls, Critical Hits, Spell Casts, Healing Chimes, Level Up Fanfares, Sword Swings, and Death Save Bells. Features master volume slider and 1-click presets (Mute, 25%, 50%, 75%, Max).'
         }
       ]

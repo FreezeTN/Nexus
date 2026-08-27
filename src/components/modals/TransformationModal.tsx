@@ -180,7 +180,7 @@ export const TransformationModal: React.FC<TransformationModalProps> = ({
           <div className="flex items-center gap-3">
             <span className="text-3xl">🐾</span>
             <div>
-              <h2 className="text-xl font-bold text-amber-200">Shapeshift Engine</h2>
+              <h2 className="text-xl font-bold text-amber-200">Nexus Shapeshift Engine</h2>
               <p className="text-xs text-stone-400">
                 Wild Shape, Polymorph, Lycanthropy & Shapechange form management with auto-injected Natural Weapons
               </p>

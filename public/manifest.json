@@ -1,7 +1,7 @@
 {
-  "short_name": "D&D Sheet",
-  "name": "D&D 5e Interactive Character Sheet",
-  "description": "Comprehensive 5e D&D character sheet with automated calculations, spell tracking, inventory, and integrated dice roller.",
+  "short_name": "Nexus",
+  "name": "Nexus - Multi-System TRPG Platform",
+  "description": "Nexus next-generation TRPG and character sheet platform with unified rules, live sync, combat, dice, and audio engines.",
   "icons": [
     {
       "src": "/pwa-icon.svg",

@@ -334,7 +334,7 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
                       <button
                         onClick={onOpenShapeshift}
                         className="px-3 py-1.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 font-bold border border-emerald-600/60 rounded-lg transition flex items-center gap-1 shadow cursor-pointer text-xs"
-                        title="Launch Shapeshift Engine for this spell"
+                        title="Launch Nexus Shapeshift Engine for this spell"
                       >
                         <span>🐾</span>
                         <span>Shapeshift</span>
@@ -344,7 +344,7 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
                       <button
                         onClick={onOpenSummonCompanion}
                         className="px-3 py-1.5 bg-teal-950 hover:bg-teal-900 text-teal-200 font-bold border border-teal-600/60 rounded-lg transition flex items-center gap-1 shadow cursor-pointer text-xs"
-                        title="Launch Animal Companion & Familiar Engine"
+                        title="Launch Nexus Companion & Summon Engine"
                       >
                         <span>🦅</span>
                         <span>Summon</span>

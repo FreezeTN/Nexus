@@ -891,18 +891,6 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         </div>
       )}
 
-      {/* Attack Resolver Component */}
-      <AttackResolver
-        character={activeAttackerCharacter}
-        combatants={combatants}
-        activeCombatantId={activeCombatant?.id}
-        onApplyDamageToCombatant={(targetId, damageAmount) => {
-          handleAdjustHp(targetId, -damageAmount);
-        }}
-        onRoll={onRoll}
-        onLogAction={(category, message, actor) => addLogEntry(category, message, actor)}
-      />
-
       {/* Combatant Roster: Team 1 (Allies) vs Team 2 (Enemies) Layout */}
       {viewMode === 'teams' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
@@ -1425,6 +1413,18 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           })}
         </div>
       )}
+
+      {/* Target AC & Attack Resolver Component (Positioned Below Initiative Tracker & Teams) */}
+      <AttackResolver
+        character={activeAttackerCharacter}
+        combatants={combatants}
+        activeCombatantId={activeCombatant?.id}
+        onApplyDamageToCombatant={(targetId, damageAmount) => {
+          handleAdjustHp(targetId, -damageAmount);
+        }}
+        onRoll={onRoll}
+        onLogAction={(category, message, actor) => addLogEntry(category, message, actor)}
+      />
 
       {/* Modals */}
       {showLogModal && (

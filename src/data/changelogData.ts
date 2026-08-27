@@ -14,11 +14,32 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v1.1.0',
+    date: 'August 2026',
+    title: 'Nexus Platform Rebranding & Unified Engine Architecture Suite',
+    badge: 'Latest Update',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '✨ Official "Nexus" Branding',
+        detail: 'Rebranded the application and ecosystem to Nexus — establishing a cohesive identity as a next-generation multi-system TRPG and character sheet platform with synchronized rulesets, combat mechanics, and live collaboration.'
+      },
+      {
+        category: '⚙️ Nexus Modular Engine Suite',
+        detail: 'Harmonized all internal core engines under the Nexus banner: Nexus Rules Engine (5e, 3.5e, Pathfinder 2e, Shadowrun, Call of Cthulhu), Nexus Shapeshift Engine, Nexus Companion & Summon Engine, Nexus Rest & Recovery Engine, Nexus Procedural Audio Engine, Nexus Dice Physics Engine, and Nexus Plugin & Extension Engine.'
+      },
+      {
+        category: '🛡️ Vault & Header Integration',
+        detail: 'Updated application headers, vault headers, Progressive Web App manifests, install prompts, command palette actions, and developer guides to reflect the Nexus platform architecture.'
+      }
+    ]
+  },
+  {
     version: 'v1.0.0',
     date: 'August 2026',
     title: 'Production Engineering Pillars, Web Workers, Telemetry & Automated CI Regression Suite',
-    badge: 'Latest Update',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Core Release',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
     highlights: [
       {
         category: '🏛️ Production Engineering Pillars Architecture',
@@ -46,7 +67,15 @@ export const changelogData: ChangelogEntry[] = [
       },
       {
         category: '🏷️ Clean Campaign Session Dock Display',
-        detail: 'Streamlined the active multiplayer session dock button to dedicate full width to the campaign name without truncation, removing redundant live count badges.'
+        detail: 'Streamlined the active multiplayer session dock button to dedicate full width strictly to the core campaign name (stripping redundant checkpoint suffixes and live member badges).'
+      },
+      {
+        category: '💾 Intelligent Campaign Name Resolution',
+        detail: 'Enhanced checkpoint loading to preserve and restore pure campaign names separately from checkpoint file titles across session headers, dock bars, and lobby tabs.'
+      },
+      {
+        category: '⚙️ Production Build & Artifact Resolution Optimization',
+        detail: 'Updated build and Vite bundle configuration with explicit root/public directory resolution and granular vendor chunking (React, Firebase, Lucide, Motion) to ensure clean, reliable production deployment artifacts.'
       }
     ]
   },

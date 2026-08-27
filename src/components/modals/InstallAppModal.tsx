@@ -63,7 +63,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
               <Laptop className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold font-serif text-amber-200">Install Character Sheet App</h2>
+              <h2 className="text-lg font-bold font-serif text-amber-200">Install Nexus App</h2>
               <p className="text-xs text-stone-400">Progressive Web App (PWA) for Desktop & Mobile</p>
             </div>
           </div>
@@ -151,7 +151,7 @@ export const InstallAppModal: React.FC<InstallAppModalProps> = ({
                     <div>
                       <div className="font-semibold text-stone-200">Chrome, Edge & Brave (Desktop)</div>
                       <div className="text-stone-400 mt-0.5">
-                        Click the <strong>Install</strong> icon on the right side of the address bar, or click browser menu (<strong>⋮</strong>) &rarr; <strong>Install D&D Character Sheet</strong>.
+                        Click the <strong>Install</strong> icon on the right side of the address bar, or click browser menu (<strong>⋮</strong>) &rarr; <strong>Install Nexus</strong>.
                       </div>
                     </div>
                   </div>

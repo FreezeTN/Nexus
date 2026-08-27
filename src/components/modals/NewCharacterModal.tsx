@@ -13,6 +13,11 @@ import {
   getClassesForSystem,
   getSubclassesForSystemClass,
   ALIGNMENT_OPTIONS,
+  ALIGNMENT_OPTIONS_BY_SYSTEM,
+  getAlignmentsForSystem,
+  getBackgroundsForSystem,
+  getHeroNamesForSystem,
+  getNamePlaceholderForSystem,
   HERO_NAMES,
   MONSTER_NAMES,
   BACKGROUND_OPTIONS
@@ -36,23 +41,27 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   initialIsVendor = false,
   enabledSystems
 }) => {
-  const startEdition = (enabledSystems && enabledSystems.length > 0 && !enabledSystems.includes(initialEdition))
+  const edition: RuleEdition = (enabledSystems && enabledSystems.length > 0 && !enabledSystems.includes(initialEdition))
     ? enabledSystems[0]
     : initialEdition;
 
-  const [edition, setEdition] = useState<RuleEdition>(startEdition);
-  const initialRaces = getRacesForSystem(initialEdition);
-  const initialClasses = getClassesForSystem(initialEdition);
-  const initialClass = initialClasses[0];
-  const initialSubclasses = getSubclassesForSystemClass(initialEdition, initialClass);
+  const initialRaces = getRacesForSystem(edition);
+  const initialClasses = getClassesForSystem(edition);
+  const initialClass = initialClasses[0] || 'Fighter';
+  const initialSubclasses = getSubclassesForSystemClass(edition, initialClass);
+  const initialBackgrounds = getBackgroundsForSystem(edition);
+  const initialAlignments = getAlignmentsForSystem(edition);
+
+  const initialSrdList = getClassicSRDHalfBreedsForEdition(edition);
+  const initialSrdId = initialSrdList.length > 0 ? initialSrdList[0].id : 'srd-5e-half-elf';
 
   const [name, setName] = useState('');
-  const [race, setRace] = useState(initialRaces[0]);
+  const [race, setRace] = useState(initialRaces[0] || 'Human');
   const [characterClass, setCharacterClass] = useState(initialClass);
-  const [subclass, setSubclass] = useState(initialSubclasses[0]);
+  const [subclass, setSubclass] = useState(initialSubclasses[0] || 'General');
   const [level, setLevel] = useState<number>(1);
-  const [background, setBackground] = useState('Folk Hero');
-  const [alignment, setAlignment] = useState('Neutral Good');
+  const [background, setBackground] = useState(initialBackgrounds[0] || 'Folk Hero');
+  const [alignment, setAlignment] = useState(initialAlignments[0] || 'Neutral Good');
   const [isVendor, setIsVendor] = useState(initialIsVendor);
   const [vendorMargin, setVendorMargin] = useState<number>(120);
   const [isMonster, setIsMonster] = useState(initialIsMonster);
@@ -72,6 +81,18 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   const [useDefenseBonusUA109, setUseDefenseBonusUA109] = useState(false);
   const [useArmorAsDRUA109, setUseArmorAsDRUA109] = useState(false);
 
+  // Shadowrun specific toggles
+  const [strictEssenceCap, setStrictEssenceCap] = useState(true);
+  const [glitchRules, setGlitchRules] = useState(true);
+  const [directMatrixDamage, setDirectMatrixDamage] = useState(true);
+  const [streetLevelMode, setStreetLevelMode] = useState(false);
+
+  // Call of Cthulhu specific toggles
+  const [majorWounds, setMajorWounds] = useState(true);
+  const [boutsOfMadness, setBoutsOfMadness] = useState(true);
+  const [pushedRolls, setPushedRolls] = useState(true);
+  const [pulpCthulhuMode, setPulpCthulhuMode] = useState(false);
+
   // Half-Breed System State (The Alpine DM Rules & Classic SRD Half-Breeds)
   const [useHalfBreedSystem, setUseHalfBreedSystem] = useState(false);
   const [primaryParent, setPrimaryParent] = useState('Elf');
@@ -79,31 +100,61 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   const [customHybridName, setCustomHybridName] = useState('');
 
   const [useClassicSRDHalfBreed, setUseClassicSRDHalfBreed] = useState(false);
-  const [selectedClassicSRDId, setSelectedClassicSRDId] = useState<string>('srd-5e-half-elf');
+  const [selectedClassicSRDId, setSelectedClassicSRDId] = useState<string>(initialSrdId);
   const [dragonVariety, setDragonVariety] = useState<string>('Red');
 
   // Portrait URL & HP Calculation Mode
   const [portraitUrl, setPortraitUrl] = useState('');
   const [hpCalcMode, setHpCalcMode] = useState<'Average' | 'Rolled' | 'Max'>('Average');
 
-  // System switch handler - auto updates race, class, and subclass options
-  const handleSystemChange = (newEd: RuleEdition) => {
-    setEdition(newEd);
-    const races = getRacesForSystem(newEd);
-    const classes = getClassesForSystem(newEd);
-    const newRace = races[0];
-    const newClass = classes[0];
-    const availableSubclasses = getSubclassesForSystemClass(newEd, newClass);
-    const newSubclass = availableSubclasses[0];
+  // Ability Scores (d20)
+  const [str, setStr] = useState(15);
+  const [dex, setDex] = useState(14);
+  const [con, setCon] = useState(13);
+  const [int, setInt] = useState(12);
+  const [wis, setWis] = useState(10);
+  const [cha, setCha] = useState(8);
 
-    setRace(newRace);
-    setCharacterClass(newClass);
-    setSubclass(newSubclass);
+  // Shadowrun 5e Attributes (Ratings 1-6+)
+  const [bod, setBod] = useState(5);
+  const [agi, setAgi] = useState(5);
+  const [rea, setRea] = useState(4);
+  const [strSR, setStrSR] = useState(4);
+  const [wil, setWil] = useState(4);
+  const [log, setLog] = useState(3);
+  const [intSR, setIntSR] = useState(4);
+  const [chaSR, setChaSR] = useState(3);
+  const [edg, setEdg] = useState(3);
+  const [ess, setEss] = useState(6.0);
+  const [mag, setMag] = useState(0);
+  const [res, setRes] = useState(0);
 
-    // Auto adjust classic SRD half breed default for selected edition
-    const srdList = getClassicSRDHalfBreedsForEdition(newEd);
-    if (srdList.length > 0) {
-      setSelectedClassicSRDId(srdList[0].id);
+  // Call of Cthulhu 7e Characteristics (Percentile 1-99)
+  const [strCoC, setStrCoC] = useState(50);
+  const [conCoC, setConCoC] = useState(55);
+  const [sizCoC, setSizCoC] = useState(60);
+  const [dexCoC, setDexCoC] = useState(50);
+  const [appCoC, setAppCoC] = useState(50);
+  const [intCoC, setIntCoC] = useState(65);
+  const [powCoC, setPowCoC] = useState(60);
+  const [eduCoC, setEduCoC] = useState(70);
+  const [sanCoC, setSanCoC] = useState(60);
+  const [luckCoC, setLuckCoC] = useState(50);
+
+  const getSystemTitle = (ed: RuleEdition): string => {
+    switch (ed) {
+      case '5e':
+        return 'D&D 5e';
+      case '3.5e':
+        return 'D&D 3.5e';
+      case 'pathfinder':
+        return 'Pathfinder 2e';
+      case 'shadowrun':
+        return 'Shadowrun';
+      case 'cthulhu':
+        return 'Call of Cthulhu';
+      default:
+        return systemRegistry.getSystem(ed)?.shortName || systemRegistry.getSystem(ed)?.name || 'TRPG';
     }
   };
 
@@ -115,14 +166,6 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       setSubclass(availableSubclasses[0]);
     }
   };
-
-  // Ability Scores
-  const [str, setStr] = useState(15);
-  const [dex, setDex] = useState(14);
-  const [con, setCon] = useState(13);
-  const [int, setInt] = useState(12);
-  const [wis, setWis] = useState(10);
-  const [cha, setCha] = useState(8);
 
   // 4d6 Drop Lowest Random Stat generator
   const roll4d6DropLowest = (): number => {
@@ -137,20 +180,21 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
   // Full Character / Monster Randomizer tailored to current system
   const handleRandomize = () => {
-    const racesList = RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e'];
-    const classesList = CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e'];
-    const randClass = classesList[Math.floor(Math.random() * classesList.length)];
-    const subMap = SUBCLASS_MAP_BY_SYSTEM[edition] || SUBCLASS_MAP_BY_SYSTEM['5e'];
-    const availableSubclasses = subMap[randClass] || ['General'];
-    const randSubclass = availableSubclasses[Math.floor(Math.random() * availableSubclasses.length)];
-    const randRace = racesList[Math.floor(Math.random() * racesList.length)];
-    const randBg = BACKGROUND_OPTIONS[Math.floor(Math.random() * BACKGROUND_OPTIONS.length)];
-    const randAlign = ALIGNMENT_OPTIONS[Math.floor(Math.random() * ALIGNMENT_OPTIONS.length)];
+    const racesList = getRacesForSystem(edition);
+    const classesList = getClassesForSystem(edition);
+    const randClass = classesList[Math.floor(Math.random() * classesList.length)] || 'Fighter';
+    const availableSubclasses = getSubclassesForSystemClass(edition, randClass);
+    const randSubclass = availableSubclasses[Math.floor(Math.random() * availableSubclasses.length)] || 'General';
+    const randRace = racesList[Math.floor(Math.random() * racesList.length)] || 'Human';
+    const bgList = getBackgroundsForSystem(edition);
+    const randBg = bgList[Math.floor(Math.random() * bgList.length)] || 'Street Runner';
+    const alignList = getAlignmentsForSystem(edition);
+    const randAlign = alignList[Math.floor(Math.random() * alignList.length)] || 'Professional';
     const randLvl = Math.floor(Math.random() * 10) + 1;
     const randHpMode = (['Average', 'Rolled', 'Max'] as const)[Math.floor(Math.random() * 3)];
 
-    const namesList = isMonster ? MONSTER_NAMES : HERO_NAMES;
-    const randName = namesList[Math.floor(Math.random() * namesList.length)];
+    const namesList = isMonster ? MONSTER_NAMES : getHeroNamesForSystem(edition);
+    const randName = namesList[Math.floor(Math.random() * namesList.length)] || 'Operative';
     const randMonsterXp = [100, 200, 450, 700, 1100, 1800, 2300, 3900, 5000, 7200][Math.floor(Math.random() * 10)];
 
     setName(randName);
@@ -163,38 +207,76 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     setHpCalcMode(randHpMode);
     setMonsterXpReward(randMonsterXp);
 
-    setStr(roll4d6DropLowest());
-    setDex(roll4d6DropLowest());
-    setCon(roll4d6DropLowest());
-    setInt(roll4d6DropLowest());
-    setWis(roll4d6DropLowest());
-    setCha(roll4d6DropLowest());
+    if (edition === 'shadowrun') {
+      setBod(3 + Math.floor(Math.random() * 4));
+      setAgi(3 + Math.floor(Math.random() * 4));
+      setRea(2 + Math.floor(Math.random() * 4));
+      setStrSR(3 + Math.floor(Math.random() * 4));
+      setWil(3 + Math.floor(Math.random() * 4));
+      setLog(2 + Math.floor(Math.random() * 4));
+      setIntSR(3 + Math.floor(Math.random() * 4));
+      setChaSR(2 + Math.floor(Math.random() * 4));
+      setEdg(2 + Math.floor(Math.random() * 3));
+    } else if (edition === 'cthulhu') {
+      const rollCoC = () => (Math.floor(Math.random() * 8) + 8) * 5;
+      const s = rollCoC();
+      const c = rollCoC();
+      const sz = (Math.floor(Math.random() * 7) + 9) * 5;
+      const d = rollCoC();
+      const a = rollCoC();
+      const i = (Math.floor(Math.random() * 8) + 10) * 5;
+      const p = rollCoC();
+      const ed = (Math.floor(Math.random() * 8) + 10) * 5;
+      setStrCoC(s);
+      setConCoC(c);
+      setSizCoC(sz);
+      setDexCoC(d);
+      setAppCoC(a);
+      setIntCoC(i);
+      setPowCoC(p);
+      setEduCoC(ed);
+      setSanCoC(p);
+      setLuckCoC((Math.floor(Math.random() * 9) + 7) * 5);
+    } else {
+      setStr(roll4d6DropLowest());
+      setDex(roll4d6DropLowest());
+      setCon(roll4d6DropLowest());
+      setInt(roll4d6DropLowest());
+      setWis(roll4d6DropLowest());
+      setCha(roll4d6DropLowest());
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    // Hit points calculation based on selected hpCalcMode and CON mod
-    const conMod = Math.floor((con - 10) / 2);
-    const hitDieValue = characterClass === 'Barbarian' ? 12 : ['Fighter', 'Paladin', 'Ranger'].includes(characterClass) ? 10 : ['Sorcerer', 'Wizard'].includes(characterClass) ? 6 : 8;
-
+    // Hit points calculation based on system and HP mode
     let hpMax = 10;
-    if (hpCalcMode === 'Max') {
-      hpMax = Math.max(1, level * (hitDieValue + conMod));
-    } else if (hpCalcMode === 'Rolled') {
-      // 1st level max + simulated rolled average (or average hit die roll rounded)
-      const baseHp = hitDieValue + conMod;
-      const additionalHp = (level - 1) * (Math.floor(hitDieValue * 0.6) + conMod);
-      hpMax = Math.max(1, baseHp + additionalHp);
+    let hitDieValue = 8;
+    let conMod = 0;
+
+    if (edition === 'shadowrun') {
+      hpMax = 8 + Math.ceil(bod / 2);
+    } else if (edition === 'cthulhu') {
+      hpMax = pulpCthulhuMode ? Math.floor((conCoC + sizCoC) / 5) : Math.floor((conCoC + sizCoC) / 10);
     } else {
-      // Standard Average mode
-      const baseHp = hitDieValue + conMod;
-      const additionalHp = (level - 1) * (Math.floor(hitDieValue / 2) + 1 + conMod);
-      hpMax = Math.max(1, baseHp + additionalHp);
+      conMod = Math.floor((con - 10) / 2);
+      hitDieValue = characterClass === 'Barbarian' ? 12 : ['Fighter', 'Paladin', 'Ranger'].includes(characterClass) ? 10 : ['Sorcerer', 'Wizard'].includes(characterClass) ? 6 : 8;
+      if (hpCalcMode === 'Max') {
+        hpMax = Math.max(1, level * (hitDieValue + conMod));
+      } else if (hpCalcMode === 'Rolled') {
+        const baseHp = hitDieValue + conMod;
+        const additionalHp = (level - 1) * (Math.floor(hitDieValue * 0.6) + conMod);
+        hpMax = Math.max(1, baseHp + additionalHp);
+      } else {
+        const baseHp = hitDieValue + conMod;
+        const additionalHp = (level - 1) * (Math.floor(hitDieValue / 2) + 1 + conMod);
+        hpMax = Math.max(1, baseHp + additionalHp);
+      }
     }
 
-    const isCaster = ['Wizard', 'Sorcerer', 'Cleric', 'Druid', 'Bard', 'Warlock', 'Paladin', 'Ranger'].includes(characterClass);
+    const isCaster = ['Wizard', 'Sorcerer', 'Cleric', 'Druid', 'Bard', 'Warlock', 'Paladin', 'Ranger', 'Shaman', 'Mage', 'Occultist'].includes(characterClass);
 
     const primaryData = PARENT_RACE_CATALOG.find(p => p.name === primaryParent) || PARENT_RACE_CATALOG[0];
     const secondaryData = PARENT_RACE_CATALOG.find(s => s.name === secondaryParent) || PARENT_RACE_CATALOG[1];
@@ -204,28 +286,62 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
     let finalRaceName = race;
     let hybridFeature: ClassFeature | null = null;
-    let charSpeed = race === 'Halfling' || race === 'Dwarf' || race === 'Gnome' ? 20 : 30;
+    let charSpeed = 30;
 
-    if (useHalfBreedSystem) {
-      finalRaceName = getHybridName(primaryParent, secondaryParent, customHybridName);
-      hybridFeature = buildHybridFeature(
-        finalRaceName,
-        primaryData,
-        secondaryData,
-        primaryData.size,
-        primaryData.speed,
-        primaryData.hasDarkvision || secondaryData.hasDarkvision
-      );
-      charSpeed = primaryData.speed;
-    } else if (useClassicSRDHalfBreed && selectedSRD) {
-      if (selectedSRD.id.includes('half-dragon')) {
-        finalRaceName = edition === '3.5e' ? `Half-${dragonVariety} Dragon (3.5e SRD)` : `Half-${dragonVariety} Dragon (5e SRD)`;
-      } else {
-        finalRaceName = selectedSRD.name;
+    if (edition === '5e' || edition === '3.5e') {
+      charSpeed = race === 'Halfling' || race === 'Dwarf' || race === 'Gnome' ? 20 : 30;
+      if (useHalfBreedSystem) {
+        finalRaceName = getHybridName(primaryParent, secondaryParent, customHybridName);
+        hybridFeature = buildHybridFeature(
+          finalRaceName,
+          primaryData,
+          secondaryData,
+          primaryData.size,
+          primaryData.speed,
+          primaryData.hasDarkvision || secondaryData.hasDarkvision
+        );
+        charSpeed = primaryData.speed;
+      } else if (useClassicSRDHalfBreed && selectedSRD) {
+        if (selectedSRD.id.includes('half-dragon')) {
+          finalRaceName = edition === '3.5e' ? `Half-${dragonVariety} Dragon (3.5e SRD)` : `Half-${dragonVariety} Dragon (5e SRD)`;
+        } else {
+          finalRaceName = selectedSRD.name;
+        }
+        hybridFeature = buildClassicSRDFeature(selectedSRD, dragonVariety);
+        charSpeed = selectedSRD.speed;
       }
-      hybridFeature = buildClassicSRDFeature(selectedSRD, dragonVariety);
-      charSpeed = selectedSRD.speed;
+    } else if (edition === 'shadowrun') {
+      charSpeed = agi * 2 + 10;
+    } else if (edition === 'cthulhu') {
+      charSpeed = dexCoC >= 50 && sizCoC >= 50 ? 8 : 7;
     }
+
+    const calculatedAbilities = edition === 'shadowrun'
+      ? {
+          STR: { score: strSR },
+          DEX: { score: agi },
+          CON: { score: bod },
+          INT: { score: log },
+          WIS: { score: intSR },
+          CHA: { score: chaSR },
+        }
+      : edition === 'cthulhu'
+      ? {
+          STR: { score: strCoC },
+          DEX: { score: dexCoC },
+          CON: { score: conCoC },
+          INT: { score: intCoC },
+          WIS: { score: powCoC },
+          CHA: { score: appCoC },
+        }
+      : {
+          STR: { score: str },
+          DEX: { score: dex },
+          CON: { score: con },
+          INT: { score: int },
+          WIS: { score: wis },
+          CHA: { score: cha },
+        };
 
     const newChar: CharacterData = {
       id: 'char-' + Date.now(),
@@ -245,7 +361,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       isMonster,
       monsterXpReward: isMonster ? monsterXpReward : undefined,
 
-      hybridHeritage: useHalfBreedSystem ? {
+      hybridHeritage: (edition === '5e' || edition === '3.5e') && useHalfBreedSystem ? {
         enabled: true,
         isClassicSRD: false,
         primaryParent,
@@ -258,7 +374,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         speedFeet: primaryData.speed,
         sizeCategory: primaryData.size,
         hasDarkvision: primaryData.hasDarkvision || secondaryData.secondaryTraitDesc.includes('Darkvision')
-      } : (useClassicSRDHalfBreed && selectedSRD) ? {
+      } : ((edition === '5e' || edition === '3.5e') && useClassicSRDHalfBreed && selectedSRD) ? {
         enabled: true,
         isClassicSRD: true,
         classicSRDId: selectedSRD.id,
@@ -284,8 +400,16 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         useGestaltUA72,
         useDefenseBonusUA109,
         useArmorAsDRUA109,
-        useHalfBreedSystem,
-        useClassicSRDHalfBreed,
+        useHalfBreedSystem: (edition === '5e' || edition === '3.5e') && useHalfBreedSystem,
+        useClassicSRDHalfBreed: (edition === '5e' || edition === '3.5e') && useClassicSRDHalfBreed,
+        strictEssenceCap,
+        glitchRules,
+        directMatrixDamage,
+        streetLevelMode,
+        majorWounds,
+        boutsOfMadness,
+        pushedRolls,
+        pulpCthulhuMode,
       },
 
       // 3.5e initial stats
@@ -299,22 +423,15 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       hpTemp: 0,
       hitDiceTotal: `${level}d${hitDieValue}`,
       hitDiceCurrent: level,
-      armorClass: 10 + Math.floor((dex - 10) / 2),
-      initiativeBonus: Math.floor((dex - 10) / 2),
+      armorClass: edition === 'shadowrun' ? 12 : edition === 'cthulhu' ? 0 : 10 + Math.floor((dex - 10) / 2),
+      initiativeBonus: edition === 'shadowrun' ? rea + intSR : Math.floor((dex - 10) / 2),
       speed: charSpeed,
       inspiration: false,
 
       deathSavesSuccesses: 0,
       deathSavesFailures: 0,
 
-      abilities: {
-        STR: { score: str },
-        DEX: { score: dex },
-        CON: { score: con },
-        INT: { score: int },
-        WIS: { score: wis },
-        CHA: { score: cha },
-      },
+      abilities: calculatedAbilities,
 
       savingThrowProficiencies: characterClass === 'Fighter' ? ['STR', 'CON'] : characterClass === 'Wizard' ? ['INT', 'WIS'] : ['DEX', 'INT'],
 
@@ -350,11 +467,11 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       attacks: [
         {
           id: 'atk-base-1',
-          name: 'Basic Strike',
-          attackBonus: 2 + Math.floor((str - 10) / 2),
-          damage: `1d6 ${Math.floor((str - 10) / 2) >= 0 ? '+' + Math.floor((str - 10) / 2) : Math.floor((str - 10) / 2)}`,
-          damageType: 'Bludgeoning',
-          range: '5 ft Melee'
+          name: edition === 'shadowrun' ? 'Ares Predator Heavy Pistol' : edition === 'cthulhu' ? '.38 Revolver' : 'Basic Strike',
+          attackBonus: edition === 'shadowrun' ? agi + 2 : 2 + Math.floor((str - 10) / 2),
+          damage: edition === 'shadowrun' ? '8P (AP -1)' : edition === 'cthulhu' ? '1d10' : `1d6 ${Math.floor((str - 10) / 2) >= 0 ? '+' + Math.floor((str - 10) / 2) : Math.floor((str - 10) / 2)}`,
+          damageType: edition === 'shadowrun' ? 'Physical' : 'Piercing',
+          range: edition === 'shadowrun' ? '15m' : '5 ft Melee'
         }
       ],
 
@@ -362,17 +479,17 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         cp: 0,
         sp: 0,
         ep: 0,
-        gp: 15,
+        gp: edition === 'shadowrun' ? 0 : 15,
         pp: 0
       },
 
       inventory: [
-        { id: 'inv-1', name: "Explorer's Pack", quantity: 1, weight: 10, equipped: true },
-        { id: 'inv-2', name: 'Traveler’s Clothes', quantity: 1, weight: 4, equipped: true }
+        { id: 'inv-1', name: edition === 'shadowrun' ? "Runner's Kit" : "Explorer's Pack", quantity: 1, weight: 10, equipped: true },
+        { id: 'inv-2', name: edition === 'shadowrun' ? 'Armored Jacket' : 'Traveler’s Clothes', quantity: 1, weight: 4, equipped: true }
       ],
 
       isSpellcaster: isCaster,
-      spellcastingAbility: ['Wizard', 'Artificer'].includes(characterClass) ? 'INT' : ['Cleric', 'Druid', 'Ranger'].includes(characterClass) ? 'WIS' : 'CHA',
+      spellcastingAbility: ['Wizard', 'Artificer'].includes(characterClass) ? 'INT' : ['Cleric', 'Druid', 'Ranger', 'Occultist'].includes(characterClass) ? 'WIS' : 'CHA',
       spellSlots: isCaster ? [
         { level: 1, max: level >= 3 ? 4 : 2, current: level >= 3 ? 4 : 2 },
         { level: 2, max: level >= 3 ? 2 : 0, current: level >= 3 ? 2 : 0 }
@@ -395,7 +512,38 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       alliesAndOrganizations: '',
       additionalNotes: '',
 
-      shadowrun: {
+      shadowrun: edition === 'shadowrun' ? {
+        bod,
+        agi,
+        rea,
+        str: strSR,
+        wil,
+        log,
+        int: intSR,
+        cha: chaSR,
+        edg,
+        edgCurrent: edg,
+        ess,
+        mag,
+        res,
+        nuyen: streetLevelMode ? 5000 : 25000,
+        karmaCurrent: streetLevelMode ? 5 : 10,
+        karmaTotal: 50,
+        streetCred: 2,
+        notoriety: 1,
+        publicAwareness: 0,
+        physicalBoxesCurrent: 0,
+        stunBoxesCurrent: 0,
+        overflowBoxesCurrent: 0,
+        ballisticArmor: 12,
+        impactArmor: 10,
+        qualities: [
+          { id: 'q-1', name: 'High Pain Tolerance', type: 'Positive', karmaCost: 7, description: 'Ignores -1 wound modifier penalty.' }
+        ],
+        cyberware: [],
+        srSkills: [],
+        vehicles: []
+      } : {
         bod: 5, agi: 5, rea: 4, str: 4, wil: 4, log: 3, int: 4, cha: 3, edg: 3, edgCurrent: 3, ess: 6.0, mag: 0, res: 0,
         nuyen: 25000, karmaCurrent: 10, karmaTotal: 50, streetCred: 2, notoriety: 1, publicAwareness: 0,
         physicalBoxesCurrent: 0, stunBoxesCurrent: 0, overflowBoxesCurrent: 0, ballisticArmor: 12, impactArmor: 10,
@@ -418,7 +566,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         <div className="flex items-center justify-between border-b border-stone-800 pb-3">
           <div className="flex items-center gap-3">
             <h3 className="text-xl font-serif font-bold text-amber-300 flex items-center gap-2">
-              <UserPlus className="w-5 h-5 text-amber-500" /> Create New D&D Entry
+              <UserPlus className="w-5 h-5 text-amber-500" /> Create New {getSystemTitle(edition)} {isMonster ? 'Monster / NPC' : isVendor ? 'Vendor' : 'Entry'}
             </h3>
             <button
               type="button"
@@ -436,39 +584,6 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
-          {/* Ruleset System & Theme Selection */}
-          <div className="bg-stone-950 p-3.5 rounded-xl border border-theme-accent">
-            <label className="block text-theme-accent font-bold mb-2 flex items-center justify-between text-xs">
-              <span className="flex items-center gap-1.5">
-                <Layers className="w-4 h-4 text-theme-accent" />
-                Select TRPG System & Ruleset *
-              </span>
-              <span className="text-[11px] text-theme-light font-mono">Theme updates dynamically</span>
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {systemRegistry.getAllSystems().filter(sys => !enabledSystems || enabledSystems.includes(sys.id)).map((sys) => (
-                <button
-                  key={sys.id}
-                  type="button"
-                  onClick={() => handleSystemChange(sys.id)}
-                  className={`p-2.5 rounded-lg border text-left transition flex flex-col justify-between ${
-                    edition === sys.id
-                      ? `${sys.badgeColor} shadow-md ring-1 ring-current`
-                      : 'bg-stone-900 border-stone-800 text-stone-400 hover:bg-stone-800 hover:text-stone-200'
-                  }`}
-                >
-                  <div>
-                    <div className="font-serif font-bold text-xs flex items-center gap-1.5">
-                      <span>{sys.icon}</span>
-                      <span>{sys.name}</span>
-                    </div>
-                    <div className="text-[10px] opacity-80 mt-0.5">{sys.description}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Basic Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -478,7 +593,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Sir Gareth, Lyra Bloodmoon"
+                placeholder={getNamePlaceholderForSystem(edition)}
                 className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100 focus:outline-none focus:border-amber-500"
               />
             </div>
@@ -488,54 +603,56 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                 <label className="block text-stone-400 text-xs font-bold">
                   {edition === 'shadowrun' ? 'Metatype (Race)' : edition === 'pathfinder' ? 'Ancestry (Race)' : edition === 'cthulhu' ? 'Origin / Heritage' : 'Race'}
                 </label>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <label className="flex items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-600/40 px-2 py-0.5 rounded-md transition">
-                    <input
-                      type="checkbox"
-                      checked={useHalfBreedSystem}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setUseHalfBreedSystem(checked);
-                        if (checked) setUseClassicSRDHalfBreed(false);
-                      }}
-                      className="accent-amber-500 w-3.5 h-3.5 rounded"
-                    />
-                    <Dna className="w-3 h-3 text-amber-400" />
-                    <span>The Alpine DM System</span>
-                  </label>
+                {(edition === '5e' || edition === '3.5e') && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-600/40 px-2 py-0.5 rounded-md transition">
+                      <input
+                        type="checkbox"
+                        checked={useHalfBreedSystem}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUseHalfBreedSystem(checked);
+                          if (checked) setUseClassicSRDHalfBreed(false);
+                        }}
+                        className="accent-amber-500 w-3.5 h-3.5 rounded"
+                      />
+                      <Dna className="w-3 h-3 text-amber-400" />
+                      <span>The Alpine DM System</span>
+                    </label>
 
-                  <label className="flex items-center gap-1.5 cursor-pointer text-amber-300 hover:text-amber-200 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-md transition">
-                    <input
-                      type="checkbox"
-                      checked={useClassicSRDHalfBreed}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setUseClassicSRDHalfBreed(checked);
-                        if (checked) {
-                          setUseHalfBreedSystem(false);
-                          const srdList = getClassicSRDHalfBreedsForEdition(edition);
-                          if (srdList.length > 0) setSelectedClassicSRDId(srdList[0].id);
-                        }
-                      }}
-                      className="accent-amber-500 w-3.5 h-3.5 rounded"
-                    />
-                    <Sparkles className="w-3 h-3 text-amber-400" />
-                    <span>Classic Half-Breeds (SRD)</span>
-                  </label>
-                </div>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-amber-300 hover:text-amber-200 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-md transition">
+                      <input
+                        type="checkbox"
+                        checked={useClassicSRDHalfBreed}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setUseClassicSRDHalfBreed(checked);
+                          if (checked) {
+                            setUseHalfBreedSystem(false);
+                            const srdList = getClassicSRDHalfBreedsForEdition(edition);
+                            if (srdList.length > 0) setSelectedClassicSRDId(srdList[0].id);
+                          }
+                        }}
+                        className="accent-amber-500 w-3.5 h-3.5 rounded"
+                      />
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Classic Half-Breeds (SRD)</span>
+                    </label>
+                  </div>
+                )}
               </div>
 
-              {!useHalfBreedSystem && !useClassicSRDHalfBreed && (
+              {(!useHalfBreedSystem && !useClassicSRDHalfBreed) || (edition !== '5e' && edition !== '3.5e') ? (
                 <select
                   value={race}
                   onChange={(e) => setRace(e.target.value)}
                   className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
                 >
-                  {(RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e']).map(r => (
+                  {getRacesForSystem(edition).map(r => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
-              )}
+              ) : null}
 
               {/* The Alpine DM System UI */}
               {useHalfBreedSystem && (
@@ -723,7 +840,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                   onChange={(e) => handleClassChange(e.target.value)}
                   className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
                 >
-                  {(CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e']).map(c => (
+                  {getClassesForSystem(edition).map(c => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -738,7 +855,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                   onChange={(e) => setSubclass(e.target.value)}
                   className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
                 >
-                  {((SUBCLASS_MAP_BY_SYSTEM[edition] && SUBCLASS_MAP_BY_SYSTEM[edition][characterClass]) || ['General']).map(sc => (
+                  {getSubclassesForSystemClass(edition, characterClass).map(sc => (
                     <option key={sc} value={sc}>{sc}</option>
                   ))}
                 </select>
@@ -772,24 +889,30 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-stone-400 mb-1">Background</label>
-              <input
-                type="text"
+              <label className="block text-stone-400 mb-1">
+                {edition === 'shadowrun' ? 'Background / Prior Career' : edition === 'cthulhu' ? 'Background / Origin' : 'Background'}
+              </label>
+              <select
                 value={background}
                 onChange={(e) => setBackground(e.target.value)}
-                placeholder="e.g. Soldier, Criminal, Sage"
                 className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
-              />
+              >
+                {getBackgroundsForSystem(edition).map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
             </div>
 
             <div>
-              <label className="block text-stone-400 mb-1">Alignment</label>
+              <label className="block text-stone-400 mb-1">
+                {edition === 'shadowrun' ? 'Disposition / Allegiance' : edition === 'cthulhu' ? 'Mental Disposition / Temperament' : 'Alignment'}
+              </label>
               <select
                 value={alignment}
                 onChange={(e) => setAlignment(e.target.value)}
                 className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
               >
-                {ALIGNMENT_OPTIONS.map(a => (
+                {getAlignmentsForSystem(edition).map(a => (
                   <option key={a} value={a}>{a}</option>
                 ))}
               </select>
@@ -810,49 +933,51 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
               <p className="text-[10px] text-stone-500 mt-1">Paste a direct image link to display your character avatar sheet portrait.</p>
             </div>
 
-            <div className="pt-2 border-t border-stone-800">
-              <label className="block text-stone-300 font-bold mb-1.5">Max HP Calculation Method</label>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setHpCalcMode('Average')}
-                  className={`p-2 rounded-lg border text-center font-bold text-xs transition ${
-                    hpCalcMode === 'Average'
-                      ? 'bg-amber-600 border-amber-500 text-stone-950 shadow-md'
-                      : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  Average HP
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHpCalcMode('Rolled')}
-                  className={`p-2 rounded-lg border text-center font-bold text-xs transition ${
-                    hpCalcMode === 'Rolled'
-                      ? 'bg-amber-600 border-amber-500 text-stone-950 shadow-md'
-                      : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  Rolled HP
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setHpCalcMode('Max')}
-                  className={`p-2 rounded-lg border text-center font-bold text-xs transition ${
-                    hpCalcMode === 'Max'
-                      ? 'bg-amber-600 border-amber-500 text-stone-950 shadow-md'
-                      : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  Max Value HP
-                </button>
+            {(edition === '5e' || edition === '3.5e' || edition === 'pathfinder') && (
+              <div className="pt-2 border-t border-stone-800">
+                <label className="block text-stone-300 font-bold mb-1.5">Max HP Calculation Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHpCalcMode('Average')}
+                    className={`p-2 rounded-lg border text-center font-bold text-xs transition ${
+                      hpCalcMode === 'Average'
+                        ? 'bg-amber-600 border-amber-500 text-stone-950 shadow-md'
+                        : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Average HP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHpCalcMode('Rolled')}
+                    className={`p-2 rounded-lg border text-center font-bold text-xs transition ${
+                      hpCalcMode === 'Rolled'
+                        ? 'bg-amber-600 border-amber-500 text-stone-950 shadow-md'
+                        : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Rolled HP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHpCalcMode('Max')}
+                    className={`p-2 rounded-lg border text-center font-bold text-xs transition ${
+                      hpCalcMode === 'Max'
+                        ? 'bg-amber-600 border-amber-500 text-stone-950 shadow-md'
+                        : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Max Value HP
+                  </button>
+                </div>
+                <p className="text-[10px] text-stone-500 mt-1">
+                  {hpCalcMode === 'Average' && 'Calculates HP using fixed class hit die average per level + CON mod.'}
+                  {hpCalcMode === 'Rolled' && 'Simulates rolled hit die value per level + CON mod (e.g. 5e HP calculator mode).'}
+                  {hpCalcMode === 'Max' && 'Calculates HP as maximum roll on hit die for every level + CON mod.'}
+                </p>
               </div>
-              <p className="text-[10px] text-stone-500 mt-1">
-                {hpCalcMode === 'Average' && 'Calculates HP using fixed class hit die average per level + CON mod.'}
-                {hpCalcMode === 'Rolled' && 'Simulates rolled hit die value per level + CON mod (e.g. 5e HP calculator mode).'}
-                {hpCalcMode === 'Max' && 'Calculates HP as maximum roll on hit die for every level + CON mod.'}
-              </p>
-            </div>
+            )}
           </div>
 
           {/* Merchant / Vendor Settings */}
@@ -953,245 +1078,621 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
             </p>
           </div>
 
-          {/* Optional D&D Rules & Calculation Toggles */}
-          <div className="bg-stone-950 border border-amber-900/40 p-4 rounded-xl space-y-3">
-            <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-sm">
-              <Settings className="w-4 h-4 text-amber-400" />
-              <span>Optional D&D Rules & Calculation Toggles</span>
+          {/* System-Specific Optional Rules & Calculation Toggles */}
+          {(edition === '5e' || edition === '3.5e') && (
+            <div className="bg-stone-950 border border-amber-900/40 p-4 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-sm">
+                <Settings className="w-4 h-4 text-amber-400" />
+                <span>Optional {getSystemTitle(edition)} Rules & Calculation Toggles</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                {/* Variant Encumbrance */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={useVariantEncumbrance}
+                    onChange={(e) => setUseVariantEncumbrance(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Scale className="w-3.5 h-3.5 text-amber-400" /> Variant Encumbrance
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Encumbered at STR×5 lbs (-10ft speed), Heavily Encumbered at STR×10 lbs (-20ft speed & Disadvantage).
+                    </p>
+                  </div>
+                </label>
+
+                {/* Tactical Flanking */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={useFlankingRules}
+                    onChange={(e) => setUseFlankingRules(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Swords className="w-3.5 h-3.5 text-amber-400" /> Tactical Flanking
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Adds Advantage prompt (5e) or +2 Attack bonus (3.5e) when positioned with an ally.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Half-Breed / Hybrid Heritage Ancestry */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={useHalfBreedSystem}
+                    onChange={(e) => setUseHalfBreedSystem(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Dna className="w-3.5 h-3.5 text-amber-400" /> Half-Breed System (The Alpine DM)
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Enables dual parent ancestry heritage, custom hybrid race names & combined traits.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Dual Classing / Multiclassing */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={useMulticlassing}
+                    onChange={(e) => setUseMulticlassing(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Layers className="w-3.5 h-3.5 text-amber-400" /> Dual Classing / Multiclassing
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Calculates combined level, combined spell slots, and multiclass Hit Dice pools.
+                    </p>
+
+                    {useMulticlassing && (
+                      <div className="mt-2.5 pt-2 border-t border-stone-800 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Class</label>
+                          <select
+                            value={secondaryClass}
+                            onChange={(e) => setSecondaryClass(e.target.value)}
+                            className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                          >
+                            {getClassesForSystem(edition).map(c => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Level</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={secondaryLevel}
+                            onChange={(e) => setSecondaryLevel(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-full bg-stone-950 border border-stone-700 font-mono font-bold text-stone-200 rounded px-2 py-1 text-xs text-center"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Subclass</label>
+                          <input
+                            type="text"
+                            value={secondarySubclass}
+                            onChange={(e) => setSecondarySubclass(e.target.value)}
+                            placeholder="e.g. Assassin"
+                            className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </label>
+
+                {/* Gritty Realism Resting */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={useGrittyRealismResting}
+                    onChange={(e) => setUseGrittyRealismResting(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" /> Gritty Realism Resting
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Short Rest takes 8 Hours (overnight), Long Rest takes 7 Days (sanctuary).
+                    </p>
+                  </div>
+                </label>
+
+                {/* Variant Critical Damage */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={useVariantCritDamage}
+                    onChange={(e) => setUseVariantCritDamage(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Crosshair className="w-3.5 h-3.5 text-amber-400" /> Variant Critical Damage
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Maximize initial weapon die + roll second die (e.g. 8 + 1d8 + STR).
+                    </p>
+                  </div>
+                </label>
+
+                {/* Milestone XP Mode */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition sm:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={useMilestoneXp}
+                    onChange={(e) => setUseMilestoneXp(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Milestone Advancement Mode
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Hides numerical XP progress bars in favor of story/DM milestone level-ups.
+                    </p>
+                  </div>
+                </label>
+              </div>
             </div>
+          )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              {/* Variant Encumbrance */}
-              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
-                <input
-                  type="checkbox"
-                  checked={useVariantEncumbrance}
-                  onChange={(e) => setUseVariantEncumbrance(e.target.checked)}
-                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-stone-200 flex items-center gap-1">
-                    <Scale className="w-3.5 h-3.5 text-amber-400" /> Variant Encumbrance
-                  </span>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                    Encumbered at STR×5 lbs (-10ft speed), Heavily Encumbered at STR×10 lbs (-20ft speed & Disadvantage).
-                  </p>
-                </div>
-              </label>
-
-              {/* Tactical Flanking */}
-              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
-                <input
-                  type="checkbox"
-                  checked={useFlankingRules}
-                  onChange={(e) => setUseFlankingRules(e.target.checked)}
-                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-stone-200 flex items-center gap-1">
-                    <Swords className="w-3.5 h-3.5 text-amber-400" /> Tactical Flanking
-                  </span>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                    Adds Advantage prompt (5e) or +2 Attack bonus (3.5e) when positioned with an ally.
-                  </p>
-                </div>
-              </label>
-
-              {/* Half-Breed / Hybrid Heritage Ancestry */}
-              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
-                <input
-                  type="checkbox"
-                  checked={useHalfBreedSystem}
-                  onChange={(e) => setUseHalfBreedSystem(e.target.checked)}
-                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-stone-200 flex items-center gap-1">
-                    <Dna className="w-3.5 h-3.5 text-amber-400" /> Half-Breed System (The Alpine DM)
-                  </span>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                    Enables dual parent ancestry heritage, custom hybrid race names & combined traits.
-                  </p>
-                </div>
-              </label>
-
-              {/* Dual Classing / Multiclassing */}
-              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition sm:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={useMulticlassing}
-                  onChange={(e) => setUseMulticlassing(e.target.checked)}
-                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
-                />
-                <div className="flex-1">
-                  <span className="font-bold text-stone-200 flex items-center gap-1">
-                    <Layers className="w-3.5 h-3.5 text-amber-400" /> Dual Classing / Multiclassing
-                  </span>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                    Calculates combined level, combined spell slots, and multiclass Hit Dice pools.
-                  </p>
-
-                  {useMulticlassing && (
-                    <div className="mt-2.5 pt-2 border-t border-stone-800 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Class</label>
-                        <select
-                          value={secondaryClass}
-                          onChange={(e) => setSecondaryClass(e.target.value)}
-                          className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
-                        >
-                          {['Fighter', 'Wizard', 'Rogue', 'Cleric', 'Paladin', 'Ranger', 'Barbarian', 'Bard', 'Druid', 'Monk', 'Sorcerer', 'Warlock', 'Artificer'].map(c => (
-                            <option key={c} value={c}>{c}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Level</label>
-                        <input
-                          type="number"
-                          min="1"
-                          value={secondaryLevel}
-                          onChange={(e) => setSecondaryLevel(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-full bg-stone-950 border border-stone-700 font-mono font-bold text-stone-200 rounded px-2 py-1 text-xs text-center"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Subclass</label>
-                        <input
-                          type="text"
-                          value={secondarySubclass}
-                          onChange={(e) => setSecondarySubclass(e.target.value)}
-                          placeholder="e.g. Assassin"
-                          className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </label>
-
-              {/* Gritty Realism Resting */}
-              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
-                <input
-                  type="checkbox"
-                  checked={useGrittyRealismResting}
-                  onChange={(e) => setUseGrittyRealismResting(e.target.checked)}
-                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-stone-200 flex items-center gap-1">
-                    <Zap className="w-3.5 h-3.5 text-amber-400" /> Gritty Realism Resting
-                  </span>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                    Short Rest takes 8 Hours (overnight), Long Rest takes 7 Days (sanctuary).
-                  </p>
-                </div>
-              </label>
-
-              {/* Variant Critical Damage */}
-              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
-                <input
-                  type="checkbox"
-                  checked={useVariantCritDamage}
-                  onChange={(e) => setUseVariantCritDamage(e.target.checked)}
-                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-stone-200 flex items-center gap-1">
-                    <Crosshair className="w-3.5 h-3.5 text-amber-400" /> Variant Critical Damage
-                  </span>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                    Maximize initial weapon die + roll second die (e.g. 8 + 1d8 + STR).
-                  </p>
-                </div>
-              </label>
-
-              {/* Milestone XP Mode */}
-              <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition sm:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={useMilestoneXp}
-                  onChange={(e) => setUseMilestoneXp(e.target.checked)}
-                  className="accent-amber-500 w-4 h-4 rounded mt-0.5"
-                />
-                <div>
-                  <span className="font-bold text-stone-200 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Milestone Advancement Mode
-                  </span>
-                  <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                    Hides numerical XP progress bars in favor of story/DM milestone level-ups.
-                  </p>
-                </div>
-              </label>
+          {/* Shadowrun Optional Rules */}
+          {edition === 'shadowrun' && (
+            <div className="bg-stone-950 border border-emerald-900/40 p-4 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 text-emerald-300 font-mono font-bold text-sm">
+                <Settings className="w-4 h-4 text-emerald-400" />
+                <span>Shadowrun 5e Rules & Simulation Toggles</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-emerald-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={strictEssenceCap}
+                    onChange={(e) => setStrictEssenceCap(e.target.checked)}
+                    className="accent-emerald-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Strict Essence Limit (6.0 Cap)</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Essence loss strictly limits cyberware and reduces Magic / Resonance ratings.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-emerald-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={glitchRules}
+                    onChange={(e) => setGlitchRules(e.target.checked)}
+                    className="accent-emerald-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Glitch & Critical Glitch System</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Triggers complications when more than half of dice rolled show 1s.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-emerald-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={directMatrixDamage}
+                    onChange={(e) => setDirectMatrixDamage(e.target.checked)}
+                    className="accent-emerald-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Biofeedback & Matrix Damage</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Hot-sim dumpshock inflicts physical biofeedback damage.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-emerald-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={streetLevelMode}
+                    onChange={(e) => setStreetLevelMode(e.target.checked)}
+                    className="accent-emerald-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Street-Level Runner Mode</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Starts with reduced starting Nuyen (5,000¥) and low resources.</p>
+                  </div>
+                </label>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Ability Scores Grid */}
+          {/* Call of Cthulhu Optional Rules */}
+          {edition === 'cthulhu' && (
+            <div className="bg-stone-950 border border-teal-900/40 p-4 rounded-xl space-y-3">
+              <div className="flex items-center gap-2 text-teal-300 font-serif font-bold text-sm">
+                <Settings className="w-4 h-4 text-teal-400" />
+                <span>Call of Cthulhu 7e Horror & Sanity Toggles</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-teal-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={majorWounds}
+                    onChange={(e) => setMajorWounds(e.target.checked)}
+                    className="accent-teal-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Major Wound Mechanics</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Single hits dealing ≥ half Max HP trigger Major Wounds and unconsciousness risk.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-teal-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={boutsOfMadness}
+                    onChange={(e) => setBoutsOfMadness(e.target.checked)}
+                    className="accent-teal-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Bouts of Madness & Phobias</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Losing ≥ 5 SAN in a single roll triggers temporary insanity bouts.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-teal-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={pushedRolls}
+                    onChange={(e) => setPushedRolls(e.target.checked)}
+                    className="accent-teal-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Pushed Skill Rolls</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Allow players to re-roll failed skill checks with heightened dire consequences.</p>
+                  </div>
+                </label>
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-teal-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={pulpCthulhuMode}
+                    onChange={(e) => setPulpCthulhuMode(e.target.checked)}
+                    className="accent-teal-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200">Pulp Cthulhu Mode (Double HP)</span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">Doubles standard investigator HP and enables heroic Luck spending.</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* System Attributes Grid */}
           <div className="border-t border-stone-800 pt-3">
-            <div className="text-amber-300 font-serif font-bold text-sm mb-2">Ability Scores</div>
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center font-mono">
-              <div>
-                <label className="block text-stone-400 text-[10px] mb-1">STR</label>
-                <input
-                  type="number"
-                  value={str}
-                  onChange={(e) => setStr(parseInt(e.target.value) || 10)}
-                  className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-stone-400 text-[10px] mb-1">DEX</label>
-                <input
-                  type="number"
-                  value={dex}
-                  onChange={(e) => setDex(parseInt(e.target.value) || 10)}
-                  className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-stone-400 text-[10px] mb-1">CON</label>
-                <input
-                  type="number"
-                  value={con}
-                  onChange={(e) => setCon(parseInt(e.target.value) || 10)}
-                  className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-stone-400 text-[10px] mb-1">INT</label>
-                <input
-                  type="number"
-                  value={int}
-                  onChange={(e) => setInt(parseInt(e.target.value) || 10)}
-                  className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-stone-400 text-[10px] mb-1">WIS</label>
-                <input
-                  type="number"
-                  value={wis}
-                  onChange={(e) => setWis(parseInt(e.target.value) || 10)}
-                  className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
-                />
-              </div>
-
-              <div>
-                <label className="block text-stone-400 text-[10px] mb-1">CHA</label>
-                <input
-                  type="number"
-                  value={cha}
-                  onChange={(e) => setCha(parseInt(e.target.value) || 10)}
-                  className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
-                />
-              </div>
+            <div className="text-amber-300 font-serif font-bold text-sm mb-2">
+              {edition === 'shadowrun' ? 'Shadowrun Attributes (Ratings 1-6+)' : edition === 'cthulhu' ? 'Investigator Characteristics (Percentile 1-99%)' : 'Ability Scores'}
             </div>
+
+            {edition === 'shadowrun' ? (
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 text-center font-mono text-xs">
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">BOD</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={bod}
+                    onChange={(e) => setBod(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">AGI</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={agi}
+                    onChange={(e) => setAgi(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">REA</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={rea}
+                    onChange={(e) => setRea(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">STR</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={strSR}
+                    onChange={(e) => setStrSR(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">WIL</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={wil}
+                    onChange={(e) => setWil(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">LOG</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={log}
+                    onChange={(e) => setLog(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">INT</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={intSR}
+                    onChange={(e) => setIntSR(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-emerald-400 text-[10px] mb-0.5 font-bold">CHA</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="15"
+                    value={chaSR}
+                    onChange={(e) => setChaSR(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-amber-400 text-[10px] mb-0.5 font-bold">EDG</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={edg}
+                    onChange={(e) => setEdg(parseInt(e.target.value) || 1)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-amber-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-cyan-400 text-[10px] mb-0.5 font-bold">ESS</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="6"
+                    step="0.1"
+                    value={ess}
+                    onChange={(e) => setEss(parseFloat(e.target.value) || 6.0)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-cyan-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-purple-400 text-[10px] mb-0.5 font-bold">MAG</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="12"
+                    value={mag}
+                    onChange={(e) => setMag(parseInt(e.target.value) || 0)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-purple-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">RES</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="12"
+                    value={res}
+                    onChange={(e) => setRes(parseInt(e.target.value) || 0)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-300"
+                  />
+                </div>
+              </div>
+            ) : edition === 'cthulhu' ? (
+              <div className="grid grid-cols-4 sm:grid-cols-5 gap-2 text-center font-mono text-xs">
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">STR%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={strCoC}
+                    onChange={(e) => setStrCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">CON%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={conCoC}
+                    onChange={(e) => setConCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">SIZ%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={sizCoC}
+                    onChange={(e) => setSizCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">DEX%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={dexCoC}
+                    onChange={(e) => setDexCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">APP%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={appCoC}
+                    onChange={(e) => setAppCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">INT%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={intCoC}
+                    onChange={(e) => setIntCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">POW%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={powCoC}
+                    onChange={(e) => setPowCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-teal-400 text-[10px] mb-0.5 font-bold">EDU%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={eduCoC}
+                    onChange={(e) => setEduCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-teal-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-purple-400 text-[10px] mb-0.5 font-bold">SAN%</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="99"
+                    value={sanCoC}
+                    onChange={(e) => setSanCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-purple-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-amber-400 text-[10px] mb-0.5 font-bold">LUCK%</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={luckCoC}
+                    onChange={(e) => setLuckCoC(parseInt(e.target.value) || 50)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1 text-center font-bold text-amber-300"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center font-mono">
+                <div>
+                  <label className="block text-stone-400 text-[10px] mb-1">STR</label>
+                  <input
+                    type="number"
+                    value={str}
+                    onChange={(e) => setStr(parseInt(e.target.value) || 10)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 text-[10px] mb-1">DEX</label>
+                  <input
+                    type="number"
+                    value={dex}
+                    onChange={(e) => setDex(parseInt(e.target.value) || 10)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 text-[10px] mb-1">CON</label>
+                  <input
+                    type="number"
+                    value={con}
+                    onChange={(e) => setCon(parseInt(e.target.value) || 10)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 text-[10px] mb-1">INT</label>
+                  <input
+                    type="number"
+                    value={int}
+                    onChange={(e) => setInt(parseInt(e.target.value) || 10)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 text-[10px] mb-1">WIS</label>
+                  <input
+                    type="number"
+                    value={wis}
+                    onChange={(e) => setWis(parseInt(e.target.value) || 10)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 text-[10px] mb-1">CHA</label>
+                  <input
+                    type="number"
+                    value={cha}
+                    onChange={(e) => setCha(parseInt(e.target.value) || 10)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-stone-800">

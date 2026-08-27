@@ -166,7 +166,7 @@ export const ClassFeaturesPanel: React.FC<ClassFeaturesPanelProps> = ({
                       <button
                         onClick={onOpenShapeshift}
                         className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-lg font-bold text-[11px] transition flex items-center gap-1 shadow cursor-pointer"
-                        title="Launch Shapeshift Engine for this feature"
+                        title="Launch Nexus Shapeshift Engine for this feature"
                       >
                         <span>🐾</span>
                         <span>Shapeshift</span>
@@ -176,7 +176,7 @@ export const ClassFeaturesPanel: React.FC<ClassFeaturesPanelProps> = ({
                       <button
                         onClick={onOpenSummonCompanion}
                         className="px-2.5 py-1 bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-500/60 rounded-lg font-bold text-[11px] transition flex items-center gap-1 shadow cursor-pointer"
-                        title="Launch Animal Companion & Familiar Engine"
+                        title="Launch Nexus Companion & Summon Engine"
                       >
                         <span>🦅</span>
                         <span>Summon</span>

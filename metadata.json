@@ -1,6 +1,6 @@
 {
-  "name": "D&D Character Sheet",
-  "description": "A comprehensive multi-edition D&D character sheet supporting both 5e and 3.5e rulesets, featuring Stats, Combat, Gear, Spells, and Character Details with auto-calculated modifiers, saving throws, skill ranks, and live dice rolling.",
+  "name": "Nexus",
+  "description": "A comprehensive next-generation multi-system TRPG and character sheet platform supporting D&D 5e, D&D 3.5e, Pathfinder 2e, Shadowrun 5e, and Call of Cthulhu 7e, powered by the modular Nexus rules, combat, audio, shapeshift, and multiplayer engines.",
   "requestFramePermissions": [
     "microphone"
   ],

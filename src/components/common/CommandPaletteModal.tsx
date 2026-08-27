@@ -110,7 +110,7 @@ export function CommandPaletteModal({
         id: 'action-roll-dice',
         title: 'Roll Custom Dice',
         category: 'Actions',
-        description: 'Open dice tray and rolling engine',
+        description: 'Open Nexus dice tray & rolling physics engine',
         icon: <Dices className="w-4 h-4 text-emerald-400" />,
         action: () => {
           onClose();
@@ -119,9 +119,9 @@ export function CommandPaletteModal({
       },
       {
         id: 'action-extensions',
-        title: 'Plugin & Extension Manager',
+        title: 'Nexus Extension Manager',
         category: 'Actions',
-        description: 'Manage active TRPG rules engines & extensions',
+        description: 'Manage active Nexus TRPG rules engines & extensions',
         icon: <Layers className="w-4 h-4 text-indigo-400" />,
         action: () => {
           onClose();
@@ -130,9 +130,9 @@ export function CommandPaletteModal({
       },
       {
         id: 'action-developer-sdk',
-        title: 'Developer SDK & Architecture Center',
+        title: 'Nexus Developer SDK & Architecture Center',
         category: 'Actions',
-        description: 'Explore Plugin Packaging, Event Bus Inspector, and Test Harness',
+        description: 'Explore Nexus Engine Specs, Plugin Packaging, Event Bus & Telemetry',
         icon: <Code className="w-4 h-4 text-purple-400" />,
         action: () => {
           onClose();

@@ -35,9 +35,11 @@ import {
   MessageSquare,
   Copy,
   Crown,
-  SlidersHorizontal
+  SlidersHorizontal,
+  BookOpen
 } from 'lucide-react';
 import { SheetLayoutOptionsTab } from './options/SheetLayoutOptionsTab';
+import { StatblockExportModal } from '../character/StatblockExportModal';
 import { CharacterData, RuleEdition } from '../../types';
 import { UserProfile } from '../../lib/firebase';
 import { systemRegistry } from '../../systems';
@@ -87,6 +89,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
   const [volume, setVolumeState] = useState<number>(() => Math.round(getMasterVolume() * 100));
   const [lastPlayed, setLastPlayed] = useState<string | null>(null);
+  const [showStatblockModal, setShowStatblockModal] = useState<boolean>(false);
 
   // Clear cache state
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
@@ -625,11 +628,11 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 <div className="grid grid-cols-2 gap-2 text-[11px] font-mono text-stone-400">
                   <div className="bg-stone-900 p-2 rounded border border-stone-800">
                     <span className="text-stone-500 block text-[10px]">APPLICATION</span>
-                    <span className="text-stone-200 font-bold">TRPG Companion</span>
+                    <span className="text-stone-200 font-bold">Nexus</span>
                   </div>
                   <div className="bg-stone-900 p-2 rounded border border-stone-800">
                     <span className="text-stone-500 block text-[10px]">VERSION</span>
-                    <span className="text-amber-300 font-bold">v0.9.5-hydra</span>
+                    <span className="text-amber-300 font-bold">v1.1.0-nexus</span>
                   </div>
                 </div>
               </div>
@@ -718,6 +721,29 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                           <span>Export {activeCharacter.name} JSON Backup</span>
                         </button>
                       </div>
+
+                      {/* PRINTABLE STATBLOCK */}
+                      <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-3">
+                        <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5">
+                          <div className="flex items-center gap-2 text-amber-400 font-serif font-bold text-sm">
+                            <BookOpen className="w-4 h-4 text-amber-400" />
+                            <span>Printable Statblock</span>
+                          </div>
+                          <span className="text-[10px] font-mono text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800/60 font-bold">
+                            PDF / Print
+                          </span>
+                        </div>
+                        <p className="text-xs text-stone-300 leading-relaxed">
+                          Open a clean, printable D&D statblock of <strong className="text-amber-300">{activeCharacter.name}</strong> formatted for physical tabletop play, PDF export, and markdown copying.
+                        </p>
+                        <button
+                          onClick={() => setShowStatblockModal(true)}
+                          className="w-full py-2.5 px-4 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/50 hover:border-amber-400 rounded-xl font-bold text-xs transition shadow flex items-center justify-center gap-2 group cursor-pointer"
+                        >
+                          <BookOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition" />
+                          <span className="font-serif font-bold">Open Printable Statblock</span>
+                        </button>
+                      </div>
                     </>
                   )}
                 </>
@@ -739,7 +765,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                   </span>
                 </div>
                 <p className="text-xs text-stone-300 leading-relaxed">
-                  Pen & Paper RPG Companion is built for Dungeon Masters, players, and tabletop roleplaying enthusiasts worldwide.
+                  Nexus TRPG Platform is built for Dungeon Masters, players, and tabletop roleplaying enthusiasts worldwide.
                 </p>
               </div>
 
@@ -860,7 +886,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             {activeCategory === 'sound'
               ? (muted ? '🔇 Sound disabled' : `🔊 Active (${volume}% volume)`)
               : activeCategory === 'credits'
-              ? '🏆 Pen & Paper RPG Companion Credits'
+              ? '🏆 Nexus Platform Credits'
               : `⚙️ App Options (${storageStats.sizeKB} KB Cache)`}
           </span>
           <button
@@ -871,6 +897,18 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Statblock Export & Printable PDF Modal */}
+      {showStatblockModal && activeCharacter && (
+        <StatblockExportModal
+          character={activeCharacter}
+          characters={[]}
+          isOpen={showStatblockModal}
+          onClose={() => setShowStatblockModal(false)}
+          onExportJson={onExportJson || (() => {})}
+          onImportJson={onImportJson || (() => {})}
+        />
+      )}
     </div>
   );
 };

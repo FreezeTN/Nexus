@@ -117,7 +117,7 @@ export const SpellTargetModal: React.FC<SpellTargetModalProps> = ({
                 <div>
                   <div className="font-bold text-emerald-300">Shapeshifting Spell Detected</div>
                   <div className="text-[11px] text-emerald-200/80">
-                    Use the <strong>Shapeshift Engine</strong> on your sheet header or spellbook to transform form stats!
+                    Use the <strong>Nexus Shapeshift Engine</strong> on your sheet header or spellbook to transform form stats!
                   </div>
                 </div>
               </div>
@@ -132,7 +132,7 @@ export const SpellTargetModal: React.FC<SpellTargetModalProps> = ({
                 <div>
                   <div className="font-bold text-teal-300">Summon / Companion Spell Detected</div>
                   <div className="text-[11px] text-teal-200/80">
-                    Use the <strong>Summon Companion Engine</strong> on your sheet header or spellbook to conjure and add your companion directly into your Campaign Roster!
+                    Use the <strong>Nexus Companion & Summon Engine</strong> on your sheet header or spellbook to conjure and add your companion directly into your Campaign Roster!
                   </div>
                 </div>
               </div>

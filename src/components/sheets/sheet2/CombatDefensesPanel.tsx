@@ -362,9 +362,9 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     onClick={() => setShowCompanionModal(true)}
                     className="w-full bg-teal-950/60 hover:bg-teal-900/80 border border-teal-600/40 p-2 rounded-xl text-teal-200 text-xs font-bold transition flex items-center justify-between"
                   >
-                    <span className="flex items-center gap-1.5">
+                    <span className="flex items-center gap-1.5 min-w-0">
                       <span>🦅</span>
-                      <span>Summon Engine</span>
+                      <span className="truncate">Summon Engine</span>
                     </span>
                     <span className="text-[10px] text-teal-400 font-mono">→</span>
                   </button>

@@ -872,38 +872,38 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
     },
     {
       id: 'manual-systems',
-      title: '⚔️ Rule Systems & Multi-Edition Engines',
+      title: '⚔️ Nexus Rules Engines & Multi-Edition Support',
       icon: Layers,
       color: 'text-emerald-400',
       description: 'Native rulesets: D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, and Custom TRPGs.',
       items: [
         {
-          name: 'D&D 5th Edition (5e)',
+          name: 'Nexus D&D 5e Engine',
           action: 'Core 5e Ruleset',
           detail: 'Proficiency Bonus scaling (+2 to +6), Advantage/Disadvantage toggles, 18 skill checks, Passive Perception, Concentration tracking, Pact Magic, and 20 preset spells.'
         },
         {
-          name: 'D&D 3.5 Edition (3.5e)',
+          name: 'Nexus D&D 3.5e Classic d20 Engine',
           action: 'v3.5 Core Ruleset',
           detail: 'Base Attack Bonus (BAB) progression (+6/+1 iterative attacks), Fortitude/Reflex/Will base save tables, Touch AC, Flat-Footed AC, Skill Points Calculator with Class/Cross-Class caps, Caster Level, Damage Reduction (DR), and Spell Resistance (SR).'
         },
         {
-          name: 'Shadowrun 5e (Cyberpunk)',
+          name: 'Nexus Shadowrun 5e Cyberpunk Engine',
           action: 'd6 Dice Pool Engine',
           detail: 'Dice pools (Attribute + Skill), Hit threshold (5s and 6s), Glitches, Physical/Stun condition monitors with wound penalties, Cyberware Essence limits (Max 6.00), Cyberdeck Matrix stats, Nuyen (¥), and Karma.'
         },
         {
-          name: 'Pathfinder 2e (PF2e)',
+          name: 'Nexus Pathfinder 2e Tactical Engine',
           action: '3-Action Turn Economy',
           detail: '3-Action economy, Multiple Attack Penalty (MAP: -0, -5, -10), Four Degrees of Success (Critical Success, Success, Failure, Critical Failure), and Proficiency Ranks.'
         },
         {
-          name: 'Call of Cthulhu 7e (Horror)',
+          name: 'Nexus Call of Cthulhu 7e Horror Engine',
           action: 'd100 Percentile System',
           detail: 'd100 percentile skill checks, Sanity Points (SAN = WIS × 5), Bouts of Madness tracking, and Pushed Rolls.'
         },
         {
-          name: 'Custom TRPG Ruleset Creator',
+          name: 'Nexus Custom Ruleset Engine & Selector',
           action: 'System Selector Modal',
           detail: 'Configure enabled systems or build modular custom TRPG rulesets with unique attribute keys, dice pool algorithms, and sheet layouts.'
         }

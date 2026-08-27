@@ -152,6 +152,10 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
     ? 'Call of Cthulhu 7e'
     : 'Manual & System Reference';
 
+  const displayCampaignName = activeSession?.name
+    ? activeSession.name.replace(/\s*-\s*Checkpoint.*$/i, '').replace(/\s+Checkpoint.*$/i, '').trim() || activeSession.name
+    : 'Session Lobby';
+
   // COLLAPSED / PHASED OUT MODE
   if (isCollapsed) {
     return (
@@ -286,7 +290,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                     ? 'bg-emerald-950/60 border-emerald-600/60 text-emerald-300 animate-pulse'
                     : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
                 }`}
-                title={activeSession ? `Campaign Session: ${activeSession.name}` : 'Multiplayer Session Lobby'}
+                title={activeSession ? `Campaign Session: ${displayCampaignName}` : 'Multiplayer Session Lobby'}
               >
                 <Users className="w-4 h-4" />
               </button>
@@ -541,10 +545,10 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                   ? 'bg-emerald-950/60 border-emerald-600/60 text-emerald-200 shadow-md animate-pulse'
                   : 'bg-stone-900/80 hover:bg-stone-800/90 border-stone-800 hover:border-amber-600/40 text-stone-200 hover:text-amber-300'
               }`}
-              title={activeSession ? `Campaign: ${activeSession.name} (Click to open Room Menu)` : 'Open Multiplayer Campaign Session Lobby'}
+              title={activeSession ? `Campaign: ${displayCampaignName} (Click to open Room Menu)` : 'Open Multiplayer Campaign Session Lobby'}
             >
               <Users className={`w-4 h-4 shrink-0 ${activeSession ? 'text-emerald-400' : 'text-amber-400'} group-hover:scale-110 transition-transform`} />
-              <span className="truncate flex-1 text-left">{activeSession ? (activeSession.name || 'Campaign Room') : 'Session Lobby'}</span>
+              <span className="truncate flex-1 text-left">{displayCampaignName}</span>
             </button>
           )}
 

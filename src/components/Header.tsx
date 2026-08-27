@@ -7,7 +7,6 @@ import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../data/monst
 import { getXpProgressDetails } from '../data/levelProgressionData';
 import { revertTransformation } from '../data/transformationData';
 import { HpOrb, getHpColorClass } from './HpOrb';
-import { StatblockExportModal } from './character/StatblockExportModal';
 import { LevelProgressionModal } from './modals/LevelProgressionModal';
 import { MaxHpInspectorModal } from './modals/MaxHpInspectorModal';
 import { RestModal } from './combat/RestModal';
@@ -136,7 +135,6 @@ export const Header: React.FC<HeaderProps> = ({
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showPwaModal, setShowPwaModal] = useState<boolean>(false);
-  const [showStatblockModal, setShowStatblockModal] = useState<boolean>(false);
   const [showLevelModal, setShowLevelModal] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
@@ -391,12 +389,14 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'text-amber-500'
               }`}>
                 {currentEdition === 'shadowrun'
-                  ? 'Shadowrun Vault • Cyberpunk Sheet'
+                  ? 'Nexus • Shadowrun Cyberpunk Vault'
                   : currentEdition === 'pathfinder'
-                  ? 'Pathfinder Vault • 2e Sheet'
+                  ? 'Nexus • Pathfinder 2e Tactical Vault'
                   : currentEdition === 'cthulhu'
-                  ? 'Call of Cthulhu Vault • 7e Sheet'
-                  : `D&D Vault • ${currentEdition} Sheet`}
+                  ? 'Nexus • Call of Cthulhu 7e Investigator Vault'
+                  : currentEdition === '3.5e'
+                  ? 'Nexus • D&D 3.5e Classic d20 Vault'
+                  : 'Nexus • D&D 5e Adventurer Vault'}
               </span>
               {/* Compact Mobile Edition Toggle */}
               <div className="flex md:hidden items-center bg-stone-950 p-0.5 rounded border border-theme-accent text-[10px]">
@@ -485,6 +485,7 @@ export const Header: React.FC<HeaderProps> = ({
 
                               const isLockedByOtherPlayer = isPlayerRole && 
                                 !!activeUserId && 
+                                activeUserId !== 'guest_player' &&
                                 activeUserId !== currentUserId && 
                                 activeUserId !== dmUserId && 
                                 activeUserRole !== 'DM';
@@ -493,7 +494,7 @@ export const Header: React.FC<HeaderProps> = ({
                               let lockOrActiveLabel = '';
                               if (isLockedByOtherPlayer) {
                                 lockOrActiveLabel = ` [🔒 Active: ${activeUserName}]`;
-                              } else if (activeUserId && activeUserId !== currentUserId && activeUserId !== dmUserId && activeUserRole !== 'DM') {
+                              } else if (activeUserId && activeUserId !== 'guest_player' && activeUserId !== currentUserId && activeUserId !== dmUserId && activeUserRole !== 'DM') {
                                 lockOrActiveLabel = ` [Active: ${activeUserName}]`;
                               }
 
@@ -534,19 +535,6 @@ export const Header: React.FC<HeaderProps> = ({
                           </optgroup>
                         )}
                       </select>
-
-                      {activeDmIsHere && (
-                        <span 
-                          className="px-2.5 py-1 bg-purple-950/90 text-purple-200 border border-purple-500/80 font-bold text-xs rounded-lg flex items-center gap-1.5 shadow-lg shadow-purple-950/50 animate-pulse cursor-default"
-                          title={`DM ${activePresence?.dmUserName || ''} is active on this character`}
-                        >
-                          <Crown className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
-                          <span>DM Active</span>
-                          {activePresence?.dmUserName && (
-                            <span className="text-[10px] opacity-80 font-mono hidden sm:inline">({activePresence.dmUserName})</span>
-                          )}
-                        </span>
-                      )}
                     </div>
                   );
                 })()
@@ -695,17 +683,6 @@ export const Header: React.FC<HeaderProps> = ({
                   <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">7d</span>
                 )}
               </button>
-
-              {currentUser && (
-                <button
-                  onClick={() => setShowStatblockModal(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-500/40 rounded-lg text-xs font-semibold transition shadow cursor-pointer"
-                  title="Open Printable Statblock View"
-                >
-                  <BookOpen className="w-4 h-4 text-amber-400" />
-                  <span className="hidden sm:inline font-serif font-bold">Printable Statblock</span>
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -848,18 +825,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>,
         document.body
-      )}
-
-      {/* Statblock Export & Printable PDF Modal */}
-      {showStatblockModal && activeCharacter && (
-        <StatblockExportModal
-          character={activeCharacter}
-          characters={characters}
-          isOpen={showStatblockModal}
-          onClose={() => setShowStatblockModal(false)}
-          onExportJson={onExportJson}
-          onImportJson={onImportJson}
-        />
       )}
 
       {/* Level Progression & Character Advancement Modal */}

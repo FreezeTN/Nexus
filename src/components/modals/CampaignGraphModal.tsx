@@ -552,7 +552,7 @@ export function CampaignGraphModal({
             </div>
             <div>
               <h2 className="text-lg sm:text-xl font-serif font-bold text-amber-100 flex items-center gap-2">
-                <span>Obsidian-Style RPG Campaign Graph</span>
+                <span>Campaign Graph</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-full uppercase">
                   Interactive Knowledge Network
                 </span>

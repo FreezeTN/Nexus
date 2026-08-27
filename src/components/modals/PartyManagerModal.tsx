@@ -588,6 +588,7 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
 
                               const isLockedForPlayer = isPlayerRole && 
                                 !!activeUserId && 
+                                activeUserId !== 'guest_player' &&
                                 activeUserId !== currentUserId && 
                                 activeUserId !== dmUserId && 
                                 activeUserRole !== 'DM';

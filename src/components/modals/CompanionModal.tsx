@@ -255,7 +255,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
             <span className="text-3xl">🐾</span>
             <div>
               <h2 className="text-xl font-bold text-emerald-200 flex items-center gap-2">
-                <span>Summon Animal Companion & Familiar Engine</span>
+                <span>Nexus Companion & Summon Engine</span>
                 <span className="text-xs bg-emerald-900/80 border border-emerald-500/50 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono uppercase">
                   {currentEditionKey} Edition
                 </span>

@@ -786,6 +786,9 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
     )
   );
   const hasActiveSession = Boolean(activeSession || activeSessionCode);
+  const displayCampaignName = activeSession?.name
+    ? activeSession.name.replace(/\s*-\s*Checkpoint.*$/i, '').replace(/\s+Checkpoint.*$/i, '').trim() || activeSession.name
+    : 'Campaign Room';
   const activeTab = (!hasActiveSession && tab === 'current') ? 'join' : tab;
 
   return (
@@ -828,7 +831,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
               >
                 <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
                 <span className="truncate max-w-[150px] sm:max-w-[200px]">
-                  {activeSession ? `Active (${activeSession.name})` : `Active (${activeSessionCode})`}
+                  {activeSession ? `Active (${displayCampaignName})` : `Active (${activeSessionCode})`}
                 </span>
               </button>
             )}
@@ -910,7 +913,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
                       </span>
                     </div>
                     <h3 className="text-xl font-serif font-extrabold text-amber-100 mt-1">
-                      {activeSession.name}
+                      {displayCampaignName}
                     </h3>
                   </div>
 
@@ -977,6 +980,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
 
                             const isLockedByOtherPlayer = isPlayerRole && 
                               !!activeUserId && 
+                              activeUserId !== 'guest_player' &&
                               activeUserId !== currentUserId && 
                               activeUserId !== dmUserId && 
                               activeUserRole !== 'DM';
