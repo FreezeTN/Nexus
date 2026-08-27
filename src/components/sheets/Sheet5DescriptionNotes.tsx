@@ -5,6 +5,7 @@ import { CollapsibleBox } from '../common/CollapsibleBox';
 import { FormattedTextEditor } from '../common/FormattedTextEditor';
 import { useLayoutCustomization } from '../../utils/layoutCustomization';
 import { EmptyLayoutState } from '../common/EmptyLayoutState';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface Sheet5Props {
   character: CharacterData;
@@ -15,6 +16,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
   character,
   onUpdateCharacter
 }) => {
+  const { t } = useLanguage();
   const { isVisible } = useLayoutCustomization();
 
   const handleTextChange = (field: keyof CharacterData, value: string) => {
@@ -32,7 +34,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
   const hasAnyVisible = showAppearance || showTraits || showBackstory || showAlliesNotes;
 
   if (!hasAnyVisible) {
-    return <EmptyLayoutState sheetName="Description & Notes" />;
+    return <EmptyLayoutState sheetName={t('nav.sheet5', 'Description & Notes')} />;
   }
 
   return (
@@ -40,13 +42,13 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
       {/* SECTION 1: Physical Appearance & Demographics */}
       {showAppearance && (
         <CollapsibleBox
-          title="Character Description & Appearance"
+          title={t('notes.appearance', 'Character Description & Appearance')}
           icon={<User className="w-5 h-5 text-amber-500" />}
           storageKey="sheet5_appearance"
         >
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-3 text-xs pt-2">
           <div>
-            <label className="block text-stone-400 mb-1">Gender</label>
+            <label className="block text-stone-400 mb-1">{t('notes.gender', 'Gender')}</label>
             <input
               type="text"
               value={character.gender || ''}
@@ -56,7 +58,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             />
           </div>
           <div>
-            <label className="block text-stone-400 mb-1">Age</label>
+            <label className="block text-stone-400 mb-1">{t('notes.age', 'Age')}</label>
             <input
               type="text"
               value={character.age || ''}
@@ -66,17 +68,17 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             />
           </div>
           <div>
-            <label className="block text-stone-400 mb-1">Height</label>
+            <label className="block text-stone-400 mb-1">{t('notes.height', 'Height')}</label>
             <input
               type="text"
               value={character.height || ''}
               onChange={(e) => handleTextChange('height', e.target.value)}
-              placeholder="e.g. 6'1&quot;"
+              placeholder={`e.g. 6'1"`}
               className="w-full bg-stone-950 border border-stone-800 rounded-lg p-2 text-stone-100"
             />
           </div>
           <div>
-            <label className="block text-stone-400 mb-1">Weight</label>
+            <label className="block text-stone-400 mb-1">{t('notes.weight', 'Weight')}</label>
             <input
               type="text"
               value={character.weight || ''}
@@ -86,7 +88,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             />
           </div>
           <div>
-            <label className="block text-stone-400 mb-1">Eyes</label>
+            <label className="block text-stone-400 mb-1">{t('notes.eyes', 'Eyes')}</label>
             <input
               type="text"
               value={character.eyes || ''}
@@ -96,7 +98,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             />
           </div>
           <div>
-            <label className="block text-stone-400 mb-1">Hair</label>
+            <label className="block text-stone-400 mb-1">{t('notes.hair', 'Hair')}</label>
             <input
               type="text"
               value={character.hair || ''}
@@ -106,7 +108,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             />
           </div>
           <div>
-            <label className="block text-stone-400 mb-1">Skin</label>
+            <label className="block text-stone-400 mb-1">{t('notes.skin', 'Skin')}</label>
             <input
               type="text"
               value={character.skin || ''}
@@ -116,27 +118,27 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             />
           </div>
           <div>
-            <label className="block text-amber-300 font-bold mb-1">Creature Size Category</label>
+            <label className="block text-amber-300 font-bold mb-1">{t('notes.sizeCategory', 'Creature Size Category')}</label>
             <select
               value={character.sizeCategory || 'Medium'}
               onChange={(e) => onUpdateCharacter({ ...character, sizeCategory: e.target.value as any })}
               className="w-full bg-stone-950 border border-stone-800 rounded-lg p-2 text-amber-200 font-bold"
             >
-              <option value="Fine">Fine (1/8 Carry Multiplier)</option>
-              <option value="Diminutive">Diminutive (1/4 Carry Multiplier)</option>
-              <option value="Tiny">Tiny (1/2 Carry Multiplier)</option>
-              <option value="Small">Small ({character.edition === '3.5e' ? '3/4' : 'x1'} Carry Multiplier)</option>
-              <option value="Medium">Medium (Standard x1 Multiplier)</option>
-              <option value="Large">Large (x2 Carry Multiplier)</option>
-              <option value="Huge">Huge (x4 Carry Multiplier)</option>
-              <option value="Gargantuan">Gargantuan (x8 Carry Multiplier)</option>
-              <option value="Colossal">Colossal (x16 Carry Multiplier)</option>
+              <option value="Fine">Fine (1/8)</option>
+              <option value="Diminutive">Diminutive (1/4)</option>
+              <option value="Tiny">Tiny (1/2)</option>
+              <option value="Small">Small ({character.edition === '3.5e' ? '3/4' : 'x1'})</option>
+              <option value="Medium">Medium (x1)</option>
+              <option value="Large">Large (x2)</option>
+              <option value="Huge">Huge (x4)</option>
+              <option value="Gargantuan">Gargantuan (x8)</option>
+              <option value="Colossal">Colossal (x16)</option>
             </select>
           </div>
           <div className="flex items-end">
             <label className="w-full flex items-center justify-between gap-2 bg-stone-950 border border-stone-800 rounded-lg p-2 cursor-pointer hover:border-amber-600/50 transition">
               <span className="text-xs text-stone-200 font-bold flex items-center gap-1.5">
-                ⚡ Powerful Build / Little Giant
+                ⚡ Powerful Build
               </span>
               <input
                 type="checkbox"
@@ -159,7 +161,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
       {/* SECTION 2: Roleplaying Traits (Personality, Ideals, Bonds, Flaws) */}
       {showTraits && (
         <CollapsibleBox
-          title="Roleplaying Traits & Personality"
+          title={t('notes.traits', 'Roleplaying Traits & Personality')}
           icon={<Heart className="w-5 h-5 text-rose-400" />}
           storageKey="sheet5_traits"
         >
@@ -169,7 +171,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
               <FormattedTextEditor
                 label={
                   <span className="flex items-center gap-2">
-                    <Heart className="w-3.5 h-3.5 text-rose-400" /> Personality Traits
+                    <Heart className="w-3.5 h-3.5 text-rose-400" /> {t('notes.personalityTraits', 'Personality Traits')}
                   </span>
                 }
                 value={character.personalityTraits || ''}
@@ -184,7 +186,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
               <FormattedTextEditor
                 label={
                   <span className="flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-amber-400" /> Ideals
+                    <Shield className="w-3.5 h-3.5 text-amber-400" /> {t('notes.ideals', 'Ideals')}
                   </span>
                 }
                 value={character.ideals || ''}
@@ -199,7 +201,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
               <FormattedTextEditor
                 label={
                   <span className="flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-blue-400" /> Bonds
+                    <Users className="w-3.5 h-3.5 text-blue-400" /> {t('notes.bonds', 'Bonds')}
                   </span>
                 }
                 value={character.bonds || ''}
@@ -214,7 +216,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
               <FormattedTextEditor
                 label={
                   <span className="flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5 text-purple-400" /> Flaws
+                    <FileText className="w-3.5 h-3.5 text-purple-400" /> {t('notes.flaws', 'Flaws')}
                   </span>
                 }
                 value={character.flaws || ''}
@@ -230,13 +232,13 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
       {/* SECTION 3: Backstory (Hintergrund) */}
       {showBackstory && (
         <CollapsibleBox
-          title="Character Backstory"
+          title={t('notes.backstory', 'Character Backstory')}
           icon={<BookOpen className="w-5 h-5 text-amber-500" />}
           storageKey="sheet5_backstory"
         >
           <div className="pt-2">
             <FormattedTextEditor
-              label="Full Backstory & Origins"
+              label={t('notes.backstoryLabel', 'Full Backstory & Origins')}
               value={character.backstory || ''}
               onChange={(val) => handleTextChange('backstory', val)}
               rows={8}
@@ -249,7 +251,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
       {/* SECTION 4: Allies, Organizations & Notes */}
       {showAlliesNotes && (
         <CollapsibleBox
-          title="Allies, Factions & Campaign Quest Log"
+          title={t('notes.allies', 'Allies, Factions & Campaign Quest Log')}
           icon={<Users className="w-5 h-5 text-emerald-400" />}
           storageKey="sheet5_allies_notes"
         >
@@ -259,7 +261,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
               <FormattedTextEditor
                 label={
                   <span className="flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-emerald-400" /> Allies & Factions
+                    <Users className="w-3.5 h-3.5 text-emerald-400" /> {t('notes.alliesFactions', 'Allies & Factions')}
                   </span>
                 }
                 value={character.alliesAndOrganizations || ''}
@@ -274,7 +276,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
               <FormattedTextEditor
                 label={
                   <span className="flex items-center gap-2">
-                    <ScrollText className="w-3.5 h-3.5 text-amber-400" /> Quest Log & Campaign Notes
+                    <ScrollText className="w-3.5 h-3.5 text-amber-400" /> {t('notes.questLog', 'Quest Log & Campaign Notes')}
                   </span>
                 }
                 value={character.additionalNotes || ''}

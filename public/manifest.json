@@ -1,7 +1,7 @@
 {
   "short_name": "Nexus",
-  "name": "Nexus - Multi-System TRPG Platform",
-  "description": "Nexus next-generation TRPG and character sheet platform with unified rules, live sync, combat, dice, and audio engines.",
+  "name": "Nexus",
+  "description": "Nexus next-generation TRPG and character sheet platform.",
   "icons": [
     {
       "src": "/pwa-icon.svg",

@@ -60,6 +60,7 @@ import {
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -131,6 +132,7 @@ export const Header: React.FC<HeaderProps> = ({
   canRedo = false,
   activeTab
 }) => {
+  const { t } = useLanguage();
   const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -351,7 +353,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="bg-stone-900 border-b border-amber-800/40 text-stone-100 sticky top-0 z-40 shadow-xl backdrop-blur-md">
       {/* Top Banner & Control Bar */}
-      <div className="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-4">
         {/* Left: App Logo & Character Selector */}
         <div className="flex items-center gap-3">
           <div className={`p-2 rounded-xl shadow-lg border transition ${
@@ -389,14 +391,14 @@ export const Header: React.FC<HeaderProps> = ({
                   : 'text-amber-500'
               }`}>
                 {currentEdition === 'shadowrun'
-                  ? 'Nexus • Shadowrun Cyberpunk Vault'
+                  ? `Nexus • ${t('vault.shadowrun', 'Shadowrun Cyberpunk Vault')}`
                   : currentEdition === 'pathfinder'
-                  ? 'Nexus • Pathfinder 2e Tactical Vault'
+                  ? `Nexus • ${t('vault.pathfinder', 'Pathfinder 2e Tactical Vault')}`
                   : currentEdition === 'cthulhu'
-                  ? 'Nexus • Call of Cthulhu 7e Investigator Vault'
+                  ? `Nexus • ${t('vault.cthulhu', 'Call of Cthulhu 7e Investigator Vault')}`
                   : currentEdition === '3.5e'
-                  ? 'Nexus • D&D 3.5e Classic d20 Vault'
-                  : 'Nexus • D&D 5e Adventurer Vault'}
+                  ? `Nexus • ${t('vault.dnd35', 'D&D 3.5e Classic d20 Vault')}`
+                  : `Nexus • ${t('vault.dnd5e', 'D&D 5e Adventurer Vault')}`}
               </span>
               {/* Compact Mobile Edition Toggle */}
               <div className="flex md:hidden items-center bg-stone-950 p-0.5 rounded border border-theme-accent text-[10px]">
@@ -425,7 +427,7 @@ export const Header: React.FC<HeaderProps> = ({
                   onClick={onOpenAuthModal}
                   className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow transition cursor-pointer"
                 >
-                  <Lock className="w-3.5 h-3.5" /> Sign In to Select Character
+                  <Lock className="w-3.5 h-3.5" /> {t('header.signInToSelect', 'Sign In to Select Character')}
                 </button>
               ) : (
                 (() => {
@@ -467,9 +469,9 @@ export const Header: React.FC<HeaderProps> = ({
                         onChange={(e) => onSelectCharacter(e.target.value)}
                         className="bg-stone-800 border border-stone-700 hover:border-theme-accent rounded-lg px-3 py-1 font-serif text-lg font-bold text-theme-text focus:outline-none focus:ring-2 focus:ring-theme-accent max-w-[260px] sm:max-w-none truncate"
                       >
-                        <option value="">-- Select a Character --</option>
+                        <option value="">{`-- ${t('header.selectCharacter', 'Select a Character')} --`}</option>
                         {playerChars.length > 0 && (
-                          <optgroup label="🧙 Player Characters">
+                          <optgroup label={`🧙 ${t('mainMenu.playerCharacters', 'Player Characters')}`}>
                             {playerChars.map((char) => {
                               const isDual = char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass;
                               const secClassStr = isDual
@@ -516,7 +518,7 @@ export const Header: React.FC<HeaderProps> = ({
                         )}
 
                         {!isPlayerRole && monsterChars.length > 0 && (
-                          <optgroup label="👹 Monsters & Encounter Creatures">
+                          <optgroup label={`👹 ${t('mainMenu.monsters', 'Monsters & Encounter Creatures')}`}>
                             {monsterChars.map((char) => (
                               <option key={char.id} value={char.id}>
                                 {char.name} ({char.race} Lvl {char.level}) [MONSTER]
@@ -526,7 +528,7 @@ export const Header: React.FC<HeaderProps> = ({
                         )}
 
                         {!isPlayerRole && merchantChars.length > 0 && (
-                          <optgroup label="🏪 Merchants & Shopkeepers">
+                          <optgroup label={`🏪 ${t('mainMenu.merchants', 'Merchants & Shopkeepers')}`}>
                             {merchantChars.map((char) => (
                               <option key={char.id} value={char.id}>
                                 {char.name} ({char.race} {char.characterClass || 'Merchant'}) [Merchant - {char.vendorMargin || 120}%]
@@ -610,12 +612,12 @@ export const Header: React.FC<HeaderProps> = ({
               {activeCharacter.isVendor && (
                 <div className="bg-theme-dark border border-theme-accent px-3 py-1.5 rounded-lg text-theme-text font-bold flex items-center gap-1.5 shadow-md">
                   <Store className="w-4 h-4 text-theme-accent" />
-                  <span>Merchant Vendor ({activeCharacter.vendorMargin || 120}% Margin)</span>
+                  <span>{t('header.merchantVendor', 'Merchant Vendor')} ({activeCharacter.vendorMargin || 120}% {t('header.margin', 'Margin')})</span>
                 </div>
               )}
               <div className="bg-stone-800/80 px-3 py-1.5 rounded-lg border border-stone-700 flex items-center gap-1.5 flex-wrap">
-                <span className="text-theme-accent font-bold">Class:</span>
-                <span>{activeCharacter.characterClass} ({activeCharacter.subclass || 'None'})</span>
+                <span className="text-theme-accent font-bold">{t('common.class', 'Class')}:</span>
+                <span>{activeCharacter.characterClass} ({activeCharacter.subclass || t('common.none', 'None')})</span>
                 {activeCharacter.optionalRules?.useMulticlassing && activeCharacter.optionalRules?.secondaryClass && (
                   <span className="text-theme-light font-semibold bg-theme-dark border border-theme-accent px-1.5 py-0.5 rounded text-[11px]">
                     / {activeCharacter.optionalRules.secondaryClass}
@@ -629,7 +631,7 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Click to open Level Progression, Dual-Class Active Class Selector & Advancement Table"
               >
                 <TrendingUp className="w-4 h-4 text-amber-400 group-hover:scale-110 transition" />
-                <span className="text-amber-300 font-bold">Level:</span>
+                <span className="text-amber-300 font-bold">{t('common.level', 'Level')}:</span>
                 {activeCharacter.optionalRules?.useMulticlassing && activeCharacter.optionalRules?.secondaryClass ? (
                   <div className="flex items-center gap-1.5 font-sans">
                     <span className="font-mono font-extrabold text-amber-200 text-sm bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-500/40">
@@ -647,43 +649,38 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
                 {xpProgressDetails?.canLevelUp && (
                   <span className="px-1.5 py-0.5 bg-emerald-500 text-stone-950 font-mono font-bold text-[10px] rounded-full animate-pulse ml-1">
-                    LEVEL UP!
+                    {t('header.levelUp', 'LEVEL UP!')}
                   </span>
                 )}
               </button>
+
+              {/* Character Rest Action Group */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setShowRestModal('short')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-200 border border-amber-600/30 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm"
+                  title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Short Rest: 8 Hours' : 'Standard Short Rest: 1 Hour'}
+                >
+                  <Sun className="w-4 h-4 text-amber-400" />
+                  <span>{t('header.shortRest', 'Short Rest')}</span>
+                  {activeCharacter?.optionalRules?.useGrittyRealismResting && (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">8h</span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setShowRestModal('long')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40 rounded-lg text-xs font-semibold transition cursor-pointer shadow-sm"
+                  title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Long Rest: 7 Days' : 'Standard Long Rest: 8 Hours'}
+                >
+                  <Moon className="w-4 h-4 text-amber-300" />
+                  <span>{t('header.longRest', 'Long Rest')}</span>
+                  {activeCharacter?.optionalRules?.useGrittyRealismResting && (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">7d</span>
+                  )}
+                </button>
+              </div>
             </>
-          )}
-        </div>
-
-        {/* Right: Character Sheet Actions & Global App Toolbar */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          {/* Character Action Group */}
-          {showCharacterHeader && (
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setShowRestModal('short')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-200 border border-amber-600/30 rounded-lg text-xs font-semibold transition cursor-pointer"
-                title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Short Rest: 8 Hours' : 'Standard Short Rest: 1 Hour'}
-              >
-                <Sun className="w-4 h-4 text-amber-400" />
-                <span>Short Rest</span>
-                {activeCharacter?.optionalRules?.useGrittyRealismResting && (
-                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">8h</span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setShowRestModal('long')}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-200 border border-amber-500/40 rounded-lg text-xs font-semibold transition cursor-pointer"
-                title={activeCharacter?.optionalRules?.useGrittyRealismResting ? 'Gritty Realism Long Rest: 7 Days' : 'Standard Long Rest: 8 Hours'}
-              >
-                <Moon className="w-4 h-4 text-amber-300" />
-                <span>Long Rest</span>
-                {activeCharacter?.optionalRules?.useGrittyRealismResting && (
-                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1 py-0.2 rounded font-mono font-bold">7d</span>
-                )}
-              </button>
-            </div>
           )}
         </div>
       </div>
@@ -705,13 +702,13 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="bg-stone-900 border border-rose-800/60 rounded-2xl p-6 max-w-md w-full shadow-2xl text-stone-100">
             <div className="flex items-center gap-3 text-rose-400 text-lg font-serif font-bold mb-2">
               <Trash2 className="w-6 h-6" />
-              <span>Delete Character</span>
+              <span>{t('header.deleteCharacter', 'Delete Character')}</span>
             </div>
             <p className="text-sm text-stone-300 mb-4 leading-relaxed">
-              Are you sure you want to delete <strong className="text-amber-200">{activeCharacter.name}</strong> ({activeCharacter.race} {activeCharacter.characterClass} Lv.{activeCharacter.level})?
+              {t('header.deleteConfirm', 'Are you sure you want to delete')} <strong className="text-amber-200">{activeCharacter.name}</strong> ({activeCharacter.race} {activeCharacter.characterClass} Lv.{activeCharacter.level})?
               {characters.length === 1 && (
                 <span className="block mt-2 text-rose-300 text-xs font-semibold bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/40">
-                  ⚠️ Note: This is your last remaining character. Deleting it will restore default starting character templates.
+                  ⚠️ {t('header.deleteLastWarning', 'Note: This is your last remaining character. Deleting it will restore default starting character templates.')}
                 </span>
               )}
             </p>
@@ -720,7 +717,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={() => setShowDeleteModal(false)}
                 className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-semibold transition"
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </button>
               <button
                 onClick={() => {
@@ -730,7 +727,7 @@ export const Header: React.FC<HeaderProps> = ({
                 className="px-4 py-2 bg-rose-700 hover:bg-rose-600 text-white rounded-xl text-xs font-bold shadow-lg transition flex items-center gap-1.5"
               >
                 <Trash2 className="w-4 h-4" />
-                <span>Delete Character</span>
+                <span>{t('header.deleteCharacter', 'Delete Character')}</span>
               </button>
             </div>
           </div>

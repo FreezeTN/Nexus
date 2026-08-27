@@ -182,12 +182,13 @@ class UnifiedSearchIndexer {
 
     // 1. Monsters
     OFFICIAL_BULK_MONSTERS.forEach((monster) => {
+      const cr = monster.challengeRating || monster.subclass?.replace(/^CR\s*/i, '') || '1/2';
       list.push({
         id: `m-${monster.name}`,
         title: monster.name,
         category: 'Monsters',
         subcategory: monster.race || 'Beast',
-        description: `CR ${monster.challengeRating || '1/2'} • AC ${monster.armorClass} • HP ${monster.hpMax} • ${monster.alignment || 'Neutral'}`,
+        description: `CR ${cr} • AC ${monster.armorClass} • HP ${monster.hpMax} • ${monster.alignment || 'Neutral'}`,
         iconType: 'monster',
         relevanceScore: 1,
         metadata: monster,

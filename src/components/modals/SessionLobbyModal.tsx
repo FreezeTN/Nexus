@@ -56,7 +56,8 @@ import {
   CheckCircle2,
   Clock,
   FileText,
-  Bookmark
+  Bookmark,
+  Dices
 } from 'lucide-react';
 import { getPassivePerception, getEffectiveMaxHp } from '../../utils/dndCalculations';
 
@@ -152,6 +153,24 @@ export const CampaignRulesSelector: React.FC<CampaignRulesSelectorProps> = ({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs">
         {/* Rule Items */}
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.usePhysicalDiceMode ? 'border-amber-500 bg-amber-950/30' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!rules.usePhysicalDiceMode}
+            onChange={() => toggleRule('usePhysicalDiceMode')}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-amber-300 flex items-center gap-1">
+              <Dices className="w-3 h-3 text-amber-400 shrink-0" /> Physical Tabletop Dice Mode
+            </span>
+            <p className="text-[10px] text-stone-300 leading-tight mt-0.5">
+              Syncs to all participants: Prompts players to enter real physical dice results instead of digital rolling.
+            </p>
+          </div>
+        </label>
+
         <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useVariantEncumbrance ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
           <input
             type="checkbox"

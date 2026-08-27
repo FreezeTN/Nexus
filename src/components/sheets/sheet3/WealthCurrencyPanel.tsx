@@ -2,7 +2,8 @@ import React from 'react';
 import { CharacterData } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { getTotalWealthInGold } from '../../../utils/dndCalculations';
-import { Coins, Gem } from 'lucide-react';
+import { Coins } from 'lucide-react';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface WealthCurrencyPanelProps {
   character: CharacterData;
@@ -13,6 +14,8 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
   character,
   onUpdateCharacter
 }) => {
+  const { t } = useLanguage();
+
   const handleCurrencyChange = (coinType: keyof CharacterData['wealth'], value: number) => {
     onUpdateCharacter({
       ...character,
@@ -27,12 +30,12 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
 
   return (
     <CollapsibleBox
-      title="Wealth, Currency & Trade Goods"
+      title={t('gear.currency', 'Wealth, Currency & Trade Goods')}
       icon={<Coins className="w-5 h-5 text-amber-500" />}
       storageKey="sheet3_wealth"
       headerExtra={
         <div className="text-xs font-mono text-amber-300 font-bold bg-amber-950/80 border border-amber-600/50 px-2.5 py-1 rounded-lg">
-          Total Net Worth: ~{totalWealthGold.toLocaleString(undefined, { maximumFractionDigits: 2 })} GP
+          {t('gear.netWorth', 'Total Net Worth')}: ~{totalWealthGold.toLocaleString(undefined, { maximumFractionDigits: 2 })} GP
         </div>
       }
     >
@@ -41,7 +44,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 font-mono">
           {/* Copper (CP) */}
           <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center">
-            <span className="text-[10px] font-bold text-amber-700 uppercase mb-1">Copper (CP)</span>
+            <span className="text-[10px] font-bold text-amber-700 uppercase mb-1">{t('gear.copper', 'Copper (CP)')}</span>
             <input
               type="number"
               min="0"
@@ -54,7 +57,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
 
           {/* Silver (SP) */}
           <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center">
-            <span className="text-[10px] font-bold text-slate-300 uppercase mb-1">Silver (SP)</span>
+            <span className="text-[10px] font-bold text-slate-300 uppercase mb-1">{t('gear.silver', 'Silver (SP)')}</span>
             <input
               type="number"
               min="0"
@@ -67,7 +70,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
 
           {/* Electrum (EP) */}
           <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center">
-            <span className="text-[10px] font-bold text-sky-400 uppercase mb-1">Electrum (EP)</span>
+            <span className="text-[10px] font-bold text-sky-400 uppercase mb-1">{t('gear.electrum', 'Electrum (EP)')}</span>
             <input
               type="number"
               min="0"
@@ -80,7 +83,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
 
           {/* Gold (GP) */}
           <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-600/40 flex flex-col items-center">
-            <span className="text-[10px] font-bold text-amber-400 uppercase mb-1">Gold (GP)</span>
+            <span className="text-[10px] font-bold text-amber-400 uppercase mb-1">{t('gear.gold', 'Gold (GP)')}</span>
             <input
               type="number"
               min="0"
@@ -93,7 +96,7 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
 
           {/* Platinum (PP) */}
           <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center col-span-2 sm:col-span-1">
-            <span className="text-[10px] font-bold text-purple-300 uppercase mb-1">Platinum (PP)</span>
+            <span className="text-[10px] font-bold text-purple-300 uppercase mb-1">{t('gear.platinum', 'Platinum (PP)')}</span>
             <input
               type="number"
               min="0"

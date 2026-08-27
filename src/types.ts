@@ -193,6 +193,9 @@ export interface OptionalRulesConfig {
   hasPowerfulBuild?: boolean;       // Powerful Build / Little Giant: Counts as 1 size category larger for carrying capacity, push, drag, and lift
   useHalfBreedSystem?: boolean;     // Half-Breed / Hybrid Heritage Ancestry rules (Alpine DM / Homebrew 5e)
   useClassicSRDHalfBreed?: boolean; // Classic SRD Half-Breeds (5e & 3.5e SRD)
+  usePhysicalDiceMode?: boolean;    // Physical Dice Mode: Prompts to input physical dice roll results rather than virtual rolling
+  disableAutoXpGain?: boolean;      // Disable Automatic EXP Gain (For groups using manual EXP systems, physical paper logs, or external campaign tracking)
+  useManualXpMode?: boolean;        // Manual Tabletop EXP Mode (Turns off automated encounter XP distribution to character sheets)
   // Shadowrun rules
   strictEssenceCap?: boolean;
   glitchRules?: boolean;

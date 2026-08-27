@@ -14,11 +14,61 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v4.9.0',
+    date: 'August 2026',
+    title: 'Multi-Language Localization, Nexus Oracle Multilingual AI & Clean Tab Branding',
+    badge: 'Latest Update',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🌍 Multi-Language Localization System',
+        detail: 'Added comprehensive language selection in Options (⚙️) → App. Choose between English 🇬🇧, German (Deutsch) 🇩🇪, French (Français) 🇫🇷, Spanish (Español) 🇪🇸, Italian (Italiano) 🇮🇹, and Japanese (日本語) 🇯🇵.'
+      },
+      {
+        category: '🔮 Multilingual Nexus AI Oracle & Entity Forge',
+        detail: 'The AI assistant automatically detects your active language selection and generates rules explanations, roleplay responses, custom monsters, magic items, and spells natively in that language using appropriate TTRPG terminology.'
+      },
+      {
+        category: '🏷️ Streamlined Browser Tab Branding',
+        detail: 'Updated browser tab title and PWA manifest metadata to a clean, minimal "Nexus" display.'
+      }
+    ]
+  },
+  {
+    version: 'v4.8.0',
+    date: 'August 2026',
+    title: 'Monsters & Folders Real-time Search, Challenge Rating Sync & Full Factory Reset Suite',
+    badge: 'Maintenance',
+    badgeColor: 'bg-stone-800 text-stone-300 border-stone-700',
+    highlights: [
+      {
+        category: '🔍 Real-time Roster & Monster Search Bar',
+        detail: 'Added live instant search filtering to the Monsters & Encounter Creatures tab (as well as Player Characters and Merchants) in the character selection menu. Instant search by name, monster type, Challenge Rating (e.g. "CR 19"), alignment, and attack actions.'
+      },
+      {
+        category: '🐉 Monster Challenge Rating (CR) Metadata Sync',
+        detail: 'Fixed Challenge Rating metadata display on monster roster cards and compendium entries, ensuring accurate CR figures (e.g. Balor displays CR 19, Adult Red Dragon displays CR 17) and automatic retroactive correction for existing local saves.'
+      },
+      {
+        category: '⚡ One-Click Factory Reset & Auth Wipe Suite',
+        detail: 'Introduced an in-depth Factory Reset tool in Options (⚙️) → App. Wipes IndexedDB session databases (Firebase Auth credentials), LocalStorage, SessionStorage, unregisters Service Workers, and clears CacheStorage for a pristine reinstall state with confirmation guards.'
+      },
+      {
+        category: '🚀 PWA Cache Invalidation & Standalone Auto-Update',
+        detail: 'Implemented aggressive no-cache HTTP headers for shell documents, automatic service worker activation cleanup, and controllerchange listeners to ensure standalone PWA installs update immediately to latest builds without stale caches.'
+      },
+      {
+        category: '🧬 Alpine DM System Hybrid Ancestries',
+        detail: 'Dual-heritage character creation combining distinct Primary and Secondary parent ancestries with computed speeds, sizes, darkvision rules, and custom blended race titles.'
+      }
+    ]
+  },
+  {
     version: 'v1.1.0',
     date: 'August 2026',
     title: 'Nexus Platform Rebranding & Unified Engine Architecture Suite',
-    badge: 'Latest Update',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Major Suite',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
     highlights: [
       {
         category: '✨ Official "Nexus" Branding',

@@ -13,6 +13,7 @@ import {
 import { CharacterData, RuleEdition } from '../types';
 import { HpOrb, getHpColorClass } from './HpOrb';
 import { MaxHpInspectorModal } from './modals/MaxHpInspectorModal';
+import { useLanguage } from '../i18n/LanguageContext';
 import {
   getEffectiveMaxHp,
   getArmorClassBreakdown,
@@ -35,6 +36,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
   onUpdateCharacter,
   onRollInitiative,
 }) => {
+  const { t } = useLanguage();
   const [hpDelta, setHpDelta] = useState<string>('');
   const [showMaxHpInspector, setShowMaxHpInspector] = useState<boolean>(false);
 
@@ -76,12 +78,12 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
 
   return (
     <div className="bg-stone-950/80 border border-stone-800 rounded-xl py-2.5 px-4 shadow-md">
-      <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
+      <div className="w-full mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
         {/* Quick HP Status */}
         <div className="flex items-center gap-3 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
           <HpOrb hpCurrent={activeCharacter.hpCurrent} hpMax={effectiveMaxHp} size="sm" showLabel={false} />
           <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">Hit Points</div>
+            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.hitPoints', 'Hit Points')}</div>
             <div className="font-mono text-sm font-bold flex items-center gap-1">
               <span className={getHpColorClass((activeCharacter.hpCurrent / Math.max(1, effectiveMaxHp)) * 100)}>
                 {activeCharacter.hpCurrent}
@@ -97,7 +99,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
               </button>
               {activeCharacter.hpTemp > 0 && (
                 <span className="text-cyan-400 text-xs ml-1 font-semibold">
-                  (+{activeCharacter.hpTemp} Temp)
+                  (+{activeCharacter.hpTemp} {t('stats.temp', 'Temp')})
                 </span>
               )}
             </div>
@@ -115,14 +117,14 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
             <button
               onClick={() => handleApplyHpChange('heal')}
               className="px-1.5 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-bold rounded text-[10px]"
-              title="Heal HP"
+              title={t('stats.healHp', 'Heal HP')}
             >
               +
             </button>
             <button
               onClick={() => handleApplyHpChange('damage')}
               className="px-1.5 py-0.5 bg-rose-800 hover:bg-rose-700 text-rose-100 font-bold rounded text-[10px]"
-              title="Damage HP"
+              title={t('stats.damageHp', 'Damage HP')}
             >
               -
             </button>
@@ -136,7 +138,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
         >
           <Shield className="w-4 h-4 text-amber-500" />
           <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">Armor Class</div>
+            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.armorClass', 'Armor Class')}</div>
             <div className="font-mono text-sm font-extrabold text-amber-200">
               {activeCharacter.armorClass}
             </div>
@@ -152,7 +154,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           <Zap className="w-4 h-4 text-yellow-400" />
           <div className="text-left">
             <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
-              Initiative <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+              {t('stats.initiative', 'Initiative')} <Sparkles className="w-2.5 h-2.5 text-amber-400" />
             </div>
             <div className="font-mono text-sm font-extrabold text-yellow-300">
               {formatModifier(activeCharacter.initiativeBonus)}
@@ -176,10 +178,10 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           <Footprints className={`w-4 h-4 ${speedInfo.isModified ? 'text-amber-400 animate-pulse' : 'text-blue-400'}`} />
           <div>
             <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
-              <span>Speed</span>
+              <span>{t('stats.speed', 'Speed')}</span>
               {speedInfo.isModified && (
                 <span className="text-[8px] bg-amber-500/30 text-amber-300 border border-amber-500/50 px-1 rounded font-mono font-bold uppercase">
-                  Penalized
+                  {t('stats.penalized', 'Penalized')}
                 </span>
               )}
             </div>
@@ -200,7 +202,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
         <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
           <Award className="w-4 h-4 text-purple-400" />
           <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">Prof. Bonus</div>
+            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.profBonus', 'Prof. Bonus')}</div>
             <div className="font-mono text-sm font-bold text-purple-300">
               +{profBonus}
             </div>
@@ -211,7 +213,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
         <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
           <Eye className="w-4 h-4 text-teal-400" />
           <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">Passive Wis</div>
+            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.passiveWis', 'Passive Wis')}</div>
             <div className="font-mono text-sm font-bold text-teal-200">
               {passivePerception}
             </div>
@@ -224,7 +226,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
             <Brain className="w-4 h-4 text-emerald-400 animate-pulse" />
             <div>
               <div className="text-[10px] uppercase font-bold text-emerald-300 flex items-center gap-1">
-                <span>Sanity</span>
+                <span>{t('stats.sanity', 'Sanity')}</span>
                 <span className={`text-[8px] px-1 rounded font-mono font-bold ${
                   (activeCharacter.sanity?.madnessState || 'Sane') === 'Sane'
                     ? 'bg-emerald-900/80 text-emerald-200'
@@ -280,8 +282,8 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
         >
           <UserCheck className="w-4 h-4" />
           <div className="text-left">
-            <div className="text-[10px] uppercase font-bold">Inspiration</div>
-            <div className="font-bold text-xs">{activeCharacter.inspiration ? 'ACTIVE' : 'NONE'}</div>
+            <div className="text-[10px] uppercase font-bold">{t('stats.inspiration', 'Inspiration')}</div>
+            <div className="font-bold text-xs">{activeCharacter.inspiration ? t('common.active', 'ACTIVE') : t('common.none', 'NONE')}</div>
           </div>
         </button>
       </div>

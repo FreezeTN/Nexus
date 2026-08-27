@@ -635,15 +635,19 @@ export function getInitialBaseCompendium(): CompendiumItem[] {
 
   // 1. Monsters
   OFFICIAL_BULK_MONSTERS.forEach((m) => {
+    const monsterCr = m.challengeRating || m.subclass?.replace(/^CR\s*/i, '') || '1';
     items.push({
       id: 'comp-mon-' + m.id,
       name: m.name,
       category: 'monsters',
       edition: m.edition || '5e',
-      description: `${m.race} • ${m.characterClass || 'Monster'} (CR ${m.challengeRating || '1'}) - ${m.alignment || 'Neutral'}. HP: ${m.hpMax}, AC: ${m.armorClass}. ${m.backstory || ''}`,
+      description: `${m.race} • ${m.characterClass || 'Monster'} (CR ${monsterCr}) - ${m.alignment || 'Neutral'}. HP: ${m.hpMax}, AC: ${m.armorClass}. ${m.backstory || ''}`,
       source: `SRD ${m.edition || '5e'}`,
-      tags: [m.race, m.characterClass, m.edition || '5e'].filter(Boolean) as string[],
-      monsterData: m
+      tags: [m.race, m.characterClass, `CR ${monsterCr}`, m.edition || '5e'].filter(Boolean) as string[],
+      monsterData: {
+        ...m,
+        challengeRating: monsterCr
+      }
     });
   });
 

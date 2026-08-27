@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nexus | Multi-System TRPG & Character Platform</title>
+    <title>Nexus</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <meta name="theme-color" content="#1c1917" />
     <meta name="description" content="Nexus - Comprehensive next-generation multi-system TRPG and character sheet platform with automated calculations, spell tracking, live sync, and integrated Nexus engines." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -17,11 +20,23 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Register PWA Service Worker
+      // Register PWA Service Worker with auto-update
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
+          navigator.serviceWorker.register('/sw.js').then((reg) => {
+            // Check for service worker updates immediately
+            reg.update().catch(() => {});
+          }).catch((err) => {
             console.log('PWA Service Worker registration failed:', err);
+          });
+
+          // Reload whenever a new active service worker takes control
+          let refreshing = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!refreshing) {
+              refreshing = true;
+              window.location.reload();
+            }
           });
         });
       }

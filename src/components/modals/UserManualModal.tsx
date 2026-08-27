@@ -26,8 +26,11 @@ import {
   Check,
   Code2,
   RefreshCw,
-  Award
+  Award,
+  History,
+  PowerOff
 } from 'lucide-react';
+import { changelogData } from '../../data/changelogData';
 
 interface UserManualModalProps {
   isOpen: boolean;
@@ -44,6 +47,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
     | 'companions'
     | 'dice-audio'
     | 'shortcuts'
+    | 'changelog'
   >('getting-started');
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -52,16 +56,15 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
   if (!isOpen) return null;
 
   const handleCopySummary = () => {
-    const text = `Pen & Paper Applet - Complete User Manual Overview\n\n` +
+    const text = `Nexus TRPG Platform (v4.8.0) - Complete User Manual Overview\n\n` +
       `• Guest Adventurer Mode: Local storage access without login. Sign in for Firebase Cloud Sync.\n` +
       `• Rulesets Supported: D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, Custom TRPG Systems.\n` +
-      `• Character Sheets: 7 dedicated views covering Stats, Combat, Inventory, Spells, Notes, Rules, Compendium & DM Overview.\n` +
+      `• Character Sheets: 7 dedicated views covering Stats, Combat, Inventory, Spells, Notes, Rules & User Guide, Compendium & DM Overview.\n` +
+      `• Monster & Folder Search: Real-time query filtering by creature name, Challenge Rating (e.g. CR 19), alignment, and actions.\n` +
       `• Combat Vitality: Animated HP Orb, Target AC Resolver, Weapons & Spell Attacks, Death Saves, Permanent Death & Revives.\n` +
       `• Multiplayer: Live session lobbies with 6-character room codes, Party Manager, DM Active Crown, Live Roll Log.\n` +
-      `• Extensions: Plugin Manifest Schema (plugin/manifest.json), Marketplace catalog, Central Event Bus & Developer SDK.\n` +
-      `• Companions & Transformations: Animal Companions, Mounts, Wild Shape / Polymorph with 0 HP form reversion.\n` +
-      `• Dice & Audio: Polyhedral 3D/2D dice, ADV/DIS, formula expressions (2d6+4), 12 Web Audio procedural sound FX.\n` +
-      `• Power Tools: Command Palette (Ctrl+K / Cmd+K), Theme Switcher, Quick HP Delta header buttons.`;
+      `• Extensions & Tools: Plugin Manifest Schema, Factory Reset Suite (IndexedDB & Auth wipe), 12 Procedural Web Audio SFX.\n` +
+      `• Companions & Transformations: Animal Companions, Mounts, Wild Shape / Polymorph with 0 HP form reversion.`;
 
     navigator.clipboard.writeText(text);
     setCopiedManual(true);
@@ -85,16 +88,16 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
           detail: 'Click the "Sign In / Register" button in the header or Main Menu to create a free account. Signed-in accounts enjoy persistent cloud synchronization via Firebase Firestore, allowing you to access your adventuring party from any desktop, tablet, or mobile device.'
         },
         {
-          name: 'Creating a New Character',
-          detail: 'Click "+ New" in the header to launch the New Character Creator wizard. Choose your character Class, Level, Race, Ability Scores, Portrait Image URL, and HP Calculation Mode (Average, Rolled, or Max Value HP).'
+          name: 'Real-Time Monster & Character Search Bar',
+          detail: 'Instantly filter through your Player Characters, Encounter Monsters, and Merchants in the character drawer by typing names, creature types, or Challenge Ratings (e.g. "CR 19").'
         },
         {
-          name: 'Switching Between Characters, Monsters & Merchants',
-          detail: 'Use the character switcher dropdown in the top left header. You can manage Player Characters (PCs), DM Encounter Monsters, and Town Shopkeepers / Merchants with custom vendor profit margins.'
+          name: 'Creating a New Character & Hybrid Ancestry',
+          detail: 'Click "+ New" in the header to launch the New Character Creator wizard. Choose your Class, Level, Race, Alpine DM System Hybrid Ancestries, Ability Scores, and Portrait URL.'
         },
         {
-          name: 'JSON Backup Export & Import',
-          detail: 'To backup your character or transfer it between browsers, open the Options Modal (⚙️) → Character tab and click "Export Character JSON" or "Import Character JSON".'
+          name: 'Factory Reset & Storage Maintenance',
+          detail: 'Access Options (⚙️) → App to perform a Factory Reset: automatically signs out of Firebase Auth, wipes local IndexedDB tokens, purges LocalStorage, and resets Service Worker caches.'
         }
       ]
     },
@@ -159,12 +162,12 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
           detail: 'Record age, height, weight, eyes, hair, deity/patron, and character portrait URL. Log personality traits, ideals, bonds, flaws, alignment matrix, backstory, and session notes with formatted rich text.'
         },
         {
-          name: 'Sheet 6: Rules Reference & User Manual',
-          detail: 'Interactive manual containing mathematical formula breakdowns, system ruleset guides, Web Audio sound sandbox, version changelogs, and live search.'
+          name: 'Sheet 6: Rules Reference & User Guide',
+          detail: 'Interactive guide containing mathematical formula breakdowns, system ruleset guides, Web Audio sound sandbox, version changelogs timeline, and live search.'
         },
         {
-          name: 'Sheet 7: SRD Compendium & Quick Import',
-          detail: 'Searchable compendium database of Spells, Equipment, Magic Items, Feats, and Monsters with 1-click import into your active character sheet.'
+          name: 'Sheet 7: SRD Compendium & Monster CR Sync',
+          detail: 'Searchable compendium database of Spells, Equipment, Magic Items, Feats, and Monsters with Challenge Rating displays and 1-click import into active sheets.'
         },
         {
           name: 'Sheet DM: DM Campaign Overview',
@@ -268,7 +271,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
         },
         {
           name: 'Nexus Procedural Web Audio Sound Engine',
-          detail: 'Real-time Web Audio sound synthesis for 12 dynamic triggers: Dice Rolls, Critical Hits, Spell Casts, Healing Chimes, Level Up Fanfares, Sword Swings, and Death Save Bells. Features master volume slider and 1-click presets (Mute, 25%, 50%, 75%, Max).'
+          detail: 'Real-time Web Audio sound synthesis for 12 dynamic triggers: Dice Rolls, Critical Hits, Spell Casts, Healing Chimes, Level Up Fanfares, Sword Swings, and Death Save Bells. Features master volume slider and 1-click presets.'
         }
       ]
     },
@@ -296,6 +299,17 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
           detail: 'Click "Short Rest" (restores temp HP & spend Hit Dice) or "Long Rest" (restores max HP, resets spent Hit Dice, and refills spell slots).'
         }
       ]
+    },
+    {
+      id: 'changelog',
+      title: '📜 Release Notes & Changelogs',
+      icon: History,
+      color: 'text-amber-400',
+      description: 'Review the latest updates, engine enhancements, feature additions, and bug fixes.',
+      topics: changelogData[0].highlights.map(h => ({
+        name: h.category,
+        detail: h.detail
+      }))
     }
   ];
 
@@ -332,11 +346,11 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
               <h2 className="text-base sm:text-lg font-serif font-bold text-amber-100 flex items-center gap-2">
                 <span>Complete Application User Manual</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full">
-                  v1.0.0
+                  v4.8.0
                 </span>
               </h2>
               <p className="text-xs text-stone-400 hidden sm:block">
-                Comprehensive guide covering every feature, ruleset, multiplayer session, extension, and tool in Pen & Paper Applet.
+                Comprehensive guide covering every feature, ruleset, multiplayer session, extension, and tool in Nexus TRPG Platform.
               </p>
             </div>
           </div>
@@ -468,6 +482,49 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
                 })
               )}
             </div>
+          ) : activeTab === 'changelog' ? (
+            /* Full Changelog Timeline View */
+            <div className="space-y-5">
+              <div className="bg-gradient-to-r from-amber-950/60 via-stone-950 to-stone-950 border border-amber-600/30 rounded-2xl p-5 flex items-start gap-4 shadow-lg">
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl shrink-0">
+                  <History className="w-7 h-7 text-amber-400" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-serif font-bold text-amber-100">Release Notes & Version Changelogs</h3>
+                  <p className="text-stone-300 text-xs leading-relaxed">
+                    Track all updates across the Nexus platform including new features, rule system enhancements, and architectural performance improvements.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {changelogData.slice(0, 5).map((entry) => (
+                  <div key={entry.version} className="bg-stone-950/90 border border-stone-800 rounded-2xl p-4 sm:p-5 space-y-3 shadow-md">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-stone-800 pb-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-base font-serif font-bold text-amber-200">{entry.version}</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${entry.badgeColor}`}>
+                          {entry.badge}
+                        </span>
+                        <span className="text-xs text-stone-300 font-medium hidden md:inline">— {entry.title}</span>
+                      </div>
+                      <span className="text-xs font-mono text-stone-400">{entry.date}</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                      {entry.highlights.map((h, idx) => (
+                        <div key={idx} className="bg-stone-900/90 border border-stone-800/80 rounded-xl p-3 space-y-1">
+                          <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{h.category}</span>
+                          </div>
+                          <p className="text-[11px] text-stone-300 leading-relaxed pl-5">{h.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             /* Tabbed Single Section View */
             activeSectionObj && (
@@ -507,11 +564,11 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
         <div className="p-4 bg-stone-950 border-t border-stone-800 flex items-center justify-between text-xs text-stone-400 shrink-0">
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>Pen & Paper Applet • Multi-Edition TRPG VTT</span>
+            <span>Nexus TRPG Platform • Multi-Edition VTT System</span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-stone-950 font-serif font-bold rounded-xl transition shadow"
+            className="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 active:scale-95 text-stone-950 font-serif font-bold rounded-xl transition shadow cursor-pointer"
           >
             Close Manual
           </button>

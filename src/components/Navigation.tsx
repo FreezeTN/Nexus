@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink } from 'lucide-react';
 import { RuleEdition } from '../types';
 import { UserProfile, GameSession } from '../lib/firebase';
+import { useLanguage } from '../i18n/LanguageContext';
 
 export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
 
@@ -28,6 +29,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   isDm = false,
   activeSession = null
 }) => {
+  const { t } = useLanguage();
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
   const isCthulhu = edition === 'cthulhu';
@@ -70,99 +72,99 @@ export const Navigation: React.FC<NavigationProps> = ({
     {
       id: 'sheet1' as TabId,
       title: isShadowrun
-        ? 'Attributes & Augs'
+        ? t('nav.sr.attributes', 'Attributes & Augs')
         : isPathfinder
-        ? 'Stats & Feats'
+        ? t('nav.pf.stats', 'Stats & Feats')
         : isCthulhu
-        ? 'Investigator Stats'
-        : 'Stats & Features',
+        ? t('nav.coc.stats', 'Investigator Stats')
+        : t('nav.stats', 'Stats & Features'),
       description: isShadowrun
-        ? 'Attributes, Condition Tracks, Cyberware & Qualities'
+        ? t('nav.sr.attributesSub', 'Attributes, Condition Tracks, Cyberware & Qualities')
         : isPathfinder
-        ? 'Stats, Skills, Ancestry & Class Feats'
+        ? t('nav.pf.statsSub', 'Stats, Skills, Ancestry & Class Feats')
         : isCthulhu
-        ? 'Characteristics, Skill Percentiles & Half/Fifth Values'
-        : 'Stats, Skills, Feats, Features',
+        ? t('nav.coc.statsSub', 'Characteristics, Skill Percentiles & Half/Fifth Values')
+        : t('nav.statsSub', 'Stats, Skills, Feats, Features'),
       icon: isShadowrun ? Cpu : ShieldAlert
     },
     {
       id: 'sheet2' as TabId,
       title: isShadowrun
-        ? 'Tactical Combat'
+        ? t('nav.sr.combat', 'Tactical Combat')
         : isPathfinder
-        ? '3-Action Combat'
+        ? t('nav.pf.combat', '3-Action Combat')
         : isCthulhu
-        ? 'Combat & Sanity'
-        : 'Combat',
+        ? t('nav.coc.combat', 'Combat & Sanity')
+        : t('nav.combat', 'Combat'),
       description: isShadowrun
-        ? 'Initiative, Firearms, Armor & Actions Cheat Sheet'
+        ? t('nav.sr.combatSub', 'Initiative, Firearms, Armor & Actions Cheat Sheet')
         : isPathfinder
-        ? 'Attacks, 3-Action Economy & Combat Tactics'
+        ? t('nav.pf.combatSub', 'Attacks, 3-Action Economy & Combat Tactics')
         : isCthulhu
-        ? 'Sanity Monitor, Firearms, Brawling & Insanity'
-        : 'Attacks, Combat Quick View, Actions & Maneuvers Cheat Sheet',
+        ? t('nav.coc.combatSub', 'Sanity Monitor, Firearms, Brawling & Insanity')
+        : t('nav.combatSub', 'Attacks, Actions & Tactics'),
       icon: Crosshair
     },
     ...(isDm && activeSession ? [{
       id: 'sheetDm' as TabId,
-      title: 'DM Overview',
-      description: 'Party Monitor, Base Stats & Live DM Overrides',
+      title: t('nav.dmOverview', 'DM Overview'),
+      description: t('nav.dmOverviewSub', 'Party Monitor, Base Stats & Live DM Overrides'),
       icon: Crown,
       badge: 'DM Only'
     }] : []),
     {
       id: 'sheet3' as TabId,
       title: isShadowrun
-        ? 'Matrix & Nuyen'
+        ? t('nav.sr.matrix', 'Matrix & Nuyen')
         : isPathfinder
-        ? 'Inventory & Coins'
+        ? t('nav.pf.gear', 'Inventory & Coins')
         : isCthulhu
-        ? 'Possessions & Cash'
-        : 'Gear & Wealth',
+        ? t('nav.coc.gear', 'Possessions & Cash')
+        : t('nav.gear', 'Gear & Wealth'),
       description: isShadowrun
-        ? 'Nuyen Vault, Credsticks, Cyberdecks, Drones & Vehicles'
+        ? t('nav.sr.matrixSub', 'Nuyen Vault, Credsticks, Cyberdecks, Drones & Vehicles')
         : isPathfinder
-        ? 'Gear, Platinum/Gold, Bulk & Magic Items'
+        ? t('nav.pf.gearSub', 'Gear, Platinum/Gold, Bulk & Magic Items')
         : isCthulhu
-        ? 'Investigator Equipment, Cash, Assets & Property'
-        : 'Inventory, Coins, Attunement, Encumbrance',
+        ? t('nav.coc.gearSub', 'Investigator Equipment, Cash, Assets & Property')
+        : t('nav.gearSub', 'Inventory, Coins, Attunement, Encumbrance'),
       icon: Package
     },
     {
       id: 'sheet4' as TabId,
       title: isShadowrun
-        ? 'Sorcery & Matrix'
+        ? t('nav.sr.magic', 'Sorcery & Matrix')
         : isPathfinder
-        ? 'Spell Repertoire'
+        ? t('nav.pf.spells', 'Spell Repertoire')
         : isCthulhu
-        ? 'Occult & Tomes'
-        : 'Spells & Casting',
+        ? t('nav.coc.spells', 'Occult & Tomes')
+        : t('nav.spells', 'Spells & Casting'),
       description: isShadowrun
-        ? 'Spells, Adept Powers, Drain & Complex Forms'
+        ? t('nav.sr.magicSub', 'Spells, Adept Powers, Drain & Complex Forms')
         : isPathfinder
-        ? 'Spell Slots, Focus Spells & Cantrips'
+        ? t('nav.pf.spellsSub', 'Spell Slots, Focus Spells & Cantrips')
         : isCthulhu
-        ? 'Tomes, Spells, Myths & Rituals'
-        : 'Spell Slots, DC, Spellbook & Cantrips',
+        ? t('nav.coc.spellsSub', 'Tomes, Spells, Myths & Rituals')
+        : t('nav.spellsSub', 'Spell Slots, DC, Spellbook & Cantrips'),
       icon: isShadowrun ? Zap : Wand2,
       badge: (isSpellcaster || isShadowrun) ? 'Active' : undefined
     },
     {
       id: 'sheet5' as TabId,
       title: isShadowrun
-        ? 'Runner Profile'
+        ? t('nav.sr.notes', 'Runner Profile')
         : isPathfinder
-        ? 'Background & Notes'
+        ? t('nav.pf.notes', 'Background & Notes')
         : isCthulhu
-        ? 'Backstory & Traumas'
-        : 'Description & Notes',
+        ? t('nav.coc.notes', 'Backstory & Traumas')
+        : t('nav.notes', 'Description & Notes'),
       description: isShadowrun
-        ? 'Street Reputation, SINs, Backstory, Lifestyle & Notes'
+        ? t('nav.sr.notesSub', 'Street Reputation, SINs, Backstory, Lifestyle & Notes')
         : isPathfinder
-        ? 'Ancestry, Background, Traits & Campaign Journal'
+        ? t('nav.pf.notesSub', 'Ancestry, Background, Traits & Campaign Journal')
         : isCthulhu
-        ? 'Personal Description, Ideology, Phobias & Traumas'
-        : 'Appearance, Backstory, Traits, Notes',
+        ? t('nav.coc.notesSub', 'Personal Description, Ideology, Phobias & Traumas')
+        : t('nav.notesSub', 'Background, Appearance, Allies & Notes'),
       icon: ScrollText
     }
   ];
@@ -180,7 +182,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   return (
     <nav className={`bg-stone-950 border-b border-stone-800 ${currentUser ? 'sticky top-[108px] z-30 shadow-md' : 'relative z-10'}`}>
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 relative flex items-center">
+      <div className="w-full mx-auto px-2 sm:px-4 relative flex items-center">
         {/* Left Scroll Button */}
         <button
           onClick={() => handleScroll('left')}

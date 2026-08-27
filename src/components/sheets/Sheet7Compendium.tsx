@@ -455,7 +455,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
                     {item.category === 'monsters' && item.monsterData && (
                       <div className="text-xs font-mono text-rose-400 flex items-center gap-2">
-                        <span>CR {item.monsterData.challengeRating || '1'}</span>
+                        <span>CR {item.monsterData.challengeRating || (item.monsterData.subclass ? item.monsterData.subclass.replace(/^CR\s*/i, '') : '1')}</span>
                         <span>• HP {item.monsterData.hpMax}</span>
                         <span>• AC {item.monsterData.armorClass}</span>
                       </div>
@@ -475,7 +475,9 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
                     {/* Description Snippet */}
                     <p className="text-xs text-stone-400 line-clamp-2 leading-relaxed">
-                      {item.description}
+                      {item.category === 'monsters' && item.monsterData
+                        ? `${item.monsterData.race || 'Monstrosity'} • ${item.monsterData.characterClass || 'Monster'} (CR ${item.monsterData.challengeRating || (item.monsterData.subclass ? item.monsterData.subclass.replace(/^CR\s*/i, '') : '1')}) - ${item.monsterData.alignment || 'Neutral'}. HP: ${item.monsterData.hpMax}, AC: ${item.monsterData.armorClass}.${item.monsterData.backstory ? ` ${item.monsterData.backstory}` : ''}`
+                        : item.description}
                     </p>
                   </div>
 
@@ -561,7 +563,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                         {m.sizeCategory || 'Medium'} {m.race || 'Monstrosity'} • {m.alignment || 'Neutral'}
                       </div>
                       <div className="text-xs text-stone-300 font-mono flex items-center justify-center sm:justify-start gap-3 flex-wrap">
-                        <span>CR: <strong className="text-purple-400">{m.challengeRating || m.subclass || '1'}</strong></span>
+                        <span>CR: <strong className="text-purple-400">{m.challengeRating || (m.subclass ? m.subclass.replace(/^CR\s*/i, '') : '1')}</strong></span>
                         {m.monsterXpReward ? <span>• XP: <strong className="text-amber-300">{m.monsterXpReward} XP</strong></span> : null}
                         {m.speed ? <span>• Speed: <strong className="text-cyan-300">{m.speed} ft</strong></span> : null}
                       </div>
@@ -582,7 +584,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                     </div>
                     <div>
                       <div className="text-[10px] font-mono text-stone-400 uppercase tracking-wider">Challenge Rating</div>
-                      <div className="text-xl font-serif font-bold text-purple-400">{m.challengeRating || m.subclass || '1'}</div>
+                      <div className="text-xl font-serif font-bold text-purple-400">{m.challengeRating || (m.subclass ? m.subclass.replace(/^CR\s*/i, '') : '1')}</div>
                     </div>
                   </div>
 

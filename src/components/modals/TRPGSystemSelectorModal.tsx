@@ -121,22 +121,6 @@ export const TRPGSystemSelectorModal: React.FC<TRPGSystemSelectorModalProps> = (
     }
   };
 
-  const handleSelectAll = () => {
-    setErrorMsg(null);
-    setSelected(['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu']);
-  };
-
-  const handleSelectPreset = (preset: 'dnd' | 'fantasy' | 'cyberpunk') => {
-    setErrorMsg(null);
-    if (preset === 'dnd') {
-      setSelected(['5e', '3.5e']);
-    } else if (preset === 'fantasy') {
-      setSelected(['5e', '3.5e', 'pathfinder']);
-    } else if (preset === 'cyberpunk') {
-      setSelected(['shadowrun']);
-    }
-  };
-
   const handleConfirm = () => {
     if (selected.length === 0) {
       setErrorMsg('Please select at least one TRPG ruleset to proceed.');
@@ -186,39 +170,6 @@ export const TRPGSystemSelectorModal: React.FC<TRPGSystemSelectorModalProps> = (
           <p className="text-sm text-stone-300 leading-relaxed bg-stone-950/60 p-4 rounded-2xl border border-stone-800">
             Choose which Tabletop RPG rulesets you want enabled in your workspace. Unselected systems will be completely hidden from top system selectors, character creation, compendiums, and user guides for a clean, customized experience.
           </p>
-
-          {/* Quick Preset Buttons */}
-          <div className="flex items-center gap-2 flex-wrap text-xs">
-            <span className="text-stone-400 font-bold uppercase text-[10px] tracking-wider font-mono">Quick Presets:</span>
-            <button
-              type="button"
-              onClick={handleSelectAll}
-              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 rounded-xl font-bold transition shadow"
-            >
-              ✨ Enable All (5 Systems)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectPreset('dnd')}
-              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-rose-300 border border-stone-700 rounded-xl font-bold transition shadow"
-            >
-              ⚔️ D&D Only (5e + 3.5e)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectPreset('fantasy')}
-              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-purple-300 border border-stone-700 rounded-xl font-bold transition shadow"
-            >
-              🧙 Fantasy Suite (5e + 3.5e + PF2e)
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSelectPreset('cyberpunk')}
-              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-cyan-300 border border-stone-700 rounded-xl font-bold transition shadow"
-            >
-              🤖 Shadowrun Only
-            </button>
-          </div>
 
           {errorMsg && (
             <div className="p-3 bg-rose-950/90 border border-rose-600/80 text-rose-200 text-xs font-bold rounded-xl flex items-center justify-between">

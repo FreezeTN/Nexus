@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
-import { CharacterData, DiceRollResult, RuleEdition, Party, CampaignSaveFile } from './types';
+import { CharacterData, DiceRollResult, RuleEdition, Party, CampaignSaveFile, GearItem, Spell } from './types';
 import { SAMPLE_CHARACTERS } from './data/defaultCharacters';
 import { DEFAULT_PARTIES } from './data/defaultParties';
 import { Header } from './components/Header';
@@ -41,6 +41,8 @@ import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
 import { SessionLobbyModal } from './components/modals/SessionLobbyModal';
 import { PartyManagerModal } from './components/modals/PartyManagerModal';
 import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorModal';
+import { AiAssistantModal } from './components/modals/AiAssistantModal';
+import { PhysicalDiceModal, PhysicalRollRequest } from './components/modals/PhysicalDiceModal';
 import { 
   auth, 
   onAuthStateChanged,
@@ -136,8 +138,18 @@ export default function App() {
   const [showDeveloperSdk, setShowDeveloperSdk] = useState<boolean>(false);
   const [showUserManualModal, setShowUserManualModal] = useState<boolean>(false);
   const [showCampaignGraphModal, setShowCampaignGraphModal] = useState<boolean>(false);
+  const [showAiAssistantModal, setShowAiAssistantModal] = useState<boolean>(false);
   const [initialGraphEntityName, setInitialGraphEntityName] = useState<string | undefined>(undefined);
   const [showVoiceModal, setShowVoiceModal] = useState<boolean>(false);
+
+  // Global listener for opening AI Assistant
+  useEffect(() => {
+    const handleOpenAi = () => {
+      setShowAiAssistantModal(true);
+    };
+    window.addEventListener('penpaper_open_ai_assistant', handleOpenAi);
+    return () => window.removeEventListener('penpaper_open_ai_assistant', handleOpenAi);
+  }, []);
 
   // Global listener for custom campaign graph view events
   useEffect(() => {
@@ -186,6 +198,15 @@ export default function App() {
           parsed = parsed.map((c: CharacterData) => {
             if (c.id === 'char-sr-ghost-zero' && c.shadowrun) {
               return { ...c, edition: 'shadowrun' as RuleEdition };
+            }
+            if (c.isMonster && !c.challengeRating) {
+              const sampleMatch = SAMPLE_CHARACTERS.find(s => s.id === c.id);
+              if (sampleMatch?.challengeRating) {
+                return { ...c, challengeRating: sampleMatch.challengeRating };
+              }
+              if (c.subclass) {
+                return { ...c, challengeRating: c.subclass.replace(/^CR\s*/i, '') };
+              }
             }
             return c;
           });
@@ -315,6 +336,11 @@ export default function App() {
     }
   }, [parties]);
 
+  // Set browser tab title
+  useEffect(() => {
+    document.title = 'Nexus';
+  }, []);
+
   // Real-time cross-window / secondary monitor synchronization
   useDetachedSyncListener((syncedChars, syncedActiveId, syncedParties) => {
     if (syncedChars && syncedChars.length > 0) {
@@ -344,6 +370,27 @@ export default function App() {
   // Dice Roller State
   const [rollLogs, setRollLogs] = useState<DiceRollResult[]>([]);
   const [activeRollResult, setActiveRollResult] = useState<DiceRollResult | null>(null);
+
+  // Physical Dice Mode State (Workspace-wide)
+  const [isPhysicalDiceMode, setIsPhysicalDiceModeState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('trpg_physical_dice_mode') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const setIsPhysicalDiceMode = (val: boolean | ((prev: boolean) => boolean)) => {
+    setIsPhysicalDiceModeState((prev) => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      try {
+        localStorage.setItem('trpg_physical_dice_mode', String(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const [physicalRollRequest, setPhysicalRollRequest] = useState<PhysicalRollRequest | null>(null);
 
   const rawActiveCharacter = characters.find(c => c.id === activeCharacterId) || null;
   const activeCharacter = useMemo(() => {
@@ -645,6 +692,25 @@ export default function App() {
     }
   };
 
+  const handleAddItemToActiveCharacter = (item: GearItem) => {
+    if (!activeCharacter) return;
+    const updatedInventory = [...(activeCharacter.inventory || []), item];
+    handleUpdateCharacter({
+      ...activeCharacter,
+      inventory: updatedInventory
+    });
+  };
+
+  const handleAddSpellToActiveCharacter = (spell: Spell) => {
+    if (!activeCharacter) return;
+    const updatedSpells = [...(activeCharacter.spells || []), spell];
+    handleUpdateCharacter({
+      ...activeCharacter,
+      spells: updatedSpells,
+      isSpellcaster: true
+    });
+  };
+
   const handleLoadCampaignSave = async (save: CampaignSaveFile) => {
     if (!save || !save.characters) return;
 
@@ -738,39 +804,25 @@ export default function App() {
     e.target.value = '';
   };
 
-  // Dice Roll Execution Handler
-  const handleRoll = (
+  // Sync physical dice mode from active campaign optional rules if present
+  useEffect(() => {
+    if (activeSession?.optionalRules?.usePhysicalDiceMode !== undefined) {
+      setIsPhysicalDiceModeState(Boolean(activeSession.optionalRules.usePhysicalDiceMode));
+    }
+  }, [activeSession?.optionalRules?.usePhysicalDiceMode]);
+
+  // Execute and record a completed roll result (shared by digital and physical workflows)
+  const executeRollResult = (
     label: string,
     diceType: number,
     diceCount: number,
     modifier: number,
-    mode: 'normal' | 'advantage' | 'disadvantage' = 'normal'
+    mode: 'normal' | 'advantage' | 'disadvantage',
+    diceRolls: number[],
+    total: number,
+    isNat20: boolean,
+    isNat1: boolean
   ) => {
-    const diceRolls: number[] = [];
-    let rollsToMake = diceCount;
-
-    if (diceType === 20 && (mode === 'advantage' || mode === 'disadvantage')) {
-      rollsToMake = 2;
-    }
-
-    for (let i = 0; i < rollsToMake; i++) {
-      rollsToMake;
-      diceRolls.push(Math.floor(Math.random() * diceType) + 1);
-    }
-
-    let chosenRoll = diceRolls[0];
-    if (diceType === 20 && mode === 'advantage') {
-      chosenRoll = Math.max(...diceRolls);
-    } else if (diceType === 20 && mode === 'disadvantage') {
-      chosenRoll = Math.min(...diceRolls);
-    } else if (diceCount > 1) {
-      chosenRoll = diceRolls.reduce((sum, n) => sum + n, 0);
-    }
-
-    const total = chosenRoll + modifier;
-    const isNat20 = diceType === 20 && chosenRoll === 20;
-    const isNat1 = diceType === 20 && chosenRoll === 1;
-
     const result: DiceRollResult = {
       id: 'roll-' + Date.now(),
       timestamp: new Date().toLocaleTimeString(),
@@ -796,10 +848,78 @@ export default function App() {
       rollerName: activeCharacter?.name || label || 'Adventurer'
     });
 
-    // Auto dismiss active toast after 4 seconds
+    // Auto dismiss active toast after 4.5 seconds
     setTimeout(() => {
       setActiveRollResult(current => current?.id === result.id ? null : current);
     }, 4500);
+  };
+
+  // Digital Random Dice Roll Generator
+  const handleDigitalRoll = (
+    label: string,
+    diceType: number,
+    diceCount: number,
+    modifier: number,
+    mode: 'normal' | 'advantage' | 'disadvantage' = 'normal'
+  ) => {
+    const diceRolls: number[] = [];
+    let rollsToMake = diceCount;
+
+    if (diceType === 20 && (mode === 'advantage' || mode === 'disadvantage')) {
+      rollsToMake = 2;
+    }
+
+    for (let i = 0; i < rollsToMake; i++) {
+      diceRolls.push(Math.floor(Math.random() * diceType) + 1);
+    }
+
+    let chosenRoll = diceRolls[0];
+    if (diceType === 20 && mode === 'advantage') {
+      chosenRoll = Math.max(...diceRolls);
+    } else if (diceType === 20 && mode === 'disadvantage') {
+      chosenRoll = Math.min(...diceRolls);
+    } else if (diceCount > 1) {
+      chosenRoll = diceRolls.reduce((sum, n) => sum + n, 0);
+    }
+
+    const total = chosenRoll + modifier;
+    const isNat20 = diceType === 20 && chosenRoll === 20;
+    const isNat1 = diceType === 20 && chosenRoll === 1;
+
+    executeRollResult(label, diceType, diceCount, modifier, mode, diceRolls, total, isNat20, isNat1);
+  };
+
+  // Main Dice Roll Execution Handler (Intercepts for Physical Dice Mode)
+  const handleRoll = (
+    label: string,
+    diceType: number,
+    diceCount: number,
+    modifier: number,
+    mode: 'normal' | 'advantage' | 'disadvantage' = 'normal'
+  ) => {
+    if (isPhysicalDiceMode) {
+      setPhysicalRollRequest({
+        label,
+        diceType,
+        diceCount,
+        modifier,
+        mode,
+        onConfirm: (rolls, total, isNat20, isNat1) => {
+          executeRollResult(label, diceType, diceCount, modifier, mode, rolls, total, isNat20, isNat1);
+          setPhysicalRollRequest(null);
+        },
+        onDigitalFallback: () => {
+          setPhysicalRollRequest(null);
+          handleDigitalRoll(label, diceType, diceCount, modifier, mode);
+        },
+        onCancel: () => {
+          setPhysicalRollRequest(null);
+        }
+      });
+      return;
+    }
+
+    handleDigitalRoll(label, diceType, diceCount, modifier, mode);
   };
 
   // Custom Damage Expression Roller (e.g., "2d6 + 4")
@@ -941,7 +1061,14 @@ export default function App() {
           onClearLogs={() => setRollLogs([])}
           activeRollResult={activeRollResult}
           onOpenAudioModal={() => setShowAudioModal(true)}
+          isPhysicalDiceMode={isPhysicalDiceMode}
+          onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
         />
+
+        {/* Physical Tabletop Dice Modal in Detached View */}
+        {physicalRollRequest && (
+          <PhysicalDiceModal request={physicalRollRequest} />
+        )}
       </div>
     );
   }
@@ -1005,12 +1132,15 @@ export default function App() {
           canRedo={canRedoCharacters}
           onOpenCommandPalette={() => setShowCommandPalette(true)}
           onOpenCampaignGraph={() => setShowCampaignGraphModal(true)}
+          onOpenAiAssistant={() => setShowAiAssistantModal(true)}
           onOpenExtensionManager={() => setShowExtensionManager(true)}
           onOpenSessionLobby={() => setShowSessionModal(true)}
           onOpenVoiceModal={() => setShowVoiceModal(true)}
           onOpenAudioModal={() => setShowAudioModal(true)}
           currentUser={currentUser}
           activeSession={activeSession}
+          isPhysicalDiceMode={isPhysicalDiceMode}
+          onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
         />
 
         {/* Right Main Content Area */}
@@ -1055,6 +1185,7 @@ export default function App() {
             enabledSystems={enabledSystems}
             onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
             onOpenAudioModal={() => setShowAudioModal(true)}
+            onOpenAiAssistant={() => setShowAiAssistantModal(true)}
           />
         )}
 
@@ -1154,7 +1285,14 @@ export default function App() {
         onClearLogs={() => setRollLogs([])}
         activeRollResult={activeRollResult}
         onOpenAudioModal={() => setShowAudioModal(true)}
+        isPhysicalDiceMode={isPhysicalDiceMode}
+        onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
       />
+
+      {/* Physical Tabletop Dice Modal */}
+      {physicalRollRequest && (
+        <PhysicalDiceModal request={physicalRollRequest} />
+      )}
 
       {/* New Character Modal */}
       {showNewCharacterModal && (
@@ -1181,6 +1319,7 @@ export default function App() {
         onOpenExtensionManager={() => setShowExtensionManager(true)}
         onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
         onOpenCampaignGraph={() => setShowCampaignGraphModal(true)}
+        onOpenAiAssistant={() => setShowAiAssistantModal(true)}
         onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
         onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
       />
@@ -1301,6 +1440,28 @@ export default function App() {
             }}
             initialEntityName={initialGraphEntityName}
             onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
+          />
+        )}
+
+        {/* Nexus AI Oracle & Entity Forge Modal */}
+        {showAiAssistantModal && (
+          <AiAssistantModal
+            isOpen={showAiAssistantModal}
+            onClose={() => setShowAiAssistantModal(false)}
+            activeCharacter={activeCharacter}
+            ruleEdition={currentSystemTheme}
+            onAddCharacter={(monsterOrChar) => {
+              handleCreateNewCharacter(monsterOrChar);
+            }}
+            onAddItemToInventory={(item) => {
+              handleAddItemToActiveCharacter(item);
+            }}
+            onAddSpellToSpellbook={(spell) => {
+              handleAddSpellToActiveCharacter(spell);
+            }}
+            onNavigateTab={(tab) => {
+              setActiveTab(normalizeTabId(tab));
+            }}
           />
         )}
 

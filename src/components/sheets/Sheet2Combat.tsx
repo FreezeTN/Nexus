@@ -4,6 +4,8 @@ import { UserProfile } from '../../lib/firebase';
 import { ShadowrunCombatPanel } from '../shadowrun/ShadowrunCombatPanel';
 import { RestModal } from '../combat/RestModal';
 import { EncounterTracker } from '../combat/EncounterTracker';
+import { AttackResolver } from '../combat/AttackResolver';
+import { useEncounterState } from '../combat/encounter/useEncounterState';
 import { MaxHpInspectorModal } from '../modals/MaxHpInspectorModal';
 import { SpellTargetModal } from '../modals/SpellTargetModal';
 import { TransformationModal } from '../modals/TransformationModal';
@@ -42,6 +44,14 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   const [showCompanionModal, setShowCompanionModal] = useState(false);
   const [showMaxHpInspector, setShowMaxHpInspector] = useState(false);
   const [targetModalSpell, setTargetModalSpell] = useState<any | null>(null);
+
+  const encounter = useEncounterState({
+    character,
+    allCharacters,
+    parties,
+    onUpdateCharacter,
+    onRoll
+  });
 
   const handleConfirmCastSpellTarget = (spellToCast: any, selectedTargetIds: string[], condName: string) => {
     const updatedSlots = spellToCast.level > 0
@@ -85,16 +95,19 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     isVisible('s2_vitalityHpOrb') ||
     isVisible('s2_defenseStats') ||
     isVisible('s2_deathSavesForm') ||
-    isVisible('s2_resistancesDr') ||
     isVisible('s2_conditionsPanel');
 
   const hasAttacksVisible =
     isVisible('s2_attacksWeapons') ||
     isVisible('s2_combatSpellsPotions');
 
+  const hasEncounterVisible =
+    isVisible('s2_encounterTracker') ||
+    isVisible('s2_attackResolver');
+
   const hasAnyVisible = character.edition === 'shadowrun'
     ? isVisible('sr_combat')
-    : (hasDefensesVisible || isVisible('s2_encounterTracker') || hasAttacksVisible);
+    : (hasDefensesVisible || hasEncounterVisible || hasAttacksVisible);
 
   if (!hasAnyVisible) {
     return <EmptyLayoutState sheetName="Combat & Actions" />;
@@ -135,6 +148,23 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
           onOpenPartyManager={onOpenPartyManager}
           onUpdateCharacter={onUpdateCharacter}
           onRoll={onRoll}
+          encounterState={encounter}
+        />
+      )}
+
+      {/* Target AC Hit & Attack Resolver (Separate Box) */}
+      {isVisible('s2_attackResolver') && (
+        <AttackResolver
+          character={encounter.activeAttackerCharacter}
+          allCharacters={allCharacters}
+          combatants={encounter.combatants}
+          activeCombatantId={encounter.activeCombatant?.id}
+          encounterEnvironment={encounter.encounterEnvironment}
+          onApplyDamageToCombatant={(targetId, damageAmount) => {
+            encounter.handleAdjustHp(targetId, -damageAmount);
+          }}
+          onRoll={onRoll}
+          onLogAction={(category, message, actor) => encounter.addLogEntry(category, message, actor)}
         />
       )}
 

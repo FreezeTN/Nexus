@@ -36,6 +36,7 @@ export interface EncounterTrackerProps {
   onOpenPartyManager?: () => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onUpdateCharacter?: (updated: CharacterData) => void;
+  encounterState?: any;
 }
 
 export interface SavedEncounterData {

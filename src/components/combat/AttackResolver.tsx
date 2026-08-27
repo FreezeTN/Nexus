@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { CharacterData, Attack, Spell, EncounterEnvironment } from '../../types';
-import { Combatant } from './EncounterTracker';
+import { Combatant } from './encounter/encounterTypes';
 import { getSpellAttackBonus, getSpellSaveDC, formatModifier, rollCompoundDamage, RolledDamagePart, applyResistanceAndDRToDamage, calculateCharacterTotalDR, getCharacterResistances, getConditionEffects } from '../../utils/dndCalculations';
 import { playDiceSound, playHitSound, playMissSound, playDamageAppliedSound, playFireSound, playIceColdSound, playLightningSound, playAcidPoisonSound } from '../../utils/diceAudio';
 import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2 } from 'lucide-react';
+import { CollapsibleBox } from '../common/CollapsibleBox';
 
 interface AttackResolverProps {
   character: CharacterData;
@@ -448,19 +449,22 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   };
 
   return (
-    <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-5 shadow-xl space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-stone-800 pb-3 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <Crosshair className="w-5 h-5 text-amber-500" />
-          <h3 className="font-serif font-bold text-amber-200 text-sm">Target AC Hit & Attack Resolver</h3>
-          <span className="text-xs bg-amber-950 text-amber-300 border border-amber-600/40 px-2.5 py-0.5 rounded-full font-serif font-bold shadow-sm">
-            Attacker: {character.name}
-          </span>
-        </div>
-        <span className="text-[11px] text-stone-400 font-mono">Automated D20 Roll vs Target AC</span>
-      </div>
-
+    <CollapsibleBox
+      title="Target AC Hit & Attack Resolver"
+      icon={<Crosshair className="w-5 h-5 text-amber-500" />}
+      badge={
+        <span className="text-xs bg-amber-950 text-amber-300 border border-amber-600/40 px-2.5 py-0.5 rounded-full font-serif font-bold shadow-sm ml-1">
+          Attacker: {character.name}
+        </span>
+      }
+      storageKey="sheet2_attack_resolver"
+      headerExtra={
+        <span className="text-[11px] text-stone-400 font-mono hidden sm:inline">
+          Automated D20 Roll vs Target AC
+        </span>
+      }
+      className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-5 shadow-xl space-y-4"
+    >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Left: Weapon / Attack & Target Selection */}
         <div className="space-y-3">
@@ -920,6 +924,6 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
           )}
         </div>
       )}
-    </div>
+    </CollapsibleBox>
   );
 };

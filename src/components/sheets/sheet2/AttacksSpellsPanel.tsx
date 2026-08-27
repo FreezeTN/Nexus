@@ -29,6 +29,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useLayoutCustomization } from '../../../utils/layoutCustomization';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface AttacksSpellsPanelProps {
   character: CharacterData;
@@ -49,6 +50,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   onOpenShapeshift,
   onOpenSummonCompanion
 }) => {
+  const { t } = useLanguage();
   const [cheatCategory, setCheatCategory] = useState<'All' | 'Action' | 'Bonus Action' | 'Reaction' | 'Maneuver' | 'Condition'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCheatSheet, setShowCheatSheet] = useState(false);
@@ -202,7 +204,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
       {/* Weapons & Attacks Panel */}
       {showAttacks && (
         <CollapsibleBox
-          title="Weapons, Spell Attacks & Maneuvers"
+          title={t('combat.attacksAndSpellcasting', 'Weapons, Spell Attacks & Maneuvers')}
           icon={<Swords className="w-5 h-5 text-amber-500" />}
           storageKey="sheet2_attacks"
           headerExtra={
@@ -211,13 +213,13 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                 onClick={() => setShowCheatSheet(true)}
                 className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-300 rounded-lg text-xs font-bold transition shadow"
               >
-                <BookMarked className="w-3.5 h-3.5 text-amber-400" /> Actions & Rules
+                <BookMarked className="w-3.5 h-3.5 text-amber-400" /> {t('combat.actions', 'Actions & Rules')}
               </button>
               <button
                 onClick={() => setShowAddAttackModal(true)}
                 className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/80 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition"
               >
-                <Plus className="w-3.5 h-3.5" /> Add Attack
+                <Plus className="w-3.5 h-3.5" /> {t('combat.addAttack', 'Add Attack')}
               </button>
             </div>
           }
@@ -226,12 +228,12 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
             {character.attacks.length === 0 ? (
               <div className="text-center py-6 px-4 border border-dashed border-stone-800 rounded-xl text-stone-500 space-y-2">
                 <Swords className="w-8 h-8 mx-auto text-stone-600 opacity-60" />
-                <p className="text-xs">No attacks added yet. Click &quot;Add Attack&quot; to configure weapons or spell attacks.</p>
+                <p className="text-xs">{t('combat.noAttacksYet', 'No attacks added yet. Click "Add Attack" to configure weapons or spell attacks.')}</p>
                 <button
                   onClick={() => setShowAddAttackModal(true)}
                   className="text-xs text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
                 >
-                  + Add your first Weapon or Attack
+                  {t('combat.addFirstAttack', '+ Add your first Weapon or Attack')}
                 </button>
               </div>
             ) : (

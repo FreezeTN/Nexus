@@ -20,7 +20,8 @@ import {
   MapPin,
   FileText,
   Users,
-  Network
+  Network,
+  Bot
 } from 'lucide-react';
 import { CharacterData } from '../../types';
 import { systemRegistry } from '../../systems';
@@ -39,6 +40,7 @@ interface CommandPaletteModalProps {
   onOpenExtensionManager: () => void;
   onOpenDeveloperSdk?: () => void;
   onOpenCampaignGraph?: () => void;
+  onOpenAiAssistant?: () => void;
   onNavigateTab: (tabId: any) => void;
   onRollDice?: () => void;
 }
@@ -64,6 +66,7 @@ export function CommandPaletteModal({
   onOpenExtensionManager,
   onOpenDeveloperSdk,
   onOpenCampaignGraph,
+  onOpenAiAssistant,
   onNavigateTab,
   onRollDice
 }: CommandPaletteModalProps) {
@@ -84,6 +87,17 @@ export function CommandPaletteModal({
 
   const allCommands = useMemo<CommandItem[]>(() => {
     const list: CommandItem[] = [
+      {
+        id: 'action-ai-oracle',
+        title: 'Nexus AI Oracle & Forge (Rules, Chat & Generator)',
+        category: 'Actions',
+        description: 'Ask rules questions, get app guidance, or forge monsters, items, spells, and graph nodes',
+        icon: <Bot className="w-4 h-4 text-purple-400" />,
+        action: () => {
+          onClose();
+          if (onOpenAiAssistant) onOpenAiAssistant();
+        }
+      },
       {
         id: 'action-campaign-graph',
         title: 'Open Interactive Campaign Knowledge Graph',

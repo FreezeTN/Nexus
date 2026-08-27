@@ -1,6 +1,5 @@
 import React from 'react';
 import { CharacterData } from '../../../types';
-import { CollapsibleBox } from '../../common/CollapsibleBox';
 import {
   formatModifier,
   getAbilityModifier,
@@ -155,8 +154,11 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   const showHpOrb = isVisible('s2_vitalityHpOrb');
   const showDefStats = isVisible('s2_defenseStats');
   const showDeathSaves = isVisible('s2_deathSavesForm');
-  const showResistances = isVisible('s2_resistancesDr');
   const showConditions = isVisible('s2_conditionsPanel');
+
+  const resistances = getCharacterResistances(character);
+  const immunities = getCharacterImmunities(character);
+  const drInfo = calculateCharacterTotalDR(character);
 
   const visibleTopCount = (showHpOrb ? 1 : 0) + (showDefStats ? 1 : 0) + (showDeathSaves ? 1 : 0);
   const topColClass = visibleTopCount === 1 ? 'md:col-span-12' : visibleTopCount === 2 ? 'md:col-span-6' : 'md:col-span-4';
@@ -213,7 +215,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
         </div>
       )}
 
-      {/* Middle 4 cols: Armor Class, Initiative, Speed */}
+      {/* Middle 4 cols: Armor Class, Initiative, Speed & Damage Mitigation */}
           {showDefStats && (
             <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-xl space-y-3`}>
               <div className="flex items-center justify-between border-b border-stone-800 pb-2">
@@ -225,6 +227,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 </span>
               </div>
 
+              {/* Primary Defense Metrics Grid: AC, Initiative, Speed */}
               <div className="grid grid-cols-3 gap-2 text-center font-mono">
                 {/* AC */}
                 <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-500/30 flex flex-col items-center justify-center relative group">
@@ -278,6 +281,68 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Damage Mitigation: Resistances, Immunities & Damage Reduction (DR) */}
+              <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/80">
+                <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                  {/* Resistances (50% damage) */}
+                  <div className="bg-stone-900/90 p-1.5 rounded-lg border border-amber-900/40 flex flex-col justify-between min-h-[46px]">
+                    <span className="text-[9px] font-sans uppercase font-bold text-amber-400/90 tracking-wider">
+                      Resist (½)
+                    </span>
+                    <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
+                      {resistances.length > 0 ? (
+                        resistances.map((r, idx) => (
+                          <span
+                            key={`${r.type}-${idx}`}
+                            className="bg-amber-950/80 text-amber-200 border border-amber-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono leading-none truncate max-w-full"
+                            title={r.source ? `${r.type} (Source: ${r.source})` : r.type}
+                          >
+                            {r.type}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-stone-500 italic text-[10px]">None</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Immunities (0 damage) */}
+                  <div className="bg-stone-900/90 p-1.5 rounded-lg border border-emerald-900/40 flex flex-col justify-between min-h-[46px]">
+                    <span className="text-[9px] font-sans uppercase font-bold text-emerald-400/90 tracking-wider">
+                      Immune (0)
+                    </span>
+                    <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
+                      {immunities.length > 0 ? (
+                        immunities.map((i, idx) => (
+                          <span
+                            key={`${i.type}-${idx}`}
+                            className="bg-emerald-950/80 text-emerald-200 border border-emerald-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono leading-none truncate max-w-full"
+                            title={i.source ? `${i.type} (Source: ${i.source})` : i.type}
+                          >
+                            {i.type}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-stone-500 italic text-[10px]">None</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Damage Reduction (DR) */}
+                  <div className="bg-stone-900/90 p-1.5 rounded-lg border border-sky-900/40 flex flex-col justify-between min-h-[46px]">
+                    <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
+                      Damage Red.
+                    </span>
+                    <div className="my-auto flex items-center justify-center gap-1 pt-0.5">
+                      <span className="text-sm font-serif font-extrabold text-sky-300">
+                        {drInfo.totalDR > 0 ? `-${drInfo.totalDR}` : '0'}
+                      </span>
+                      <span className="text-[9px] text-stone-500 font-sans">DR</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -373,54 +438,6 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
             </div>
           )}
         </div>
-      )}
-
-      {/* Resistances, Immunities & Damage Reduction Panel */}
-      {showResistances && (
-        <CollapsibleBox
-          title="Resistances, Immunities & Damage Reduction (DR)"
-          icon={<Shield className="w-5 h-5 text-amber-500" />}
-          storageKey="sheet2_defenses_res"
-        >
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 text-xs font-mono">
-            <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-1">
-              <span className="text-amber-400 font-serif font-bold text-xs block font-sans">Damage Resistances (50% Damage)</span>
-              <div className="text-stone-300 flex flex-wrap gap-1 pt-1">
-                {getCharacterResistances(character).length > 0 ? (
-                  getCharacterResistances(character).map((r, idx) => (
-                    <span key={`${r.type}-${idx}`} className="bg-stone-900 text-amber-200 border border-amber-800/50 px-2 py-0.5 rounded text-[11px]">
-                      {r.type} {r.source ? `(${r.source})` : ''}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-stone-500 italic text-[11px]">None recorded</span>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-1">
-              <span className="text-emerald-400 font-serif font-bold text-xs block font-sans">Damage Immunities (0 Damage)</span>
-              <div className="text-stone-300 flex flex-wrap gap-1 pt-1">
-                {getCharacterImmunities(character).length > 0 ? (
-                  getCharacterImmunities(character).map((i, idx) => (
-                    <span key={`${i.type}-${idx}`} className="bg-stone-900 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded text-[11px]">
-                      {i.type} {i.source ? `(${i.source})` : ''}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-stone-500 italic text-[11px]">None recorded</span>
-                )}
-              </div>
-            </div>
-
-            <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-1">
-              <span className="text-sky-400 font-serif font-bold text-xs block font-sans">Damage Reduction (DR)</span>
-              <div className="text-sky-200 font-bold text-sm pt-1">
-                -{calculateCharacterTotalDR(character).totalDR} Flat Damage Reduced
-              </div>
-            </div>
-          </div>
-        </CollapsibleBox>
       )}
 
       {/* Conditions & Status Effects Widget */}

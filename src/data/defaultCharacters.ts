@@ -598,6 +598,7 @@ export const SAMPLE_CHARACTERS: CharacterData[] = [
     experiencePoints: 1100,
     edition: '5e',
     isMonster: true,
+    challengeRating: '1',
     monsterXpReward: 1100,
     portraitUrl: 'https://api.open5e.com/static/img/object_illustrations/open5e-illustrations/monsters/goblin.png',
     hpCalcMode: 'Average',

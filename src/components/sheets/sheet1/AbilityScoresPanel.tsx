@@ -2,6 +2,7 @@ import React from 'react';
 import { AbilityName, CharacterData } from '../../../types';
 import { getAbilityModifier, formatModifier, getSavingThrowBonus } from '../../../utils/dndCalculations';
 import { Dices, CheckSquare, Square } from 'lucide-react';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface AbilityScoresPanelProps {
   character: CharacterData;
@@ -16,6 +17,7 @@ export const AbilityScoresPanel: React.FC<AbilityScoresPanelProps> = ({
   onUpdateCharacter,
   onRoll
 }) => {
+  const { t } = useLanguage();
   const abilitiesList: AbilityName[] = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
 
   const handleScoreChange = (ability: AbilityName, newScore: number) => {
@@ -57,7 +59,7 @@ export const AbilityScoresPanel: React.FC<AbilityScoresPanelProps> = ({
             <div className="my-1.5 text-center flex flex-col items-center">
               {editingAbilities ? (
                 <div className="flex items-center gap-1 my-1">
-                  <span className="text-[10px] text-stone-400 font-mono">Score:</span>
+                  <span className="text-[10px] text-stone-400 font-mono">{t('stats.score', 'Score')}:</span>
                   <input
                     type="number"
                     min="1"
@@ -73,17 +75,17 @@ export const AbilityScoresPanel: React.FC<AbilityScoresPanelProps> = ({
               )}
 
               <div className="text-xs font-mono font-bold text-amber-300 bg-stone-950/90 px-2.5 py-0.5 rounded-full border border-stone-800 mt-1 shadow-inner">
-                Mod: <span className="text-emerald-400">{formatModifier(mod)}</span>
+                {t('stats.modifier', 'Mod')}: <span className="text-emerald-400">{formatModifier(mod)}</span>
               </div>
             </div>
 
             {/* Quick Roll Check Button */}
             <button
-              onClick={() => onRoll(`${ability} Ability Check`, 20, 1, mod, 'normal')}
+              onClick={() => onRoll(`${ability} Check`, 20, 1, mod, 'normal')}
               className="w-full mt-1 py-1 bg-stone-800 hover:bg-amber-700/80 text-amber-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1"
               title={`Roll ${ability} Check (d20${formatModifier(mod)})`}
             >
-              <Dices className="w-3.5 h-3.5 text-amber-400" /> Roll Check
+              <Dices className="w-3.5 h-3.5 text-amber-400" /> {t('dice.roll', 'Roll')}
             </button>
 
             {/* 5e Saving Throw Indicator */}
@@ -99,7 +101,7 @@ export const AbilityScoresPanel: React.FC<AbilityScoresPanelProps> = ({
                   ) : (
                     <Square className="w-3.5 h-3.5" />
                   )}
-                  <span>Save</span>
+                  <span>{t('stats.save', 'Save')}</span>
                 </button>
 
                 <button

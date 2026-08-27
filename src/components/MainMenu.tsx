@@ -18,10 +18,15 @@ import {
   Lock,
   Crown,
   UserCheck,
-  SlidersHorizontal
+  SlidersHorizontal,
+  Bot,
+  Sparkles,
+  Search,
+  X
 } from 'lucide-react';
 import { HpOrb } from './HpOrb';
 import { UserProfile, CharacterPresence } from '../lib/firebase';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface MainMenuProps {
   characters: CharacterData[];
@@ -37,6 +42,7 @@ interface MainMenuProps {
   enabledSystems?: RuleEdition[];
   onOpenSystemSelector?: () => void;
   onOpenAudioModal?: () => void;
+  onOpenAiAssistant?: () => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -52,8 +58,10 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onOpenAuthModal,
   enabledSystems = ['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu'],
   onOpenSystemSelector,
-  onOpenAudioModal
+  onOpenAudioModal,
+  onOpenAiAssistant
 }) => {
+  const { t } = useLanguage();
   const currentEdition = edition || activeCharacter?.edition || '5e';
   const activeSystem = currentEdition === 'shadowrun'
     ? 'shadowrun'
@@ -67,6 +75,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [selectedEdition, setSelectedEdition] = React.useState<RuleEdition>(currentEdition);
   const [activeFolderTab, setActiveFolderTab] = React.useState<'all' | 'characters' | 'monsters' | 'merchants'>('all');
   const [collapsedFolders, setCollapsedFolders] = React.useState<Record<string, boolean>>({});
+  const [folderSearchQueries, setFolderSearchQueries] = React.useState<Record<string, string>>({});
+
+  const handleFolderSearchChange = (folderKey: string, query: string) => {
+    setFolderSearchQueries(prev => ({ ...prev, [folderKey]: query }));
+  };
 
   React.useEffect(() => {
     let ed = currentEdition;
@@ -245,7 +258,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 </div>
               </div>
               <p className="text-xs text-stone-400 truncate">
-                {char.race} • {char.characterClass || (isSR ? 'Runner' : 'Hero')} {char.level ? `Lvl ${char.level}` : ''}
+                {char.race} • {char.isMonster ? `${char.characterClass || 'Monster'} (CR ${char.challengeRating || (char.subclass ? char.subclass.replace(/^CR\s*/i, '') : char.level || '1')})` : `${char.characterClass || (isSR ? 'Runner' : 'Hero')} ${char.level ? `Lvl ${char.level}` : ''}`}
               </p>
             </div>
           </div>
@@ -303,32 +316,32 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       {
         key: 'characters',
         categoryType: 'character' as const,
-        title: 'Player Characters',
-        description: 'Main player adventurers, heroes, and runners',
+        title: t('mainMenu.playerCharacters', 'Player Characters'),
+        description: t('mainMenu.playerCharactersSub', 'Main player adventurers, heroes, and runners'),
         icon: <User className="w-4 h-4 text-amber-400" />,
         badgeStyle: 'bg-amber-950 text-amber-300 border-amber-600/40',
         chars: playerChars,
-        createBtnText: 'Character'
+        createBtnText: t('common.character', 'Character')
       },
       {
         key: 'monsters',
         categoryType: 'monster' as const,
-        title: 'Monsters & Encounter Creatures',
-        description: 'Hostile creatures, bosses, and encounter statblocks',
+        title: t('mainMenu.monsters', 'Monsters & Encounter Creatures'),
+        description: t('mainMenu.monstersSub', 'Hostile creatures, bosses, and encounter statblocks'),
         icon: <Skull className="w-4 h-4 text-red-400" />,
         badgeStyle: 'bg-red-950 text-red-300 border-red-600/40',
         chars: monsterChars,
-        createBtnText: 'Monster'
+        createBtnText: t('common.monster', 'Monster')
       },
       {
         key: 'merchants',
         categoryType: 'vendor' as const,
-        title: 'Merchants & Shopkeepers',
-        description: 'NPC vendors, shopkeepers, and price markup trade NPCs',
+        title: t('mainMenu.merchants', 'Merchants & Shopkeepers'),
+        description: t('mainMenu.merchantsSub', 'NPC vendors, shopkeepers, and price markup trade NPCs'),
         icon: <Store className="w-4 h-4 text-cyan-400" />,
         badgeStyle: 'bg-cyan-950 text-cyan-300 border-cyan-600/40',
         chars: merchantChars,
-        createBtnText: 'Merchant'
+        createBtnText: t('common.merchant', 'Merchant')
       }
     ];
 
@@ -349,8 +362,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 <User className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-serif font-bold text-amber-200 text-sm">Guest Adventurer Mode</h4>
-                <p className="text-stone-300 text-xs">Playing locally. Sign in to sync your characters across devices & access DM multiplayer sessions.</p>
+                <h4 className="font-serif font-bold text-amber-200 text-sm">{t('mainMenu.guestMode', 'Guest Adventurer Mode')}</h4>
+                <p className="text-stone-300 text-xs">{t('mainMenu.guestModeSub', 'Playing locally. Sign in to sync your characters across devices & access DM multiplayer sessions.')}</p>
               </div>
             </div>
             {onOpenAuthModal && (
@@ -358,7 +371,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 onClick={onOpenAuthModal}
                 className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-xl transition flex items-center gap-1.5 shrink-0 shadow cursor-pointer"
               >
-                <UserCheck className="w-4 h-4" /> Sign In / Account
+                <UserCheck className="w-4 h-4" /> {t('mainMenu.signInAccount', 'Sign In / Account')}
               </button>
             )}
           </div>
@@ -367,7 +380,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* Category / Folder Filter Tabs */}
         <div className="flex flex-wrap items-center gap-2 bg-stone-950/80 p-2 rounded-2xl border border-stone-800">
           <span className="text-xs font-serif font-bold text-stone-400 px-2 flex items-center gap-1">
-            <Folder className="w-3.5 h-3.5 text-amber-500" /> Folders:
+            <Folder className="w-3.5 h-3.5 text-amber-500" /> {t('mainMenu.folders', 'Folders')}:
           </span>
           <button
             onClick={() => setActiveFolderTab('all')}
@@ -377,7 +390,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
             }`}
           >
-            📁 All Folders ({isPlayerRole ? playerChars.length : systemChars.length})
+            📁 {t('mainMenu.allFolders', 'All Folders')} ({isPlayerRole ? playerChars.length : systemChars.length})
           </button>
           <button
             onClick={() => setActiveFolderTab('characters')}
@@ -387,7 +400,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
             }`}
           >
-            🧙 Characters ({playerChars.length})
+            🧙 {t('mainMenu.characters', 'Characters')} ({playerChars.length})
           </button>
           {!isPlayerRole && (
             <>
@@ -399,7 +412,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
                 }`}
               >
-                👹 Monsters ({monsterChars.length})
+                👹 {t('mainMenu.monstersFolder', 'Monsters')} ({monsterChars.length})
               </button>
               <button
                 onClick={() => setActiveFolderTab('merchants')}
@@ -409,7 +422,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                     : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
                 }`}
               >
-                🏪 Merchants ({merchantChars.length})
+                🏪 {t('mainMenu.merchantsFolder', 'Merchants')} ({merchantChars.length})
               </button>
             </>
           )}
@@ -418,6 +431,51 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         {/* Folder Sections */}
         {activeFolders.map(folder => {
           const isCollapsed = collapsedFolders[folder.key];
+          const query = (folderSearchQueries[folder.key] || '').trim().toLowerCase();
+
+          const filteredChars = query
+            ? folder.chars.filter(char => {
+                const name = (char.name || '').toLowerCase();
+                const race = (char.race || '').toLowerCase();
+                const cls = (char.characterClass || '').toLowerCase();
+                const sub = (char.subclass || '').toLowerCase();
+                const cr = (char.challengeRating || '').toLowerCase();
+                const align = (char.alignment || '').toLowerCase();
+                const bg = (char.background || '').toLowerCase();
+
+                if (
+                  name.includes(query) ||
+                  race.includes(query) ||
+                  cls.includes(query) ||
+                  sub.includes(query) ||
+                  cr.includes(query) ||
+                  align.includes(query) ||
+                  bg.includes(query)
+                ) {
+                  return true;
+                }
+
+                const crClean = cr ? `cr ${cr}`.trim().toLowerCase() : '';
+                const crNoSpace = cr ? `cr${cr}`.trim().toLowerCase() : '';
+                if (crClean.includes(query) || crNoSpace.includes(query)) {
+                  return true;
+                }
+
+                if (char.attacks?.some(a => a.name?.toLowerCase().includes(query) || a.damageType?.toLowerCase().includes(query))) {
+                  return true;
+                }
+
+                if (char.feats?.some(f => f.name?.toLowerCase().includes(query) || f.description?.toLowerCase().includes(query))) {
+                  return true;
+                }
+
+                if (char.spells?.some(s => s.name?.toLowerCase().includes(query) || s.school?.toLowerCase().includes(query))) {
+                  return true;
+                }
+
+                return false;
+              })
+            : folder.chars;
 
           return (
             <div key={folder.key} className="bg-stone-950/90 border border-stone-800 rounded-2xl p-4 space-y-4">
@@ -436,7 +494,9 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                         {folder.title}
                       </h4>
                       <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${folder.badgeStyle}`}>
-                        {folder.chars.length} {folder.chars.length === 1 ? 'Entry' : 'Entries'}
+                        {query
+                          ? `${filteredChars.length} of ${folder.chars.length} Entries`
+                          : `${folder.chars.length} ${folder.chars.length === 1 ? 'Entry' : 'Entries'}`}
                       </span>
                     </div>
                     <p className="text-[11px] text-stone-400 mt-0.5">{folder.description}</p>
@@ -462,10 +522,62 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 </div>
               </div>
 
+              {/* Search Bar for Folder when expanded */}
+              {!isCollapsed && (
+                <div className="flex items-center gap-2 pt-0.5">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 text-stone-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={folderSearchQueries[folder.key] || ''}
+                      onChange={(e) => handleFolderSearchChange(folder.key, e.target.value)}
+                      placeholder={
+                        folder.key === 'monsters'
+                          ? 'Search monsters by name, type, or CR (e.g. Dragon, CR 19, Fiend, HP)...'
+                          : folder.key === 'merchants'
+                          ? 'Search merchants by name, shop type, or race...'
+                          : 'Search characters by name, class, or race...'
+                      }
+                      className="w-full pl-9 pr-8 py-2 bg-stone-900/90 border border-stone-800 focus:border-amber-500/60 rounded-xl text-xs text-stone-200 placeholder-stone-500 focus:outline-none focus:ring-1 focus:ring-amber-500/40 transition font-sans"
+                    />
+                    {folderSearchQueries[folder.key] && (
+                      <button
+                        onClick={() => handleFolderSearchChange(folder.key, '')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-500 hover:text-stone-300 transition rounded-md"
+                        title="Clear Search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {folderSearchQueries[folder.key] && (
+                    <div className="text-[11px] font-mono text-stone-400 shrink-0 bg-stone-900 border border-stone-800 px-2.5 py-1.5 rounded-xl">
+                      <strong className="text-amber-400">{filteredChars.length}</strong> of {folder.chars.length}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Folder Items Grid */}
               {!isCollapsed && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {folder.chars.map(char => renderCard(char))}
+                  {filteredChars.map(char => renderCard(char))}
+
+                  {/* Empty state when search returns 0 matches */}
+                  {query && filteredChars.length === 0 && (
+                    <div className="col-span-full py-8 text-center bg-stone-900/40 border border-dashed border-stone-800 rounded-2xl space-y-2">
+                      <p className="text-xs text-stone-400 font-sans">
+                        No {folder.title.toLowerCase()} matching "<span className="text-amber-300 font-bold">{folderSearchQueries[folder.key]}</span>"
+                      </p>
+                      <button
+                        onClick={() => handleFolderSearchChange(folder.key, '')}
+                        className="text-xs text-amber-400 hover:text-amber-300 font-mono font-bold underline cursor-pointer"
+                      >
+                        Clear Search
+                      </button>
+                    </div>
+                  )}
 
                   {/* Create New Card in Folder */}
                   <button
@@ -497,6 +609,16 @@ export const MainMenu: React.FC<MainMenuProps> = ({
             <Layers className="w-5 h-5 text-amber-500" /> Choose TRPG Ruleset & Active System
           </h3>
           <div className="flex items-center gap-2">
+            {onOpenAiAssistant && (
+              <button
+                type="button"
+                onClick={onOpenAiAssistant}
+                className="text-xs text-purple-300 hover:text-purple-100 font-bold flex items-center gap-1.5 bg-purple-950/70 border border-purple-500/60 hover:border-purple-400 px-3 py-1.5 rounded-xl transition cursor-pointer shadow-sm"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>AI Oracle & Forge</span>
+              </button>
+            )}
             {onOpenSystemSelector && (
               <button
                 type="button"

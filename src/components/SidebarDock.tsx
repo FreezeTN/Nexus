@@ -15,12 +15,15 @@ import {
   ChevronRight,
   ChevronLeft,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  Bot,
+  Dices
 } from 'lucide-react';
 import { TabId } from './Navigation';
 import { UserProfile, GameSession } from '../lib/firebase';
 import { isSoundEnabled } from '../utils/diceAudio';
 import { InstallAppModal } from './modals/InstallAppModal';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface SidebarDockProps {
   activeTab: TabId;
@@ -32,12 +35,15 @@ interface SidebarDockProps {
   canRedo?: boolean;
   onOpenCommandPalette?: () => void;
   onOpenCampaignGraph?: () => void;
+  onOpenAiAssistant?: () => void;
   onOpenExtensionManager?: () => void;
   onOpenSessionLobby?: () => void;
   onOpenVoiceModal?: () => void;
   onOpenAudioModal?: () => void;
   currentUser?: UserProfile | null;
   activeSession?: GameSession | null;
+  isPhysicalDiceMode?: boolean;
+  onTogglePhysicalDiceMode?: () => void;
 }
 
 interface BeforeInstallPromptEvent extends Event {
@@ -55,13 +61,17 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
   canRedo = false,
   onOpenCommandPalette,
   onOpenCampaignGraph,
+  onOpenAiAssistant,
   onOpenExtensionManager,
   onOpenSessionLobby,
   onOpenVoiceModal,
   onOpenAudioModal,
   currentUser,
-  activeSession
+  activeSession,
+  isPhysicalDiceMode = false,
+  onTogglePhysicalDiceMode
 }) => {
+  const { t } = useLanguage();
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [showInstallModal, setShowInstallModal] = useState(false);
@@ -142,7 +152,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
     ? 'Pathfinder Guide'
     : isCthulhu
     ? 'Cthulhu Guide'
-    : 'User Guide';
+    : t('nav.userGuide', 'User Guide');
 
   const guideSubtext = isShadowrun
     ? 'Shadowrun 5e Rules'
@@ -150,7 +160,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
     ? 'Pathfinder 2e SRD'
     : isCthulhu
     ? 'Call of Cthulhu 7e'
-    : 'Manual & System Reference';
+    : t('nav.userGuideSub', 'Manual & System Reference');
 
   const displayCampaignName = activeSession?.name
     ? activeSession.name.replace(/\s*-\s*Checkpoint.*$/i, '').replace(/\s+Checkpoint.*$/i, '').trim() || activeSession.name
@@ -166,10 +176,10 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
             <button
               onClick={toggleCollapse}
               className="w-full py-2 px-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-300 transition cursor-pointer shadow-sm group flex items-center justify-center gap-2"
-              title="Phase In / Expand Vertical Menu"
+              title={`${t('nav.phaseIn', 'Phase In Menu')} / Expand`}
             >
               <PanelLeftOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-              <span className="lg:hidden text-xs font-bold font-serif">Phase In Menu</span>
+              <span className="lg:hidden text-xs font-bold font-serif">{t('nav.phaseIn', 'Phase In Menu')}</span>
             </button>
 
           <div className="w-full h-px bg-stone-800/80 my-0.5" />
@@ -184,7 +194,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                   ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md'
                   : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-stone-400 hover:text-amber-300'
               }`}
-              title="Hub (Systems & Roster)"
+              title={`${t('nav.hub', 'Hub')} (${t('nav.hubSub', 'Systems & Roster')})`}
             >
               <Sparkles className="w-4 h-4" />
             </button>
@@ -210,7 +220,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                   ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md'
                   : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-stone-400 hover:text-amber-300'
               }`}
-              title="Compendium (Monsters, Spells & Items)"
+              title={`${t('nav.compendium', 'Compendium')} (${t('nav.compendiumSub', 'Monsters, Spells & Items')})`}
             >
               <Library className="w-4 h-4" />
             </button>
@@ -229,7 +239,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                   ? 'bg-stone-900 hover:bg-stone-800 text-amber-300 border-stone-800 hover:border-amber-600/40 cursor-pointer'
                   : 'bg-stone-900/40 text-stone-600 border-transparent cursor-not-allowed opacity-40'
               }`}
-              title="Undo (Ctrl+Z)"
+              title={`${t('nav.undo', 'Undo')} (Ctrl+Z)`}
             >
               <Undo2 className="w-3.5 h-3.5" />
             </button>
@@ -243,28 +253,39 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                   ? 'bg-stone-900 hover:bg-stone-800 text-amber-300 border-stone-800 hover:border-amber-600/40 cursor-pointer'
                   : 'bg-stone-900/40 text-stone-600 border-transparent cursor-not-allowed opacity-40'
               }`}
-              title="Redo (Ctrl+Y)"
+              title={`${t('nav.redo', 'Redo')} (Ctrl+Y)`}
             >
               <Redo2 className="w-3.5 h-3.5" />
             </button>
+
+            {/* AI Assistant Oracle & Entity Forge */}
+            {onOpenAiAssistant && (
+              <button
+                onClick={onOpenAiAssistant}
+                className="p-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-500/60 text-purple-200 shadow-md shadow-purple-950/40 transition cursor-pointer"
+                title={`Nexus ${t('nav.aiOracle', 'AI Oracle & Forge')}`}
+              >
+                <Bot className="w-4 h-4 text-purple-300" />
+              </button>
+            )}
 
             {/* Command Palette */}
             {onOpenCommandPalette && (
               <button
                 onClick={onOpenCommandPalette}
                 className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-amber-400 transition cursor-pointer"
-                title="Command Palette (Ctrl+K)"
+                title={`${t('nav.commandPalette', 'Command Palette')} (Ctrl+K)`}
               >
                 <Command className="w-4 h-4" />
               </button>
             )}
 
-            {/* Campaign Graph */}
-            {onOpenCampaignGraph && (
+            {/* Campaign Graph (Only visible in active campaign session) */}
+            {activeSession && onOpenCampaignGraph && (
               <button
                 onClick={onOpenCampaignGraph}
                 className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-amber-400 transition cursor-pointer"
-                title="Campaign Knowledge Graph"
+                title={t('nav.campaignGraph', 'Campaign Graph')}
               >
                 <Network className="w-4 h-4" />
               </button>
@@ -275,7 +296,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
               <button
                 onClick={onOpenExtensionManager}
                 className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-indigo-400 transition cursor-pointer"
-                title="SDK / Plugins Manager"
+                title={t('nav.sdkPlugins', 'SDK / Plugins')}
               >
                 <Layers className="w-4 h-4" />
               </button>
@@ -301,7 +322,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
               <button
                 onClick={onOpenVoiceModal}
                 className="p-2 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-emerald-400 transition cursor-pointer"
-                title="Party WebRTC Voice Chat"
+                title={t('nav.partyVoice', 'Party Voice')}
               >
                 <Radio className="w-4 h-4 animate-pulse" />
               </button>
@@ -316,9 +337,24 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                     ? 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
                     : 'bg-rose-950/60 border-rose-800/80 text-rose-300'
                 }`}
-                title="Options & Audio Settings"
+                title={t('nav.options', 'Options')}
               >
                 <Settings className="w-4 h-4" />
+              </button>
+            )}
+
+            {/* Physical Dice Toggle */}
+            {onTogglePhysicalDiceMode && (
+              <button
+                onClick={onTogglePhysicalDiceMode}
+                className={`p-2 rounded-xl border transition cursor-pointer ${
+                  isPhysicalDiceMode
+                    ? 'bg-amber-500 text-stone-950 border-amber-400 font-bold shadow-md shadow-amber-500/20'
+                    : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
+                }`}
+                title={isPhysicalDiceMode ? `${t('nav.physicalDice', 'Physical Dice')} [ON]` : `${t('nav.physicalDice', 'Physical Dice')} [OFF]`}
+              >
+                <Dices className={`w-4 h-4 ${isPhysicalDiceMode ? 'text-stone-950 animate-pulse' : 'text-amber-400'}`} />
               </button>
             )}
 
@@ -330,7 +366,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                   ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300'
                   : 'bg-stone-900/80 hover:bg-stone-800 border-stone-800 text-amber-400'
               }`}
-              title={isStandalone ? 'App Installed' : 'Install PWA App'}
+              title={isStandalone ? t('nav.appInstalled', 'App Installed') : t('nav.installApp', 'Install App')}
             >
               <Laptop className="w-4 h-4" />
             </button>
@@ -357,14 +393,14 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
         {/* TOP: NAVIGATION & SYSTEM GUIDES (Hub, User Guide, Compendium) */}
         <div className="space-y-1.5">
           <div className="px-1 flex items-center justify-between text-[11px] font-bold text-stone-400 uppercase tracking-wider">
-            <span>Navigation & Rules</span>
+            <span>{t('nav.navigation', 'Navigation')}</span>
             <button
               onClick={toggleCollapse}
               className="p-1 rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/50 text-stone-400 hover:text-amber-300 transition cursor-pointer shadow-sm group flex items-center gap-1 text-[10px] normal-case"
               title="Phase out / collapse vertical menu"
             >
               <PanelLeftClose className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-300" />
-              <span className="hidden sm:inline text-[10px] text-stone-400 group-hover:text-amber-300 font-mono">Phase Out</span>
+              <span className="hidden sm:inline text-[10px] text-stone-400 group-hover:text-amber-300 font-mono">{t('nav.phaseOut', 'Phase Out')}</span>
             </button>
           </div>
 
@@ -387,8 +423,8 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                 <Sparkles className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="font-serif font-bold text-sm tracking-wide leading-tight block">Hub</span>
-                <p className="text-[10px] text-stone-400 truncate mt-0.5">Systems & Roster</p>
+                <span className="font-serif font-bold text-sm tracking-wide leading-tight block">{t('nav.hub', 'Hub')}</span>
+                <p className="text-[10px] text-stone-400 truncate mt-0.5">{t('nav.hubSub', 'Systems & Roster')}</p>
               </div>
             </div>
             <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform ${
@@ -443,8 +479,8 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                 <Library className="w-4 h-4" />
               </div>
               <div className="min-w-0">
-                <span className="font-serif font-bold text-sm tracking-wide leading-tight block">Compendium</span>
-                <p className="text-[10px] text-stone-400 truncate mt-0.5">Monsters, Spells & Items</p>
+                <span className="font-serif font-bold text-sm tracking-wide leading-tight block">{t('nav.compendium', 'Compendium')}</span>
+                <p className="text-[10px] text-stone-400 truncate mt-0.5">{t('nav.compendiumSub', 'Monsters, Spells & Items')}</p>
               </div>
             </div>
             <ChevronRight className={`w-3.5 h-3.5 shrink-0 transition-transform ${
@@ -457,7 +493,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
 
         {/* TOOLBAR ACTIONS HEADER */}
         <div className="px-1 flex items-center justify-between text-[11px] font-bold text-stone-400 uppercase tracking-wider">
-          <span>Quick Controls</span>
+          <span>{t('nav.quickControls', 'Quick Controls')}</span>
           <span className="text-[10px] font-mono text-stone-600">v0.9.5</span>
         </div>
 
@@ -476,7 +512,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
               title="Undo last change (Ctrl+Z)"
             >
               <Undo2 className="w-3.5 h-3.5" />
-              <span>Undo</span>
+              <span>{t('nav.undo', 'Undo')}</span>
             </button>
 
             <button
@@ -490,9 +526,24 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
               title="Redo change (Ctrl+Y or Cmd+Shift+Z)"
             >
               <Redo2 className="w-3.5 h-3.5" />
-              <span>Redo</span>
+              <span>{t('nav.redo', 'Redo')}</span>
             </button>
           </div>
+
+          {/* AI Assistant Oracle & Entity Forge */}
+          {onOpenAiAssistant && (
+            <button
+              onClick={onOpenAiAssistant}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-purple-950/70 hover:bg-purple-900/80 border border-purple-500/50 hover:border-purple-400 text-purple-200 hover:text-purple-100 text-xs font-bold transition cursor-pointer group shadow-sm"
+              title="Open Nexus AI Oracle & Entity Forge"
+            >
+              <div className="flex items-center gap-2.5">
+                <Bot className="w-4 h-4 text-purple-300 group-hover:scale-110 transition-transform" />
+                <span>{t('nav.aiOracle', 'AI Oracle & Forge')}</span>
+              </div>
+              <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-mono">Oracle</span>
+            </button>
+          )}
 
           {/* Command Palette Ctrl+K */}
           {onOpenCommandPalette && (
@@ -503,21 +554,21 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
             >
               <div className="flex items-center gap-2.5">
                 <Command className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                <span>Command Palette</span>
+                <span>{t('nav.commandPalette', 'Command Palette')}</span>
               </div>
             </button>
           )}
 
-          {/* Campaign Knowledge Graph */}
-          {onOpenCampaignGraph && (
+          {/* Campaign Knowledge Graph (Only visible in active campaign session) */}
+          {activeSession && onOpenCampaignGraph && (
             <button
               onClick={onOpenCampaignGraph}
               className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-stone-900/80 hover:bg-stone-800/90 border border-stone-800 hover:border-amber-600/40 text-stone-200 hover:text-amber-300 text-xs font-bold transition cursor-pointer group"
-              title="Open Obsidian-Style RPG Campaign Knowledge Graph Network"
+              title="Open Campaign Graph"
             >
               <div className="flex items-center gap-2.5">
                 <Network className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-                <span>Campaign Graph</span>
+                <span>{t('nav.campaignGraph', 'Campaign Graph')}</span>
               </div>
             </button>
           )}
@@ -531,7 +582,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
             >
               <div className="flex items-center gap-2.5">
                 <Layers className="w-4 h-4 text-indigo-400 group-hover:scale-110 transition-transform" />
-                <span>SDK / Plugins</span>
+                <span>{t('nav.sdkPlugins', 'SDK / Plugins')}</span>
               </div>
             </button>
           )}
@@ -561,7 +612,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
             >
               <div className="flex items-center gap-2.5">
                 <Radio className="w-4 h-4 text-emerald-400 animate-pulse group-hover:scale-110 transition-transform" />
-                <span>Party Voice</span>
+                <span>{t('nav.partyVoice', 'Party Voice')}</span>
               </div>
             </button>
           )}
@@ -579,8 +630,31 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
             >
               <div className="flex items-center gap-2.5">
                 <Settings className="w-4 h-4 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
-                <span>Options</span>
+                <span>{t('nav.options', 'Options')}</span>
               </div>
+            </button>
+          )}
+
+          {/* Physical Tabletop Dice Mode */}
+          {onTogglePhysicalDiceMode && (
+            <button
+              onClick={onTogglePhysicalDiceMode}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border group ${
+                isPhysicalDiceMode
+                  ? 'bg-amber-500 text-stone-950 border-amber-400 font-extrabold shadow-md shadow-amber-500/20'
+                  : 'bg-stone-900/80 hover:bg-stone-800/90 border-stone-800 hover:border-amber-600/40 text-stone-200 hover:text-amber-300'
+              }`}
+              title={isPhysicalDiceMode ? 'Physical Tabletop Mode Active: Click to switch to digital rolling' : 'Switch to Physical Tabletop Dice Mode (Input real dice)'}
+            >
+              <div className="flex items-center gap-2.5">
+                <Dices className={`w-4 h-4 ${isPhysicalDiceMode ? 'text-stone-950 animate-pulse' : 'text-amber-400'} group-hover:rotate-12 transition-transform`} />
+                <span>{t('nav.physicalDice', 'Physical Dice')}</span>
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                isPhysicalDiceMode ? 'bg-stone-950 text-amber-300' : 'bg-stone-800 text-stone-400'
+              }`}>
+                {isPhysicalDiceMode ? 'ON' : 'OFF'}
+              </span>
             </button>
           )}
 
@@ -598,7 +672,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
           >
             <div className="flex items-center gap-2.5">
               <Laptop className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
-              <span>{isStandalone ? 'App Installed' : 'Install App'}</span>
+              <span>{isStandalone ? t('nav.appInstalled', 'App Installed') : t('nav.installApp', 'Install App')}</span>
             </div>
           </button>
         </div>

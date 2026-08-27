@@ -9,6 +9,7 @@ import {
   formatModifier
 } from '../../../utils/dndCalculations';
 import { Shield, CheckSquare, Square, Dices } from 'lucide-react';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface SkillsPanelProps {
   character: CharacterData;
@@ -16,11 +17,37 @@ interface SkillsPanelProps {
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
 }
 
+const getTranslatedSkillName = (name: string, t: (key: string, def?: string) => string) => {
+  const map: Record<string, string> = {
+    'Acrobatics': 'skills.acrobatics',
+    'Animal Handling': 'skills.animalHandling',
+    'Arcana': 'skills.arcana',
+    'Athletics': 'skills.athletics',
+    'Deception': 'skills.deception',
+    'History': 'skills.history',
+    'Insight': 'skills.insight',
+    'Intimidation': 'skills.intimidation',
+    'Investigation': 'skills.investigation',
+    'Medicine': 'skills.medicine',
+    'Nature': 'skills.nature',
+    'Perception': 'skills.perception',
+    'Performance': 'skills.performance',
+    'Persuasion': 'skills.persuasion',
+    'Religion': 'skills.religion',
+    'Sleight of Hand': 'skills.sleightOfHand',
+    'Stealth': 'skills.stealth',
+    'Survival': 'skills.survival',
+  };
+  const key = map[name];
+  return key ? t(key, name) : name;
+};
+
 export const SkillsPanel: React.FC<SkillsPanelProps> = ({
   character,
   onUpdateCharacter,
   onRoll
 }) => {
+  const { t } = useLanguage();
   const profBonus = getProficiencyBonus(character.level);
 
   const handleSkillProficiencyChange = (skillId: string, type: 'proficient' | 'expertise') => {
@@ -58,13 +85,13 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
 
   return (
     <CollapsibleBox
-      title={`Skills (${character.edition === '3.5e' ? '3.5e Ranks System' : '5e Proficiency System'})`}
+      title={`${t('stats.skills', 'Skills')} (${character.edition === '3.5e' ? '3.5e Ranks System' : '5e Proficiency System'})`}
       icon={<Shield className="w-5 h-5 text-amber-500" />}
       storageKey="sheet1_skills"
       headerExtra={
         character.edition !== '3.5e' ? (
           <div className="text-xs text-stone-400 font-mono">
-            Prof: <span className="text-purple-300 font-bold">+{profBonus}</span>
+            {t('stats.profBonus', 'Prof')}: <span className="text-purple-300 font-bold">+{profBonus}</span>
           </div>
         ) : undefined
       }
@@ -136,6 +163,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
 
         <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
           {character.skills.map((skill) => {
+            const displayName = getTranslatedSkillName(skill.name, t);
             if (character.edition === '3.5e') {
               const skillBonus = get35eSkillBonus(skill, character.abilities);
               const abilityMod = getAbilityModifier(character.abilities[skill.ability]?.score || 10);
@@ -167,7 +195,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                     <span className="font-mono text-[10px] text-amber-500 font-bold w-6">
                       {skill.ability}
                     </span>
-                    <span className="font-medium text-stone-200 truncate">{skill.name}</span>
+                    <span className="font-medium text-stone-200 truncate">{displayName}</span>
                   </div>
 
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
@@ -201,9 +229,9 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                     </span>
 
                     <button
-                      onClick={() => onRoll(`${skill.name} Check (3.5e)`, 20, 1, skillBonus, 'normal')}
+                      onClick={() => onRoll(`${displayName} Check (3.5e)`, 20, 1, skillBonus, 'normal')}
                       className="p-1 bg-stone-800 hover:bg-amber-600 text-stone-300 hover:text-white rounded-lg transition"
-                      title={`Roll ${skill.name} Check`}
+                      title={`Roll ${displayName} Check`}
                     >
                       <Dices className="w-3.5 h-3.5" />
                     </button>
@@ -246,7 +274,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                     {skill.ability}
                   </span>
 
-                  <span className="font-medium text-stone-200 truncate">{skill.name}</span>
+                  <span className="font-medium text-stone-200 truncate">{displayName}</span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -254,9 +282,9 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                     {formatModifier(skillBonus)}
                   </span>
                   <button
-                    onClick={() => onRoll(`${skill.name} Check`, 20, 1, skillBonus, 'normal')}
+                    onClick={() => onRoll(`${displayName} Check`, 20, 1, skillBonus, 'normal')}
                     className="p-1 bg-stone-800 hover:bg-amber-600 text-stone-300 hover:text-white rounded-lg transition"
-                    title={`Roll ${skill.name} Check`}
+                    title={`Roll ${displayName} Check`}
                   >
                     <Dices className="w-3.5 h-3.5" />
                   </button>

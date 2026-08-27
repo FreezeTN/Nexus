@@ -19,6 +19,7 @@ export type LayoutFeatureId =
   | 's2_resistancesDr'
   | 's2_conditionsPanel'
   | 's2_encounterTracker'
+  | 's2_attackResolver'
   | 's2_attacksWeapons'
   | 's2_combatSpellsPotions'
   // Sheet 3: Gear & Wealth
@@ -152,10 +153,10 @@ export const ALL_LAYOUT_FEATURES: LayoutFeatureDef[] = [
   },
   {
     id: 's2_defenseStats',
-    name: 'Armor Class, Initiative & Speed',
+    name: 'Defense Stats, Resistances & DR',
     sheet: 'sheet2',
     sheetLabel: 'Combat',
-    description: 'AC calculation breakdown, DEX initiative roller, speed modifiers (encumbrance/armor), Touch AC and Flat-Footed AC.',
+    description: 'Armor Class (AC), Initiative roller, Speed, 3.5e touch/flat-footed defenses, Damage Resistances, Immunities, and flat Damage Reduction (DR).',
     defaultEnabled: true,
     category: 'Defenses & Movement',
     editions: ['5e', '3.5e', 'pathfinder', 'cthulhu']
@@ -169,16 +170,6 @@ export const ALL_LAYOUT_FEATURES: LayoutFeatureDef[] = [
     defaultEnabled: true,
     category: 'Life & Form',
     editions: ['5e', '3.5e', 'pathfinder']
-  },
-  {
-    id: 's2_resistancesDr',
-    name: 'Resistances, Immunities & DR',
-    sheet: 'sheet2',
-    sheetLabel: 'Combat',
-    description: 'Collapsible damage resistance badges (50%), damage immunities (100%), and flat Damage Reduction (DR) calculations.',
-    defaultEnabled: true,
-    category: 'Damage Mitigation',
-    editions: ['5e', '3.5e', 'pathfinder', 'cthulhu']
   },
   {
     id: 's2_conditionsPanel',
@@ -196,6 +187,16 @@ export const ALL_LAYOUT_FEATURES: LayoutFeatureDef[] = [
     sheet: 'sheet2',
     sheetLabel: 'Combat',
     description: 'Party & monster turn-order manager, combat round counter, initiative sorter, active turn highlighter and audio bells.',
+    defaultEnabled: true,
+    category: 'Encounter Management',
+    editions: ['5e', '3.5e', 'pathfinder', 'cthulhu']
+  },
+  {
+    id: 's2_attackResolver',
+    name: 'Target AC Hit & Attack Resolver',
+    sheet: 'sheet2',
+    sheetLabel: 'Combat',
+    description: 'Automated D20 attack rolls vs target Armor Class (AC), critical hit doubling, advantage/disadvantage, cover bonuses and one-click damage application.',
     defaultEnabled: true,
     category: 'Encounter Management',
     editions: ['5e', '3.5e', 'pathfinder', 'cthulhu']

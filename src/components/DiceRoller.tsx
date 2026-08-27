@@ -3,6 +3,7 @@ import { DiceRollResult } from '../types';
 import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playDiceSound, isDiceSoundEnabled, setDiceSoundEnabled } from '../utils/diceAudio';
+import { useLanguage } from '../i18n/LanguageContext';
 
 interface DiceRollerProps {
   rollLogs: DiceRollResult[];
@@ -10,6 +11,8 @@ interface DiceRollerProps {
   onClearLogs: () => void;
   activeRollResult?: DiceRollResult | null;
   onOpenAudioModal?: () => void;
+  isPhysicalDiceMode?: boolean;
+  onTogglePhysicalDiceMode?: () => void;
 }
 
 export const DiceRoller: React.FC<DiceRollerProps> = ({
@@ -17,14 +20,17 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   onRoll,
   onClearLogs,
   activeRollResult,
-  onOpenAudioModal
+  onOpenAudioModal,
+  isPhysicalDiceMode = false,
+  onTogglePhysicalDiceMode
 }) => {
+  const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedDie, setSelectedDie] = useState<number>(20);
   const [diceCount, setDiceCount] = useState<number>(1);
   const [customModifier, setCustomModifier] = useState<number>(0);
   const [rollMode, setRollMode] = useState<'normal' | 'advantage' | 'disadvantage'>('normal');
-  const [customLabel, setCustomLabel] = useState<string>('Custom Roll');
+  const [customLabel, setCustomLabel] = useState<string>(t('dice.customRoll', 'Custom Roll'));
   const [soundOn, setSoundOn] = useState<boolean>(isDiceSoundEnabled());
 
   const diceTypes = [4, 6, 8, 10, 12, 20, 100];
@@ -38,7 +44,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
 
   const handleQuickRoll = (d: number) => {
     playDiceSound();
-    onRoll(customLabel || `d${d} Roll`, d, diceCount, customModifier, d === 20 ? rollMode : 'normal');
+    onRoll(customLabel || `d${d} ${t('dice.roll', 'Roll')}`, d, diceCount, customModifier, d === 20 ? rollMode : 'normal');
   };
 
   return (
@@ -93,9 +99,23 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
             <div className="flex items-center justify-between border-b border-stone-800 pb-2">
               <div className="flex items-center gap-2 text-amber-400 font-semibold font-serif">
                 <Dices className="w-5 h-5 text-amber-500" />
-                <span>Interactive Dice Roller</span>
+                <span>{isPhysicalDiceMode ? t('dice.physicalMode', 'Physical Tabletop Mode') : t('dice.interactiveTitle', 'Interactive Dice Roller')}</span>
               </div>
               <div className="flex items-center gap-1">
+                {onTogglePhysicalDiceMode && (
+                  <button
+                    onClick={onTogglePhysicalDiceMode}
+                    className={`px-2 py-1 rounded-lg border text-[10px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                      isPhysicalDiceMode
+                        ? 'bg-amber-500 text-stone-950 border-amber-400 shadow'
+                        : 'bg-stone-800 text-stone-300 border-stone-700 hover:text-amber-300'
+                    }`}
+                    title={isPhysicalDiceMode ? 'Physical Dice Mode is Active' : 'Switch to Physical Dice Mode'}
+                  >
+                    <Dices className="w-3 h-3" />
+                    <span>{isPhysicalDiceMode ? t('dice.physical', 'Physical') : t('dice.digital', 'Digital')}</span>
+                  </button>
+                )}
                 <button
                   onClick={handleToggleSound}
                   className={`p-1.5 rounded-lg border transition text-xs flex items-center gap-1 ${
@@ -103,7 +123,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                       ? 'bg-amber-950/80 text-amber-300 border-amber-600/50 hover:bg-amber-900'
                       : 'bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200'
                   }`}
-                  title={isDiceSoundEnabled() ? 'Dice Roll Sound Enabled (Click to toggle sound)' : 'Dice Roll Sound Muted (Click to enable sound)'}
+                  title={isDiceSoundEnabled() ? 'Sound ON' : 'Sound OFF'}
                 >
                   {isDiceSoundEnabled() ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-stone-500" />}
                   <span className="text-[10px] font-mono">{isDiceSoundEnabled() ? 'ON' : 'OFF'}</span>
@@ -112,9 +132,9 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                   <button
                     onClick={onOpenAudioModal}
                     className="p-1.5 rounded-lg border border-stone-800 bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-amber-300 transition text-[10px] font-mono"
-                    title="Open Full Audio Options & Volume Controls"
+                    title="Open Audio Options"
                   >
-                    Options
+                    {t('common.options', 'Options')}
                   </button>
                 )}
                 <button
@@ -125,6 +145,25 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Mode Banner if Physical Dice Mode is Active */}
+            {isPhysicalDiceMode && (
+              <div className="bg-amber-950/50 border border-amber-600/50 rounded-xl p-2 text-xs flex items-center justify-between text-amber-200">
+                <div className="flex items-center gap-1.5 font-sans">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span className="font-semibold text-[11px]">{t('dice.tabletopModeActive', 'Tabletop Mode Active')}:</span>
+                  <span className="text-[10px] text-amber-300/80">{t('dice.promptsRealRoll', 'Prompts for real roll result')}</span>
+                </div>
+                {onTogglePhysicalDiceMode && (
+                  <button
+                    onClick={onTogglePhysicalDiceMode}
+                    className="text-[10px] underline text-amber-400 hover:text-amber-200 font-mono"
+                  >
+                    {t('dice.switch', 'Switch')}
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Dice Selector Buttons */}
             <div className="grid grid-cols-7 gap-1">
@@ -152,7 +191,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                     rollMode === 'advantage' ? 'bg-emerald-700 text-white font-bold' : 'text-stone-400 hover:text-stone-200'
                   }`}
                 >
-                  Advantage
+                  {t('dice.advantage', 'Advantage')}
                 </button>
                 <button
                   onClick={() => setRollMode('normal')}
@@ -160,7 +199,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                     rollMode === 'normal' ? 'bg-amber-600 text-white font-bold' : 'text-stone-400 hover:text-stone-200'
                   }`}
                 >
-                  Normal
+                  {t('dice.normal', 'Normal')}
                 </button>
                 <button
                   onClick={() => setRollMode('disadvantage')}
@@ -168,7 +207,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                     rollMode === 'disadvantage' ? 'bg-rose-700 text-white font-bold' : 'text-stone-400 hover:text-stone-200'
                   }`}
                 >
-                  Disadvantage
+                  {t('dice.disadvantage', 'Disadvantage')}
                 </button>
               </div>
             )}
@@ -176,7 +215,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
             {/* Inputs: Count, Modifier & Label */}
             <div className="grid grid-cols-3 gap-2 text-xs">
               <div>
-                <label className="block text-stone-400 mb-1">Number of Dice</label>
+                <label className="block text-stone-400 mb-1">{t('dice.numberOfDice', 'Number of Dice')}</label>
                 <input
                   type="number"
                   min="1"
@@ -187,7 +226,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-stone-400 mb-1">Modifier (+/-)</label>
+                <label className="block text-stone-400 mb-1">{t('dice.modifier', 'Modifier (+/-)')}</label>
                 <input
                   type="number"
                   value={customModifier}
@@ -196,7 +235,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-stone-400 mb-1">Roll Tag</label>
+                <label className="block text-stone-400 mb-1">{t('dice.rollTag', 'Roll Tag')}</label>
                 <input
                   type="text"
                   value={customLabel}
@@ -213,28 +252,28 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
               className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg border border-amber-400/30 flex items-center justify-center gap-2 text-sm transition transform active:scale-98"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Roll {diceCount}d{selectedDie} {customModifier >= 0 ? `+${customModifier}` : customModifier}</span>
+              <span>{t('dice.roll', 'Roll')} {diceCount}d{selectedDie} {customModifier >= 0 ? `+${customModifier}` : customModifier}</span>
             </button>
 
             {/* Roll Logs History */}
             <div className="border-t border-stone-800 pt-2 max-h-40 overflow-y-auto space-y-1.5 pr-1">
               <div className="flex items-center justify-between text-xs text-stone-400 mb-1">
                 <span className="flex items-center gap-1 font-semibold text-stone-300">
-                  <History className="w-3.5 h-3.5" /> Recent Rolls
+                  <History className="w-3.5 h-3.5" /> {t('dice.recentRolls', 'Recent Rolls')}
                 </span>
                 {rollLogs.length > 0 && (
                   <button
                     onClick={onClearLogs}
                     className="text-stone-500 hover:text-rose-400 transition flex items-center gap-1"
                   >
-                    <Trash2 className="w-3 h-3" /> Clear
+                    <Trash2 className="w-3 h-3" /> {t('common.clear', 'Clear')}
                   </button>
                 )}
               </div>
 
               {rollLogs.length === 0 ? (
                 <div className="text-xs text-stone-500 text-center py-2 italic">
-                  No dice rolls yet. Click any skill, stat, weapon or spell to roll!
+                  {t('dice.noRollsYet', 'No dice rolls yet. Click any skill, stat, weapon or spell to roll!')}
                 </div>
               ) : (
                 rollLogs.slice(0, 8).map((log) => (
@@ -262,10 +301,17 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
       {/* Floating Toggle Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-gradient-to-r from-amber-700 to-amber-800 hover:from-amber-600 hover:to-amber-700 text-amber-100 p-3 rounded-full shadow-2xl border-2 border-amber-400/50 flex items-center gap-2 group transition transform active:scale-95"
+        className={`p-3 rounded-full shadow-2xl border-2 flex items-center gap-2 group transition transform active:scale-95 cursor-pointer ${
+          isPhysicalDiceMode
+            ? 'bg-gradient-to-r from-amber-600 via-amber-700 to-amber-900 text-amber-100 border-amber-400 ring-2 ring-amber-500/40 shadow-amber-950/80'
+            : 'bg-gradient-to-r from-amber-700 to-amber-800 hover:from-amber-600 hover:to-amber-700 text-amber-100 border-amber-400/50'
+        }`}
+        title={isPhysicalDiceMode ? 'Physical Tabletop Mode Active' : 'Dice Tray'}
       >
-        <Dices className="w-6 h-6 text-amber-300 group-hover:rotate-12 transition-transform" />
-        <span className="hidden md:inline font-serif font-bold text-sm pr-1">Dice Tray</span>
+        <Dices className={`w-6 h-6 ${isPhysicalDiceMode ? 'text-amber-200 animate-pulse' : 'text-amber-300'} group-hover:rotate-12 transition-transform`} />
+        <span className="hidden md:inline font-serif font-bold text-sm pr-1">
+          {isPhysicalDiceMode ? t('dice.physicalDice', 'Physical Dice') : t('dice.diceTray', 'Dice Tray')}
+        </span>
         {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
       </button>
     </div>

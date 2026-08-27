@@ -26,88 +26,24 @@ import {
   ListFilter,
   UserPlus,
   Sparkles,
-  Flame
+  Flame,
+  Zap
 } from 'lucide-react';
-import { AttackResolver } from './AttackResolver';
 import { voiceManager, VoicePeerState } from '../../lib/voiceChatService';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound } from '../../utils/diceAudio';
+import { CollapsibleBox } from '../common/CollapsibleBox';
 
 import { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData } from './encounter/encounterTypes';
 import { EncounterLogModal } from './encounter/EncounterLogModal';
 import { AddCombatantModal } from './encounter/AddCombatantModal';
 import { MonsterMechanicsBar } from './encounter/MonsterMechanicsBar';
 import { eventBus } from '../../events/eventBus';
+import { useEncounterState, loadSavedEncounter } from './encounter/useEncounterState';
 
 export type { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData };
-
-export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
-  const defaultPlayer: Combatant = {
-    id: 'player-' + char.id,
-    name: char.name,
-    initiative: 0,
-    armorClass: char.armorClass || 10,
-    hpCurrent: char.hpCurrent || 10,
-    hpMax: getEffectiveMaxHp(char),
-    type: 'player',
-    isPlayerChar: true,
-    conditions: char.conditions || [],
-    portraitUrl: char.portraitUrl || (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined)
-  };
-
-  const defaultState: SavedEncounterData = {
-    combatants: [defaultPlayer],
-    activeTurnIndex: 0,
-    roundNumber: 1,
-    encounterEnvironment: 'terrestrial',
-    combatLogs: [
-      {
-        id: 'log-init-1',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        round: 1,
-        category: 'turn',
-        message: `Encounter tracker initialized for ${char.name}.`
-      }
-    ]
-  };
-
-  try {
-    const charKey = char.id || 'default';
-    const raw = localStorage.getItem(`dnd_encounter_state_v1_${charKey}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.combatants) && parsed.combatants.length > 0) {
-        const syncedCombatants = parsed.combatants.map((c: Combatant) => {
-          if (c.isPlayerChar) {
-            return {
-              ...c,
-              name: char.name,
-              hpCurrent: char.hpCurrent,
-              hpMax: getEffectiveMaxHp(char),
-              armorClass: char.armorClass,
-              conditions: char.conditions || [],
-              portraitUrl: char.portraitUrl || (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined)
-            };
-          }
-          return c;
-        });
-
-        return {
-          combatants: syncedCombatants,
-          activeTurnIndex: typeof parsed.activeTurnIndex === 'number' && parsed.activeTurnIndex < syncedCombatants.length ? parsed.activeTurnIndex : 0,
-          roundNumber: typeof parsed.roundNumber === 'number' ? parsed.roundNumber : 1,
-          encounterEnvironment: parsed.encounterEnvironment || 'terrestrial',
-          combatLogs: Array.isArray(parsed.combatLogs) && parsed.combatLogs.length > 0 ? parsed.combatLogs : defaultState.combatLogs
-        };
-      }
-    }
-  } catch (err) {
-    console.error("Error reading encounter state from localStorage:", err);
-  }
-
-  return defaultState;
-}
+export { loadSavedEncounter };
 
 export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   character,
@@ -116,76 +52,52 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   currentUser,
   onOpenPartyManager,
   onRoll,
-  onUpdateCharacter
+  onUpdateCharacter,
+  encounterState: externalState
 }) => {
-  const [combatants, setCombatants] = useState<Combatant[]>(() => loadSavedEncounter(character).combatants);
-  const [activeTurnIndex, setActiveTurnIndex] = useState<number>(() => loadSavedEncounter(character).activeTurnIndex);
-  const [roundNumber, setRoundNumber] = useState<number>(() => loadSavedEncounter(character).roundNumber);
-  const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>(() => loadSavedEncounter(character).combatLogs);
-  const [encounterEnvironment, setEncounterEnvironment] = useState<EncounterEnvironment>(() => loadSavedEncounter(character).encounterEnvironment || 'terrestrial');
+  const localEncounter = useEncounterState({
+    character,
+    allCharacters,
+    parties,
+    onUpdateCharacter,
+    onRoll
+  });
+
+  const encounter = externalState || localEncounter;
+
+  const {
+    combatants,
+    setCombatants,
+    activeTurnIndex,
+    setActiveTurnIndex,
+    roundNumber,
+    setRoundNumber,
+    combatLogs,
+    setCombatLogs,
+    encounterEnvironment,
+    setEncounterEnvironment,
+    activeCombatant,
+    activeAttackerCharacter,
+    allies,
+    enemies,
+    xpAlert,
+    setXpAlert,
+    handleAdjustHp,
+    handleNextTurn,
+    handlePrevTurn,
+    handleRollAllInitiatives,
+    handleToggleCombatantType,
+    handleUpdateCombatantMaxHp,
+    handleRemoveCombatant,
+    handleClearEncounter,
+    handleAddPartyToEncounter,
+    addLogEntry,
+    awardDefeatedMonsterXp,
+    applyManualXp,
+    toggleAutoXpGain
+  } = encounter;
+
   const [showEndConfirm, setShowEndConfirm] = useState(false);
-
-  // Reload saved encounter if active character ID changes
-  React.useEffect(() => {
-    const saved = loadSavedEncounter(character);
-    setCombatants(saved.combatants);
-    setActiveTurnIndex(saved.activeTurnIndex);
-    setRoundNumber(saved.roundNumber);
-    setCombatLogs(saved.combatLogs);
-    setEncounterEnvironment(saved.encounterEnvironment || 'terrestrial');
-  }, [character.id]);
-
-  // Save encounter state to localStorage
-  React.useEffect(() => {
-    const charKey = character.id || 'default';
-    try {
-      const dataToSave: SavedEncounterData = {
-        combatants,
-        activeTurnIndex,
-        roundNumber,
-        combatLogs,
-        encounterEnvironment
-      };
-      localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
-    } catch (err) {
-      console.error("Error saving encounter state to localStorage:", err);
-    }
-  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, character.id]);
-
-  // Keep player combatant synced with character
-  React.useEffect(() => {
-    setCombatants(prev =>
-      prev.map(c => {
-        if (c.isPlayerChar) {
-          return {
-            ...c,
-            name: character.name,
-            hpCurrent: character.hpCurrent,
-            hpMax: getEffectiveMaxHp(character),
-            armorClass: character.armorClass,
-            conditions: character.conditions || [],
-            portraitUrl: character.portraitUrl || (character.isMonster ? getMonsterPortraitUrl(character.name, character.id) : undefined)
-          };
-        }
-        return c;
-      })
-    );
-  }, [
-    character.hpCurrent,
-    character.hpMax,
-    character.feats,
-    character.inventory,
-    character.abilities,
-    character.level,
-    character.maxHpModifier,
-    character.exhaustionLevel,
-    character.armorClass,
-    character.name,
-    character.conditions,
-    character.portraitUrl,
-    character.isMonster
-  ]);
-
   const [showAddModal, setShowAddModal] = useState(false);
   const [addModalInitialType, setAddModalInitialType] = useState<'ally' | 'enemy'>('enemy');
   const [viewMode, setViewMode] = useState<'teams' | 'timeline'>('teams');
@@ -209,150 +121,21 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     return unsub;
   }, []);
 
-  const [xpAlert, setXpAlert] = useState<{
-    monsterName: string;
-    totalXp: number;
-    xpPerParticipant: number;
-    participantCount: number;
-    participantNames: string;
-  } | null>(null);
-
-  const activeCombatant = combatants[activeTurnIndex];
-
-  // Allies (Team 1) and Enemies (Team 2) from active character's perspective
-  const allies = React.useMemo(() => {
-    return combatants.filter(c => c.isPlayerChar || c.type === 'player' || c.type === 'ally');
-  }, [combatants]);
-
-  const enemies = React.useMemo(() => {
-    return combatants.filter(c => !c.isPlayerChar && c.type === 'enemy');
-  }, [combatants]);
-
   const isAllyTurn = activeCombatant ? (activeCombatant.isPlayerChar || activeCombatant.type === 'player' || activeCombatant.type === 'ally') : false;
   const isEnemyTurn = activeCombatant ? (!activeCombatant.isPlayerChar && activeCombatant.type === 'enemy') : false;
 
-  const alliesTotalHp = allies.reduce((sum, c) => sum + (c.hpMax || 1), 0);
-  const alliesCurrentHp = allies.reduce((sum, c) => sum + Math.max(0, c.hpCurrent || 0), 0);
-  const alliesAliveCount = allies.filter(c => c.hpCurrent > 0).length;
+  const alliesTotalHp = allies.reduce((sum: number, c: Combatant) => sum + (c.hpMax || 1), 0);
+  const alliesCurrentHp = allies.reduce((sum: number, c: Combatant) => sum + Math.max(0, c.hpCurrent || 0), 0);
+  const alliesAliveCount = allies.filter((c: Combatant) => c.hpCurrent > 0).length;
 
-  const enemiesTotalHp = enemies.reduce((sum, c) => sum + (c.hpMax || 1), 0);
-  const enemiesCurrentHp = enemies.reduce((sum, c) => sum + Math.max(0, c.hpCurrent || 0), 0);
-  const enemiesAliveCount = enemies.filter(c => c.hpCurrent > 0 && !c.isDefeated).length;
-  const enemiesTotalXp = enemies.reduce((sum, c) => sum + (c.monsterXpReward || 0), 0);
+  const enemiesTotalHp = enemies.reduce((sum: number, c: Combatant) => sum + (c.hpMax || 1), 0);
+  const enemiesCurrentHp = enemies.reduce((sum: number, c: Combatant) => sum + Math.max(0, c.hpCurrent || 0), 0);
+  const enemiesAliveCount = enemies.filter((c: Combatant) => c.hpCurrent > 0 && !c.isDefeated).length;
+  const enemiesTotalXp = enemies.reduce((sum: number, c: Combatant) => sum + (c.monsterXpReward || 0), 0);
 
   const handleOpenAddModal = (type: 'ally' | 'enemy' = 'enemy') => {
     setAddModalInitialType(type);
     setShowAddModal(true);
-  };
-
-  const handleToggleCombatantType = (id: string) => {
-    setCombatants(prev =>
-      prev.map(c => {
-        if (c.id === id) {
-          const nextType: 'ally' | 'enemy' = c.type === 'enemy' ? 'ally' : 'enemy';
-          addLogEntry('turn', `Switched allegiance for ${c.name} to ${nextType === 'enemy' ? 'Enemy (Team 2)' : 'Ally (Team 1)'}`, c.name);
-          return { ...c, type: nextType };
-        }
-        return c;
-      })
-    );
-  };
-
-  const activeAttackerCharacter: CharacterData = React.useMemo(() => {
-    if (!activeCombatant) return character;
-
-    if (activeCombatant.isPlayerChar || activeCombatant.name.toLowerCase() === character.name.toLowerCase()) {
-      return character;
-    }
-
-    const cleanActiveName = activeCombatant.name.toLowerCase().replace(/\s+#\d+$/, '');
-    const found = allCharacters.find(ch => {
-      const cleanChId = ch.id.replace(/^(player-|party-|ally-|enemy-|comb-)/, '');
-      const cleanCombId = activeCombatant.id.replace(/^(player-|party-|ally-|enemy-|comb-)/, '').replace(/-\d+$/, '');
-      return (
-        ch.id === activeCombatant.id ||
-        cleanChId === cleanCombId ||
-        ch.name.toLowerCase() === cleanActiveName
-      );
-    });
-
-    if (found) return found;
-
-    return {
-      ...character,
-      id: activeCombatant.id,
-      name: activeCombatant.name,
-      armorClass: activeCombatant.armorClass,
-      hpCurrent: activeCombatant.hpCurrent,
-      hpMax: activeCombatant.hpMax,
-      attacks: [],
-      spells: [],
-      conditions: activeCombatant.conditions || []
-    };
-  }, [activeCombatant, character, allCharacters]);
-
-  const addLogEntry = (category: CombatLogEntry['category'], message: string, actor?: string) => {
-    const newEntry: CombatLogEntry = {
-      id: 'log-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      round: roundNumber,
-      actor: actor || activeCombatant?.name || character.name,
-      category,
-      message
-    };
-    setCombatLogs(prev => [newEntry, ...prev]);
-  };
-
-  const awardDefeatedMonsterXp = (target: Combatant) => {
-    if (target.type !== 'enemy' || target.isDefeated) return;
-
-    const totalXp = target.monsterXpReward !== undefined ? target.monsterXpReward : 450;
-    if (totalXp <= 0) return;
-
-    const activeParticipants = combatants.filter(c => c.type === 'player' || c.type === 'ally');
-    const participantCount = Math.max(1, activeParticipants.length);
-    const xpPerParticipant = Math.floor(totalXp / participantCount);
-
-    setCombatants(prev =>
-      prev.map(c => c.id === target.id ? { ...c, isDefeated: true } : c)
-    );
-
-    if (onUpdateCharacter && xpPerParticipant > 0) {
-      const isPlayerInParticipants = activeParticipants.some(p => p.isPlayerChar || p.name === character.name);
-      if (isPlayerInParticipants) {
-        const isDual = !!(character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass);
-        const currentGenXp = character.experiencePoints || 0;
-        const newGenXp = currentGenXp + xpPerParticipant;
-
-        if (!isDual) {
-          const newLevel = getLevelFromTotalXp(newGenXp);
-          onUpdateCharacter({
-            ...character,
-            experiencePoints: newGenXp,
-            ...(newLevel > character.level ? { level: newLevel } : {})
-          });
-        } else {
-          onUpdateCharacter({
-            ...character,
-            experiencePoints: newGenXp
-          });
-        }
-      }
-    }
-
-    setXpAlert({
-      monsterName: target.name,
-      totalXp,
-      xpPerParticipant,
-      participantCount,
-      participantNames: activeParticipants.map(p => p.name).join(', ')
-    });
-
-    addLogEntry(
-      'heal',
-      `💀 MONSTER DEFEATED: ${target.name}! ${totalXp.toLocaleString()} total XP distributed (${xpPerParticipant.toLocaleString()} XP to each of ${participantCount} active participant(s): ${activeParticipants.map(p => p.name).join(', ')})`,
-      target.name
-    );
   };
 
   const dexScore = character.abilities?.DEX?.score ?? 10;
@@ -374,7 +157,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
 
     addLogEntry('initiative', `Rolled Initiative: ${total} (Roll: ${roll} + Bonus: ${bonus})`, character.name);
 
-    setCombatants(prev => {
+    setCombatants((prev: Combatant[]) => {
       const updated = prev.map(c => {
         if (c.isPlayerChar) {
           return {
@@ -391,245 +174,39 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     });
   };
 
-  const handleAddPartyToEncounter = (partyObj: Party) => {
-    const allMembers = (allCharacters || []).filter(c => partyObj.characterIds.includes(c.id));
-    if (allMembers.length === 0) {
-      alert(`Party "${partyObj.name}" has no members! Add characters to the party first.`);
-      return;
-    }
-
-    const deadMembers = allMembers.filter(m => !m.isMonster && isCharacterDead(m));
-    const members = allMembers.filter(m => m.isMonster || !isCharacterDead(m));
-
-    if (deadMembers.length > 0) {
-      alert(`The following dead character(s) were excluded from combat: ${deadMembers.map(m => m.name).join(', ')}. Revive them before adding them to combat!`);
-    }
-
-    if (members.length === 0) return;
-
-    const newCombatants: Combatant[] = [];
-    const addedLogDetails: string[] = [];
-
-    members.forEach(member => {
-      const isPlayerChar = member.id === character.id;
-      const memDexScore = member.abilities?.DEX?.score ?? 10;
-      const memDexMod = getAbilityModifier(memDexScore);
-      const memInitBonus = (member.initiativeBonus || 0) + (isNaN(memDexMod) ? 0 : memDexMod);
-      const rolledInit = Math.floor(Math.random() * 20) + 1 + memInitBonus;
-      const portrait = member.portraitUrl || (member.isMonster ? getMonsterPortraitUrl(member.name, member.id) : undefined);
-      const effectiveMax = getEffectiveMaxHp(member);
-
-      newCombatants.push({
-        id: isPlayerChar ? 'player-' + member.id : 'party-' + member.id + '-' + Date.now(),
-        name: member.name,
-        initiative: rolledInit,
-        armorClass: member.armorClass || 10,
-        hpCurrent: member.hpCurrent || effectiveMax || 10,
-        hpMax: effectiveMax || 10,
-        type: isPlayerChar ? 'player' : 'ally',
-        isPlayerChar,
-        partyId: partyObj.id,
-        isPartyMember: true,
-        conditions: member.conditions || [],
-        portraitUrl: portrait
-      });
-
-      addedLogDetails.push(`${member.name} (${isPlayerChar ? 'YOU' : 'Ally'}) - Init: ${rolledInit}, AC: ${member.armorClass || 10}, HP: ${member.hpCurrent || effectiveMax || 10}/${effectiveMax}`);
-    });
-
-    setCombatants(prev => {
-      const newNames = new Set(newCombatants.map(c => c.name.toLowerCase()));
-      const filteredPrev = prev.filter(c => !newNames.has(c.name.toLowerCase()));
-      const combined = [...filteredPrev, ...newCombatants];
-      return combined.sort((a, b) => b.initiative - a.initiative);
-    });
-
-    addLogEntry(
-      'turn',
-      `🛡️ Party "${partyObj.name}" (${members.length} members) joined the encounter as Allies!\n${addedLogDetails.join('\n')}`,
-      'Party'
-    );
-
-    eventBus.emit('CombatStarted', {
-      encounterName: `Tactical Combat - ${partyObj.name}`,
-      participantsCount: members.length
-    });
-
-    setShowAddModal(false);
-  };
-
-  const handleNextTurn = () => {
-    if (combatants.length === 0) return;
-    playInitiativeTurnSound();
-    let nextIdx = 0;
-    let nextRound = roundNumber;
-    if (activeTurnIndex >= combatants.length - 1) {
-      nextIdx = 0;
-      nextRound = roundNumber + 1;
-      setActiveTurnIndex(0);
-      setRoundNumber(nextRound);
-    } else {
-      nextIdx = activeTurnIndex + 1;
-      setActiveTurnIndex(nextIdx);
-    }
-    const nextCombatant = combatants[nextIdx];
-    if (nextCombatant) {
-      addLogEntry('turn', `Round ${nextRound} - Turn started for ${nextCombatant.name} (Init ${nextCombatant.initiative})`, nextCombatant.name);
-    }
-  };
-
-  const handlePrevTurn = () => {
-    if (combatants.length === 0) return;
-    let prevIdx = 0;
-    let prevRound = roundNumber;
-    if (activeTurnIndex <= 0) {
-      prevIdx = combatants.length - 1;
-      prevRound = Math.max(1, roundNumber - 1);
-      setActiveTurnIndex(prevIdx);
-      setRoundNumber(prevRound);
-    } else {
-      prevIdx = activeTurnIndex - 1;
-      setActiveTurnIndex(prevIdx);
-    }
-    const prevCombatant = combatants[prevIdx];
-    if (prevCombatant) {
-      addLogEntry('turn', `Turn moved back to ${prevCombatant.name}`, prevCombatant.name);
-    }
-  };
-
-  const handleAdjustHp = (id: string, delta: number) => {
-    const target = combatants.find(c => c.id === id);
-    if (!target) return;
-
-    const wasAtZero = target.hpCurrent <= 0;
-    const nextHp = Math.max(0, Math.min(target.hpMax, target.hpCurrent + delta));
-
-    setCombatants(prev =>
-      prev.map(c => (c.id === id ? { ...c, hpCurrent: nextHp } : c))
-    );
-
-    if (delta < 0) {
-      if (nextHp === 0) playDeathSound();
-      else playDamageAppliedSound();
-
-      if (wasAtZero) {
-        addLogEntry('damage', `💀 ${target.name} took damage at 0 HP! Automatic Death Save Failure added.`, target.name);
-      } else {
-        addLogEntry('damage', `${target.name} took ${Math.abs(delta)} damage (${nextHp}/${target.hpMax} HP)`, target.name);
-      }
-    } else if (delta > 0) {
-      playHealSound();
-      addLogEntry('heal', `${target.name} healed for ${delta} HP (${nextHp}/${target.hpMax} HP)`, target.name);
-    }
-
-    if (target.type === 'enemy' && target.hpCurrent > 0 && nextHp === 0 && !target.isDefeated) {
-      awardDefeatedMonsterXp(target);
-    }
-
-    if (target.isPlayerChar && onUpdateCharacter) {
-      let updatedFailures = character.deathSavesFailures || 0;
-      let updatedSuccesses = character.deathSavesSuccesses || 0;
-      let conds = character.conditions || [];
-
-      if (delta < 0 && wasAtZero) {
-        updatedFailures = Math.min(3, updatedFailures + 1);
-        if (updatedFailures >= 3 && !conds.includes('Dead')) {
-          conds = [...conds, 'Dead'];
-        }
-      } else if (delta > 0 && wasAtZero) {
-        updatedFailures = 0;
-        updatedSuccesses = 0;
-        conds = conds.filter(c => c !== 'Unconscious');
-      }
-
-      onUpdateCharacter({
-        ...character,
-        hpCurrent: nextHp,
-        deathSavesFailures: updatedFailures,
-        deathSavesSuccesses: updatedSuccesses,
-        conditions: conds
-      });
-    }
-  };
-
-  const handleUpdateCombatantMaxHp = (id: string, newMaxHp: number) => {
-    const validMaxHp = Math.max(1, newMaxHp);
-    const target = combatants.find(c => c.id === id);
-    if (!target) return;
-
-    setCombatants(prev =>
-      prev.map(c => {
-        if (c.id === id) {
-          const updatedHpCurrent = Math.min(c.hpCurrent, validMaxHp);
-          if (c.isPlayerChar || c.type === 'player') {
-            if (c.id === 'player-' + character.id || c.id === character.id) {
-              if (onUpdateCharacter) {
-                onUpdateCharacter({
-                  ...character,
-                  hpMax: validMaxHp,
-                  hpCurrent: updatedHpCurrent
-                });
-              }
-            }
-          }
-          return { ...c, hpMax: validMaxHp, hpCurrent: updatedHpCurrent };
-        }
-        return c;
-      })
-    );
-
-    addLogEntry('turn', `Updated ${target.name}'s Max HP to ${validMaxHp} HP`, target.name);
-  };
-
-  const handleRemoveCombatant = (id: string) => {
-    const target = combatants.find(c => c.id === id);
-    if (target) {
-      addLogEntry('turn', `Removed ${target.name} from combat`, target.name);
-    }
-    setCombatants(prev => prev.filter(c => c.id !== id));
-  };
-
-  const handleClearEncounter = () => {
-    const defaultPlayer: Combatant = {
-      id: 'player-' + character.id,
-      name: character.name,
-      initiative: 0,
-      armorClass: character.armorClass || 10,
-      hpCurrent: character.hpCurrent || 10,
-      hpMax: getEffectiveMaxHp(character),
-      type: 'player',
-      isPlayerChar: true,
-      conditions: character.conditions || [],
-      portraitUrl: character.portraitUrl || (character.isMonster ? getMonsterPortraitUrl(character.name, character.id) : undefined)
-    };
-    setCombatants([defaultPlayer]);
-    setActiveTurnIndex(0);
-    setRoundNumber(1);
-    setCombatLogs([
-      {
-        id: 'log-init-' + Date.now(),
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        round: 1,
-        category: 'turn',
-        message: `Encounter reset. All added targets cleared.`
-      }
-    ]);
-    setShowEndConfirm(false);
-  };
-
   const currentEnvConfig = ENVIRONMENT_CONFIGS[encounterEnvironment] || ENVIRONMENT_CONFIGS.terrestrial;
 
   return (
-    <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 shadow-xl space-y-4">
+    <CollapsibleBox
+      title="Initiative & Encounter Tracker"
+      icon={<Crosshair className="w-5 h-5 text-amber-500" />}
+      badge={
+        <span className="bg-amber-950 text-amber-300 border border-amber-600/40 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ml-1">
+          Round {roundNumber}
+        </span>
+      }
+      storageKey="sheet2_encounter_tracker"
+      headerExtra={
+        <button
+          type="button"
+          onClick={() => setShowLogModal(true)}
+          className="flex items-center gap-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/30 px-2.5 py-1 rounded-xl font-bold text-xs transition relative shadow"
+          title="Open Encounter Combat Log"
+        >
+          <ScrollText className="w-3.5 h-3.5 text-amber-400" />
+          <span className="hidden sm:inline">Combat Log</span>
+          {combatLogs.length > 0 && (
+            <span className="bg-amber-500 text-stone-950 font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold">
+              {combatLogs.length}
+            </span>
+          )}
+        </button>
+      }
+      className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-5 shadow-xl space-y-4"
+    >
       {/* Top Controls */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <Crosshair className="w-5 h-5 text-amber-500" />
-          <h3 className="font-serif font-bold text-stone-100 text-sm">Initiative & Encounter Tracker</h3>
-          <span className="bg-amber-950 text-amber-300 border border-amber-600/40 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold">
-            Round {roundNumber}
-          </span>
-
           <div className="flex items-center gap-1.5 bg-stone-950 border border-stone-800 px-2.5 py-1 rounded-xl text-xs font-bold shadow">
             <Compass className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-stone-400 font-sans hidden sm:inline">Location:</span>
@@ -703,6 +280,30 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             <Dices className="w-3.5 h-3.5" />
             <span>Roll Init ({formatModifier(initBonus)})</span>
           </button>
+
+          {/* Auto-XP vs Manual EXP Mode Quick Toggle */}
+          {onUpdateCharacter && (
+            <button
+              onClick={toggleAutoXpGain}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl font-bold transition shadow border cursor-pointer ${
+                character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                  ? 'bg-stone-900 text-amber-300 border-amber-500/50 hover:bg-amber-950/60'
+                  : 'bg-stone-900/90 text-emerald-300 border-emerald-700/50 hover:bg-emerald-950/40'
+              }`}
+              title={
+                character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                  ? 'Manual Tabletop EXP Mode is ACTIVE: Defeating monsters does NOT automatically add XP to character sheets. Click to switch to Auto-XP'
+                  : 'Auto-XP Gain is ACTIVE: Defeating monsters automatically distributes XP to party character sheets. Click to switch to Manual EXP'
+              }
+            >
+              <Zap className={`w-3.5 h-3.5 ${character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode ? 'text-amber-400' : 'text-emerald-400'}`} />
+              <span>
+                {character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                  ? 'EXP: Manual (Off)'
+                  : 'EXP: Auto (On)'}
+              </span>
+            </button>
+          )}
 
           {onOpenPartyManager && (
             <button
@@ -815,29 +416,61 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
 
       {/* Defeated Monster XP Banner */}
       {xpAlert && (
-        <div className="bg-gradient-to-r from-amber-950 via-amber-900 to-amber-950 border border-amber-500/60 rounded-xl p-3 text-amber-200 shadow-xl flex items-center justify-between gap-3 animate-fadeIn">
+        <div className={`border rounded-xl p-3 shadow-xl flex items-center justify-between gap-3 animate-fadeIn ${
+          xpAlert.isManualMode
+            ? 'bg-gradient-to-r from-stone-900 via-amber-950/40 to-stone-900 border-amber-600/50 text-amber-200'
+            : 'bg-gradient-to-r from-amber-950 via-amber-900 to-amber-950 border-amber-500/60 text-amber-200'
+        }`}>
           <div className="flex items-center gap-2.5">
-            <div className="p-2 bg-amber-500 text-stone-950 rounded-lg font-bold text-base shadow shrink-0">
-              ⚡
+            <div className={`p-2 rounded-lg font-bold text-base shadow shrink-0 ${
+              xpAlert.isManualMode ? 'bg-amber-600/90 text-stone-950' : 'bg-amber-500 text-stone-950'
+            }`}>
+              {xpAlert.isManualMode ? '📖' : '⚡'}
             </div>
             <div>
               <div className="font-serif font-bold text-amber-100 text-sm flex items-center gap-2 flex-wrap">
                 <span>Monster Defeated! {xpAlert.monsterName}</span>
-                <span className="bg-amber-400 text-stone-950 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold">
-                  +{xpAlert.xpPerParticipant.toLocaleString()} XP per player
-                </span>
+                {xpAlert.isManualMode ? (
+                  <span className="bg-amber-950 text-amber-300 border border-amber-600/60 text-[10px] px-2 py-0.5 rounded-full font-mono font-bold">
+                    Manual / Tabletop EXP Active (Sheet not modified)
+                  </span>
+                ) : (
+                  <span className="bg-amber-400 text-stone-950 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold">
+                    +{xpAlert.xpPerParticipant.toLocaleString()} XP per player
+                  </span>
+                )}
               </div>
               <p className="text-xs text-amber-300/90 font-sans mt-0.5">
-                Distributed <strong>{xpAlert.totalXp.toLocaleString()} total XP</strong> among <strong>{xpAlert.participantCount} active participant(s)</strong> ({xpAlert.participantNames}).
+                {xpAlert.isManualMode ? (
+                  <span>
+                    Encounter Value: <strong>{xpAlert.totalXp.toLocaleString()} total XP</strong> ({xpAlert.xpPerParticipant.toLocaleString()} XP/player for {xpAlert.participantCount} active participant{xpAlert.participantCount > 1 ? 's' : ''}). Auto-gain is paused.
+                  </span>
+                ) : (
+                  <span>
+                    Distributed <strong>{xpAlert.totalXp.toLocaleString()} total XP</strong> among <strong>{xpAlert.participantCount} active participant(s)</strong> ({xpAlert.participantNames}).
+                  </span>
+                )}
               </p>
             </div>
           </div>
-          <button
-            onClick={() => setXpAlert(null)}
-            className="p-1 hover:bg-amber-800/50 rounded-lg text-amber-400 hover:text-amber-100 transition text-xs font-bold shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {xpAlert.isManualMode && onUpdateCharacter && (
+              <button
+                onClick={() => applyManualXp(xpAlert.xpPerParticipant)}
+                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-lg text-xs font-bold transition shadow flex items-center gap-1 cursor-pointer"
+                title="Award this XP to your character sheet now anyway"
+              >
+                <Zap className="w-3 h-3" />
+                <span>+ Award to Sheet ({xpAlert.xpPerParticipant.toLocaleString()} XP)</span>
+              </button>
+            )}
+            <button
+              onClick={() => setXpAlert(null)}
+              className="p-1 hover:bg-amber-800/50 rounded-lg text-amber-400 hover:text-amber-100 transition text-xs font-bold"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1414,18 +1047,6 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         </div>
       )}
 
-      {/* Target AC & Attack Resolver Component (Positioned Below Initiative Tracker & Teams) */}
-      <AttackResolver
-        character={activeAttackerCharacter}
-        combatants={combatants}
-        activeCombatantId={activeCombatant?.id}
-        onApplyDamageToCombatant={(targetId, damageAmount) => {
-          handleAdjustHp(targetId, -damageAmount);
-        }}
-        onRoll={onRoll}
-        onLogAction={(category, message, actor) => addLogEntry(category, message, actor)}
-      />
-
       {/* Modals */}
       {showLogModal && (
         <EncounterLogModal
@@ -1455,6 +1076,6 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           onAddPartyToEncounter={handleAddPartyToEncounter}
         />
       )}
-    </div>
+    </CollapsibleBox>
   );
 };

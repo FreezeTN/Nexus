@@ -357,6 +357,11 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                     Level {character.level} {character.characterClass}
                   </span>
                 )}
+                {(character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode) && (
+                  <span className="text-[11px] bg-stone-900 text-amber-300 border border-amber-500/50 font-mono font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    📖 Manual EXP Mode
+                  </span>
+                )}
               </div>
               <p className="text-xs text-stone-400 mt-0.5">
                 D&D 5e Character Advancement • Viewing: <strong className="text-amber-300 font-mono">{activeClassName} (Lv. {activeClassLevel})</strong>
@@ -364,7 +369,41 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+          <div className="flex items-center gap-2 shrink-0 self-end md:self-center flex-wrap">
+            <button
+              onClick={() => {
+                const currentDisabled = Boolean(
+                  character.optionalRules?.disableAutoXpGain ||
+                  character.optionalRules?.useManualXpMode
+                );
+                onUpdateCharacter({
+                  ...character,
+                  optionalRules: {
+                    ...character.optionalRules,
+                    disableAutoXpGain: !currentDisabled,
+                    useManualXpMode: !currentDisabled
+                  }
+                });
+              }}
+              className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer ${
+                character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                  ? 'bg-amber-950/80 border-amber-500/60 text-amber-200 hover:bg-amber-900/80'
+                  : 'bg-stone-900 border-stone-800 text-stone-300 hover:border-stone-700'
+              }`}
+              title={
+                character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                  ? 'Manual Tabletop EXP mode is ACTIVE: Encounter kill XP is disabled. Click to turn Auto-XP ON'
+                  : 'Auto-XP Gain is ACTIVE: Monster kills automatically award XP. Click to turn Manual / Tabletop EXP ON'
+              }
+            >
+              <Zap className={`w-3.5 h-3.5 ${character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode ? 'text-amber-400' : 'text-emerald-400'}`} />
+              <span>
+                {character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                  ? 'Manual EXP (Auto-XP Off)'
+                  : 'Auto-XP (On)'}
+              </span>
+            </button>
+
             {xpDetails.canLevelUp && (
               <button
                 onClick={() => {

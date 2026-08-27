@@ -36,12 +36,17 @@ import {
   Copy,
   Crown,
   SlidersHorizontal,
-  BookOpen
+  BookOpen,
+  LogOut,
+  PowerOff,
+  Globe
 } from 'lucide-react';
+import { useLanguage } from '../../i18n/LanguageContext';
+import { SUPPORTED_LANGUAGES } from '../../i18n/languages';
 import { SheetLayoutOptionsTab } from './options/SheetLayoutOptionsTab';
 import { StatblockExportModal } from '../character/StatblockExportModal';
 import { CharacterData, RuleEdition } from '../../types';
-import { UserProfile } from '../../lib/firebase';
+import { UserProfile, logoutUser } from '../../lib/firebase';
 import { systemRegistry } from '../../systems';
 import {
   isSoundEnabled,
@@ -85,15 +90,18 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onExportJson,
   onImportJson
 }) => {
+  const { language, setLanguage, t } = useLanguage();
   const [activeCategory, setActiveCategory] = useState<'sound' | 'app' | 'layout' | 'character' | 'credits'>(initialCategory);
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
   const [volume, setVolumeState] = useState<number>(() => Math.round(getMasterVolume() * 100));
   const [lastPlayed, setLastPlayed] = useState<string | null>(null);
   const [showStatblockModal, setShowStatblockModal] = useState<boolean>(false);
 
-  // Clear cache state
+  // Clear cache & factory reset state
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false);
-  const [cacheClearedSuccess, setCacheClearedSuccess] = useState(false);
+  const [showFactoryResetConfirm, setShowFactoryResetConfirm] = useState(false);
+  const [cacheClearedSuccess, setCacheClearedSuccess] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
   const [storageStats, setStorageStats] = useState<{ count: number; sizeKB: string }>({ count: 0, sizeKB: '0.0' });
 
   // Discord handle copy state
@@ -111,7 +119,9 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
       setVolumeState(Math.round(getMasterVolume() * 100));
       setActiveCategory(initialCategory);
       setShowClearCacheConfirm(false);
-      setCacheClearedSuccess(false);
+      setShowFactoryResetConfirm(false);
+      setCacheClearedSuccess(null);
+      setIsResetting(false);
       calculateStorageStats();
     }
   }, [isOpen, initialCategory]);
@@ -169,23 +179,86 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     }, 800);
   };
 
-  const handleClearCache = () => {
+  const handleClearCache = async () => {
+    setIsResetting(true);
     try {
+      // 1. Clear Web Storages
       localStorage.clear();
       sessionStorage.clear();
+
+      // 2. Clear CacheStorage
       if ('caches' in window) {
-        caches.keys().then((names) => {
-          names.forEach((name) => caches.delete(name));
-        });
+        const names = await caches.keys();
+        await Promise.all(names.map((name) => caches.delete(name)));
       }
-      setCacheClearedSuccess(true);
+
+      // 3. Unregister active service workers
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((r) => r.unregister()));
+      }
+
+      setCacheClearedSuccess('Application cache and local storage cleared! Reloading...');
       setTimeout(() => {
         window.location.reload();
       }, 1200);
     } catch (e) {
       console.error('Failed to clear cache:', e);
-      alert('Cache cleared! Reloading application...');
       window.location.reload();
+    }
+  };
+
+  const handleFactoryReset = async () => {
+    setIsResetting(true);
+    try {
+      // 1. Sign out of Firebase Auth
+      await logoutUser();
+
+      // 2. Clear Web Storage
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // 3. Delete IndexedDB databases (where Firebase Auth session & offline tokens reside)
+      if ('indexedDB' in window && window.indexedDB.databases) {
+        try {
+          const dbs = await window.indexedDB.databases();
+          await Promise.all(
+            dbs.map((dbInfo) => {
+              if (dbInfo.name) {
+                return new Promise((resolve) => {
+                  const req = window.indexedDB.deleteDatabase(dbInfo.name!);
+                  req.onsuccess = () => resolve(true);
+                  req.onerror = () => resolve(false);
+                  req.onblocked = () => resolve(false);
+                });
+              }
+              return Promise.resolve(true);
+            })
+          );
+        } catch (idbErr) {
+          console.warn('Could not enumerate/delete IndexedDB databases:', idbErr);
+        }
+      }
+
+      // 4. Clear CacheStorage
+      if ('caches' in window) {
+        const names = await caches.keys();
+        await Promise.all(names.map((name) => caches.delete(name)));
+      }
+
+      // 5. Unregister all service workers
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((r) => r.unregister()));
+      }
+
+      setCacheClearedSuccess('Factory Reset Complete! Wiped all local data, auth tokens, and caches. Restarting...');
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1500);
+    } catch (e) {
+      console.error('Failed to perform factory reset:', e);
+      window.location.href = '/';
     }
   };
 
@@ -193,10 +266,10 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
       <div className="bg-stone-900 border border-amber-500/50 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
-        <div className="bg-gradient-to-r from-amber-950 via-stone-900 to-amber-950 p-4 border-b border-amber-800/50 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-amber-950 via-stone-900 to-amber-950 p-4 border-b border-amber-800/50 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 text-amber-400 font-serif font-bold text-lg">
             <Settings className="w-5 h-5 text-amber-400" />
-            <span>Options</span>
+            <span>{t('options.title', 'Options')}</span>
           </div>
           <button
             onClick={onClose}
@@ -207,7 +280,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
         </div>
 
         {/* Category Navigation Tabs */}
-        <div className="bg-stone-950 px-3 pt-2.5 pb-2.5 sm:px-4 border-b border-stone-800 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none flex-wrap">
+        <div className="bg-stone-950 px-3 py-2.5 sm:px-4 border-b border-stone-800 flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-thin shrink-0">
           <button
             onClick={() => setActiveCategory('sound')}
             className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
@@ -221,7 +294,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             ) : (
               <Volume2 className="w-3.5 h-3.5 text-amber-400" />
             )}
-            <span>Sound</span>
+            <span>{t('options.tabSound', 'Sound')}</span>
           </button>
 
           <button
@@ -233,7 +306,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             }`}
           >
             <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
-            <span>App</span>
+            <span>{t('options.tabApp', 'App')}</span>
           </button>
 
           <button
@@ -245,7 +318,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             }`}
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
-            <span>Layout</span>
+            <span>{t('options.tabLayout', 'Layout')}</span>
           </button>
 
           {currentUser && (
@@ -254,11 +327,11 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
                 activeCategory === 'character'
                   ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
-                  : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
+                : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
               }`}
             >
               <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span>Character</span>
+              <span>{t('options.tabCharacter', 'Character')}</span>
             </button>
           )}
 
@@ -271,12 +344,12 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             }`}
           >
             <Award className="w-3.5 h-3.5 text-purple-400" />
-            <span>Credits</span>
+            <span>{t('options.tabCredits', 'Credits')}</span>
           </button>
         </div>
 
         {/* Modal Body */}
-        <div className="p-5 space-y-6 overflow-y-auto">
+        <div className="p-5 space-y-6 overflow-y-auto flex-1 min-h-0">
           {/* CATEGORY 1: SOUND OPTIONS */}
           {activeCategory === 'sound' && (
             <div className="space-y-5 animate-fadeIn">
@@ -300,7 +373,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                   </div>
                   <div>
                     <div className="font-serif font-bold text-base flex items-center gap-2">
-                      <span>Sound Effects</span>
+                      <span>{t('options.soundEffects', 'Sound Effects')}</span>
                       <span
                         className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
                           muted
@@ -308,13 +381,13 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                             : 'bg-emerald-950 text-emerald-300 border border-emerald-700'
                         }`}
                       >
-                        {muted ? 'Muted' : 'Enabled'}
+                        {muted ? t('options.muted', 'Muted') : t('options.enabled', 'Enabled')}
                       </span>
                     </div>
                     <p className="text-xs text-stone-400 mt-0.5">
                       {muted
-                        ? 'All audio effects, dice roll sounds, and spell cast cues are silenced.'
-                        : 'Procedural audio effects active for rolls, attacks, spells, and events.'}
+                        ? t('options.mutedDesc', 'All audio effects, dice roll sounds, and spell cast cues are silenced.')
+                        : t('options.enabledDesc', 'Procedural audio effects active for rolls, attacks, spells, and events.')}
                     </p>
                   </div>
                 </div>
@@ -330,12 +403,12 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                   {muted ? (
                     <>
                       <Volume2 className="w-4 h-4" />
-                      <span>Unmute All</span>
+                      <span>{t('options.unmuteAll', 'Unmute All')}</span>
                     </>
                   ) : (
                     <>
                       <VolumeX className="w-4 h-4" />
-                      <span>Mute All</span>
+                      <span>{t('options.muteAll', 'Mute All')}</span>
                     </>
                   )}
                 </button>
@@ -346,7 +419,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold uppercase tracking-wider text-amber-400 font-serif flex items-center gap-1.5">
                     <Radio className="w-4 h-4 text-amber-500" />
-                    Master Volume Level
+                    {t('options.masterVolume', 'Master Volume Level')}
                   </span>
                   <span className="font-mono text-sm font-extrabold text-amber-300 bg-stone-900 px-2 py-0.5 rounded border border-stone-800">
                     {muted ? '0%' : `${volume}%`}
@@ -561,6 +634,50 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           {/* CATEGORY 2: APP OPTIONS & CACHE CLEARING */}
           {activeCategory === 'app' && (
             <div className="space-y-5 animate-fadeIn">
+              {/* Application Language Selector */}
+              <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-4">
+                <div className="flex items-center justify-between border-b border-stone-800/80 pb-3">
+                  <div className="flex items-center gap-2.5 text-amber-400 font-serif font-bold text-sm">
+                    <Globe className="w-4 h-4 text-amber-400" />
+                    <span>{t('options.language', 'Application Language')}</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60 font-bold">
+                    {SUPPORTED_LANGUAGES.find(l => l.code === language)?.name || 'English'}
+                  </span>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  {t('options.languageDesc', 'Select your preferred language. The entire interface, navigation, and AI Oracle will automatically adapt.')}
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                  {SUPPORTED_LANGUAGES.map((lang) => {
+                    const isSelected = language === lang.code;
+                    return (
+                      <button
+                        key={lang.code}
+                        type="button"
+                        onClick={() => setLanguage(lang.code)}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-amber-950/70 border-amber-500 text-amber-200 shadow-sm'
+                            : 'bg-stone-900/80 border-stone-800 text-stone-300 hover:border-stone-700 hover:bg-stone-900'
+                        }`}
+                      >
+                        <span className="text-lg leading-none">{lang.flag}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-semibold truncate">{lang.nativeName}</div>
+                          <div className="text-[10px] text-stone-400 truncate">{lang.name}</div>
+                        </div>
+                        {isSelected && (
+                          <Check className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* App Cache & Local Storage Management Card */}
               <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-4">
                 <div className="flex items-center justify-between border-b border-stone-800/80 pb-3">
@@ -580,7 +697,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 {cacheClearedSuccess ? (
                   <div className="p-3 bg-emerald-950/90 border border-emerald-500/80 rounded-xl flex items-center gap-2 text-xs text-emerald-200 animate-fadeIn">
                     <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>Cache successfully cleared! Reloading application...</span>
+                    <span>{cacheClearedSuccess}</span>
                   </div>
                 ) : showClearCacheConfirm ? (
                   <div className="p-4 bg-rose-950/80 border border-rose-600/80 rounded-xl space-y-3 animate-fadeIn">
@@ -588,33 +705,96 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                       <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
                       <div>
                         <strong className="font-bold text-rose-300 block mb-0.5">Are you sure you want to clear cache?</strong>
-                        <span>This will reset local application settings and reload the page. Saved server characters will be re-synced upon login.</span>
+                        <span>This will reset local application settings, clear web cache, and reload the page.</span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-end gap-2 pt-1">
                       <button
                         onClick={() => setShowClearCacheConfirm(false)}
-                        className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold rounded-lg transition border border-stone-700"
+                        disabled={isResetting}
+                        className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold rounded-lg transition border border-stone-700 cursor-pointer"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleClearCache}
-                        className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5"
+                        disabled={isResetting}
+                        className="px-4 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg transition shadow flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
-                        <span>Yes, Clear Cache & Reload</span>
+                        <span>{isResetting ? 'Clearing...' : 'Yes, Clear Cache & Reload'}</span>
                       </button>
                     </div>
                   </div>
                 ) : (
                   <button
-                    onClick={() => setShowClearCacheConfirm(true)}
-                    className="w-full py-2.5 px-4 bg-rose-950/60 hover:bg-rose-900/80 text-rose-200 border border-rose-700/60 hover:border-rose-500 rounded-xl font-bold text-xs transition shadow flex items-center justify-center gap-2 group"
+                    onClick={() => {
+                      setShowClearCacheConfirm(true);
+                      setShowFactoryResetConfirm(false);
+                    }}
+                    className="w-full py-2.5 px-4 bg-rose-950/40 hover:bg-rose-950/80 text-rose-200 border border-rose-700/50 hover:border-rose-500 rounded-xl font-bold text-xs transition shadow flex items-center justify-center gap-2 group cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4 text-rose-400 group-hover:scale-110 transition" />
-                    <span>Clear Application Cache</span>
+                    <span>Clear Cache & Reload App</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Complete Factory Reset & Wipe Card */}
+              <div className="bg-stone-950 p-4 rounded-xl border border-red-900/50 space-y-4">
+                <div className="flex items-center justify-between border-b border-red-950 pb-3">
+                  <div className="flex items-center gap-2.5 text-rose-400 font-serif font-bold text-sm">
+                    <PowerOff className="w-4 h-4 text-rose-400" />
+                    <span>Factory Reset & Full App Wipe</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800/60 font-bold">
+                    HARD RESET
+                  </span>
+                </div>
+
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Performs a complete application reset: logs out of Firebase Authentication, wipes IndexedDB session tokens, deletes all local characters, clears LocalStorage & CacheStorage, and reboots to a fresh factory install state.
+                </p>
+
+                {showFactoryResetConfirm ? (
+                  <div className="p-4 bg-red-950 border border-red-500 rounded-xl space-y-3 animate-fadeIn">
+                    <div className="flex items-start gap-2.5 text-rose-100 text-xs">
+                      <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="font-bold text-white block mb-0.5">WARNING: Total Application Reset</strong>
+                        <span>This will log out your account, delete local IndexedDB authentication credentials, and clear all locally stored characters and configurations.</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-red-900/60">
+                      <button
+                        onClick={() => setShowFactoryResetConfirm(false)}
+                        disabled={isResetting}
+                        className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-bold rounded-lg transition border border-stone-700 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleFactoryReset}
+                        disabled={isResetting}
+                        className="px-4 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg transition shadow-lg flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <PowerOff className="w-3.5 h-3.5" />
+                        <span>{isResetting ? 'Resetting App...' : 'Yes, Factory Reset Everything'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowFactoryResetConfirm(true);
+                      setShowClearCacheConfirm(false);
+                    }}
+                    className="w-full py-2.5 px-4 bg-red-950/70 hover:bg-red-900 text-red-100 border border-red-600/60 hover:border-red-400 rounded-xl font-bold text-xs transition shadow flex items-center justify-center gap-2 group cursor-pointer"
+                  >
+                    <PowerOff className="w-4 h-4 text-red-400 group-hover:scale-110 transition" />
+                    <span>Factory Reset & Wipe All Data (Auth & Storage)</span>
                   </button>
                 )}
               </div>

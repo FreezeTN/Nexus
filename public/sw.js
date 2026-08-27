@@ -1,12 +1,12 @@
 // Service Worker for D&D / TRPG Interactive Sheet PWA
-const CACHE_NAME = 'dnd-app-pwa-v1';
+const CACHE_NAME = 'nexus-trpg-v12';
 
-// Install Event
+// Install Event - force update immediately
 self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate Event
+// Activate Event - purge all older caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -21,15 +21,19 @@ self.addEventListener('activate', (event) => {
 
 // Network-first fetch handler for maximum freshness and reliability
 self.addEventListener('fetch', (event) => {
-  // Let the browser handle cross-origin, websocket, or API requests normally
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.origin) return;
 
+  // Never cache sw.js, manifest.json, or API endpoints
+  if (url.pathname === '/sw.js' || url.pathname.startsWith('/api/')) {
+    return;
+  }
+
+  // For app HTML / JS / CSS modules, always prefer fresh network response
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: 'no-cache' })
       .then((response) => {
-        // Only cache valid basic responses
         if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -39,7 +43,6 @@ self.addEventListener('fetch', (event) => {
         return response;
       })
       .catch(() => {
-        // Fallback to cache if network is unavailable
         return caches.match(event.request).then((cachedResponse) => {
           if (cachedResponse) return cachedResponse;
           if (event.request.mode === 'navigate') {
@@ -50,3 +53,4 @@ self.addEventListener('fetch', (event) => {
       })
   );
 });
+
