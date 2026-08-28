@@ -647,6 +647,11 @@ export const Header: React.FC<HeaderProps> = ({
                 ) : (
                   <span className="font-mono font-bold text-sm text-stone-100">{activeCharacter.level}</span>
                 )}
+                {(activeCharacter.optionalRules?.disableAutoXpGain || activeCharacter.optionalRules?.useManualXpMode) && (
+                  <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-950/90 border border-amber-600/50 px-1.5 py-0.5 rounded ml-0.5">
+                    Manual EXP
+                  </span>
+                )}
                 {xpProgressDetails?.canLevelUp && (
                   <span className="px-1.5 py-0.5 bg-emerald-500 text-stone-950 font-mono font-bold text-[10px] rounded-full animate-pulse ml-1">
                     {t('header.levelUp', 'LEVEL UP!')}

@@ -17,27 +17,44 @@ import {
   Copy,
   Plus,
   Loader2,
+  User,
+  Store,
+  CheckCircle2,
   HelpCircle,
   BookOpen,
   Dice5,
   ChevronRight,
   ExternalLink,
-  RotateCcw
+  RotateCcw,
+  Image as ImageIcon,
+  Paperclip,
+  Maximize2,
+  UploadCloud,
+  FileText,
+  Layers,
+  FolderPlus,
+  RefreshCw
 } from 'lucide-react';
 import { CharacterData, GearItem, Spell, RuleEdition } from '../../types';
 import { CampaignEntity } from '../../utils/searchIndexer';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { extractTextFromPdf, ExtractedPdfData } from '../../utils/pdfExtractor';
 import {
   ChatMessage,
+  ChatMessageAttachment,
   EntityType,
   askAssistant,
   generateEntity,
   getStoredUserApiKey,
   setStoredUserApiKey,
+  hydrateGeneratedCharacter,
+  hydrateGeneratedMerchant,
   hydrateGeneratedMonster,
   hydrateGeneratedItem,
   hydrateGeneratedSpell,
-  hydrateGeneratedGraphNode
+  hydrateGeneratedGraphNode,
+  extractEntitiesFromChatMessage,
+  DetectedChatEntity
 } from '../../services/geminiService';
 
 interface AiAssistantModalProps {
@@ -96,10 +113,20 @@ function formatHumanError(err: any): string {
 }
 
 const FORGE_INSPIRATIONS: Record<string, string[]> = {
+  character: [
+    'Level 3 Human Fighter with dual scimitars and battle master tactics',
+    'Level 5 Elf Wizard specializing in divination and battlefield control',
+    'Level 1 Tiefling Rogue with expertise in stealth and underworld contacts'
+  ],
   monster: [
-    'CR 6 Glacial Drake with frost breath and burrowing',
-    'CR 1/2 Clockwork Scout with optical disruption',
-    'CR 12 Abyssal Archon boss with phase shifts'
+    'CR 6 Glacial Drake with frost breath, ice burrowing, and tail sweep',
+    'CR 1/2 Clockwork Scout with optical disruption and laser sting',
+    'CR 12 Abyssal Archon boss with phase shifts and fear aura'
+  ],
+  merchant: [
+    'Dwarven Master Blacksmith running The Iron Anvil with fine weapons and shields',
+    'Elven Alchemist selling glowing restorative draughts and rare reagents',
+    'Goblin Curio Trader offering peculiar magic trinkets with unpredictable side-effects'
   ],
   npc: [
     'A dwarven spy master running a tavern front in Waterdeep',
@@ -150,14 +177,30 @@ export function AiAssistantModal({
       {
         id: 'welcome_1',
         role: 'assistant',
-        text: 'Greetings, adventurer! I am **Nexus Oracle**, your in-app tabletop assistant. You can ask me anything about TTRPG rules (5e, 3.5e, Pathfinder, Shadowrun, Cthulhu), how features in this app work, or use the **Entity Forge** tab to generate monsters, magic items, spells, and campaign lore directly into your sheets.',
+        text: `Greetings, adventurer! I am **Nexus Oracle**, your in-app tabletop assistant.
+
+You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun, Cthulhu**), ask for tactical guidance, or tell me to generate characters, monsters, merchants, or magic items.
+
+💡 **1-Click Imports Active**: Whenever I generate a statblock, creature, merchant, or item in chat, an interactive **1-Click Import Button** will appear right below the message to add it instantly to your **Campaign Hub** or active inventory!`,
         timestamp: new Date().toISOString()
       }
     ];
   });
   const [inputMessage, setInputMessage] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
+  const [importedChatIds, setImportedChatIds] = useState<Record<string, string>>({});
+  const [attachedAttachment, setAttachedAttachment] = useState<ChatMessageAttachment | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | Blob | null>(null);
+  const [extractedPdf, setExtractedPdf] = useState<ExtractedPdfData | null>(null);
+  const [isPdfExtracting, setIsPdfExtracting] = useState(false);
+  const [pdfExtractStatus, setPdfExtractStatus] = useState('');
+  const [pdfScope, setPdfScope] = useState<'all' | 'range' | 'filter'>('all');
+  const [pdfPageRange, setPdfPageRange] = useState('');
+  const [pdfKeyword, setPdfKeyword] = useState('');
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [previewModalImage, setPreviewModalImage] = useState<string | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Generator state
   const [entityType, setEntityType] = useState<EntityType>('monster');
@@ -183,31 +226,260 @@ export function AiAssistantModal({
     if (activeTab === 'chat') {
       chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chatMessages, isChatLoading, activeTab]);
+  }, [chatMessages, isChatLoading, activeTab, attachedAttachment]);
 
   if (!isOpen) return null;
 
+  const formatFileSize = (bytes?: number): string => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const processAttachedFile = async (file: File | Blob, nameHint?: string) => {
+    const isPdf = file.type === 'application/pdf' || (file as File).name?.toLowerCase().endsWith('.pdf');
+    const isImage = file.type.startsWith('image/');
+
+    if (!isPdf && !isImage) {
+      alert('Please attach a PDF document (.pdf) or image screenshot (.png, .jpg, .webp).');
+      return;
+    }
+
+    const fileName = nameHint || (file as File).name || (isPdf ? 'Compendium.pdf' : 'Screenshot.png');
+    const fileSize = (file as File).size;
+    setAttachedFile(file);
+
+    if (isPdf) {
+      setIsPdfExtracting(true);
+      setPdfExtractStatus(`Indexing ${fileName} (${formatFileSize(fileSize)})...`);
+      try {
+        const extracted = await extractTextFromPdf(file, fileName);
+        setExtractedPdf(extracted);
+        setPdfScope('all');
+        setPdfPageRange('');
+        setPdfKeyword('');
+        setAttachedAttachment({
+          data: '',
+          mimeType: 'application/pdf',
+          name: fileName,
+          fileSize,
+        });
+      } catch (pdfErr) {
+        console.error('Failed to parse PDF on client, attempting server parse:', pdfErr);
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const res = await fetch('/api/parse-pdf', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/pdf',
+              'X-File-Name': encodeURIComponent(fileName),
+            },
+            body: arrayBuffer,
+          });
+          const serverData = await res.json();
+          if (serverData && serverData.fullText) {
+            setExtractedPdf({
+              fileName,
+              fileSize,
+              totalPages: serverData.totalPages || 1,
+              fullText: serverData.fullText,
+              pageTexts: serverData.pageTexts || [{ pageNumber: 1, text: serverData.fullText }],
+              isScanned: (serverData.fullText.length < (serverData.totalPages || 1) * 30),
+              samplePreview: serverData.fullText.substring(0, 1200),
+              headings: serverData.headings || [],
+            });
+          }
+        } catch (serverErr) {
+          console.error('Server PDF parse fallback error:', serverErr);
+        }
+
+        setAttachedAttachment({
+          data: '',
+          mimeType: 'application/pdf',
+          name: fileName,
+          fileSize,
+        });
+      } finally {
+        setIsPdfExtracting(false);
+      }
+      return;
+    }
+
+    // Process image file
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new window.Image();
+      img.onload = () => {
+        const maxDimension = 1600;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const optimizedDataUrl = canvas.toDataURL(mimeType, 0.88);
+          const base64Data = optimizedDataUrl.split(',')[1];
+          setExtractedPdf(null);
+          setAttachedAttachment({
+            data: base64Data,
+            mimeType,
+            previewUrl: optimizedDataUrl,
+            name: fileName,
+            fileSize,
+          });
+        } else {
+          const base64Data = dataUrl.split(',')[1];
+          setExtractedPdf(null);
+          setAttachedAttachment({
+            data: base64Data,
+            mimeType: file.type || 'image/png',
+            previewUrl: dataUrl,
+            name: fileName,
+            fileSize,
+          });
+        }
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }).replace(/:/g, '-');
+          processAttachedFile(file, `Screenshot_${timestamp}.png`);
+          break;
+        }
+      } else if (item.type === 'application/pdf') {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          processAttachedFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingOver(false);
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.type.startsWith('image/') || file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          processAttachedFile(file);
+          break;
+        }
+      }
+    }
+  };
+
+  const parsePageRange = (rangeStr: string, maxPages: number): number[] => {
+    const pages = new Set<number>();
+    const parts = rangeStr.split(',').map(s => s.trim());
+    for (const part of parts) {
+      if (part.includes('-')) {
+        const [startStr, endStr] = part.split('-');
+        const start = parseInt(startStr, 10);
+        const end = parseInt(endStr, 10);
+        if (!isNaN(start) && !isNaN(end)) {
+          const from = Math.max(1, Math.min(start, end));
+          const to = Math.min(maxPages, Math.max(start, end));
+          for (let p = from; p <= to; p++) pages.add(p);
+        }
+      } else {
+        const p = parseInt(part, 10);
+        if (!isNaN(p) && p >= 1 && p <= maxPages) pages.add(p);
+      }
+    }
+    return Array.from(pages).sort((a, b) => a - b);
+  };
+
   const handleSendMessage = async (customText?: string) => {
     const textToSend = (customText || inputMessage).trim();
-    if (!textToSend || isChatLoading) return;
+    if ((!textToSend && !attachedAttachment && !extractedPdf) || isChatLoading || isPdfExtracting) return;
+
+    const currentAttachmentToSend = attachedAttachment;
+    const currentPdf = extractedPdf;
+
+    // Build the user message to display in chat history
+    let displayAttachment = currentAttachmentToSend;
+    if (currentPdf && !displayAttachment) {
+      displayAttachment = {
+        data: '',
+        mimeType: 'application/pdf',
+        name: currentPdf.fileName,
+        fileSize: currentPdf.fileSize,
+      };
+    }
 
     const userMsg: ChatMessage = {
       id: `usr_${Date.now()}`,
       role: 'user',
-      text: textToSend,
-      timestamp: new Date().toISOString()
+      text:
+        textToSend ||
+        (currentPdf || currentAttachmentToSend?.mimeType === 'application/pdf'
+          ? `📄 [Attached PDF Compendium: ${currentPdf?.fileName || currentAttachmentToSend?.name || 'Manual.pdf'}]`
+          : '📸 [Attached Screenshot for Oracle Analysis]'),
+      timestamp: new Date().toISOString(),
+      attachment: displayAttachment || undefined,
+      image: displayAttachment || undefined,
     };
 
     setChatMessages(prev => [...prev, userMsg]);
     if (!customText) setInputMessage('');
+    setAttachedAttachment(null);
+    setExtractedPdf(null);
     setIsChatLoading(true);
 
     try {
-      const historyPayload = chatMessages.slice(-10).map((m) => ({
-        role: m.role,
-        text: m.text,
-        isError: m.isError,
-      }));
+      const historyPayload = chatMessages.slice(-10).map((m) => {
+        const att = m.attachment || m.image;
+        return {
+          role: m.role,
+          text: m.text,
+          isError: m.isError,
+          image: att && att.mimeType !== 'application/pdf' && att.data ? { data: att.data, mimeType: att.mimeType } : undefined,
+        };
+      });
 
       let contextSummary = `Rule System: ${ruleEdition}`;
       if (activeCharacter) {
@@ -223,7 +495,76 @@ export function AiAssistantModal({
         }
       }
 
-      const reply = await askAssistant(textToSend, historyPayload, contextSummary, language);
+      // If we have an attached or extracted PDF, construct an ultra-high quality prompt containing the extracted compendium text
+      let queryMessage = textToSend;
+      let directImagePayload: { data: string; mimeType: string } | undefined = undefined;
+
+      let resolvedPdf = currentPdf;
+      if ((!resolvedPdf || !resolvedPdf.fullText) && attachedFile && (attachedFile.type === 'application/pdf' || (attachedFile as File).name?.toLowerCase().endsWith('.pdf'))) {
+        try {
+          resolvedPdf = await extractTextFromPdf(attachedFile, (attachedFile as File).name || 'Document.pdf');
+        } catch (e) {
+          console.warn('Failed on-the-fly extraction in handleSendMessage:', e);
+        }
+      }
+
+      if (resolvedPdf && resolvedPdf.fullText) {
+        let compendiumSectionText = '';
+
+        if (pdfScope === 'range' && pdfPageRange.trim()) {
+          const targetPages = parsePageRange(pdfPageRange, resolvedPdf.totalPages);
+          const pageSet = new Set(targetPages);
+          const filtered = resolvedPdf.pageTexts.filter(pt => pageSet.has(pt.pageNumber));
+          compendiumSectionText = filtered.map(pt => `--- [PAGE ${pt.pageNumber}] ---\n${pt.text}`).join('\n\n');
+        } else if (pdfScope === 'filter' && pdfKeyword.trim()) {
+          const kw = pdfKeyword.toLowerCase().trim();
+          const matchedPages = resolvedPdf.pageTexts.filter(pt => pt.text.toLowerCase().includes(kw));
+          compendiumSectionText = matchedPages.map(pt => `--- [PAGE ${pt.pageNumber}] ---\n${pt.text}`).join('\n\n');
+          if (!compendiumSectionText) {
+            compendiumSectionText = resolvedPdf.fullText.substring(0, 250000);
+          }
+        } else {
+          // All pages: Gemini 3.7 Flash supports huge contexts; cap at 350,000 chars for lightning speed
+          compendiumSectionText = resolvedPdf.fullText.length > 350000
+            ? resolvedPdf.fullText.substring(0, 350000) + `\n\n... [Compendium continues for ${resolvedPdf.totalPages} total pages]`
+            : resolvedPdf.fullText;
+        }
+
+        const userInstruction = textToSend || 'Extract all monsters, statblocks, characters, spells, and items from this PDF compendium with full structured stats.';
+
+        queryMessage = `[ATTACHED COMPENDIUM: "${resolvedPdf.fileName}" | ${resolvedPdf.totalPages} Pages | Rule System: ${ruleEdition}]
+
+=== COMPENDIUM EXTRACTED TEXT BEGIN ===
+${compendiumSectionText}
+=== COMPENDIUM EXTRACTED TEXT END ===
+
+USER REQUEST:
+${userInstruction}
+
+INSTRUCTIONS FOR THE ORACLE:
+1. Extract and present all relevant monsters, creatures, statblocks, items, or spells found in the compendium text above.
+2. For every extracted entity, provide complete game stats (HP, AC, Ability Scores, CR, Actions, Special Abilities, Spells) following ${ruleEdition.toUpperCase()} rules.
+3. Crucially, format all extracted creatures, items, and spells with code blocks or JSON so the Nexus importer can provide 1-click import cards for each entity!`;
+      } else if (resolvedPdf && (!resolvedPdf.fullText || resolvedPdf.isScanned)) {
+        // Fallback for scanned PDF without embedded text
+        const userInstruction = textToSend || 'Extract all monsters, statblocks, characters, spells, and items from this PDF compendium with full structured stats.';
+        queryMessage = `[ATTACHED COMPENDIUM: "${resolvedPdf.fileName}" | ${resolvedPdf.totalPages} Pages | Scanned PDF]\n\n${userInstruction}\n\nPlease generate and extract the monsters, creatures, and statblocks corresponding to this compendium title for ${ruleEdition.toUpperCase()}. Provide complete game statistics and JSON code blocks for 1-click import.`;
+      } else if (currentAttachmentToSend && currentAttachmentToSend.data && currentAttachmentToSend.mimeType.startsWith('image/')) {
+        directImagePayload = {
+          data: currentAttachmentToSend.data,
+          mimeType: currentAttachmentToSend.mimeType,
+        };
+      }
+
+      setAttachedFile(null);
+
+      const reply = await askAssistant(
+        queryMessage,
+        historyPayload,
+        contextSummary,
+        language,
+        directImagePayload
+      );
 
       const assistantMsg: ChatMessage = {
         id: `ast_${Date.now()}`,
@@ -269,42 +610,168 @@ export function AiAssistantModal({
     }
   };
 
-  const handleImportEntity = () => {
-    if (!generatedResult) return;
+  const handleImportEntity = (overrideType?: EntityType, overrideData?: any) => {
+    const targetType = overrideType || entityType;
+    const targetData = overrideData || generatedResult;
+    if (!targetData) return;
 
     try {
-      if (entityType === 'monster' || entityType === 'npc') {
-        const monster = hydrateGeneratedMonster(generatedResult, ruleEdition);
+      if (targetType === 'character') {
+        const pc = hydrateGeneratedCharacter(targetData, ruleEdition);
+        if (onAddCharacter) {
+          onAddCharacter(pc);
+          setImportedSuccess(`Added "${pc.name}" (Level ${pc.level} ${pc.characterClass}) to Hub under Player Characters!`);
+        }
+      } else if (targetType === 'merchant') {
+        const merchant = hydrateGeneratedMerchant(targetData, ruleEdition);
+        if (onAddCharacter) {
+          onAddCharacter(merchant);
+          setImportedSuccess(`Added "${merchant.name}" to Hub under Merchants & Shops!`);
+        }
+      } else if (targetType === 'monster' || targetType === 'npc') {
+        const monster = hydrateGeneratedMonster(targetData, ruleEdition);
         if (onAddCharacter) {
           onAddCharacter(monster);
-          setImportedSuccess(`Added "${monster.name}" (CR ${monster.challengeRating}) to your character & creature roster!`);
+          setImportedSuccess(`Added "${monster.name}" (CR ${monster.challengeRating}) to Hub under Monsters & Creatures!`);
         }
-      } else if (entityType === 'item') {
-        const item = hydrateGeneratedItem(generatedResult);
+      } else if (targetType === 'item') {
+        const item = hydrateGeneratedItem(targetData);
         if (onAddItemToInventory) {
           onAddItemToInventory(item);
           setImportedSuccess(`Added "${item.name}" directly to ${activeCharacter?.name || 'active character'}'s inventory!`);
         }
-      } else if (entityType === 'spell') {
-        const spell = hydrateGeneratedSpell(generatedResult, ruleEdition);
+      } else if (targetType === 'spell') {
+        const spell = hydrateGeneratedSpell(targetData, ruleEdition);
         if (onAddSpellToSpellbook) {
           onAddSpellToSpellbook(spell);
           setImportedSuccess(`Added "${spell.name}" (Level ${spell.level}) to ${activeCharacter?.name || 'active character'}'s spellbook!`);
         }
-      } else if (entityType === 'graph_node') {
-        const node = hydrateGeneratedGraphNode(generatedResult);
+      } else if (targetType === 'graph_node') {
+        const node = hydrateGeneratedGraphNode(targetData);
         const existingRaw = localStorage.getItem('penpaper_campaign_graph_nodes');
         const existingNodes = existingRaw ? JSON.parse(existingRaw) : [];
         const updated = [node, ...existingNodes];
         localStorage.setItem('penpaper_campaign_graph_nodes', JSON.stringify(updated));
         setImportedSuccess(`Added "${node.name}" (${node.type.toUpperCase()}) to your Campaign Graph network!`);
       } else {
-        navigator.clipboard.writeText(JSON.stringify(generatedResult, null, 2));
+        navigator.clipboard.writeText(JSON.stringify(targetData, null, 2));
         setImportedSuccess('Entity details copied to clipboard!');
       }
     } catch (err: any) {
       alert(`Import failed: ${err.message}`);
     }
+  };
+
+  const handleChatEntityImport = (entity: DetectedChatEntity) => {
+    try {
+      if (entity.type === 'character') {
+        const pc = hydrateGeneratedCharacter(entity.rawJson, ruleEdition);
+        if (onAddCharacter) {
+          onAddCharacter(pc);
+          setImportedChatIds(prev => ({
+            ...prev,
+            [entity.id]: `Added "${pc.name}" to Hub as Player Character!`
+          }));
+        }
+      } else if (entity.type === 'merchant') {
+        const merchant = hydrateGeneratedMerchant(entity.rawJson, ruleEdition);
+        if (onAddCharacter) {
+          onAddCharacter(merchant);
+          setImportedChatIds(prev => ({
+            ...prev,
+            [entity.id]: `Added "${merchant.name}" to Hub as Merchant Shopkeeper!`
+          }));
+        }
+      } else if (entity.type === 'monster') {
+        const monster = hydrateGeneratedMonster(entity.rawJson, ruleEdition);
+        if (onAddCharacter) {
+          onAddCharacter(monster);
+          setImportedChatIds(prev => ({
+            ...prev,
+            [entity.id]: `Added "${monster.name}" (CR ${monster.challengeRating}) to Hub as Monster & Combatant!`
+          }));
+        }
+      } else if (entity.type === 'item') {
+        const item = hydrateGeneratedItem(entity.rawJson);
+        if (onAddItemToInventory) {
+          onAddItemToInventory(item);
+          setImportedChatIds(prev => ({
+            ...prev,
+            [entity.id]: `Added "${item.name}" to active inventory!`
+          }));
+        }
+      } else if (entity.type === 'spell') {
+        const spell = hydrateGeneratedSpell(entity.rawJson, ruleEdition);
+        if (onAddSpellToSpellbook) {
+          onAddSpellToSpellbook(spell);
+          setImportedChatIds(prev => ({
+            ...prev,
+            [entity.id]: `Added "${spell.name}" to spellbook!`
+          }));
+        }
+      } else if (entity.type === 'graph_node') {
+        const node = hydrateGeneratedGraphNode(entity.rawJson);
+        const existingRaw = localStorage.getItem('penpaper_campaign_graph_nodes');
+        const existingNodes = existingRaw ? JSON.parse(existingRaw) : [];
+        const updated = [node, ...existingNodes];
+        localStorage.setItem('penpaper_campaign_graph_nodes', JSON.stringify(updated));
+        setImportedChatIds(prev => ({
+          ...prev,
+          [entity.id]: `Added "${node.name}" to Campaign Graph!`
+        }));
+      }
+    } catch (err: any) {
+      alert(`Import failed: ${err.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleBatchImport = (entities: DetectedChatEntity[]) => {
+    let successCount = 0;
+    const newImportedRecord: Record<string, string> = { ...importedChatIds };
+
+    for (const entity of entities) {
+      if (newImportedRecord[entity.id]) continue;
+      try {
+        if (entity.type === 'character') {
+          const pc = hydrateGeneratedCharacter(entity.rawJson, ruleEdition);
+          if (onAddCharacter) onAddCharacter(pc);
+          newImportedRecord[entity.id] = `Added "${pc.name}" (Player Character)`;
+          successCount++;
+        } else if (entity.type === 'merchant') {
+          const merchant = hydrateGeneratedMerchant(entity.rawJson, ruleEdition);
+          if (onAddCharacter) onAddCharacter(merchant);
+          newImportedRecord[entity.id] = `Added "${merchant.name}" (Merchant)`;
+          successCount++;
+        } else if (entity.type === 'monster') {
+          const monster = hydrateGeneratedMonster(entity.rawJson, ruleEdition);
+          if (onAddCharacter) onAddCharacter(monster);
+          newImportedRecord[entity.id] = `Added "${monster.name}" (CR ${monster.challengeRating || '?'})`;
+          successCount++;
+        } else if (entity.type === 'item') {
+          const item = hydrateGeneratedItem(entity.rawJson);
+          if (onAddItemToInventory) onAddItemToInventory(item);
+          newImportedRecord[entity.id] = `Added "${item.name}" (Inventory)`;
+          successCount++;
+        } else if (entity.type === 'spell') {
+          const spell = hydrateGeneratedSpell(entity.rawJson, ruleEdition);
+          if (onAddSpellToSpellbook) onAddSpellToSpellbook(spell);
+          newImportedRecord[entity.id] = `Added "${spell.name}" (Spellbook)`;
+          successCount++;
+        } else if (entity.type === 'graph_node') {
+          const node = hydrateGeneratedGraphNode(entity.rawJson);
+          const existingRaw = localStorage.getItem('penpaper_campaign_graph_nodes');
+          const existingNodes = existingRaw ? JSON.parse(existingRaw) : [];
+          existingNodes.push(node);
+          localStorage.setItem('penpaper_campaign_graph_nodes', JSON.stringify(existingNodes));
+          newImportedRecord[entity.id] = `Added "${node.name}" (Graph)`;
+          successCount++;
+        }
+      } catch (err) {
+        console.error('Failed to import entity:', entity.name, err);
+      }
+    }
+
+    setImportedChatIds(newImportedRecord);
   };
 
   const handleCopyResult = () => {
@@ -430,46 +897,253 @@ export function AiAssistantModal({
 
         {/* Tab 1: Oracle Chat */}
         {activeTab === 'chat' && (
-          <div className="flex-1 flex flex-col min-h-0 bg-stone-900/50">
+          <div
+            className="flex-1 flex flex-col min-h-0 bg-stone-900/50 relative"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onPaste={handlePaste}
+          >
+            {/* Drag & Drop Visual Overlay */}
+            {isDraggingOver && (
+              <div className="absolute inset-0 z-30 bg-stone-950/90 border-2 border-dashed border-amber-500 rounded-b-2xl flex flex-col items-center justify-center gap-3 backdrop-blur-sm pointer-events-none animate-in fade-in duration-150">
+                <div className="w-16 h-16 rounded-2xl bg-amber-500/20 border border-amber-500/50 flex items-center justify-center text-amber-400 shadow-lg">
+                  <UploadCloud className="w-8 h-8 animate-bounce" />
+                </div>
+                <div className="text-center">
+                  <h4 className="text-base font-bold text-amber-200">Drop PDF Compendium or Screenshot Here</h4>
+                  <p className="text-xs text-stone-400 mt-0.5">Nexus Oracle will extract monsters, characters, spells, items, or statblocks</p>
+                </div>
+              </div>
+            )}
+
             {/* Chat Messages Container */}
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
-              {chatMessages.map(msg => (
-                <div
-                  key={msg.id}
-                  className={`flex gap-3 max-w-[88%] ${
-                    msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
-                  }`}
-                >
-                  <div
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold ${
-                      msg.role === 'user'
-                        ? 'bg-amber-600 text-stone-950 shadow-md'
-                        : msg.isError
-                        ? 'bg-red-900/80 text-red-200 border border-red-500'
-                        : 'bg-purple-950 border border-purple-500/40 text-purple-200'
-                    }`}
-                  >
-                    {msg.role === 'user' ? 'You' : <Bot className="w-4 h-4" />}
-                  </div>
+              {chatMessages.map(msg => {
+                const detectedEntities = msg.role === 'assistant' && !msg.isError ? extractEntitiesFromChatMessage(msg.text) : [];
+                const attachment = msg.attachment || msg.image;
+                const isPdf = attachment?.mimeType === 'application/pdf';
 
+                return (
                   <div
-                    className={`p-3.5 rounded-2xl text-sm leading-relaxed ${
-                      msg.role === 'user'
-                        ? 'bg-amber-600/20 border border-amber-500/30 text-amber-50 rounded-tr-none'
-                        : msg.isError
-                        ? 'bg-red-950/40 border border-red-800/60 text-red-200 rounded-tl-none'
-                        : 'bg-stone-950/80 border border-stone-800 text-stone-200 rounded-tl-none shadow-sm'
+                    key={msg.id}
+                    className={`flex gap-3 max-w-[92%] ${
+                      msg.role === 'user' ? 'ml-auto flex-row-reverse' : 'mr-auto'
                     }`}
                   >
-                    <div className="markdown-body prose prose-invert max-w-none text-sm space-y-2">
-                      <Markdown>{msg.text}</Markdown>
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold ${
+                        msg.role === 'user'
+                          ? 'bg-amber-600 text-stone-950 shadow-md'
+                          : msg.isError
+                          ? 'bg-red-900/80 text-red-200 border border-red-500'
+                          : 'bg-purple-950 border border-purple-500/40 text-purple-200'
+                      }`}
+                    >
+                      {msg.role === 'user' ? 'You' : <Bot className="w-4 h-4" />}
                     </div>
-                    <div className="mt-1 text-[10px] opacity-40 text-right font-mono">
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+
+                    <div
+                      className={`p-3.5 rounded-2xl text-sm leading-relaxed space-y-2.5 ${
+                        msg.role === 'user'
+                          ? 'bg-amber-600/20 border border-amber-500/30 text-amber-50 rounded-tr-none'
+                          : msg.isError
+                          ? 'bg-red-950/40 border border-red-800/60 text-red-200 rounded-tl-none'
+                          : 'bg-stone-950/80 border border-stone-800 text-stone-200 rounded-tl-none shadow-sm'
+                      }`}
+                    >
+                      {/* Attached PDF or Screenshot Card */}
+                      {attachment && (
+                        <div className="mb-2">
+                          {isPdf ? (
+                            <div className="p-3 rounded-xl bg-stone-900 border border-red-500/30 max-w-sm flex items-center justify-between gap-3 shadow-md">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-9 h-9 rounded-lg bg-red-950/80 border border-red-500/50 flex items-center justify-center text-red-400 flex-shrink-0">
+                                  <FileText className="w-5 h-5" />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-stone-100 truncate">{attachment.name || 'Compendium.pdf'}</div>
+                                  <div className="text-[10px] text-stone-400 font-mono flex items-center gap-1.5">
+                                    <span className="text-red-400 font-bold uppercase tracking-wider">PDF Compendium</span>
+                                    {attachment.fileSize && <span>• {formatFileSize(attachment.fileSize)}</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              onClick={() =>
+                                setPreviewModalImage(
+                                  attachment.previewUrl ||
+                                    (attachment.data ? `data:${attachment.mimeType || 'image/png'};base64,${attachment.data}` : null)
+                                )
+                              }
+                              className="relative group rounded-xl overflow-hidden border border-amber-500/40 bg-stone-950/90 max-w-sm cursor-pointer shadow-md hover:border-amber-400 transition"
+                              title="Click to view full image"
+                            >
+                              <img
+                                src={
+                                  attachment.previewUrl ||
+                                  (attachment.data ? `data:${attachment.mimeType || 'image/png'};base64,${attachment.data}` : '')
+                                }
+                                alt={attachment.name || 'Screenshot'}
+                                className="w-full max-h-56 object-cover group-hover:scale-105 transition duration-300"
+                                referrerPolicy="no-referrer"
+                              />
+                              <div className="absolute inset-0 bg-stone-950/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-1.5 text-xs text-amber-200 font-bold backdrop-blur-[1px]">
+                                <Maximize2 className="w-4 h-4" />
+                                <span>View Full Size</span>
+                              </div>
+                              <div className="px-2.5 py-1 bg-stone-950/90 text-[10px] text-stone-300 font-mono truncate border-t border-stone-800 flex items-center justify-between gap-1">
+                                <span className="flex items-center gap-1 truncate">
+                                  <ImageIcon className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                                  <span className="truncate">{attachment.name || 'Pasted Screenshot'}</span>
+                                </span>
+                                <span className="text-amber-400 font-bold text-[9px] uppercase tracking-wider flex-shrink-0">Vision</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="markdown-body prose prose-invert max-w-none text-sm space-y-2">
+                        <Markdown>{msg.text}</Markdown>
+                      </div>
+
+                      {/* Retry Button on Error */}
+                      {msg.isError && (
+                        <div className="mt-2.5 pt-2 border-t border-red-900/40 flex items-center justify-between gap-2">
+                          <span className="text-[11px] text-red-300/80">Spike in capacity is temporary.</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Find previous user message
+                              const msgIndex = chatMessages.findIndex(m => m.id === msg.id);
+                              let lastUserText = '';
+                              for (let i = msgIndex - 1; i >= 0; i--) {
+                                if (chatMessages[i].role === 'user' && chatMessages[i].text) {
+                                  lastUserText = chatMessages[i].text;
+                                  break;
+                                }
+                              }
+                              // Remove current error message and re-send
+                              setChatMessages(prev => prev.filter(m => m.id !== msg.id));
+                              handleSendMessage(lastUserText);
+                            }}
+                            disabled={isChatLoading}
+                            className="px-3 py-1 bg-red-900/60 hover:bg-red-800 text-red-200 text-xs font-semibold rounded-lg border border-red-700/50 flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+                          >
+                            <RefreshCw className={`w-3.5 h-3.5 ${isChatLoading ? 'animate-spin' : ''}`} />
+                            <span>Retry Inquiry</span>
+                          </button>
+                        </div>
+                      )}
+
+                      {/* In-Chat 1-Click Import Cards for Generated Entities */}
+                      {detectedEntities.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-stone-800/80 space-y-2.5">
+                          {/* Batch Import Header when Multiple Entities Found */}
+                          {detectedEntities.length > 1 ? (
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 p-2.5 bg-amber-950/40 border border-amber-500/40 rounded-xl shadow-inner">
+                              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                                <Layers className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                                <span>{detectedEntities.length} Entities Extracted from Compendium</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleBatchImport(detectedEntities)}
+                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer w-full sm:w-auto flex-shrink-0"
+                              >
+                                <FolderPlus className="w-3.5 h-3.5" />
+                                <span>Import All ({detectedEntities.length})</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Detected Entity & 1-Click Import:</span>
+                            </div>
+                          )}
+
+                          <div className="space-y-2">
+                            {detectedEntities.map(entity => {
+                              const isAlreadyImported = importedChatIds[entity.id];
+
+                              return (
+                                <div
+                                  key={entity.id}
+                                  className="p-3 bg-stone-900 border border-amber-500/30 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md"
+                                >
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-stone-950 border border-amber-600/40 flex items-center justify-center flex-shrink-0 text-amber-400">
+                                      {entity.type === 'character' && <User className="w-4 h-4 text-sky-400" />}
+                                      {entity.type === 'monster' && <Skull className="w-4 h-4 text-red-400" />}
+                                      {entity.type === 'merchant' && <Store className="w-4 h-4 text-amber-400" />}
+                                      {entity.type === 'item' && <Shield className="w-4 h-4 text-emerald-400" />}
+                                      {entity.type === 'spell' && <Scroll className="w-4 h-4 text-purple-400" />}
+                                      {entity.type === 'graph_node' && <Network className="w-4 h-4 text-cyan-400" />}
+                                    </div>
+                                    <div>
+                                      <div className="font-bold text-stone-100 text-xs flex items-center gap-1.5">
+                                        <span>{entity.name}</span>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-stone-300 font-mono">
+                                          {entity.type === 'character'
+                                            ? 'Player Hero'
+                                            : entity.type === 'monster'
+                                            ? 'Monster'
+                                            : entity.type === 'merchant'
+                                            ? 'Merchant Shop'
+                                            : entity.type.toUpperCase()}
+                                        </span>
+                                      </div>
+                                      {entity.subtitle && (
+                                        <div className="text-[11px] text-stone-400">{entity.subtitle}</div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                                    {isAlreadyImported ? (
+                                      <div className="px-3 py-1.5 bg-emerald-950/80 border border-emerald-500/50 rounded-lg text-[11px] text-emerald-300 font-medium flex items-center gap-1.5 w-full sm:w-auto justify-center">
+                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                        <span>{isAlreadyImported}</span>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleChatEntityImport(entity)}
+                                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow-md cursor-pointer w-full sm:w-auto flex-shrink-0"
+                                      >
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>
+                                          {entity.type === 'character'
+                                            ? 'Import to Hub (Character)'
+                                            : entity.type === 'monster'
+                                            ? 'Import to Hub (Monster)'
+                                            : entity.type === 'merchant'
+                                            ? 'Import to Hub (Merchant)'
+                                            : entity.type === 'item'
+                                            ? 'Add to Inventory'
+                                            : entity.type === 'spell'
+                                            ? 'Add to Spellbook'
+                                            : 'Add to Graph'}
+                                        </span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="mt-1 text-[10px] opacity-40 text-right font-mono">
+                        {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
 
               {isChatLoading && (
                 <div className="flex gap-3 max-w-[85%] mr-auto items-center">
@@ -478,12 +1152,189 @@ export function AiAssistantModal({
                   </div>
                   <div className="px-4 py-2.5 rounded-2xl bg-stone-950/80 border border-stone-800 text-xs text-stone-400 flex items-center gap-2">
                     <span className="inline-block w-2 h-2 rounded-full bg-purple-400 animate-ping" />
-                    <span>Nexus Oracle is consulting the arcane archives...</span>
+                    <span>Nexus Oracle is analyzing your document & arcane archives...</span>
                   </div>
                 </div>
               )}
               <div ref={chatBottomRef} />
             </div>
+
+            {/* Quick Inspiration Chips */}
+            <div className="px-4 py-2 bg-stone-950/90 border-t border-stone-800/80 flex items-center gap-2 overflow-x-auto text-[11px] text-stone-400">
+              <span className="font-bold text-amber-500/80 flex-shrink-0 flex items-center gap-1">
+                <Sparkles className="w-3 h-3" /> Quick Prompts:
+              </span>
+              {(attachedAttachment?.mimeType === 'application/pdf'
+                ? [
+                    { label: '📖 Extract Monsters & Statblocks', prompt: 'Extract and generate monsters from this PDF manual with full structured statblocks ready for import.' },
+                    { label: '🐉 Extract Bosses & Dragons', prompt: 'Extract all high-tier boss monsters, dragons, or unique villains in this PDF with full statblocks.' },
+                    { label: '🗡️ Extract Magic Items', prompt: 'Extract all magic items, weapons, and equipment from this PDF compendium with full stats.' },
+                    { label: '📜 Extract Spells & Feats', prompt: 'Extract all spells, powers, and feats found in this PDF document.' },
+                    { label: '🗺️ Summarize Manual & Lore', prompt: 'Provide a complete summary of the chapters, rules, lore, and encounter tables in this PDF.' }
+                  ]
+                : [
+                    { label: '🧙 Create Level 3 Hero', prompt: 'Create a fully detailed Level 3 Hero character for 5e with stats, spells or weapons, and backstory.' },
+                    { label: '👹 Forge CR 5 Boss', prompt: 'Generate a balanced CR 5 Boss monster for 5e with unique multiattack actions and legendary traits.' },
+                    { label: '🏪 Master Merchant Shop', prompt: 'Create a rich Merchant and shopkeeper with custom trade wares, price markup, and shop lore.' },
+                    { label: '🗡️ Celestial Weapon', prompt: 'Design a legendary celestial magic weapon with special radiant damage and activation abilities.' },
+                    { label: '📜 3rd-Level Spell', prompt: 'Design a 3rd-level transmutation or evocation spell for 5e with damage, saving throws, and components.' }
+                  ]
+              ).map((chip, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleSendMessage(chip.prompt)}
+                  disabled={isChatLoading}
+                  className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 hover:text-amber-200 border border-stone-800 hover:border-amber-500/40 rounded-lg whitespace-nowrap transition cursor-pointer disabled:opacity-50"
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+
+            {/* PDF Indexing Progress Banner */}
+            {isPdfExtracting && (
+              <div className="px-4 py-2.5 bg-purple-950/60 border-t border-purple-800/60 flex items-center justify-between gap-3 text-xs text-purple-200 animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <Loader2 className="w-4 h-4 animate-spin text-purple-400" />
+                  <span>{pdfExtractStatus || 'Parsing PDF compendium structure and indexing pages...'}</span>
+                </div>
+                <span className="text-[11px] text-purple-400 font-mono">Bypassing proxy limits</span>
+              </div>
+            )}
+
+            {/* Attached Image / Document Preview Bar before Sending */}
+            {(attachedAttachment || extractedPdf) && !isPdfExtracting && (
+              <div className="px-4 py-2.5 bg-stone-950 border-t border-stone-800 flex flex-col gap-2 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {extractedPdf || attachedAttachment?.mimeType === 'application/pdf' ? (
+                      <div className="w-11 h-11 rounded-lg bg-red-950/90 border border-red-500/60 flex items-center justify-center text-red-400 flex-shrink-0 shadow">
+                        <FileText className="w-6 h-6" />
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() =>
+                          setPreviewModalImage(
+                            attachedAttachment?.previewUrl || (attachedAttachment?.data ? `data:${attachedAttachment.mimeType};base64,${attachedAttachment.data}` : null)
+                          )
+                        }
+                        className="w-11 h-11 rounded-lg overflow-hidden border border-amber-500/60 flex-shrink-0 cursor-pointer relative group bg-stone-900 shadow"
+                        title="Click to view full screenshot"
+                      >
+                        <img
+                          src={attachedAttachment?.previewUrl || `data:${attachedAttachment?.mimeType};base64,${attachedAttachment?.data}`}
+                          alt="Attached screenshot"
+                          className="w-full h-full object-cover group-hover:scale-110 transition"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-stone-950/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                          <Maximize2 className="w-3.5 h-3.5 text-amber-300" />
+                        </div>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5 truncate">
+                        {extractedPdf || attachedAttachment?.mimeType === 'application/pdf' ? (
+                          <FileText className="w-3.5 h-3.5 text-red-400 flex-shrink-0" />
+                        ) : (
+                          <ImageIcon className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                        )}
+                        <span className="truncate">{extractedPdf?.fileName || attachedAttachment?.name || 'Document Attached'}</span>
+                      </div>
+                      <div className="text-[11px] text-stone-400 flex items-center gap-1.5 flex-wrap">
+                        {extractedPdf ? (
+                          <>
+                            <span className="text-stone-300 font-semibold">{formatFileSize(extractedPdf.fileSize)}</span>
+                            <span>•</span>
+                            <span className="px-1.5 py-0.2 rounded bg-stone-800 text-stone-300 font-mono text-[10px]">{extractedPdf.totalPages} Pages</span>
+                            <span>•</span>
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              <Check className="w-3 h-3" />
+                              {extractedPdf.fullText ? `${Math.round(extractedPdf.fullText.split(/\s+/).length / 1000)}k words indexed` : 'Document ready'}
+                            </span>
+                          </>
+                        ) : attachedAttachment?.mimeType === 'application/pdf' ? (
+                          <span>PDF Document • {formatFileSize(attachedAttachment.fileSize)} • Ready for Oracle parsing</span>
+                        ) : (
+                          <span>Screenshot ready for vision analysis. Type inquiry or hit Send.</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAttachedAttachment(null);
+                      setExtractedPdf(null);
+                    }}
+                    className="p-1.5 rounded-lg bg-stone-900 hover:bg-red-950 text-stone-400 hover:text-red-300 border border-stone-800 hover:border-red-600/40 transition cursor-pointer flex-shrink-0"
+                    title="Remove attachment"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* PDF Compendium Scope Controls (All / Page Range / Filter) */}
+                {extractedPdf && extractedPdf.totalPages > 1 && (
+                  <div className="pt-1.5 border-t border-stone-800/80 flex items-center gap-2 flex-wrap text-[11px]">
+                    <span className="text-stone-400 font-medium">Extract Scope:</span>
+                    <button
+                      type="button"
+                      onClick={() => setPdfScope('all')}
+                      className={`px-2 py-0.5 rounded cursor-pointer transition border ${
+                        pdfScope === 'all'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
+                          : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      Entire Manual ({extractedPdf.totalPages} pgs)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPdfScope('range')}
+                      className={`px-2 py-0.5 rounded cursor-pointer transition border ${
+                        pdfScope === 'range'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
+                          : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      Select Page Range
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPdfScope('filter')}
+                      className={`px-2 py-0.5 rounded cursor-pointer transition border ${
+                        pdfScope === 'filter'
+                          ? 'bg-amber-500/20 border-amber-500/60 text-amber-300 font-semibold'
+                          : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      Filter by Monster / Keyword
+                    </button>
+
+                    {pdfScope === 'range' && (
+                      <input
+                        type="text"
+                        value={pdfPageRange}
+                        onChange={e => setPdfPageRange(e.target.value)}
+                        placeholder={`e.g. 1-20 or 15,18,22 (Max: ${extractedPdf.totalPages})`}
+                        className="px-2 py-0.5 bg-stone-900 border border-amber-500/40 rounded text-stone-200 text-[11px] w-48 focus:outline-none focus:border-amber-400"
+                      />
+                    )}
+
+                    {pdfScope === 'filter' && (
+                      <input
+                        type="text"
+                        value={pdfKeyword}
+                        onChange={e => setPdfKeyword(e.target.value)}
+                        placeholder="e.g. Dragon, Goblin, Lich, Beholder..."
+                        className="px-2 py-0.5 bg-stone-900 border border-amber-500/40 rounded text-stone-200 text-[11px] w-48 focus:outline-none focus:border-amber-400"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Input Bar */}
             <div className="p-3 bg-stone-950 border-t border-stone-800">
@@ -494,19 +1345,52 @@ export function AiAssistantModal({
                 }}
                 className="flex items-center gap-2"
               >
+                {/* Hidden File Input for PDF / Image Upload */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*,application/pdf,.pdf"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      processAttachedFile(file);
+                    }
+                    e.target.value = '';
+                  }}
+                />
+
+                {/* Attach File / Image Button */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isChatLoading}
+                  className="p-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-amber-300 border border-stone-700 hover:border-amber-500/50 transition cursor-pointer flex-shrink-0"
+                  title="Attach PDF compendium or screenshot (or press Ctrl+V / Paste anywhere)"
+                >
+                  <Paperclip className="w-4 h-4" />
+                </button>
+
                 <input
                   id="ai_chat_input"
                   type="text"
                   value={inputMessage}
                   onChange={e => setInputMessage(e.target.value)}
-                  placeholder={`Ask a rules question, how a sheet works, or TTRPG advice... (${ruleEdition.toUpperCase()})`}
+                  onPaste={handlePaste}
+                  placeholder={
+                    attachedAttachment
+                      ? attachedAttachment.mimeType === 'application/pdf'
+                        ? "e.g. 'Extract all monsters and statblocks from this PDF manual'..."
+                        : "Describe what to extract or analyze from this screenshot (or click Inquire)..."
+                      : `Ask rules, attach PDF compendiums, paste screenshots (Ctrl+V)... (${ruleEdition.toUpperCase()})`
+                  }
                   className="flex-1 px-4 py-2.5 bg-stone-900 border border-stone-700 rounded-xl text-stone-100 placeholder-stone-500 text-sm focus:outline-none focus:border-amber-500 transition"
                   disabled={isChatLoading}
                 />
                 <button
                   id="ai_chat_send_btn"
                   type="submit"
-                  disabled={!inputMessage.trim() || isChatLoading}
+                  disabled={(!inputMessage.trim() && !attachedAttachment) || isChatLoading}
                   className="px-4 py-2.5 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-stone-950 font-bold text-sm rounded-xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
                 >
                   <Send className="w-4 h-4" />
@@ -529,7 +1413,9 @@ export function AiAssistantModal({
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                     {[
+                      { type: 'character' as EntityType, label: 'Player Character', icon: User },
                       { type: 'monster' as EntityType, label: 'Monster / Boss', icon: Skull },
+                      { type: 'merchant' as EntityType, label: 'Merchant / Shop', icon: Store },
                       { type: 'npc' as EntityType, label: 'NPC Character', icon: Bot },
                       { type: 'item' as EntityType, label: 'Magic Item', icon: Shield },
                       { type: 'spell' as EntityType, label: 'Arcane Spell', icon: Scroll },
@@ -569,7 +1455,11 @@ export function AiAssistantModal({
                     value={genPrompt}
                     onChange={e => setGenPrompt(e.target.value)}
                     placeholder={
-                      entityType === 'monster'
+                      entityType === 'character'
+                        ? 'e.g. Level 3 Human Battle Master Fighter with dual scimitars and gladiator background...'
+                        : entityType === 'merchant'
+                        ? 'e.g. Dwarven blacksmith running The Iron Anvil with rare plate armors and runic weapons...'
+                        : entityType === 'monster'
                         ? 'e.g. A CR 6 Glacial Drake with frost breath, ice armor, and burrowing...'
                         : entityType === 'item'
                         ? 'e.g. A legendary warhammer forged in celestial flame with radiant strike and return throw...'
@@ -614,7 +1504,7 @@ export function AiAssistantModal({
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Forge {entityType.toUpperCase()}</span>
+                    <span>Forge {entityType === 'character' ? 'Player Character' : entityType === 'merchant' ? 'Merchant Shop' : entityType.toUpperCase()}</span>
                   </>
                 )}
               </button>
@@ -636,6 +1526,11 @@ export function AiAssistantModal({
                         {generatedResult.level !== undefined && (
                           <span className="text-xs px-2 py-0.5 rounded-md bg-purple-950 text-purple-300 border border-purple-700 font-mono">
                             Level {generatedResult.level}
+                          </span>
+                        )}
+                        {generatedResult.isVendor && (
+                          <span className="text-xs px-2 py-0.5 rounded-md bg-amber-950 text-amber-300 border border-amber-700 font-mono">
+                            Merchant Shop
                           </span>
                         )}
                       </h3>
@@ -663,7 +1558,7 @@ export function AiAssistantModal({
                       <div className="grid grid-cols-3 gap-2 bg-stone-900/80 p-2 rounded-lg text-center font-mono">
                         <div>
                           <span className="text-stone-500 block text-[10px]">HP Max</span>
-                          <span className="text-emerald-400 font-bold">{generatedResult.hpMax} ({generatedResult.hitDiceTotal})</span>
+                          <span className="text-emerald-400 font-bold">{generatedResult.hpMax} ({generatedResult.hitDiceTotal || 'Hit Dice'})</span>
                         </div>
                         <div>
                           <span className="text-stone-500 block text-[10px]">Armor Class</span>
@@ -671,7 +1566,24 @@ export function AiAssistantModal({
                         </div>
                         <div>
                           <span className="text-stone-500 block text-[10px]">Speed</span>
-                          <span className="text-amber-400 font-bold">{generatedResult.speed} ft</span>
+                          <span className="text-amber-400 font-bold">{generatedResult.speed || 30} ft</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Merchant Inventory Preview */}
+                    {Array.isArray(generatedResult.inventory) && generatedResult.inventory.length > 0 && (
+                      <div>
+                        <span className="font-bold text-amber-400 uppercase tracking-wider block mb-1 text-[11px]">
+                          {entityType === 'merchant' ? 'Shop Wares for Sale:' : 'Starting Inventory:'}
+                        </span>
+                        <div className="space-y-1 max-h-32 overflow-y-auto">
+                          {generatedResult.inventory.map((item: any, idx: number) => (
+                            <div key={idx} className="p-1.5 bg-stone-900 rounded border border-stone-800 flex justify-between text-[11px]">
+                              <span className="text-stone-200">{item.name} {item.quantity > 1 ? `(x${item.quantity})` : ''}</span>
+                              <span className="text-amber-400 font-mono">{item.costGp ? `${item.costGp} GP` : item.itemType || 'Gear'}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
@@ -716,13 +1628,17 @@ export function AiAssistantModal({
                   <div className="pt-2">
                     <button
                       id="ai_forge_import_btn"
-                      onClick={handleImportEntity}
+                      onClick={() => handleImportEntity()}
                       className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer"
                     >
                       <Plus className="w-4 h-4" />
                       <span>
-                        {entityType === 'monster' || entityType === 'npc'
-                          ? 'Add to Creature & Character Roster'
+                        {entityType === 'character'
+                          ? 'Import to Hub as Player Character'
+                          : entityType === 'merchant'
+                          ? 'Import to Hub as Merchant Shop'
+                          : entityType === 'monster' || entityType === 'npc'
+                          ? 'Import to Hub as Monster & Combatant'
                           : entityType === 'item'
                           ? 'Add to Inventory (Sheet 3)'
                           : entityType === 'spell'
@@ -739,7 +1655,7 @@ export function AiAssistantModal({
                   <Swords className="w-12 h-12 mb-3 text-stone-700" />
                   <p className="text-sm font-bold text-stone-400 mb-1">Entity Preview Empty</p>
                   <p className="text-xs max-w-sm">
-                    Configure your desired creature, item, spell, or lore node on the left, then click <strong>"Forge Entity"</strong> to generate and inspect it here.
+                    Configure your desired creature, character, merchant, item, spell, or lore node on the left, then click <strong>"Forge Entity"</strong> to generate and inspect it here.
                   </p>
                 </div>
               )}
@@ -799,6 +1715,40 @@ export function AiAssistantModal({
           </div>
         )}
       </div>
+
+      {/* Full Size Image Preview Modal */}
+      {previewModalImage && (
+        <div
+          className="fixed inset-0 z-60 bg-stone-950/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setPreviewModalImage(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-stone-900 border border-stone-800 rounded-2xl overflow-hidden shadow-2xl flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="px-4 py-2.5 bg-stone-950 border-b border-stone-800 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-300">
+                <ImageIcon className="w-4 h-4 text-amber-400" />
+                <span>Screenshot / Image Preview</span>
+              </div>
+              <button
+                onClick={() => setPreviewModalImage(null)}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-100 hover:bg-stone-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="p-2 overflow-auto flex items-center justify-center bg-stone-950/60">
+              <img
+                src={previewModalImage}
+                alt="Full preview"
+                className="max-w-full max-h-[80vh] object-contain rounded-lg"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

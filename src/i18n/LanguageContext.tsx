@@ -24,10 +24,6 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (stored && SUPPORTED_LANGUAGES.some((l) => l.code === stored)) {
         return stored;
       }
-      const browserLang = navigator.language?.slice(0, 2)?.toLowerCase();
-      if (browserLang && SUPPORTED_LANGUAGES.some((l) => l.code === browserLang)) {
-        return browserLang;
-      }
     } catch {}
     return 'en';
   });

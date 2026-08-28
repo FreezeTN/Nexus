@@ -287,6 +287,7 @@ export interface GearItem {
   equipped: boolean;
   stored?: boolean; // stored away in camp/stash (does not contribute to active carried weight)
   attuned?: boolean;
+  requiresAttunement?: boolean;
   isMagic?: boolean;
   costGp?: number; // item price / value in Gold Pieces
   notes?: string;
@@ -295,6 +296,7 @@ export interface GearItem {
   acBonus?: number;
   initiativeBonus?: number;
   armorType?: 'Heavy' | 'Medium' | 'Light' | 'Shield' | 'Bonus';
+  strengthRequirement?: number; // Minimum STR required to wear without -10ft speed penalty (e.g. 13 for Chain Mail, 15 for Plate)
   damageReduction?: number; // Damage Reduction (DR) granted by item (e.g., 2, 5)
   resistance?: string; // Damage type resistance granted by item (e.g. Fire, Cold, Slashing, All)
   immunity?: string; // Damage type immunity granted by item (e.g. Poison, Fire, Acid, All)
@@ -302,12 +304,28 @@ export interface GearItem {
   hpMaxBonus?: number; // Max HP bonus or penalty granted when equipped
   isCursed?: boolean; // Cursed artifact marker with active drawbacks or attunement restrictions
   spellDcBonus?: number; // Spell Save DC bonus (e.g. +1, +2 from Robe of the Archmagi or Rod of the Pact Keeper)
+  spellAttackBonus?: number; // Spell Attack bonus (e.g. +1, +2 from Wand of the War Mage)
+  abilitySetters?: Partial<Record<AbilityName, number>>; // Sets ability score to fixed value (e.g. { STR: 19 } for Gauntlets of Ogre Power, { INT: 19 } for Headband of Intellect)
+  abilityBonuses?: Partial<Record<AbilityName, number>>; // Adds bonus to ability score (e.g. { WIS: 2 })
+  attunementSlotsGranted?: number; // Increases max attunement slots
   weaponStats?: {
     attackBonus?: string | number;
     damage?: string;
     damageType?: string;
     range?: string;
     notes?: string;
+    isFinesse?: boolean;
+    isVersatile?: boolean;
+    versatileDamage?: string; // e.g. "1d10"
+    isRanged?: boolean;
+    isThrown?: boolean;
+    isTwoHanded?: boolean;
+    isLight?: boolean;
+    isHeavy?: boolean;
+    isReach?: boolean;
+    abilityOverride?: AbilityName;
+    attackBonusModifier?: number;
+    damageBonusModifier?: number;
   };
 }
 
@@ -345,6 +363,14 @@ export interface SpellSlots {
   level: number; // 1-9
   max: number;
   current: number;
+}
+
+export interface ActiveConcentration {
+  spellId?: string;
+  spellName: string;
+  castLevel?: number;
+  duration?: string;
+  castTimestamp?: number;
 }
 
 export interface CharacterData {
@@ -406,6 +432,7 @@ export interface CharacterData {
   // Conditions & Status Effects
   conditions?: string[];
   exhaustionLevel?: number; // 0-6
+  activeConcentration?: ActiveConcentration;
 
   // Vitals
   hpMax: number;

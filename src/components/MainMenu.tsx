@@ -616,7 +616,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 className="text-xs text-purple-300 hover:text-purple-100 font-bold flex items-center gap-1.5 bg-purple-950/70 border border-purple-500/60 hover:border-purple-400 px-3 py-1.5 rounded-xl transition cursor-pointer shadow-sm"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>AI Oracle & Forge</span>
+                <span>Nexus Oracle</span>
               </button>
             )}
             {onOpenSystemSelector && (

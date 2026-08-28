@@ -1,5 +1,35 @@
-import { CharacterData, Party, EncounterEnvironment } from '../../../types';
+import { CharacterData, Party, EncounterEnvironment, GearItem } from '../../../types';
 import { UserProfile } from '../../../lib/firebase';
+
+export type EncounterMode = 'combat' | 'merchant';
+
+export interface MerchantEncounterState {
+  merchantId: string;
+  merchantName: string;
+  archetype?: string;
+  portraitUrl?: string;
+  greeting?: string;
+  personality?: string;
+  haggleDc: number;
+  haggleModifier: number; // e.g. -15% on success, +10% on fail, 0 default
+  lastHaggleResult?: {
+    roll: number;
+    modifier: number;
+    total: number;
+    success: boolean;
+    discountPercent: number;
+    timestamp: string;
+  };
+  goldGp: number;
+  vendorMargin: number; // base markup percentage e.g. 100
+  inventory: GearItem[];
+  statblock?: {
+    armorClass: number;
+    hp: number;
+    initiativeBonus: number;
+    attacks?: string;
+  };
+}
 
 export interface Combatant {
   id: string;
@@ -24,7 +54,7 @@ export interface CombatLogEntry {
   timestamp: string;
   round: number;
   actor?: string;
-  category: 'initiative' | 'turn' | 'attack' | 'damage' | 'heal' | 'condition' | 'ability' | 'note';
+  category: 'initiative' | 'turn' | 'attack' | 'damage' | 'heal' | 'condition' | 'ability' | 'note' | 'trade';
   message: string;
 }
 
@@ -45,4 +75,7 @@ export interface SavedEncounterData {
   roundNumber: number;
   combatLogs: CombatLogEntry[];
   encounterEnvironment?: EncounterEnvironment;
+  encounterMode?: EncounterMode;
+  activeMerchant?: MerchantEncounterState | null;
 }
+

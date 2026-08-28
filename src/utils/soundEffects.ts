@@ -631,3 +631,48 @@ export function playDeathSound() {
     console.warn('playDeathSound error:', e);
   }
 }
+
+/**
+ * Gold Coin Clink & Currency Transaction Sound
+ */
+export function playCoinSound() {
+  const audio = getAudioSetup();
+  if (!audio) return;
+  const { ctx, masterGain } = audio;
+
+  try {
+    const now = ctx.currentTime;
+    const coinTones = [
+      { f: 2349.32, t: 0.0, d: 0.12 }, // D7
+      { f: 2793.83, t: 0.04, d: 0.15 }, // F7
+      { f: 3520.00, t: 0.09, d: 0.18 }  // A7
+    ];
+
+    coinTones.forEach(coin => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(coin.f, now + coin.t);
+      osc.frequency.exponentialRampToValueAtTime(coin.f * 0.98, now + coin.t + coin.d);
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(coin.f, now + coin.t);
+      filter.Q.setValueAtTime(8, now + coin.t);
+
+      gain.gain.setValueAtTime(0.01, now + coin.t);
+      gain.gain.linearRampToValueAtTime(0.18, now + coin.t + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + coin.t + coin.d);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(masterGain);
+
+      osc.start(now + coin.t);
+      osc.stop(now + coin.t + coin.d + 0.02);
+    });
+  } catch (e) {
+    console.warn('playCoinSound error:', e);
+  }
+}

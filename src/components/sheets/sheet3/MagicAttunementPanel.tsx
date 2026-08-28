@@ -1,8 +1,9 @@
 import React from 'react';
 import { CharacterData, GearItem } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
-import { recalculateCharacterAC } from '../../../utils/dndCalculations';
-import { Sparkles, ShieldCheck, Zap, Lock, Unlock, AlertCircle, Plus, CheckCircle2 } from 'lucide-react';
+import { recalculateCharacterAC, getMaxAttunementSlots } from '../../../utils/dndCalculations';
+import { Sparkles, ShieldCheck, Zap, Lock, Unlock, AlertCircle, Plus, CheckCircle2, Award, Shield } from 'lucide-react';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface MagicAttunementPanelProps {
   character: CharacterData;
@@ -13,17 +14,11 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
   character,
   onUpdateCharacter
 }) => {
-  // Determine Max Attunement Slots (Standard 5e: 3 slots; Artificer Lvl 10: 4, Lvl 14: 5, Lvl 18: 6)
-  const isArtificer = (character.characterClass || '').toLowerCase().includes('artificer') ||
-                      (character.optionalRules?.secondaryClass || '').toLowerCase().includes('artificer');
-  const level = character.level || 1;
-
-  let maxSlots = 3;
-  if (isArtificer) {
-    if (level >= 18) maxSlots = 6;
-    else if (level >= 14) maxSlots = 5;
-    else if (level >= 10) maxSlots = 4;
-  }
+  const { t } = useLanguage();
+  
+  // Use the advanced 5e attunement rules calculator
+  const attunementBreakdown = getMaxAttunementSlots(character);
+  const maxSlots = attunementBreakdown.maxSlots;
 
   const inventory = character.inventory || [];
   const attunedItems = inventory.filter(i => i.attuned);
@@ -32,6 +27,7 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
   // Magic / Attunable candidate items in inventory that are not yet attuned
   const candidateItems = inventory.filter(item => {
     if (item.attuned) return false;
+    if (item.requiresAttunement) return true;
     if (item.isMagic) return true;
     const notes = (item.notes || '').toLowerCase();
     const name = (item.name || '').toLowerCase();
@@ -74,7 +70,7 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
 
   return (
     <CollapsibleBox
-      title="Magic Item Attunement Slots"
+      title={t('inventory.attunementSlots', 'Magic Item Attunement Slots')}
       icon={<Sparkles className="w-5 h-5 text-purple-400" />}
       storageKey="sheet3_magic_attunement"
       headerExtra={
@@ -86,11 +82,23 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
             : 'bg-purple-950 text-purple-300 border-purple-600/50'
         }`}>
           <Zap className="w-3.5 h-3.5 text-purple-400" />
-          <span>{slotsUsed} / {maxSlots} Slots Used</span>
+          <span>{slotsUsed} / {maxSlots} {t('inventory.attuned', 'Attuned')}</span>
         </div>
       }
     >
       <div className="space-y-4 pt-2 text-xs">
+        {attunementBreakdown.featureName && (
+          <div className="bg-purple-950/40 border border-purple-800/50 rounded-xl px-3 py-2 flex items-center justify-between text-xs text-purple-200">
+            <span className="flex items-center gap-1.5 font-bold">
+              <Award className="w-4 h-4 text-purple-400" />
+              {attunementBreakdown.featureName}
+            </span>
+            <span className="font-mono text-purple-300 bg-purple-900/60 px-2 py-0.5 rounded border border-purple-700/50">
+              {maxSlots} Max Attunement Slots
+            </span>
+          </div>
+        )}
+
         {/* Attunement Slot Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {Array.from({ length: maxSlots }).map((_, index) => {
@@ -110,7 +118,7 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
                       <div>
                         <span className="font-bold text-purple-200 block text-sm leading-tight">{item.name}</span>
                         <span className="text-[10px] text-purple-400 font-mono">
-                          Slot #{index + 1} &bull; {item.equipped ? 'Equipped' : 'Carried'}
+                          Slot #{index + 1} &bull; {item.equipped ? t('inventory.equipped', 'Equipped') : 'Carried'}
                         </span>
                       </div>
                     </div>
@@ -131,15 +139,36 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
                     </p>
                   )}
 
-                  <div className="flex items-center justify-between text-[10px] text-purple-300 font-mono pt-1 border-t border-purple-900/40">
-                    <span className="flex items-center gap-1">
+                  {/* Active Attunement Benefits */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-purple-900/40 text-[10px] font-mono">
+                    <span className="flex items-center gap-1 text-purple-300">
                       <ShieldCheck className="w-3 h-3 text-emerald-400" /> Active Bond
                     </span>
                     {item.spellDcBonus && (
-                      <span className="bg-amber-950 text-amber-300 border border-amber-700/50 px-1.5 py-0.2 rounded font-bold">
-                        +{item.spellDcBonus} Spell DC
+                      <span className="bg-amber-950 text-amber-300 border border-amber-700/50 px-1.5 py-0.5 rounded font-bold">
+                        +{item.spellDcBonus} DC
                       </span>
                     )}
+                    {item.spellAttackBonus && (
+                      <span className="bg-amber-950 text-amber-300 border border-amber-700/50 px-1.5 py-0.5 rounded font-bold">
+                        +{item.spellAttackBonus} Spell Atk
+                      </span>
+                    )}
+                    {item.acBonus && (
+                      <span className="bg-emerald-950 text-emerald-300 border border-emerald-700/50 px-1.5 py-0.5 rounded font-bold">
+                        +{item.acBonus} AC
+                      </span>
+                    )}
+                    {item.abilitySetters && Object.entries(item.abilitySetters).map(([abil, val]) => val && (
+                      <span key={abil} className="bg-cyan-950 text-cyan-300 border border-cyan-700/50 px-1.5 py-0.5 rounded font-bold">
+                        {abil} = {val}
+                      </span>
+                    ))}
+                    {item.abilityBonuses && Object.entries(item.abilityBonuses).map(([abil, val]) => val && (
+                      <span key={abil} className="bg-blue-950 text-blue-300 border border-blue-700/50 px-1.5 py-0.5 rounded font-bold">
+                        +{val} {abil}
+                      </span>
+                    ))}
                   </div>
                 </div>
               );
@@ -176,7 +205,7 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
                   <div className="min-w-0">
                     <span className="font-bold text-stone-200 block text-xs truncate">{item.name}</span>
                     <span className="text-[10px] text-stone-400 font-mono">
-                      {item.itemType || 'Magic Gear'} &bull; {item.equipped ? 'Equipped' : 'Carried'}
+                      {item.itemType || 'Magic Gear'} &bull; {item.equipped ? t('inventory.equipped', 'Equipped') : 'Carried'}
                     </span>
                   </div>
 
@@ -200,10 +229,11 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
           <AlertCircle className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
           <div>
             <strong className="text-purple-300 font-bold block">5e Attunement Rules:</strong>
-            Attuning to a magic item requires spending a Short Rest (1 hour) focused on the item. A character can attune to up to {maxSlots} magic items simultaneously. Attunement grants active magic properties (e.g., Spell DC bonuses, resistances, or special activated abilities).
+            Attuning to a magic item requires spending a Short Rest (1 hour) focused on the item. {attunementBreakdown.reason}. Attunement activates magical ability score modifications, stat setters, spell bonuses, and protective properties.
           </div>
         </div>
       </div>
     </CollapsibleBox>
   );
 };
+

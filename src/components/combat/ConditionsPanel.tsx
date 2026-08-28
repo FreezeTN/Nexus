@@ -3,6 +3,7 @@ import { CharacterData } from '../../types';
 import { DND_CONDITIONS, EXHAUSTION_LEVELS } from '../../data/conditionsData';
 import { getConditionEffects } from '../../utils/dndCalculations';
 import { ShieldAlert, Plus, X, AlertCircle, Info, Activity } from 'lucide-react';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface ConditionsPanelProps {
   character: CharacterData;
@@ -13,6 +14,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
   character,
   onUpdateCharacter
 }) => {
+  const { t } = useLanguage();
   const [showAddModal, setShowAddModal] = useState(false);
   const activeConditions = character.conditions || [];
   const exhaustion = character.exhaustionLevel || 0;
@@ -51,7 +53,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ShieldAlert className="w-5 h-5 text-amber-500" />
-          <h3 className="font-serif font-bold text-stone-100 text-sm">Conditions & Status Effects</h3>
+          <h3 className="font-serif font-bold text-stone-100 text-sm">{t('combat.statusEffects', 'Conditions & Status Effects')}</h3>
           {(activeConditions.length > 0 || exhaustion > 0) && (
             <span className="bg-rose-950 text-rose-300 border border-rose-600/50 text-[10px] px-2 py-0.5 rounded-full font-mono font-bold">
               {activeConditions.length + (exhaustion > 0 ? 1 : 0)} Active
@@ -65,7 +67,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
               onClick={handleClearAll}
               className="text-[11px] text-stone-400 hover:text-stone-200 transition underline"
             >
-              Clear All
+              {t('common.clear', 'Clear All')}
             </button>
           )}
           <button
@@ -73,7 +75,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
             className="flex items-center gap-1 text-xs bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-600/40 px-2.5 py-1 rounded-lg font-bold transition"
           >
             <Plus className="w-3.5 h-3.5" />
-            <span>Manage Status</span>
+            <span>{t('combat.statusEffects', 'Manage Status')}</span>
           </button>
         </div>
       </div>

@@ -77,6 +77,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   const [useGrittyRealismResting, setUseGrittyRealismResting] = useState(false);
   const [useVariantCritDamage, setUseVariantCritDamage] = useState(false);
   const [useMilestoneXp, setUseMilestoneXp] = useState(false);
+  const [disableAutoXpGain, setDisableAutoXpGain] = useState(false);
   const [useGestaltUA72, setUseGestaltUA72] = useState(false);
   const [useDefenseBonusUA109, setUseDefenseBonusUA109] = useState(false);
   const [useArmorAsDRUA109, setUseArmorAsDRUA109] = useState(false);
@@ -397,6 +398,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         useGrittyRealismResting,
         useVariantCritDamage,
         useMilestoneXp,
+        disableAutoXpGain,
+        useManualXpMode: disableAutoXpGain,
         useGestaltUA72,
         useDefenseBonusUA109,
         useArmorAsDRUA109,
@@ -1235,7 +1238,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                 </label>
 
                 {/* Milestone XP Mode */}
-                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition sm:col-span-2">
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
                   <input
                     type="checkbox"
                     checked={useMilestoneXp}
@@ -1248,6 +1251,24 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                     </span>
                     <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
                       Hides numerical XP progress bars in favor of story/DM milestone level-ups.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Manual Tabletop EXP Mode */}
+                <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition">
+                  <input
+                    type="checkbox"
+                    checked={disableAutoXpGain}
+                    onChange={(e) => setDisableAutoXpGain(e.target.checked)}
+                    className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-stone-200 flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-amber-400" /> Manual / Tabletop EXP System
+                    </span>
+                    <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                      Disables automatic combat kill EXP distribution to the character sheet.
                     </p>
                   </div>
                 </label>

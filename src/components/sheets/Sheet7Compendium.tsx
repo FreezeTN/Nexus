@@ -4,6 +4,7 @@ import { getAbilityModifier, formatModifier } from '../../utils/dndCalculations'
 import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { systemRegistry } from '../../systems';
+import { useLanguage } from '../../i18n/LanguageContext';
 import {
   CompendiumItem,
   CompendiumCategory,
@@ -50,6 +51,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
   onAddMonsterToRoster,
   enabledSystems
 }) => {
+  const { t } = useLanguage();
   const [selectedCategory, setSelectedCategory] = useState<CompendiumCategory | 'all'>('all');
   const [selectedSystem, setSelectedSystem] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -305,7 +307,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by name, tags, description, or source..."
+              placeholder={t('compendium.searchPlaceholder', 'Search spells, monsters, magic items, rules...')}
               className="w-full pl-10 pr-4 py-2.5 bg-stone-900 border border-stone-800 rounded-xl text-stone-200 placeholder-stone-500 text-sm focus:outline-none focus:border-amber-500/80"
             />
             {searchQuery && (
@@ -323,7 +325,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               <Filter className="w-3.5 h-3.5 text-amber-400" /> System:
             </span>
             {[
-              { id: 'all', label: 'Active Systems' },
+              { id: 'all', label: t('common.all', 'Active Systems') },
               ...systemRegistry.getAllSystems().map(sys => ({ id: sys.id, label: sys.shortName }))
             ]
               .filter(sys => sys.id === 'all' || !enabledSystems || enabledSystems.includes(sys.id as RuleEdition))
@@ -347,14 +349,14 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         {/* CATEGORY TABS */}
         <div className="mt-4 flex items-center gap-2 overflow-x-auto scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent pt-2 pb-2 pr-4">
           {[
-            { id: 'all' as const, label: 'All Entries', icon: Layers, count: categoryCounts.all },
-            { id: 'monsters' as const, label: 'Monsters & NPCs', icon: Crown, count: categoryCounts.monsters },
-            { id: 'spells' as const, label: 'Spells & Magic', icon: Wand2, count: categoryCounts.spells },
-            { id: 'items' as const, label: 'Items & Gear', icon: Sword, count: categoryCounts.items },
-            { id: 'classes' as const, label: 'Classes', icon: Shield, count: categoryCounts.classes },
-            { id: 'feats' as const, label: 'Feats', icon: Scroll, count: categoryCounts.feats },
-            { id: 'features' as const, label: 'Features', icon: Sparkles, count: categoryCounts.features },
-            { id: 'skills' as const, label: 'Skills', icon: Dices, count: categoryCounts.skills }
+            { id: 'all' as const, label: t('common.all', 'All Entries'), icon: Layers, count: categoryCounts.all },
+            { id: 'monsters' as const, label: t('compendium.monsters', 'Monsters & NPCs'), icon: Crown, count: categoryCounts.monsters },
+            { id: 'spells' as const, label: t('compendium.spells', 'Spells & Magic'), icon: Wand2, count: categoryCounts.spells },
+            { id: 'items' as const, label: t('compendium.items', 'Items & Gear'), icon: Sword, count: categoryCounts.items },
+            { id: 'classes' as const, label: t('wizard.stepClass', 'Classes'), icon: Shield, count: categoryCounts.classes },
+            { id: 'feats' as const, label: t('wizard.stepFeats', 'Feats'), icon: Scroll, count: categoryCounts.feats },
+            { id: 'features' as const, label: t('level.featuresUnlocked', 'Features'), icon: Sparkles, count: categoryCounts.features },
+            { id: 'skills' as const, label: t('skills.title', 'Skills'), icon: Dices, count: categoryCounts.skills }
           ].map((cat) => {
             const Icon = cat.icon;
             const isActive = selectedCategory === cat.id;

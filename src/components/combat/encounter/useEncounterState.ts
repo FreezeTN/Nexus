@@ -5,7 +5,7 @@ import { getLevelFromTotalXp } from '../../../data/levelProgressionData';
 import { getMonsterPortraitUrl } from '../../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound } from '../../../utils/diceAudio';
-import { Combatant, CombatLogEntry, SavedEncounterData } from './encounterTypes';
+import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState } from './encounterTypes';
 
 export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
   const defaultPlayer: Combatant = {
@@ -26,6 +26,8 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
     activeTurnIndex: 0,
     roundNumber: 1,
     encounterEnvironment: 'terrestrial',
+    encounterMode: 'combat',
+    activeMerchant: null,
     combatLogs: [
       {
         id: 'log-init-1',
@@ -63,6 +65,8 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
           activeTurnIndex: typeof parsed.activeTurnIndex === 'number' && parsed.activeTurnIndex < syncedCombatants.length ? parsed.activeTurnIndex : 0,
           roundNumber: typeof parsed.roundNumber === 'number' ? parsed.roundNumber : 1,
           encounterEnvironment: parsed.encounterEnvironment || 'terrestrial',
+          encounterMode: parsed.encounterMode || 'combat',
+          activeMerchant: parsed.activeMerchant || null,
           combatLogs: Array.isArray(parsed.combatLogs) && parsed.combatLogs.length > 0 ? parsed.combatLogs : defaultState.combatLogs
         };
       }
@@ -94,6 +98,8 @@ export function useEncounterState({
   const [roundNumber, setRoundNumber] = useState<number>(() => loadSavedEncounter(character).roundNumber);
   const [combatLogs, setCombatLogs] = useState<CombatLogEntry[]>(() => loadSavedEncounter(character).combatLogs);
   const [encounterEnvironment, setEncounterEnvironment] = useState<EncounterEnvironment>(() => loadSavedEncounter(character).encounterEnvironment || 'terrestrial');
+  const [encounterMode, setEncounterMode] = useState<EncounterMode>(() => loadSavedEncounter(character).encounterMode || 'combat');
+  const [activeMerchant, setActiveMerchant] = useState<MerchantEncounterState | null>(() => loadSavedEncounter(character).activeMerchant || null);
 
   const [xpAlert, setXpAlert] = useState<{
     monsterName: string;
@@ -112,6 +118,8 @@ export function useEncounterState({
     setRoundNumber(saved.roundNumber);
     setCombatLogs(saved.combatLogs);
     setEncounterEnvironment(saved.encounterEnvironment || 'terrestrial');
+    setEncounterMode(saved.encounterMode || 'combat');
+    setActiveMerchant(saved.activeMerchant || null);
   }, [character.id]);
 
   // Save encounter state to localStorage
@@ -123,13 +131,16 @@ export function useEncounterState({
         activeTurnIndex,
         roundNumber,
         combatLogs,
-        encounterEnvironment
+        encounterEnvironment,
+        encounterMode,
+        activeMerchant
       };
       localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
     } catch (err) {
       console.error("Error saving encounter state to localStorage:", err);
     }
-  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, character.id]);
+  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, character.id]);
+
 
   // Keep player combatant synced with character
   useEffect(() => {
@@ -505,6 +516,67 @@ export function useEncounterState({
     setCombatants(prev => prev.filter(c => c.id !== id));
   }, [combatants, addLogEntry]);
 
+  const handleSetMerchantEncounter = useCallback((merchantData: MerchantEncounterState) => {
+    setActiveMerchant(merchantData);
+    setEncounterMode('merchant');
+    addLogEntry(
+      'trade',
+      `🏪 Merchant Encounter Started: "${merchantData.merchantName}" (${merchantData.archetype || 'Trader'}) has opened shop! Starting gold till: ${merchantData.goldGp} GP, ${merchantData.inventory.length} wares available.`,
+      merchantData.merchantName
+    );
+  }, [addLogEntry]);
+
+  const handlePivotMerchantToCombat = useCallback(() => {
+    if (!activeMerchant) return;
+
+    const merchantInitBonus = activeMerchant.statblock?.initiativeBonus || 2;
+    const rolledInit = Math.floor(Math.random() * 20) + 1 + merchantInitBonus;
+    const ac = activeMerchant.statblock?.armorClass || 14;
+    const hp = activeMerchant.statblock?.hp || 45;
+
+    const merchantCombatant: Combatant = {
+      id: 'enemy-merchant-' + activeMerchant.merchantId + '-' + Date.now(),
+      name: activeMerchant.merchantName + ' (Merchant)',
+      initiative: rolledInit,
+      armorClass: ac,
+      hpCurrent: hp,
+      hpMax: hp,
+      type: 'enemy',
+      monsterXpReward: 700,
+      isDefeated: false,
+      portraitUrl: activeMerchant.portraitUrl
+    };
+
+    setCombatants(prev => {
+      const defaultPlayer = prev.find(c => c.isPlayerChar) || {
+        id: 'player-' + character.id,
+        name: character.name,
+        initiative: 10,
+        armorClass: character.armorClass || 10,
+        hpCurrent: character.hpCurrent || 10,
+        hpMax: getEffectiveMaxHp(character),
+        type: 'player',
+        isPlayerChar: true,
+        conditions: character.conditions || [],
+        portraitUrl: character.portraitUrl
+      };
+
+      const others = prev.filter(c => c.isPlayerChar || c.type === 'ally');
+      const roster = [defaultPlayer, ...others.filter(c => c.id !== defaultPlayer.id), merchantCombatant];
+      return roster.sort((a, b) => b.initiative - a.initiative);
+    });
+
+    setEncounterMode('combat');
+    setRoundNumber(1);
+    setActiveTurnIndex(0);
+
+    addLogEntry(
+      'ability',
+      `⚔️ COMBAT TRIGGERED! ${activeMerchant.merchantName} drew weapons! (AC ${ac}, HP ${hp}, Initiative: ${rolledInit}). Attacks: ${activeMerchant.statblock?.attacks || 'Mundane weapons'}`,
+      activeMerchant.merchantName
+    );
+  }, [activeMerchant, character, addLogEntry]);
+
   const handleClearEncounter = useCallback(() => {
     const defaultPlayer: Combatant = {
       id: 'player-' + character.id,
@@ -521,6 +593,8 @@ export function useEncounterState({
     setCombatants([defaultPlayer]);
     setActiveTurnIndex(0);
     setRoundNumber(1);
+    setEncounterMode('combat');
+    setActiveMerchant(null);
     setCombatLogs([
       {
         id: 'log-init-' + Date.now(),
@@ -600,6 +674,12 @@ export function useEncounterState({
     setCombatLogs,
     encounterEnvironment,
     setEncounterEnvironment,
+    encounterMode,
+    setEncounterMode,
+    activeMerchant,
+    setActiveMerchant,
+    handleSetMerchantEncounter,
+    handlePivotMerchantToCombat,
     activeCombatant,
     activeAttackerCharacter,
     allies,
@@ -621,5 +701,6 @@ export function useEncounterState({
     toggleAutoXpGain
   };
 }
+
 
 export type EncounterManagerReturn = ReturnType<typeof useEncounterState>;

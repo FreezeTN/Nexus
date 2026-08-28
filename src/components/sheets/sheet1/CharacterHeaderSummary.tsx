@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CharacterData } from '../../../types';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../../data/monsterPortraits';
 import { syncClassFeaturesForCharacter } from '../../../data/srdRulesLibrary';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import {
   getCombinedLevel,
   getActiveClassChoice,
@@ -44,6 +45,7 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
   setShowCompanionModal,
   setShowLevelProgressionModal
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl text-stone-100 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -270,7 +272,18 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
                   )}
                 </div>
               ) : (
-                <span><strong>XP:</strong> {character.experiencePoints.toLocaleString()}</span>
+                <span className="flex items-center gap-1.5">
+                  <strong>XP:</strong> {character.experiencePoints.toLocaleString()}
+                  {(character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode) && (
+                    <span
+                      onClick={() => setShowLevelProgressionModal(true)}
+                      className="bg-amber-950/80 text-amber-300 border border-amber-600/50 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded cursor-pointer hover:bg-amber-900/80 transition"
+                      title="Manual Tabletop EXP Mode Active (Auto-XP off) - Click to manage progression"
+                    >
+                      📖 Manual
+                    </span>
+                  )}
+                </span>
               )}
             </div>
           </div>
@@ -291,24 +304,24 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
         <button
           onClick={() => setShowLevelProgressionModal(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/90 hover:bg-amber-900 text-amber-200 border border-amber-500/50 rounded-xl text-xs font-bold transition shadow-md"
-          title="Open D&D 5e Character Advancement Table & Level Up Wizard"
+          title="Open Character Advancement Table & Level Up Wizard"
         >
           <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
-          <span>Level Progression & Table</span>
+          <span>{t('level.title', 'Level Progression & Table')}</span>
         </button>
         <button
           onClick={() => setEditingProfile(!editingProfile)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 rounded-xl text-xs font-semibold border border-stone-700 transition"
         >
           <Edit2 className="w-3.5 h-3.5 text-amber-400" />
-          <span>{editingProfile ? 'Close Edit Profile' : 'Edit Profile & Details'}</span>
+          <span>{editingProfile ? t('common.close', 'Close Edit') : t('common.edit', 'Edit Profile & Details')}</span>
         </button>
         <button
           onClick={() => setEditingAbilities(!editingAbilities)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-xs font-semibold border border-stone-700 transition"
         >
           <Edit2 className="w-3.5 h-3.5 text-amber-400" />
-          <span>{editingAbilities ? 'Done Editing Stats' : 'Edit Ability Scores'}</span>
+          <span>{editingAbilities ? t('common.done', 'Done') : t('stats.abilityScores', 'Edit Ability Scores')}</span>
         </button>
       </div>
     </div>

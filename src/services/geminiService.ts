@@ -1,5 +1,52 @@
-import { CharacterData, GearItem, Spell, RuleEdition } from '../types';
+import { CharacterData, GearItem, Spell, RuleEdition, AbilityName, Skill } from '../types';
 import { CampaignEntity } from '../utils/searchIndexer';
+
+export const DND5E_SKILL_DEFS: Array<{ name: string; ability: AbilityName }> = [
+  { name: 'Acrobatics', ability: 'DEX' },
+  { name: 'Animal Handling', ability: 'WIS' },
+  { name: 'Arcana', ability: 'INT' },
+  { name: 'Athletics', ability: 'STR' },
+  { name: 'Deception', ability: 'CHA' },
+  { name: 'History', ability: 'INT' },
+  { name: 'Insight', ability: 'WIS' },
+  { name: 'Intimidation', ability: 'CHA' },
+  { name: 'Investigation', ability: 'INT' },
+  { name: 'Medicine', ability: 'WIS' },
+  { name: 'Nature', ability: 'INT' },
+  { name: 'Perception', ability: 'WIS' },
+  { name: 'Performance', ability: 'CHA' },
+  { name: 'Persuasion', ability: 'CHA' },
+  { name: 'Religion', ability: 'INT' },
+  { name: 'Sleight of Hand', ability: 'DEX' },
+  { name: 'Stealth', ability: 'DEX' },
+  { name: 'Survival', ability: 'WIS' },
+];
+
+export function build5eSkillList(proficientNames: any[] = []): Skill[] {
+  const profSet = new Set(
+    (Array.isArray(proficientNames) ? proficientNames : [])
+      .map(s => (typeof s === 'string' ? s.toLowerCase().trim() : s?.name ? String(s.name).toLowerCase().trim() : ''))
+      .filter(Boolean)
+  );
+
+  return DND5E_SKILL_DEFS.map((s, idx) => ({
+    id: `skill_${idx}_${s.name.toLowerCase().replace(/\s+/g, '_')}`,
+    name: s.name,
+    ability: s.ability,
+    proficient: profSet.has(s.name.toLowerCase()),
+    expertise: false,
+  }));
+}
+
+export interface ChatMessageAttachment {
+  data: string; // base64 string
+  mimeType: string;
+  previewUrl?: string;
+  name?: string;
+  fileSize?: number;
+}
+
+export type ChatMessageImage = ChatMessageAttachment;
 
 export interface ChatMessage {
   id: string;
@@ -7,9 +54,11 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   isError?: boolean;
+  image?: ChatMessageAttachment;
+  attachment?: ChatMessageAttachment;
 }
 
-export type EntityType = 'monster' | 'npc' | 'item' | 'spell' | 'graph_node' | 'quest' | 'encounter';
+export type EntityType = 'character' | 'monster' | 'merchant' | 'npc' | 'item' | 'spell' | 'graph_node' | 'quest' | 'encounter';
 
 const USER_API_KEY_STORAGE = 'nexus_user_ai_api_key';
 
@@ -47,7 +96,8 @@ export async function askAssistant(
   message: string,
   history: Array<{ role: 'user' | 'assistant'; text: string; isError?: boolean }>,
   systemContext?: string,
-  language?: string
+  language?: string,
+  image?: { data: string; mimeType: string }
 ): Promise<string> {
   const customApiKey = getStoredUserApiKey();
   const activeLang = language || getStoredLanguage();
@@ -71,6 +121,7 @@ export async function askAssistant(
         systemContext,
         customApiKey: customApiKey || undefined,
         language: activeLang,
+        image: image ? { data: image.data, mimeType: image.mimeType } : undefined,
       }),
     });
   } catch (networkErr: any) {
@@ -184,7 +235,7 @@ export function hydrateGeneratedMonster(raw: any, edition: RuleEdition = '5e'): 
       CHA: { score: Number(raw.abilities?.CHA?.score) || 10 },
     },
     savingThrowProficiencies: Array.isArray(raw.savingThrowProficiencies) ? raw.savingThrowProficiencies : [],
-    skills: Array.isArray(raw.skills) ? raw.skills : [],
+    skills: build5eSkillList(raw.skills || []),
     classFeatures: Array.isArray(raw.classFeatures)
       ? raw.classFeatures.map((f: any, i: number) => ({
           id: f.id || `trait_${i}_${Date.now()}`,
@@ -282,26 +333,386 @@ export function hydrateGeneratedSpell(raw: any, edition: RuleEdition = '5e'): Sp
 }
 
 /**
- * Hydrates raw AI graph node JSON into a CampaignEntity
+ * Hydrates raw AI character JSON into a full, valid Player Character CharacterData object
  */
-export function hydrateGeneratedGraphNode(raw: any): CampaignEntity {
-  const id = `entity_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+export function hydrateGeneratedCharacter(raw: any, edition: RuleEdition = '5e'): CharacterData {
+  const id = `pc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const hp = Number(raw.hpMax) || 12;
+
+  const inv: GearItem[] = Array.isArray(raw.inventory)
+    ? raw.inventory.map((item: any) => hydrateGeneratedItem(item))
+    : [];
+
   return {
     id,
-    name: raw.name || 'Unnamed Lore Entity',
-    type: raw.type || 'npc',
-    summary: raw.summary || raw.description || 'Campaign lore record.',
-    region: raw.region || 'Realm',
-    status: raw.status || 'Active',
-    faction: raw.faction || '',
-    tags: Array.isArray(raw.tags) ? raw.tags : [],
-    connections: Array.isArray(raw.connections)
-      ? raw.connections.map((c: any, i: number) => ({
-          targetId: c.targetId || `rel_${i}_${Date.now()}`,
-          targetName: c.targetName || 'Connected Subject',
-          relationship: c.relationship || 'Associated With',
-          targetType: c.targetType || 'npc',
+    name: raw.name || 'Unnamed Adventurer',
+    race: raw.race || 'Human',
+    characterClass: raw.characterClass || 'Fighter',
+    subclass: raw.subclass || '',
+    level: Number(raw.level) || 1,
+    background: raw.background || 'Folk Hero',
+    alignment: raw.alignment || 'Neutral Good',
+    experiencePoints: 0,
+    edition,
+    isMonster: false,
+    isVendor: false,
+    hpMax: hp,
+    hpCurrent: hp,
+    hpTemp: 0,
+    hitDiceTotal: raw.hitDiceTotal || '1d10 + 2',
+    hitDiceCurrent: Number(raw.level) || 1,
+    armorClass: Number(raw.armorClass) || 14,
+    initiativeBonus: Number(raw.initiativeBonus) || 0,
+    speed: Number(raw.speed) || 30,
+    inspiration: false,
+    deathSavesSuccesses: 0,
+    deathSavesFailures: 0,
+    abilities: {
+      STR: { score: Number(raw.abilities?.STR?.score) || 14 },
+      DEX: { score: Number(raw.abilities?.DEX?.score) || 12 },
+      CON: { score: Number(raw.abilities?.CON?.score) || 14 },
+      INT: { score: Number(raw.abilities?.INT?.score) || 10 },
+      WIS: { score: Number(raw.abilities?.WIS?.score) || 12 },
+      CHA: { score: Number(raw.abilities?.CHA?.score) || 10 },
+    },
+    savingThrowProficiencies: Array.isArray(raw.savingThrowProficiencies) ? raw.savingThrowProficiencies : ['STR', 'CON'],
+    skills: build5eSkillList(raw.skills || ['Athletics', 'Perception']),
+    classFeatures: Array.isArray(raw.classFeatures)
+      ? raw.classFeatures.map((f: any, i: number) => ({
+          id: f.id || `trait_${i}_${Date.now()}`,
+          name: f.name || 'Class Feature',
+          source: f.source || 'Class Feature',
+          description: f.description || '',
         }))
       : [],
+    feats: [],
+    attacks: Array.isArray(raw.attacks)
+      ? raw.attacks.map((a: any, i: number) => ({
+          id: a.id || `atk_${i}_${Date.now()}`,
+          name: a.name || 'Main Weapon',
+          attackBonus: Number(a.attackBonus) || 4,
+          damage: a.damage || '1d8 + 2',
+          damageType: a.damageType || 'Slashing',
+          range: a.range || 'Melee 5 ft.',
+          notes: a.notes || '',
+        }))
+      : [],
+    legendaryActions: [],
+    legendaryActionsMax: 0,
+    legendaryActionsRemaining: 0,
+    reactions: [],
+    wealth: {
+      cp: Number(raw.wealth?.cp) || 0,
+      sp: Number(raw.wealth?.sp) || 0,
+      ep: Number(raw.wealth?.ep) || 0,
+      gp: Number(raw.wealth?.gp) || 25,
+      pp: Number(raw.wealth?.pp) || 0,
+    },
+    inventory: inv,
+    isSpellcaster: !!raw.isSpellcaster,
+    spellcastingAbility: raw.spellcastingAbility || 'INT',
+    spellSlots: [],
+    spells: [],
+    personalityTraits: raw.personalityTraits || '',
+    ideals: raw.ideals || '',
+    bonds: raw.bonds || '',
+    flaws: raw.flaws || '',
+    backstory: raw.backstory || '',
+    alliesAndOrganizations: raw.alliesAndOrganizations || '',
+    additionalNotes: raw.additionalNotes || '',
   };
 }
+
+/**
+ * Hydrates raw AI merchant JSON into a full CharacterData object with vendor flags & trade inventory
+ */
+export function hydrateGeneratedMerchant(raw: any, edition: RuleEdition = '5e'): CharacterData {
+  const id = `merchant_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const hp = Number(raw.hpMax) || 20;
+
+  const inv: GearItem[] = Array.isArray(raw.inventory)
+    ? raw.inventory.map((item: any) => hydrateGeneratedItem(item))
+    : [];
+
+  return {
+    id,
+    name: raw.name || 'Unnamed Merchant',
+    race: raw.race || 'Human',
+    characterClass: raw.characterClass || 'Merchant Shopkeeper',
+    subclass: raw.subclass || raw.shopName || 'Trade Shop',
+    level: Number(raw.level) || 3,
+    background: raw.background || 'Guild Artisan',
+    alignment: raw.alignment || 'Neutral Good',
+    experiencePoints: 0,
+    edition,
+    isMonster: false,
+    isVendor: true,
+    vendorMargin: Number(raw.vendorMargin) || 100,
+    hpMax: hp,
+    hpCurrent: hp,
+    hpTemp: 0,
+    hitDiceTotal: raw.hitDiceTotal || '3d8 + 3',
+    hitDiceCurrent: 3,
+    armorClass: Number(raw.armorClass) || 12,
+    initiativeBonus: 0,
+    speed: 30,
+    inspiration: false,
+    deathSavesSuccesses: 0,
+    deathSavesFailures: 0,
+    abilities: {
+      STR: { score: Number(raw.abilities?.STR?.score) || 10 },
+      DEX: { score: Number(raw.abilities?.DEX?.score) || 12 },
+      CON: { score: Number(raw.abilities?.CON?.score) || 12 },
+      INT: { score: Number(raw.abilities?.INT?.score) || 14 },
+      WIS: { score: Number(raw.abilities?.WIS?.score) || 14 },
+      CHA: { score: Number(raw.abilities?.CHA?.score) || 14 },
+    },
+    savingThrowProficiencies: ['WIS', 'CHA'],
+    skills: build5eSkillList(raw.skills || ['Insight', 'Persuasion', 'Deception']),
+    classFeatures: [
+      {
+        id: `feat_${Date.now()}`,
+        name: 'Master Appraiser',
+        source: 'Merchant',
+        description: 'Knows the exact market value, craftsmanship quality, and lore of rare antiquities and weapons.'
+      }
+    ],
+    feats: [],
+    attacks: [
+      {
+        id: `atk_${Date.now()}`,
+        name: 'Dagger',
+        attackBonus: 3,
+        damage: '1d4 + 1',
+        damageType: 'Piercing',
+        range: 'Melee 5 ft. or Thrown 20/60',
+        notes: 'Concealed weapon under the trade counter.'
+      }
+    ],
+    legendaryActions: [],
+    legendaryActionsMax: 0,
+    legendaryActionsRemaining: 0,
+    reactions: [],
+    wealth: {
+      cp: Number(raw.wealth?.cp) || 50,
+      sp: Number(raw.wealth?.sp) || 120,
+      ep: 0,
+      gp: Number(raw.wealth?.gp) || 350,
+      pp: Number(raw.wealth?.pp) || 2,
+    },
+    inventory: inv,
+    isSpellcaster: false,
+    spellcastingAbility: 'INT',
+    spellSlots: [],
+    spells: [],
+    personalityTraits: raw.personalityTraits || 'Affable, sharp eye for trade, loves a fair bargain.',
+    ideals: raw.ideals || 'Fair exchange and community commerce.',
+    bonds: raw.bonds || raw.subclass || 'Loyal to the shop and local merchants guild.',
+    flaws: raw.flaws || 'Hesitant to give discounts without a compelling story.',
+    backstory: raw.backstory || raw.lore || '',
+    alliesAndOrganizations: 'Merchants Guild',
+    additionalNotes: `Shop: ${raw.subclass || raw.shopName || 'Trade Shop'}. Markup: ${Number(raw.vendorMargin) || 100}%`,
+  };
+}
+
+/**
+ * Hydrates raw AI graph/lore node JSON into a campaign graph node object
+ */
+export function hydrateGeneratedGraphNode(raw: any): any {
+  const id = `node_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  return {
+    id,
+    name: raw.name || raw.title || 'Lore Entry',
+    category: raw.category || raw.type || 'Location',
+    summary: raw.summary || raw.description || '',
+    tags: Array.isArray(raw.tags) ? raw.tags : ['lore'],
+    details: raw.details || raw.notes || raw.description || '',
+    connections: Array.isArray(raw.connections) ? raw.connections : [],
+    timestamp: new Date().toISOString()
+  };
+}
+
+export interface DetectedChatEntity {
+  id: string;
+  type: 'character' | 'monster' | 'merchant' | 'item' | 'spell' | 'graph_node';
+  name: string;
+  subtitle?: string;
+  summary?: string;
+  rawJson?: any;
+}
+
+/**
+ * Parses assistant chat text for JSON blocks or structured statblocks that can be imported with 1-click
+ */
+export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity[] {
+  const detected: DetectedChatEntity[] = [];
+  if (!text) return detected;
+
+  const processEntityObject = (itemObj: any) => {
+    if (!itemObj || typeof itemObj !== 'object') return;
+
+    // Handle nested collections like { monsters: [...] }, { characters: [...] }, { spells: [...] }, { items: [...] }
+    if (Array.isArray(itemObj.monsters)) {
+      itemObj.monsters.forEach((m: any) => processEntityObject({ ...m, isMonster: true }));
+      return;
+    }
+    if (Array.isArray(itemObj.creatures)) {
+      itemObj.creatures.forEach((m: any) => processEntityObject({ ...m, isMonster: true }));
+      return;
+    }
+    if (Array.isArray(itemObj.characters)) {
+      itemObj.characters.forEach((c: any) => processEntityObject({ ...c, isMonster: false }));
+      return;
+    }
+    if (Array.isArray(itemObj.merchants)) {
+      itemObj.merchants.forEach((m: any) => processEntityObject({ ...m, isVendor: true }));
+      return;
+    }
+    if (Array.isArray(itemObj.shops)) {
+      itemObj.shops.forEach((s: any) => processEntityObject({ ...s, isVendor: true }));
+      return;
+    }
+    if (Array.isArray(itemObj.items)) {
+      itemObj.items.forEach((it: any) => processEntityObject(it));
+      return;
+    }
+    if (Array.isArray(itemObj.spells)) {
+      itemObj.spells.forEach((sp: any) => processEntityObject(sp));
+      return;
+    }
+    if (Array.isArray(itemObj.nodes)) {
+      itemObj.nodes.forEach((n: any) => processEntityObject(n));
+      return;
+    }
+    if (Array.isArray(itemObj.entities)) {
+      itemObj.entities.forEach((e: any) => processEntityObject(e));
+      return;
+    }
+
+    // Check if it's a monster
+    if (
+      itemObj.isMonster === true ||
+      itemObj.challengeRating !== undefined ||
+      (itemObj.hpMax && itemObj.attacks && !itemObj.isVendor)
+    ) {
+      detected.push({
+        id: `det_mon_${Date.now()}_${detected.length}`,
+        type: 'monster',
+        name: itemObj.name || 'Unnamed Creature',
+        subtitle: `CR ${itemObj.challengeRating || '1'} • ${itemObj.race || 'Monster'} ${itemObj.characterClass || ''}`,
+        summary: itemObj.backstory || (itemObj.hpMax ? `HP: ${itemObj.hpMax}, AC: ${itemObj.armorClass || 13}` : undefined),
+        rawJson: itemObj,
+      });
+    }
+    // Check if it's a merchant
+    else if (
+      itemObj.isVendor === true ||
+      itemObj.vendorMargin !== undefined ||
+      itemObj.shopName ||
+      (itemObj.inventory && itemObj.characterClass?.toLowerCase().includes('merchant'))
+    ) {
+      detected.push({
+        id: `det_merch_${Date.now()}_${detected.length}`,
+        type: 'merchant',
+        name: itemObj.name || itemObj.shopName || 'Trade Merchant',
+        subtitle: `Merchant & Shop • ${itemObj.subclass || itemObj.shopName || 'General Store'}`,
+        summary:
+          itemObj.backstory ||
+          itemObj.personalityTraits ||
+          (itemObj.inventory ? `${itemObj.inventory.length} items in shop stock` : undefined),
+        rawJson: itemObj,
+      });
+    }
+    // Check if it's a player character
+    else if (itemObj.isMonster === false && (itemObj.abilities || itemObj.characterClass || itemObj.background)) {
+      detected.push({
+        id: `det_char_${Date.now()}_${detected.length}`,
+        type: 'character',
+        name: itemObj.name || 'Adventurer',
+        subtitle: `Level ${itemObj.level || 1} ${itemObj.race || ''} ${itemObj.characterClass || 'Hero'}`,
+        summary: itemObj.backstory || (itemObj.hpMax ? `HP: ${itemObj.hpMax}, AC: ${itemObj.armorClass || 10}` : undefined),
+        rawJson: itemObj,
+      });
+    }
+    // Check if it's an item
+    else if (itemObj.costGp !== undefined || itemObj.itemType || itemObj.weaponStats || itemObj.armorAc) {
+      detected.push({
+        id: `det_item_${Date.now()}_${detected.length}`,
+        type: 'item',
+        name: itemObj.name || 'Magic Item',
+        subtitle: `${itemObj.itemType || 'Gear'} • ${itemObj.costGp ? `${itemObj.costGp} GP` : 'Valuable'}`,
+        summary: itemObj.notes || itemObj.description,
+        rawJson: itemObj,
+      });
+    }
+    // Check if it's a spell
+    else if (itemObj.school || itemObj.castingTime || itemObj.components || itemObj.level !== undefined) {
+      detected.push({
+        id: `det_spell_${Date.now()}_${detected.length}`,
+        type: 'spell',
+        name: itemObj.name || 'Arcane Spell',
+        subtitle: `Level ${itemObj.level ?? 1} ${itemObj.school || 'Evocation'}`,
+        summary: itemObj.description,
+        rawJson: itemObj,
+      });
+    }
+    // Check if it's a graph node
+    else if (itemObj.summary && (itemObj.region || itemObj.connections || itemObj.faction)) {
+      detected.push({
+        id: `det_node_${Date.now()}_${detected.length}`,
+        type: 'graph_node',
+        name: itemObj.name || 'Campaign Lore Node',
+        subtitle: `Campaign Graph • ${itemObj.type || 'Entity'}`,
+        summary: itemObj.summary,
+        rawJson: itemObj,
+      });
+    }
+  };
+
+  // 1. Look for ```json blocks
+  const jsonBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = jsonBlockRegex.exec(text)) !== null) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      if (Array.isArray(parsed)) {
+        parsed.forEach((item) => processEntityObject(item));
+      } else if (parsed && typeof parsed === 'object') {
+        processEntityObject(parsed);
+      }
+    } catch {
+      // Not valid JSON in code block
+    }
+  }
+
+  // 2. Fallback heuristic: If no JSON block found, look for structured markdown statblocks
+  if (detected.length === 0) {
+    // Check if monster statblock with Armor Class and Hit Points
+    const nameMatch = text.match(/###?\s*(?:Monster|Creature|Boss|Statblock)?:\s*([^\n\r]+)/i) || text.match(/\*\*([A-Z][a-zA-Z\s'-]+)\*\*\s*\n\s*\*?(?:Small|Medium|Large|Huge|Gargantuan)/i);
+    const crMatch = text.match(/Challenge\s*(?:Rating)?[:\s]+(\d+(?:\/\d+)?)/i) || text.match(/CR\s*[:\s]*(\d+(?:\/\d+)?)/i);
+    const hpMatch = text.match(/Hit\s*Points[:\s]+(\d+)/i) || text.match(/HP[:\s]+(\d+)/i);
+    const acMatch = text.match(/Armor\s*Class[:\s]+(\d+)/i) || text.match(/AC[:\s]+(\d+)/i);
+
+    if (crMatch && hpMatch && nameMatch) {
+      const monsterName = nameMatch[1].replace(/[*#]/g, '').trim();
+      detected.push({
+        id: `det_heur_mon_${Date.now()}`,
+        type: 'monster',
+        name: monsterName,
+        subtitle: `CR ${crMatch[1]} • Creature`,
+        summary: `HP: ${hpMatch[1]}, AC: ${acMatch ? acMatch[1] : '13'}`,
+        rawJson: {
+          name: monsterName,
+          challengeRating: crMatch[1],
+          hpMax: Number(hpMatch[1]),
+          armorClass: acMatch ? Number(acMatch[1]) : 13,
+          backstory: text.substring(0, 300)
+        }
+      });
+    }
+  }
+
+  return detected;
+}
+

@@ -27,7 +27,8 @@ import {
   UserPlus,
   Sparkles,
   Flame,
-  Zap
+  Zap,
+  Store
 } from 'lucide-react';
 import { voiceManager, VoicePeerState } from '../../lib/voiceChatService';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
@@ -39,8 +40,10 @@ import { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData } 
 import { EncounterLogModal } from './encounter/EncounterLogModal';
 import { AddCombatantModal } from './encounter/AddCombatantModal';
 import { MonsterMechanicsBar } from './encounter/MonsterMechanicsBar';
+import { MerchantEncounterPanel } from './encounter/MerchantEncounterPanel';
 import { eventBus } from '../../events/eventBus';
 import { useEncounterState, loadSavedEncounter } from './encounter/useEncounterState';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 export type { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData };
 export { loadSavedEncounter };
@@ -55,6 +58,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   onUpdateCharacter,
   encounterState: externalState
 }) => {
+  const { t } = useLanguage();
   const localEncounter = useEncounterState({
     character,
     allCharacters,
@@ -94,12 +98,18 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     addLogEntry,
     awardDefeatedMonsterXp,
     applyManualXp,
-    toggleAutoXpGain
+    toggleAutoXpGain,
+    encounterMode,
+    setEncounterMode,
+    activeMerchant,
+    setActiveMerchant,
+    handleSetMerchantEncounter,
+    handlePivotMerchantToCombat
   } = encounter;
 
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addModalInitialType, setAddModalInitialType] = useState<'ally' | 'enemy'>('enemy');
+  const [addModalInitialType, setAddModalInitialType] = useState<'ally' | 'enemy' | 'merchant'>('enemy');
   const [viewMode, setViewMode] = useState<'teams' | 'timeline'>('teams');
   const [editingMaxHpId, setEditingMaxHpId] = useState<string | null>(null);
   const [editingMaxHpValue, setEditingMaxHpValue] = useState<number | string>('');
@@ -133,7 +143,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const enemiesAliveCount = enemies.filter((c: Combatant) => c.hpCurrent > 0 && !c.isDefeated).length;
   const enemiesTotalXp = enemies.reduce((sum: number, c: Combatant) => sum + (c.monsterXpReward || 0), 0);
 
-  const handleOpenAddModal = (type: 'ally' | 'enemy' = 'enemy') => {
+  const handleOpenAddModal = (type: 'ally' | 'enemy' | 'merchant' = 'enemy') => {
     setAddModalInitialType(type);
     setShowAddModal(true);
   };
@@ -178,11 +188,11 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
 
   return (
     <CollapsibleBox
-      title="Initiative & Encounter Tracker"
+      title={t('combat.trackerTitle', 'Initiative & Encounter Tracker')}
       icon={<Crosshair className="w-5 h-5 text-amber-500" />}
       badge={
         <span className="bg-amber-950 text-amber-300 border border-amber-600/40 text-xs px-2.5 py-0.5 rounded-full font-mono font-bold ml-1">
-          Round {roundNumber}
+          {t('combat.round', 'Round')} {roundNumber}
         </span>
       }
       storageKey="sheet2_encounter_tracker"
@@ -191,10 +201,10 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           type="button"
           onClick={() => setShowLogModal(true)}
           className="flex items-center gap-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/30 px-2.5 py-1 rounded-xl font-bold text-xs transition relative shadow"
-          title="Open Encounter Combat Log"
+          title={t('combat.logTitle', 'Open Encounter Combat Log')}
         >
           <ScrollText className="w-3.5 h-3.5 text-amber-400" />
-          <span className="hidden sm:inline">Combat Log</span>
+          <span className="hidden sm:inline">{t('combat.logTitle', 'Combat Log')}</span>
           {combatLogs.length > 0 && (
             <span className="bg-amber-500 text-stone-950 font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold">
               {combatLogs.length}
@@ -237,7 +247,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             title="Open Encounter Combat Log"
           >
             <ScrollText className="w-3.5 h-3.5 text-amber-400" />
-            <span>Combat Log</span>
+            <span>{t('combat.logTitle', 'Combat Log')}</span>
             {combatLogs.length > 0 && (
               <span className="bg-amber-500 text-stone-950 font-mono text-[10px] px-1.5 py-0.2 rounded-full font-bold">
                 {combatLogs.length}
@@ -278,7 +288,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             title="Roll Initiative d20 + DEX Mod"
           >
             <Dices className="w-3.5 h-3.5" />
-            <span>Roll Init ({formatModifier(initBonus)})</span>
+            <span>{t('combat.rollInit', 'Roll Init')} ({formatModifier(initBonus)})</span>
           </button>
 
           {/* Auto-XP vs Manual EXP Mode Quick Toggle */}
@@ -299,8 +309,8 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               <Zap className={`w-3.5 h-3.5 ${character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode ? 'text-amber-400' : 'text-emerald-400'}`} />
               <span>
                 {character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
-                  ? 'EXP: Manual (Off)'
-                  : 'EXP: Auto (On)'}
+                  ? t('combat.manualXpMode', 'EXP: Manual (Off)')
+                  : t('combat.autoXpMode', 'EXP: Auto (On)')}
               </span>
             </button>
           )}
@@ -312,7 +322,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               title="Manage adventuring parties & allies"
             >
               <Users className="w-3.5 h-3.5 text-purple-300" />
-              <span>Parties ({parties?.length || 0})</span>
+              <span>{t('party.title', 'Parties')} ({parties?.length || 0})</span>
             </button>
           )}
 
@@ -323,7 +333,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               title="Add Ally / Companion to Team 1"
             >
               <Shield className="w-3.5 h-3.5 text-emerald-400" />
-              <span>+ Ally</span>
+              <span>+ {t('combat.addCombatant', 'Ally')}</span>
             </button>
 
             <button
@@ -332,24 +342,33 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               title="Add Enemy / Monster to Team 2"
             >
               <Swords className="w-3.5 h-3.5 text-rose-400" />
-              <span>+ Enemy</span>
+              <span>+ {t('common.monster', 'Enemy')}</span>
+            </button>
+
+            <button
+              onClick={() => handleOpenAddModal('merchant')}
+              className="flex items-center gap-1 text-xs bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-600/60 px-2.5 py-1.5 rounded-xl font-bold transition shadow"
+              title="Spawn or Trade with a Merchant Encounter"
+            >
+              <Store className="w-3.5 h-3.5 text-amber-400" />
+              <span>+ Merchant</span>
             </button>
           </div>
 
           {showEndConfirm ? (
             <div className="flex items-center gap-1.5 bg-rose-950/90 border border-rose-800 p-1 rounded-xl animate-fadeIn">
-              <span className="text-[11px] text-rose-200 font-bold px-1.5">End encounter?</span>
+              <span className="text-[11px] text-rose-200 font-bold px-1.5">{t('combat.confirmEnd', 'End encounter?')}</span>
               <button
                 onClick={handleClearEncounter}
                 className="text-xs bg-rose-600 hover:bg-rose-500 text-white px-2 py-1 rounded-lg font-bold transition shadow"
               >
-                Yes, End
+                {t('common.confirm', 'Yes, End')}
               </button>
               <button
                 onClick={() => setShowEndConfirm(false)}
                 className="text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700 px-2 py-1 rounded-lg font-bold transition"
               >
-                Cancel
+                {t('common.cancel', 'Cancel')}
               </button>
             </div>
           ) : (
@@ -359,7 +378,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               title="End encounter & reset combatants"
             >
               <Trash2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">End</span>
+              <span className="hidden sm:inline">{t('combat.endEncounter', 'End')}</span>
             </button>
           )}
         </div>
@@ -474,6 +493,24 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         </div>
       )}
 
+      {/* Merchant Bazaar Encounter Mode View */}
+      {encounterMode === 'merchant' && activeMerchant && (
+        <MerchantEncounterPanel
+          merchant={activeMerchant}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onUpdateMerchant={setActiveMerchant}
+          onPivotToCombat={handlePivotMerchantToCombat}
+          onLeaveEncounter={() => {
+            setEncounterMode('combat');
+            setActiveMerchant(null);
+            addLogEntry('trade', `Concluded trading with ${activeMerchant.merchantName} and closed bazaar.`, character.name);
+          }}
+          onAddLogEntry={addLogEntry}
+          onRoll={onRoll}
+        />
+      )}
+
       {/* Turn Navigation & Battle Stage Bar */}
       {combatants.length > 0 && (
         <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 flex items-center justify-between flex-wrap gap-3 shadow-md">
@@ -537,10 +574,10 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                 </div>
                 <div>
                   <h4 className="font-serif font-bold text-stone-100 text-sm flex items-center gap-2">
-                    <span>Team 1: Allies & Party</span>
+                    <span>Team 1 ({t('combat.advantage', 'Allies & Party')})</span>
                     {isAllyTurn && (
                       <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.2 rounded-full font-mono font-bold animate-pulse">
-                        Active Turn
+                        {t('combat.active', 'Active Turn')}
                       </span>
                     )}
                   </h4>
@@ -555,7 +592,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                 className="flex items-center gap-1 text-xs bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-700/60 px-2.5 py-1 rounded-xl font-bold transition shadow"
               >
                 <Plus className="w-3.5 h-3.5" />
-                <span>Add Ally</span>
+                <span>+ {t('combat.addCombatant', 'Add Ally')}</span>
               </button>
             </div>
 
@@ -1074,6 +1111,10 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             setShowAddModal(false);
           }}
           onAddPartyToEncounter={handleAddPartyToEncounter}
+          onSelectMerchantEncounter={(merchantData) => {
+            handleSetMerchantEncounter(merchantData);
+            setShowAddModal(false);
+          }}
         />
       )}
     </CollapsibleBox>

@@ -12,6 +12,7 @@ import { getAbilityModifier, formatModifier, getProficiencyBonus, getCombinedLev
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { playLevelUpSound } from '../../utils/diceAudio';
 import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
+import { useLanguage } from '../../i18n/LanguageContext';
 import {
   TrendingUp,
   Award,
@@ -39,6 +40,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
   onClose,
   onUpdateCharacter
 }) => {
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'table' | 'wizard' | 'award'>('table');
 
   const isDualClass = !!(character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass);
@@ -585,7 +587,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
             }`}
           >
             <TrendingUp className="w-4 h-4 text-amber-400" />
-            Advancement Table (1–20)
+            {t('level.title', 'Advancement Table (1–20)')}
           </button>
           <button
             onClick={() => setActiveTab('wizard')}
@@ -596,7 +598,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-400" />
-            Level Up Wizard
+            {t('wizard.title', 'Level Up Wizard')}
             {xpDetails.canLevelUp && (
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute top-2 right-2" />
             )}
@@ -610,7 +612,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
             }`}
           >
             <Award className="w-4 h-4 text-amber-400" />
-            Award XP & Calculator
+            {t('combat.awardSheet', 'Award XP & Calculator')}
           </button>
         </div>
 

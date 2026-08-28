@@ -5,9 +5,12 @@ import {
   getSpellSaveDC,
   getSpellAttackBonus,
   getAbilityModifier,
-  formatModifier
+  formatModifier,
+  getEffectiveAbilities,
+  getPreparedSpellsDetails
 } from '../../../utils/dndCalculations';
-import { Wand2, RefreshCw } from 'lucide-react';
+import { Wand2, RefreshCw, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface SpellcastingStatsPanelProps {
   character: CharacterData;
@@ -18,9 +21,12 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
   character,
   onUpdateCharacter
 }) => {
+  const { t } = useLanguage();
   const spellDC = getSpellSaveDC(character);
   const spellAtk = getSpellAttackBonus(character);
-  const abilityMod = getAbilityModifier(character.abilities[character.spellcastingAbility]?.score || 10);
+  const effectiveAbilities = getEffectiveAbilities(character);
+  const abilityMod = getAbilityModifier(effectiveAbilities[character.spellcastingAbility]?.score || 10);
+  const prepDetails = getPreparedSpellsDetails(character);
 
   const handleAbilityChange = (ability: AbilityName) => {
     onUpdateCharacter({
@@ -71,29 +77,69 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
 
   return (
     <CollapsibleBox
-      title="Spellcasting Stats & Slot Tracker"
+      title={t('spells.spellSlots', 'Spellcasting Stats & Slot Tracker')}
       icon={<Wand2 className="w-5 h-5 text-amber-500" />}
       storageKey="sheet4_stats"
       headerExtra={
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRestoreAllSlots();
-          }}
-          className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg text-xs font-bold transition shadow"
-          title="Restore all spell slots to maximum (Long Rest)"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> Restore All Slots
-        </button>
+        <div className="flex items-center gap-2">
+          {prepDetails.isPreparedCaster && (
+            <div className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+              prepDetails.isOverLimit
+                ? 'bg-rose-950 text-rose-300 border-rose-600/60'
+                : prepDetails.currentPrepared === prepDetails.maxPrepared
+                ? 'bg-amber-950 text-amber-300 border-amber-600/50'
+                : 'bg-emerald-950 text-emerald-300 border-emerald-600/50'
+            }`}>
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>{prepDetails.currentPrepared} / {prepDetails.maxPrepared} Prepared</span>
+            </div>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRestoreAllSlots();
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg text-xs font-bold transition shadow"
+            title="Restore all spell slots to maximum (Long Rest)"
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> {t('common.reset', 'Restore All Slots')}
+          </button>
+        </div>
       }
     >
       <div className="space-y-4 pt-2 text-xs">
+        {/* Prepared Spells Limit Banner for Prepared Classes */}
+        {prepDetails.isPreparedCaster && (
+          <div className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 ${
+            prepDetails.isOverLimit
+              ? 'bg-rose-950/40 border-rose-700/60 text-rose-200'
+              : 'bg-stone-900/80 border-stone-800 text-stone-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              <BookOpen className={`w-4 h-4 shrink-0 ${prepDetails.isOverLimit ? 'text-rose-400' : 'text-amber-400'}`} />
+              <div>
+                <span className="font-bold text-xs text-stone-100 block">
+                  {prepDetails.className} Prepared Spells Limit: {prepDetails.currentPrepared} of {prepDetails.maxPrepared} prepared
+                </span>
+                <span className="text-[11px] text-stone-400 font-mono">
+                  Formula: {prepDetails.formula} (Cantrips do not count against limit)
+                </span>
+              </div>
+            </div>
+            {prepDetails.isOverLimit && (
+              <span className="text-[11px] font-bold font-mono px-2 py-0.5 bg-rose-900/80 text-rose-200 border border-rose-600 rounded">
+                Over Preparation Limit!
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Ability, Save DC & Attack Bonus Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Spellcasting Ability Choice */}
           <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 flex flex-col justify-between">
             <span className="text-stone-400 font-serif font-bold text-xs uppercase block font-sans">
-              Spellcasting Ability
+              {t('spells.ability', 'Spellcasting Ability')}
             </span>
             <div className="my-2 flex items-center justify-between">
               <select
@@ -116,23 +162,24 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
 
           {/* Spell Save DC */}
           <div className="bg-stone-950 p-3 rounded-xl border border-amber-600/30 flex flex-col items-center justify-center">
-            <span className="text-stone-400 text-[10px] font-sans uppercase font-bold">Spell Save DC</span>
+            <span className="text-stone-400 text-[10px] font-sans uppercase font-bold">{t('spells.saveDc', 'Spell Save DC')}</span>
             <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{spellDC}</span>
-            <span className="text-[9px] text-stone-500 font-mono">8 + Prof + Ability Mod</span>
+            <span className="text-[9px] text-stone-500 font-mono">8 + Prof + Ability Mod + Items</span>
           </div>
 
           {/* Spell Attack Modifier */}
           <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-            <span className="text-stone-400 text-[10px] font-sans uppercase font-bold">Spell Attack Bonus</span>
+            <span className="text-stone-400 text-[10px] font-sans uppercase font-bold">{t('spells.attackBonus', 'Spell Attack Bonus')}</span>
             <span className="text-2xl font-serif font-extrabold text-emerald-300 my-0.5">{formatModifier(spellAtk)}</span>
-            <span className="text-[9px] text-stone-500 font-mono">Prof + Ability Mod</span>
+            <span className="text-[9px] text-stone-500 font-mono">Prof + Ability Mod + Items</span>
           </div>
         </div>
+
 
         {/* Spell Slot Trackers (Levels 1 to 9) */}
         <div>
           <span className="font-serif font-bold text-amber-300 text-xs block mb-2 font-sans">
-            Spell Slot Tracker (Click - / + or input slots remaining)
+            {t('spells.spellSlots', 'Spell Slot Tracker')}
           </span>
 
           <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2 font-mono">
@@ -140,11 +187,11 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
               const slot = character.spellSlots.find(s => s.level === lvl) || { level: lvl, current: 0, max: 0 };
               return (
                 <div key={lvl} className="bg-stone-950 p-2 rounded-xl border border-stone-800 text-center space-y-1">
-                  <span className="text-[10px] text-amber-400 font-bold block uppercase">Lvl {lvl}</span>
+                  <span className="text-[10px] text-amber-400 font-bold block uppercase">{t('level.level', 'Lvl')} {lvl}</span>
 
                   {/* Current Slots */}
                   <div className="space-y-0.5">
-                    <span className="text-[9px] text-stone-500 font-sans block">Remaining</span>
+                    <span className="text-[9px] text-stone-500 font-sans block">{t('spells.slotsRemaining', 'Remaining')}</span>
                     <div className="flex items-center justify-center gap-1">
                       <button
                         onClick={() => handleSlotChange(lvl, slot.current - 1)}
@@ -166,7 +213,7 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
 
                   {/* Max Slots Controls */}
                   <div className="pt-1 border-t border-stone-800/80 space-y-0.5">
-                    <span className="text-[9px] text-stone-500 font-sans block">Max Slots</span>
+                    <span className="text-[9px] text-stone-500 font-sans block">{t('spells.slotsTotal', 'Max Slots')}</span>
                     <div className="flex items-center justify-center gap-0.5">
                       <button
                         onClick={() => handleSlotChange(lvl, Math.min(slot.current, Math.max(0, slot.max - 1)), Math.max(0, slot.max - 1))}

@@ -153,7 +153,37 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 />
               </div>
               <div>
-                <label className="block text-stone-400 mb-1 font-semibold">Total XP Points</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-stone-400 font-semibold">Total XP Points</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const isManual = !(character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode);
+                      onUpdateCharacter({
+                        ...character,
+                        optionalRules: {
+                          ...character.optionalRules,
+                          disableAutoXpGain: isManual,
+                          useManualXpMode: isManual
+                        }
+                      });
+                    }}
+                    className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border transition cursor-pointer ${
+                      character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                        ? 'bg-amber-950 text-amber-300 border-amber-600/60 hover:bg-amber-900'
+                        : 'bg-stone-900 text-stone-400 border-stone-700 hover:text-stone-200'
+                    }`}
+                    title={
+                      character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                        ? 'Manual Tabletop EXP: Combat encounters do not auto-increase XP. Click to switch to Auto-XP'
+                        : 'Auto-XP Gain Active: Encounter kills auto-grant XP. Click to switch to Manual Tabletop EXP'
+                    }
+                  >
+                    {character.optionalRules?.disableAutoXpGain || character.optionalRules?.useManualXpMode
+                      ? '📖 Manual EXP (Off)'
+                      : '⚡ Auto-XP (On)'}
+                  </button>
+                </div>
                 <input
                   type="number"
                   value={character.experiencePoints}

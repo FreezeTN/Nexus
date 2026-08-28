@@ -1,8 +1,19 @@
 import { CharacterData } from '../../types';
 import { getCombinedLevel } from './levelCalculators';
+import { getAbilityModifier, getEffectiveAbilities } from './abilityCalculators';
 
 export { getCombinedLevel };
 
+export interface PreparedSpellsDetails {
+  isPreparedCaster: boolean;
+  maxPrepared: number;
+  currentPrepared: number;
+  cantripsCount: number;
+  formula: string;
+  className: string;
+  isOverLimit: boolean;
+  notes?: string;
+}
 
 export function getRequiredLevelForSpellSlotLevel(slotLevel: number, char: CharacterData): number {
   const cls = (char.characterClass || '').toLowerCase();
@@ -70,3 +81,110 @@ export function getMaxUnlockedSpellSlotLevel(char: CharacterData): number {
 
   return Math.max(maxSlotByLevel, maxExistingSlotLevel);
 }
+
+/**
+ * Calculates the Prepared Spells limit according to D&D 5e Rules
+ */
+export function getPreparedSpellsDetails(char: CharacterData): PreparedSpellsDetails {
+  const spells = char.spells || [];
+  const leveledSpells = spells.filter(s => s.level > 0);
+  const cantrips = spells.filter(s => s.level === 0);
+  const currentPrepared = leveledSpells.filter(s => s.prepared).length;
+  const cantripsCount = cantrips.length;
+
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const cls = (char.characterClass || '').toLowerCase();
+  const lvl = char.level || 1;
+
+  let isPreparedCaster = false;
+  let maxPrepared = 0;
+  let formula = '';
+  let className = char.characterClass || 'Caster';
+
+  if (cls.includes('wizard')) {
+    isPreparedCaster = true;
+    const intMod = getAbilityModifier(effectiveAbilities.INT?.score || 10);
+    maxPrepared = Math.max(1, lvl + intMod);
+    formula = `Wizard Level (${lvl}) + INT Mod (${intMod >= 0 ? '+' + intMod : intMod})`;
+    className = 'Wizard';
+  } else if (cls.includes('cleric')) {
+    isPreparedCaster = true;
+    const wisMod = getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+    maxPrepared = Math.max(1, lvl + wisMod);
+    formula = `Cleric Level (${lvl}) + WIS Mod (${wisMod >= 0 ? '+' + wisMod : wisMod})`;
+    className = 'Cleric';
+  } else if (cls.includes('druid')) {
+    isPreparedCaster = true;
+    const wisMod = getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+    maxPrepared = Math.max(1, lvl + wisMod);
+    formula = `Druid Level (${lvl}) + WIS Mod (${wisMod >= 0 ? '+' + wisMod : wisMod})`;
+    className = 'Druid';
+  } else if (cls.includes('paladin')) {
+    isPreparedCaster = true;
+    const chaMod = getAbilityModifier(effectiveAbilities.CHA?.score || 10);
+    maxPrepared = Math.max(1, Math.floor(lvl / 2) + chaMod);
+    formula = `½ Paladin Level (${Math.floor(lvl / 2)}) + CHA Mod (${chaMod >= 0 ? '+' + chaMod : chaMod})`;
+    className = 'Paladin';
+  } else if (cls.includes('artificer')) {
+    isPreparedCaster = true;
+    const intMod = getAbilityModifier(effectiveAbilities.INT?.score || 10);
+    maxPrepared = Math.max(1, Math.floor(lvl / 2) + intMod);
+    formula = `½ Artificer Level (${Math.floor(lvl / 2)}) + INT Mod (${intMod >= 0 ? '+' + intMod : intMod})`;
+    className = 'Artificer';
+  }
+
+  // Handle multiclass secondary class if primary was not a prepared caster
+  if (!isPreparedCaster && char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass) {
+    const secCls = (char.optionalRules.secondaryClass || '').toLowerCase();
+    const secLvl = char.optionalRules.secondaryLevel || 1;
+
+    if (secCls.includes('wizard')) {
+      isPreparedCaster = true;
+      const intMod = getAbilityModifier(effectiveAbilities.INT?.score || 10);
+      maxPrepared = Math.max(1, secLvl + intMod);
+      formula = `Wizard Level (${secLvl}) + INT Mod (${intMod >= 0 ? '+' + intMod : intMod})`;
+      className = char.optionalRules.secondaryClass;
+    } else if (secCls.includes('cleric')) {
+      isPreparedCaster = true;
+      const wisMod = getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+      maxPrepared = Math.max(1, secLvl + wisMod);
+      formula = `Cleric Level (${secLvl}) + WIS Mod (${wisMod >= 0 ? '+' + wisMod : wisMod})`;
+      className = char.optionalRules.secondaryClass;
+    } else if (secCls.includes('druid')) {
+      isPreparedCaster = true;
+      const wisMod = getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+      maxPrepared = Math.max(1, secLvl + wisMod);
+      formula = `Druid Level (${secLvl}) + WIS Mod (${wisMod >= 0 ? '+' + wisMod : wisMod})`;
+      className = char.optionalRules.secondaryClass;
+    } else if (secCls.includes('paladin')) {
+      isPreparedCaster = true;
+      const chaMod = getAbilityModifier(effectiveAbilities.CHA?.score || 10);
+      maxPrepared = Math.max(1, Math.floor(secLvl / 2) + chaMod);
+      formula = `½ Paladin Level (${Math.floor(secLvl / 2)}) + CHA Mod (${chaMod >= 0 ? '+' + chaMod : chaMod})`;
+      className = char.optionalRules.secondaryClass;
+    } else if (secCls.includes('artificer')) {
+      isPreparedCaster = true;
+      const intMod = getAbilityModifier(effectiveAbilities.INT?.score || 10);
+      maxPrepared = Math.max(1, Math.floor(secLvl / 2) + intMod);
+      formula = `½ Artificer Level (${Math.floor(secLvl / 2)}) + INT Mod (${intMod >= 0 ? '+' + intMod : intMod})`;
+      className = char.optionalRules.secondaryClass;
+    }
+  }
+
+  // Non-prepared casters (Sorcerer, Bard, Warlock, Ranger)
+  if (!isPreparedCaster) {
+    maxPrepared = leveledSpells.length;
+    formula = 'All Known Spells Ready';
+  }
+
+  return {
+    isPreparedCaster,
+    maxPrepared,
+    currentPrepared,
+    cantripsCount,
+    formula,
+    className,
+    isOverLimit: isPreparedCaster && currentPrepared > maxPrepared
+  };
+}
+

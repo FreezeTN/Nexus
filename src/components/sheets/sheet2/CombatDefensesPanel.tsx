@@ -11,12 +11,15 @@ import {
   getEffectiveMaxHp,
   calculateCharacterTotalDR,
   getCharacterResistances,
-  getCharacterImmunities
+  getCharacterImmunities,
+  calculateInitiativeBonus
 } from '../../../utils/dndCalculations';
+
 import { HpOrb } from '../../HpOrb';
 import { ConditionsPanel } from '../../combat/ConditionsPanel';
 import { getEnvironmentalTraitStatus } from '../../../utils/environmentRules';
 import { useLayoutCustomization } from '../../../utils/layoutCustomization';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import {
   Shield,
   Heart,
@@ -55,6 +58,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   setShowCompanionModal,
   setShowRestModal
 }) => {
+  const { t } = useLanguage();
   const effectiveMaxHp = getEffectiveMaxHp(character);
   const speedInfo = getEffectiveSpeed(character);
 
@@ -209,7 +213,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
               className="bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 p-2 rounded-xl text-amber-200 font-sans font-bold flex flex-col items-center justify-center gap-1 transition shadow-md"
             >
               <Moon className="w-4 h-4 text-amber-400" />
-              <span>Rest & Hit Dice</span>
+              <span>{t('rest.title', 'Rest & Hit Dice')}</span>
             </button>
           </div>
         </div>
@@ -220,7 +224,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
             <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-xl space-y-3`}>
               <div className="flex items-center justify-between border-b border-stone-800 pb-2">
                 <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
-                  <Shield className="w-4 h-4 text-amber-500" /> Defense Stats
+                  <Shield className="w-4 h-4 text-amber-500" /> {t('defenses.armorClass', 'Defense Stats')}
                 </span>
                 <span className="text-xs text-stone-400 font-mono">
                   {character.edition === '3.5e' ? '3.5e Rules' : '5e Rules'}
@@ -231,7 +235,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
               <div className="grid grid-cols-3 gap-2 text-center font-mono">
                 {/* AC */}
                 <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-500/30 flex flex-col items-center justify-center relative group">
-                  <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">Armor Class</span>
+                  <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('defenses.armorClass', 'Armor Class')}</span>
                   <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{character.armorClass}</span>
                   <span className="text-[9px] text-stone-500 truncate max-w-full">
                     {getArmorClassBreakdown(character).explanation || `Base ${getArmorClassBreakdown(character).baseAc}`}
@@ -239,21 +243,27 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 </div>
 
                 {/* Initiative */}
-                <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                  <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">Initiative</span>
-                  <button
-                    onClick={() => onRoll('Initiative Roll', 20, 1, getAbilityModifier(character.abilities.DEX?.score || 10), 'normal')}
-                    className="text-2xl font-serif font-extrabold text-emerald-300 hover:text-emerald-200 transition my-0.5"
-                    title="Roll Initiative"
-                  >
-                    {formatModifier(getAbilityModifier(character.abilities.DEX?.score || 10))}
-                  </button>
-                  <span className="text-[9px] text-stone-500">DEX Mod</span>
-                </div>
+                {(() => {
+                  const initBonus = calculateInitiativeBonus(character);
+                  return (
+                    <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                      <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.initiative', 'Initiative')}</span>
+                      <button
+                        onClick={() => onRoll('Initiative Roll', 20, 1, initBonus, 'normal')}
+                        className="text-2xl font-serif font-extrabold text-emerald-300 hover:text-emerald-200 transition my-0.5"
+                        title={`Roll Initiative (${formatModifier(initBonus)})`}
+                      >
+                        {formatModifier(initBonus)}
+                      </button>
+                      <span className="text-[9px] text-stone-500">Total Init Mod</span>
+                    </div>
+                  );
+                })()}
+
 
                 {/* Speed */}
                 <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                  <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">Speed</span>
+                  <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.speed', 'Speed')}</span>
                   <span className="text-xl font-serif font-extrabold text-sky-300 my-0.5 flex items-center gap-1">
                     <Footprints className="w-4 h-4 text-sky-400 shrink-0" />
                     {speedInfo.effectiveSpeed} <span className="text-xs font-normal">ft</span>

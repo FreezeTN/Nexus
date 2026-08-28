@@ -15,6 +15,9 @@ import { Sheet5DescriptionNotes } from './components/sheets/Sheet5DescriptionNot
 import { Sheet6UserGuide } from './components/sheets/Sheet6UserGuide';
 import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
 import { SheetDmOverview } from './components/sheets/SheetDmOverview';
+import { BattlemapSandbox } from './components/battlemap/BattlemapSandbox';
+import { TacticalActionDock } from './components/combat/TacticalActionDock';
+import { LevelUpWizardModal } from './components/modals/LevelUpWizardModal';
 import { DetachedHeaderBanner } from './components/common/DetachedHeaderBanner';
 import {
   getDetachedParams,
@@ -77,6 +80,10 @@ const normalizeTabId = (tab: string): TabId => {
     case 'encounter':
     case 'sheet2':
       return 'sheet2';
+    case 'battlemap':
+    case 'map':
+    case 'sheetBattlemap':
+      return 'sheetBattlemap';
     case 'gear':
     case 'inventory':
     case 'sheet3':
@@ -141,6 +148,7 @@ export default function App() {
   const [showAiAssistantModal, setShowAiAssistantModal] = useState<boolean>(false);
   const [initialGraphEntityName, setInitialGraphEntityName] = useState<string | undefined>(undefined);
   const [showVoiceModal, setShowVoiceModal] = useState<boolean>(false);
+  const [showLevelUpWizard, setShowLevelUpWizard] = useState<boolean>(false);
 
   // Global listener for opening AI Assistant
   useEffect(() => {
@@ -1165,6 +1173,7 @@ export default function App() {
               edition={currentSystemTheme}
               onUpdateCharacter={handleUpdateCharacter}
               onRollInitiative={handleRollInitiative}
+              onOpenLevelUp={() => setShowLevelUpWizard(true)}
             />
           )}
 
@@ -1215,6 +1224,14 @@ export default function App() {
             }}
             onRoll={handleRoll}
             onRollDamage={handleRollDamage}
+          />
+        )}
+
+        {activeTab === 'sheetBattlemap' && activeCharacter && (
+          <BattlemapSandbox
+            activeCharacter={activeCharacter}
+            partyMembers={characters}
+            onRoll={handleRoll}
           />
         )}
 
@@ -1288,6 +1305,26 @@ export default function App() {
         isPhysicalDiceMode={isPhysicalDiceMode}
         onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
       />
+
+      {/* Floating Tactical Action HUD & Quick-Cast Dock */}
+      {activeCharacter && activeTab !== 'menu' && (
+        <TacticalActionDock
+          character={activeCharacter}
+          onUpdateCharacter={handleUpdateCharacter}
+          onRoll={handleRoll}
+        />
+      )}
+
+      {/* Level-Up Progression Wizard Modal */}
+      {showLevelUpWizard && activeCharacter && (
+        <LevelUpWizardModal
+          isOpen={showLevelUpWizard}
+          onClose={() => setShowLevelUpWizard(false)}
+          character={activeCharacter}
+          onUpdateCharacter={handleUpdateCharacter}
+          onRoll={handleRoll}
+        />
+      )}
 
       {/* Physical Tabletop Dice Modal */}
       {physicalRollRequest && (

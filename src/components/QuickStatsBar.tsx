@@ -28,6 +28,7 @@ interface QuickStatsBarProps {
   edition?: RuleEdition;
   onUpdateCharacter: (updated: CharacterData) => void;
   onRollInitiative: () => void;
+  onOpenLevelUp?: () => void;
 }
 
 export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
@@ -35,6 +36,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
   edition,
   onUpdateCharacter,
   onRollInitiative,
+  onOpenLevelUp,
 }) => {
   const { t } = useLanguage();
   const [hpDelta, setHpDelta] = useState<string>('');
@@ -269,6 +271,21 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
               </div>
             </div>
           </div>
+        )}
+
+        {/* Level & Level-Up Wizard Button */}
+        {onOpenLevelUp && (
+          <button
+            onClick={onOpenLevelUp}
+            className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-stone-950 px-3 py-1.5 rounded-xl font-bold transition shadow-md cursor-pointer border border-amber-400/40"
+            title="Open Level-Up Progression Wizard (HP, ASI/Feat, Class Features, Subclass)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-stone-950" />
+            <div className="text-left font-mono">
+              <div className="text-[9px] uppercase leading-none text-stone-950/80 font-extrabold">Level {activeCharacter.level || 1}</div>
+              <div className="text-xs leading-none font-black text-stone-950">Level Up</div>
+            </div>
+          </button>
         )}
 
         {/* Inspiration Toggle */}

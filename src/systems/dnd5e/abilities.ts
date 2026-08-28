@@ -4,7 +4,12 @@ import {
   formatModifier,
   getProficiencyBonus,
   getSavingThrowBonus,
-  getSkillBonus
+  getSkillBonus,
+  getEffectiveAbilityDetails,
+  getEffectiveAbilities,
+  getItemAbilitySetter,
+  getItemAbilityBonus,
+  AbilityScoreDetails
 } from '../../utils/calculators/abilityCalculators';
 import { getCombinedLevel } from '../../utils/calculators/levelCalculators';
 
@@ -13,15 +18,22 @@ export {
   formatModifier,
   getProficiencyBonus,
   getSavingThrowBonus,
-  getSkillBonus
+  getSkillBonus,
+  getEffectiveAbilityDetails,
+  getEffectiveAbilities,
+  getItemAbilitySetter,
+  getItemAbilityBonus,
+  type AbilityScoreDetails
 };
 
 export function getPassivePerception(char: CharacterData): number {
   const effectiveLevel = getCombinedLevel(char);
+  const effectiveAbilities = getEffectiveAbilities(char);
   const perceptionSkill = char.skills.find(s => s.name === 'Perception');
   if (perceptionSkill) {
-    return 10 + getSkillBonus(perceptionSkill, char.abilities, effectiveLevel);
+    return 10 + getSkillBonus(perceptionSkill, effectiveAbilities, effectiveLevel);
   }
-  const wisMod = getAbilityModifier(char.abilities.WIS?.score || 10);
+  const wisMod = getAbilityModifier(effectiveAbilities.WIS?.score || 10);
   return 10 + wisMod;
 }
+

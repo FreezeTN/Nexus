@@ -14,10 +14,76 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.1.0',
+    date: 'August 2026',
+    title: 'Interactive UX Suite: Attunement Toggles, Prepared Filter, Stat Breakdowns & Rest Audio',
+    badge: 'Latest Update',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🔮 Attunement Quick-Action Toggle & Limit Safeguards',
+        detail: 'Added direct "Attune/Unattune" action buttons to inventory cards (Sheet 3) with real-time attunement capacity badges (e.g. 2/3 Attuned) and automatic capacity validation warnings.'
+      },
+      {
+        category: '⭐ "Prepared Spells Only" Quick Filter',
+        detail: 'Added a dedicated status filter in the spellbook (Sheet 4) allowing instant toggling between All Spells, Prepared Spells Only, and Unprepared Spells with live counts.'
+      },
+      {
+        category: '📊 Interactive Stat Source Breakdown Popover',
+        detail: 'Clicking any modified ability score or magic badge on Sheet 1 opens an interactive popover detailing base score, magic item overrides (e.g., Gauntlets of Ogre Power), additive bonuses, and effective modifiers.'
+      },
+      {
+        category: '🌙 Rest & Recovery Engine Audio & State Polish',
+        detail: 'Short and Long Rest execution now triggers procedural restorative sound effects, seamlessly recharging Warlock Pact Magic, class features, Hit Dice, HP, and clearing exhaustion.'
+      },
+      {
+        category: '💰 Merchant Transaction Audio & Visual Confirmations',
+        detail: 'Integrated realistic procedural gold coin sound synthesizers and real-time transaction feedback upon buying and selling gear in the Merchant encounter system.'
+      }
+    ]
+  },
+  {
+    version: 'v5.0.0',
+    date: 'August 2026',
+    title: '5e Attunement Engine, Dynamic Magic Item Setters, Spell Prep Tracker & Armor Rules',
+    badge: 'Major Release',
+    badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    highlights: [
+      {
+        category: '✨ 5e Magic Item Attunement & Class Scaling Engine',
+        detail: 'Integrated full D&D 5e attunement rules with class-specific slot scaling. Automatically supports Artificer progression (4 slots at Lvl 10 via Magic Item Savant, 5 at Lvl 14 via Magic Item Master, and 6 at Lvl 18 via Magic Item Soul) alongside live attunement limit indicators, requirement checks, and active attunement benefit tags.'
+      },
+      {
+        category: '⚡ Magic Item Ability Score Setters & Modifiers',
+        detail: 'Added full support for stat-setting magic items (e.g. Gauntlets of Ogre Power STR 19, Headband of Intellect INT 19, Amulet of Health CON 19, Belts of Giant Strength) and additive stat bonuses. Automatically propagates effective scores across skills, saving throws, spell save DCs, spell attacks, carrying capacities, and initiative with visual modified badges.'
+      },
+      {
+        category: '🛡️ Heavy Armor Strength Minimums & Dwarven Speed Rules',
+        detail: 'Character speed calculation now enforces 5e heavy armor Strength requirements (e.g. Chain Mail STR 13, Plate STR 15), automatically applying a -10 ft movement penalty when requirements are unmet while honoring Dwarven racial speed traits.'
+      },
+      {
+        category: '📖 Prepared Spells Limits & Real-Time Capacity Tracker',
+        detail: 'Introduced an automatic prepared spells limit calculator and real-time counter on Sheet 4 for prepared spellcasting classes (Cleric, Druid, Wizard, Paladin, Artificer), including formula breakdowns, over-preparation warning badges, and slot management.'
+      },
+      {
+        category: '🎲 Dynamic Initiative & Combat Defenses Synchronization',
+        detail: 'Initiative modifier rolls and Armor Class now reactively account for effective dexterity modifiers, magical item bonuses, and attuned item properties across Sheet 2.'
+      },
+      {
+        category: '🏪 Interactive Merchant Encounters & Tactical Trading',
+        detail: 'Enhanced encounter tracker with dedicated Merchant encounter mode featuring dynamic haggling skill checks (Persuasion, Deception, Intimidation), real-time pricing modifiers, inventory filtering, direct wallet syncing, and seamless pivot to tactical combat.'
+      },
+      {
+        category: '🧩 Modular Rules System & Calculator Architecture',
+        detail: 'Refactored D&D 5e calculation pipelines into dedicated domain modules (ability score setters, spell prep limits, combat math, and attunement calculators) ensuring consistent state propagation and high testability.'
+      }
+    ]
+  },
+  {
     version: 'v4.9.0',
     date: 'August 2026',
     title: 'Multi-Language Localization, Nexus Oracle Multilingual AI & Clean Tab Branding',
-    badge: 'Latest Update',
+    badge: 'Feature Release',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     highlights: [
       {

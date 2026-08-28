@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { CharacterData } from '../../types';
 import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
+import { playHealSound, playSpellCastSound } from '../../utils/soundEffects';
 import { Flame, Moon, Heart, Sparkles, Wand2, X, RefreshCw, Dices } from 'lucide-react';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface RestModalProps {
   character: CharacterData;
@@ -18,6 +20,7 @@ export const RestModal: React.FC<RestModalProps> = ({
   onRoll,
   initialRestType = 'short'
 }) => {
+  const { t } = useLanguage();
   const [restType, setRestType] = useState<'short' | 'long'>(initialRestType);
   const [diceToSpend, setDiceToSpend] = useState<number>(1);
   const [applySpellRecovery, setApplySpellRecovery] = useState<boolean>(true);
@@ -118,6 +121,7 @@ export const RestModal: React.FC<RestModalProps> = ({
       onRoll(`Short Rest Healing (${countToSpend}d${dieSides} + ${countToSpend * conMod} CON)`, dieSides, countToSpend, countToSpend * conMod, 'normal');
     }
 
+    playHealSound();
     setRestLog(`Short Rest Completed! Spent ${countToSpend} Hit Die (${rolls.join(', ')} + CON) restoring +${totalHpRecovered} HP! Short Rest class features recharged.${spellRecoveryLog}`);
   };
 
@@ -166,6 +170,7 @@ export const RestModal: React.FC<RestModalProps> = ({
       conditions
     });
 
+    playSpellCastSound();
     setRestLog(`Long Rest Completed! Fully restored HP (${newHp}/${newHp}), recharged Spell Slots, reset Death Saves, recovered +${recoveredHdCount} Hit Dice, and reduced Exhaustion.`);
   };
 
@@ -176,7 +181,7 @@ export const RestModal: React.FC<RestModalProps> = ({
         <div className="flex items-center justify-between border-b border-stone-800 pb-3">
           <div className="flex items-center gap-2">
             <Flame className="w-5 h-5 text-amber-500" />
-            <h2 className="text-lg font-serif font-bold text-stone-100">Nexus Rest & Recovery Engine</h2>
+            <h2 className="text-lg font-serif font-bold text-stone-100">{t('rest.title', 'Rest & Recovery Engine')}</h2>
           </div>
           <button onClick={onClose} className="text-stone-400 hover:text-stone-100">
             <X className="w-5 h-5" />
@@ -195,7 +200,7 @@ export const RestModal: React.FC<RestModalProps> = ({
             }`}
           >
             <Flame className="w-4 h-4" />
-            <span>Short Rest (1 Hour)</span>
+            <span>{t('rest.shortRest', 'Short Rest')} (1h)</span>
           </button>
 
           <button
@@ -208,7 +213,7 @@ export const RestModal: React.FC<RestModalProps> = ({
             }`}
           >
             <Moon className="w-4 h-4" />
-            <span>Long Rest (8 Hours)</span>
+            <span>{t('rest.longRest', 'Long Rest')} (8h)</span>
           </button>
         </div>
 

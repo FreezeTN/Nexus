@@ -263,7 +263,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
               <button
                 onClick={onOpenAiAssistant}
                 className="p-2 rounded-xl bg-purple-950/80 hover:bg-purple-900 border border-purple-500/60 text-purple-200 shadow-md shadow-purple-950/40 transition cursor-pointer"
-                title={`Nexus ${t('nav.aiOracle', 'AI Oracle & Forge')}`}
+                title={t('nav.aiOracle', 'Nexus Oracle')}
               >
                 <Bot className="w-4 h-4 text-purple-300" />
               </button>
@@ -494,7 +494,6 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
         {/* TOOLBAR ACTIONS HEADER */}
         <div className="px-1 flex items-center justify-between text-[11px] font-bold text-stone-400 uppercase tracking-wider">
           <span>{t('nav.quickControls', 'Quick Controls')}</span>
-          <span className="text-[10px] font-mono text-stone-600">v0.9.5</span>
         </div>
 
         {/* VERTICAL BUTTON STACK */}
@@ -534,14 +533,11 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
           {onOpenAiAssistant && (
             <button
               onClick={onOpenAiAssistant}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-purple-950/70 hover:bg-purple-900/80 border border-purple-500/50 hover:border-purple-400 text-purple-200 hover:text-purple-100 text-xs font-bold transition cursor-pointer group shadow-sm"
-              title="Open Nexus AI Oracle & Entity Forge"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-purple-950/70 hover:bg-purple-900/80 border border-purple-500/50 hover:border-purple-400 text-purple-200 hover:text-purple-100 text-xs font-bold transition cursor-pointer group shadow-sm"
+              title="Open Nexus Oracle"
             >
-              <div className="flex items-center gap-2.5">
-                <Bot className="w-4 h-4 text-purple-300 group-hover:scale-110 transition-transform" />
-                <span>{t('nav.aiOracle', 'AI Oracle & Forge')}</span>
-              </div>
-              <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded font-mono">Oracle</span>
+              <Bot className="w-4 h-4 text-purple-300 group-hover:scale-110 transition-transform" />
+              <span>{t('nav.aiOracle', 'Nexus Oracle')}</span>
             </button>
           )}
 

@@ -6,9 +6,11 @@ import {
   getAbilityModifier,
   get35eSkillBonus,
   getSkillBonus,
-  formatModifier
+  formatModifier,
+  getEffectiveAbilities
 } from '../../../utils/dndCalculations';
 import { Shield, CheckSquare, Square, Dices } from 'lucide-react';
+
 import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface SkillsPanelProps {
@@ -49,6 +51,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
 }) => {
   const { t } = useLanguage();
   const profBonus = getProficiencyBonus(character.level);
+  const effectiveAbilities = getEffectiveAbilities(character);
 
   const handleSkillProficiencyChange = (skillId: string, type: 'proficient' | 'expertise') => {
     const updatedSkills = character.skills.map(skill => {
@@ -241,7 +244,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
             }
 
             // Standard 5e Skill Render
-            const skillBonus = getSkillBonus(skill, character.abilities, character.level);
+            const skillBonus = getSkillBonus(skill, effectiveAbilities, character.level);
             return (
               <div
                 key={skill.id}

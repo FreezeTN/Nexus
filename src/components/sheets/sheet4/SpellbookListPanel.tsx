@@ -3,11 +3,12 @@ import { CharacterData, Spell } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { PRESET_5E_SPELLS, PRESET_35E_SPELLS } from '../../../data/presetSpells';
 import { saveCustomCompendiumEntry } from '../../../data/compendiumData';
-import { OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta } from '../../../utils/dndCalculations';
+import { OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, getPreparedSpellsDetails } from '../../../utils/dndCalculations';
 import { isShapeshiftAbility } from '../../../data/transformationData';
 import { isCompanionSummonAbility } from '../../../data/companionData';
 import { checkSpellEligibility, SpellEligibilityResult } from '../../../utils/spellClassUtils';
 import { eventBus } from '../../../events/eventBus';
+import { useLanguage } from '../../../i18n/LanguageContext';
 import {
   Sparkles,
   Plus,
@@ -23,8 +24,10 @@ import {
   AlertTriangle,
   ShieldAlert,
   CheckCircle2,
-  Filter
+  Filter,
+  BookOpen
 } from 'lucide-react';
+
 
 interface SpellbookListPanelProps {
   character: CharacterData;
@@ -46,8 +49,10 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
   onOpenShapeshift,
   onOpenSummonCompanion
 }) => {
+  const { t } = useLanguage();
   const [showAddSpellModal, setShowAddSpellModal] = useState(false);
   const [levelFilter, setLevelFilter] = useState<number | 'all'>('all');
+  const [prepFilter, setPrepFilter] = useState<'all' | 'prepared' | 'unprepared'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Custom Spell Creation State
@@ -178,6 +183,8 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
 
   const filteredSpells = character.spells.filter(spell => {
     if (levelFilter !== 'all' && spell.level !== levelFilter) return false;
+    if (prepFilter === 'prepared' && !spell.prepared && spell.level > 0) return false;
+    if (prepFilter === 'unprepared' && (spell.prepared || spell.level === 0)) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchName = spell.name.toLowerCase().includes(q);
@@ -188,25 +195,43 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
     return true;
   });
 
+  const prepDetails = getPreparedSpellsDetails(character);
+  const countPrepared = character.spells.filter(s => s.prepared && s.level > 0).length;
+  const countUnprepared = character.spells.filter(s => !s.prepared && s.level > 0).length;
+
   return (
     <CollapsibleBox
-      title="Spellbook & Known Spells"
+      title={t('spells.spellbook', 'Spellbook & Known Spells')}
       icon={<Sparkles className="w-5 h-5 text-amber-500" />}
       storageKey="sheet4_spells"
       headerExtra={
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowAddSpellModal(true);
-          }}
-          className="flex items-center gap-1 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md"
-        >
-          <Plus className="w-4 h-4" /> Add Spell
-        </button>
+        <div className="flex items-center gap-2">
+          {prepDetails.isPreparedCaster && (
+            <div className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+              prepDetails.isOverLimit
+                ? 'bg-rose-950 text-rose-300 border-rose-600/60'
+                : prepDetails.currentPrepared === prepDetails.maxPrepared
+                ? 'bg-amber-950 text-amber-300 border-amber-600/50'
+                : 'bg-emerald-950 text-emerald-300 border-emerald-600/50'
+            }`}>
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>{prepDetails.currentPrepared} / {prepDetails.maxPrepared} Prepared</span>
+            </div>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAddSpellModal(true);
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md"
+          >
+            <Plus className="w-4 h-4" /> {t('spells.addSpell', '+ Add Spell')}
+          </button>
+        </div>
       }
     >
       <div className="space-y-4 pt-2">
-        {/* Search & Level Filters */}
+        {/* Search, Preparation & Level Filters */}
         <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-3">
           <div className="relative flex items-center">
             <Search className="w-4 h-4 text-stone-400 absolute left-3 pointer-events-none" />
@@ -214,7 +239,7 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search spells by name, school, or effect..."
+              placeholder={t('compendium.searchPlaceholder', 'Search spells by name, school, or effect...')}
               className="w-full bg-stone-900 border border-stone-700 focus:border-amber-500 rounded-xl pl-9 pr-8 py-1.5 text-xs text-stone-100 placeholder-stone-500 focus:outline-none"
             />
             {searchQuery && (
@@ -227,24 +252,59 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          {/* Filter Toolbar: Preparation Status & Spell Level */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1.5 text-xs">
+              <span className="text-[10px] font-mono text-stone-400 font-bold uppercase mr-1">Status:</span>
+              <button
+                onClick={() => setPrepFilter('all')}
+                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
+                  prepFilter === 'all' ? 'bg-amber-600 text-stone-950 shadow' : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+              >
+                {t('common.all', 'All Spells')} ({character.spells.length})
+              </button>
+
+              <button
+                onClick={() => setPrepFilter('prepared')}
+                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1 ${
+                  prepFilter === 'prepared' ? 'bg-emerald-600 text-stone-950 shadow' : 'bg-stone-900 text-emerald-400 hover:text-emerald-300 border border-stone-800'
+                }`}
+              >
+                <BookOpen className="w-3 h-3" />
+                <span>Prepared Only ({countPrepared})</span>
+              </button>
+
+              <button
+                onClick={() => setPrepFilter('unprepared')}
+                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition ${
+                  prepFilter === 'unprepared' ? 'bg-stone-700 text-stone-100 shadow' : 'bg-stone-900 text-stone-400 hover:text-stone-300 border border-stone-800'
+                }`}
+              >
+                Unprepared ({countUnprepared})
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1 border-t border-stone-800/60">
+            <span className="text-[10px] font-mono text-stone-400 font-bold uppercase mr-1">Level:</span>
             <button
               onClick={() => setLevelFilter('all')}
-              className={`px-2.5 py-1 rounded-lg font-bold transition ${
-                levelFilter === 'all' ? 'bg-amber-600 text-stone-950' : 'bg-stone-900 text-stone-400 hover:text-stone-200'
+              className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                levelFilter === 'all' ? 'bg-amber-600 text-stone-950' : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
               }`}
             >
-              All Levels
+              {t('common.all', 'All Levels')}
             </button>
             {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((lvl) => (
               <button
                 key={lvl}
                 onClick={() => setLevelFilter(lvl)}
-                className={`px-2.5 py-1 rounded-lg font-bold transition ${
-                  levelFilter === lvl ? 'bg-amber-600 text-stone-950' : 'bg-stone-900 text-stone-400 hover:text-stone-200'
+                className={`px-2 py-0.5 rounded-lg font-bold text-[11px] transition ${
+                  levelFilter === lvl ? 'bg-amber-600 text-stone-950' : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
                 }`}
               >
-                {lvl === 0 ? 'Cantrips' : `Lvl ${lvl}`}
+                {lvl === 0 ? t('spells.cantrips', 'Cantrips') : `${t('level.level', 'Lvl')} ${lvl}`}
               </button>
             ))}
           </div>

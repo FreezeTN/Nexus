@@ -1,10 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink } from 'lucide-react';
+import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink, MapPin } from 'lucide-react';
 import { RuleEdition } from '../types';
 import { UserProfile, GameSession } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
 
-export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
+export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheetBattlemap' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
 
 interface NavigationProps {
   activeTab: TabId;
@@ -105,6 +105,13 @@ export const Navigation: React.FC<NavigationProps> = ({
         : t('nav.combatSub', 'Attacks, Actions & Tactics'),
       icon: Crosshair
     },
+    {
+      id: 'sheetBattlemap' as TabId,
+      title: t('nav.battlemap', '2D Battlemap'),
+      description: t('nav.battlemapSub', 'Grid, Tokens, Fog-of-War & Spell AoE Templates'),
+      icon: MapPin,
+      badge: 'Live'
+    },
     ...(isDm && activeSession ? [{
       id: 'sheetDm' as TabId,
       title: t('nav.dmOverview', 'DM Overview'),
@@ -172,7 +179,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   // Filter tabs: if no active character selected, hide character sheet tabs
   const tabs = allTabs.filter(t => {
     if (!hasActiveCharacter) {
-      const characterSheets = ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5', 'sheetDm'];
+      const characterSheets = ['sheet1', 'sheet2', 'sheetBattlemap', 'sheet3', 'sheet4', 'sheet5', 'sheetDm'];
       if (characterSheets.includes(t.id)) return false;
     }
     return true;

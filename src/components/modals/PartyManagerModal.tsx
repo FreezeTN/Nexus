@@ -3,6 +3,7 @@ import { CharacterData, Party } from '../../types';
 import { Users, Plus, Shield, Heart, Eye, Trash2, Edit3, Check, Swords, UserPlus, UserMinus, Sparkles, X, ChevronRight, Crown, Lock, Pencil } from 'lucide-react';
 import { getPassivePerception, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { UserProfile, CharacterPresence } from '../../lib/firebase';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface PartyManagerModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
   currentUser,
   presenceMap = {}
 }) => {
+  const { t } = useLanguage();
   const isPlayerRole = !currentUser || currentUser.role === 'Player';
   const currentUserId = currentUser?.uid || 'guest_player';
   const [selectedPartyId, setSelectedPartyId] = useState<string>(
@@ -171,7 +173,7 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
               <Users className="w-5 h-5 text-amber-400" />
             </div>
             <div>
-              <h2 className="text-lg font-serif font-bold text-amber-300">Party Manager & Adventuring Groups</h2>
+              <h2 className="text-lg font-serif font-bold text-amber-300">{t('party.title', 'Party Manager & Adventuring Groups')}</h2>
               <p className="text-xs text-stone-400">
                 Organize party members, allies, and add full parties directly to encounters.
               </p>
@@ -190,12 +192,12 @@ export const PartyManagerModal: React.FC<PartyManagerModalProps> = ({
           {/* Left Sidebar: Party List */}
           <div className="w-full md:w-64 bg-stone-950/80 border-r border-stone-800 p-4 flex flex-col gap-3 shrink-0 overflow-y-auto">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-mono font-bold text-stone-400 uppercase">Your Parties ({parties.length})</span>
+              <span className="text-xs font-mono font-bold text-stone-400 uppercase">{t('party.title', 'Parties')} ({parties.length})</span>
               <button
                 onClick={() => setIsCreating(true)}
                 className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-stone-950 font-extrabold rounded-lg text-xs flex items-center gap-1 transition shadow"
               >
-                <Plus className="w-3.5 h-3.5" /> New Party
+                <Plus className="w-3.5 h-3.5" /> + {t('party.addMember', 'New Party')}
               </button>
             </div>
 

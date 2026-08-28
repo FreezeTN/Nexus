@@ -1,6 +1,16 @@
 import { AbilityName, AbilityScores, CharacterData, GearItem, RuleEdition, Skill } from '../types';
-import { getCombinedLevel, getActiveClassChoice, getAbilityModifier, getSavingThrowBonus, getEffectiveLevel } from '../systems/dnd5e';
+import {
+  getCombinedLevel,
+  getActiveClassChoice,
+  getAbilityModifier,
+  getSavingThrowBonus,
+  getEffectiveLevel,
+  getEffectiveAbilities,
+  getProficiencyBonus,
+  formatModifier
+} from '../systems/dnd5e';
 export * from '../systems/dnd5e';
+
 
 export {
   OFFICIAL_DAMAGE_TYPES,
@@ -69,12 +79,19 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     };
   }
 
-  const dexMod = getAbilityModifier(char.abilities?.DEX?.score || 10);
-  const conMod = getAbilityModifier(char.abilities?.CON?.score || 10);
-  const wisMod = getAbilityModifier(char.abilities?.WIS?.score || 10);
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const dexMod = getAbilityModifier(effectiveAbilities?.DEX?.score || 10);
+  const conMod = getAbilityModifier(effectiveAbilities?.CON?.score || 10);
+  const wisMod = getAbilityModifier(effectiveAbilities?.WIS?.score || 10);
 
   const inventory = char.inventory || [];
-  const equippedItems = inventory.filter(i => i.equipped && !i.stored);
+  const equippedItems = inventory.filter(i => {
+    if (!i.equipped || i.stored) return false;
+    // If item requires attunement, it must be attuned to grant defense/AC benefits
+    const needsAttunement = i.requiresAttunement ?? (i.isMagic || (i.notes || '').toLowerCase().includes('attune'));
+    if (needsAttunement && !i.attuned) return false;
+    return true;
+  });
 
   let equippedArmor: GearItem | null = null;
   let equippedShield: GearItem | null = null;
@@ -113,7 +130,7 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
       equippedArmor = item;
     } else {
       // Check for AC bonus on other equipped magic items (Ring of Protection, etc.)
-      const bonusVal = item.armorAc ?? (() => {
+      const bonusVal = item.armorAc ?? item.acBonus ?? (() => {
         const bonusMatch = notesLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i) ||
                            nameLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i);
         return bonusMatch ? parseInt(bonusMatch[1] || bonusMatch[2] || '0', 10) : 0;
@@ -782,7 +799,8 @@ export function getTotalWeight(char: CharacterData): number {
 }
 
 export function getCarryingCapacity(char: CharacterData): number {
-  const strScore = char.abilities.STR?.score || 10;
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const strScore = effectiveAbilities.STR?.score || 10;
   const { multiplier } = getSizeCarryingMultiplier(char);
   return Math.floor(strScore * 15 * multiplier);
 }
@@ -806,7 +824,8 @@ export interface EncumbranceDetails {
 
 export function getEncumbranceDetails(char: CharacterData): EncumbranceDetails {
   const totalWeight = getTotalWeight(char);
-  const strScore = char.abilities.STR?.score || 10;
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const strScore = effectiveAbilities.STR?.score || 10;
   const isVariant = !!char.optionalRules?.useVariantEncumbrance;
   const sizeInfo = getSizeCarryingMultiplier(char);
   const mult = sizeInfo.multiplier;
@@ -1277,6 +1296,32 @@ export function getSavingThrowDetails(
   };
 }
 
+export function getArmorStrengthRequirement(armor: GearItem): number {
+  if (armor.strengthRequirement !== undefined) {
+    return armor.strengthRequirement;
+  }
+  const name = (armor.name || '').toLowerCase();
+  const notes = (armor.notes || '').toLowerCase();
+
+  const reqMatch = notes.match(/str\s*(?:req|requirement|min)?\s*(\d+)/i) || name.match(/str\s*(\d+)/i);
+  if (reqMatch) {
+    return parseInt(reqMatch[1], 10);
+  }
+
+  if (armor.armorType === 'Heavy' || name.includes('heavy')) {
+    if (name.includes('plate') || name.includes('splint')) return 15;
+    if (name.includes('chain mail')) return 13;
+  } else if (name.includes('plate') && !name.includes('half')) {
+    return 15;
+  } else if (name.includes('splint')) {
+    return 15;
+  } else if (name.includes('chain mail')) {
+    return 13;
+  }
+
+  return 0;
+}
+
 export interface SpeedDetails {
   baseSpeed: number;
   effectiveSpeed: number;
@@ -1284,6 +1329,8 @@ export interface SpeedDetails {
   isModified: boolean;
   status: string;
   reasons: string[];
+  armorPenalty: number;
+  isDwarf: boolean;
 }
 
 export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
@@ -1316,6 +1363,29 @@ export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
     reasons.push(`${encumbrance.status} (-${encumbrance.speedPenalty} ft)`);
   }
 
+  // Heavy Armor Strength Requirement Check
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const strScore = effectiveAbilities.STR?.score || 10;
+  const raceLower = (char.race || '').toLowerCase();
+  const isDwarf = raceLower.includes('dwarf') ||
+    (char.classFeatures || []).some(t => (t.name || '').toLowerCase().includes('speed') && (t.description || '').toLowerCase().includes('armor')) ||
+    (char.feats || []).some(t => (t.name || '').toLowerCase().includes('speed') && (t.description || '').toLowerCase().includes('armor'));
+
+  let armorPenalty = 0;
+  const equippedArmor = (char.inventory || []).find(i => i.equipped && !i.stored && (i.itemType === 'Armor' || i.armorType === 'Heavy' || (i.armorAc !== undefined && i.armorType !== 'Shield')));
+  if (equippedArmor) {
+    const strReq = getArmorStrengthRequirement(equippedArmor);
+    if (strReq > 0 && strScore < strReq) {
+      if (isDwarf) {
+        reasons.push(`Heavy Armor STR unmet (${strScore}/${strReq}), but negated by Dwarven Resilience`);
+      } else {
+        armorPenalty = 10;
+        effectiveSpeed = Math.max(0, effectiveSpeed - 10);
+        reasons.push(`Heavy Armor STR Unmet: ${equippedArmor.name} requires ${strReq} STR (Current: ${strScore}) (-10 ft)`);
+      }
+    }
+  }
+
   const speedPenalty = baseSpeed - effectiveSpeed;
 
   return {
@@ -1325,6 +1395,268 @@ export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
     isModified: speedPenalty > 0,
     status: effects.speedZero ? 'Speed 0 (Condition)' : encumbrance.status,
     reasons,
+    armorPenalty,
+    isDwarf
+  };
+}
+
+export interface AttunementSlotsBreakdown {
+  maxSlots: number;
+  isArtificer: boolean;
+  artificerLevel: number;
+  featureName?: string;
+  grantedByItems: number;
+  reason: string;
+}
+
+export function getMaxAttunementSlots(char: CharacterData): AttunementSlotsBreakdown {
+  const cls = (char.characterClass || '').toLowerCase();
+  const secCls = (char.optionalRules?.secondaryClass || '').toLowerCase();
+  
+  let isArtificer = false;
+  let artificerLevel = 0;
+
+  if (cls.includes('artificer')) {
+    isArtificer = true;
+    artificerLevel = char.level || 1;
+  } else if (char.optionalRules?.useMulticlassing && secCls.includes('artificer')) {
+    isArtificer = true;
+    artificerLevel = char.optionalRules.secondaryLevel || 1;
+  }
+
+  let baseSlots = 3;
+  let featureName: string | undefined = undefined;
+
+  if (isArtificer) {
+    if (artificerLevel >= 18) {
+      baseSlots = 6;
+      featureName = 'Magic Item Master (Level 18)';
+    } else if (artificerLevel >= 14) {
+      baseSlots = 5;
+      featureName = 'Magic Item Savant (Level 14)';
+    } else if (artificerLevel >= 10) {
+      baseSlots = 4;
+      featureName = 'Magic Item Adept (Level 10)';
+    }
+  }
+
+  // Check items granting attunement slots
+  let grantedByItems = 0;
+  const inventory = char.inventory || [];
+  for (const item of inventory) {
+    if (item.equipped && !item.stored && item.attunementSlotsGranted) {
+      grantedByItems += item.attunementSlotsGranted;
+    }
+  }
+
+  const customOverride = (char as any).customMaxAttunementSlots;
+  const maxSlots = customOverride !== undefined ? customOverride : (baseSlots + grantedByItems);
+
+  let reason = `Standard 5e (3 slots)`;
+  if (featureName) {
+    reason = `Artificer: ${featureName} (${baseSlots} slots)`;
+  }
+  if (grantedByItems > 0) {
+    reason += ` + ${grantedByItems} from Magic Items`;
+  }
+
+  return {
+    maxSlots,
+    isArtificer,
+    artificerLevel,
+    featureName,
+    grantedByItems,
+    reason
+  };
+}
+
+export function getAttunedItemsCount(char: CharacterData): number {
+  return (char.inventory || []).filter(item => item.attuned).length;
+}
+
+export interface WeaponAttackBreakdown {
+  name: string;
+  attackBonus: number;
+  damage: string;
+  damageType: string;
+  range: string;
+  abilityUsed: AbilityName;
+  abilityMod: number;
+  profBonus: number;
+  isProficient: boolean;
+  magicBonus: number;
+  isVersatile: boolean;
+  isFinesse: boolean;
+  isRanged: boolean;
+  isThrown: boolean;
+  isTwoHanded: boolean;
+  explanation: string;
+}
+
+export function calculateWeaponAttackDetails(
+  char: CharacterData,
+  itemOrAttack: GearItem | any,
+  options?: {
+    useVersatile?: boolean;
+    abilityOverride?: AbilityName;
+    isProficient?: boolean;
+  }
+): WeaponAttackBreakdown {
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const effectiveLevel = getCombinedLevel(char);
+  const profBonus = getProficiencyBonus(effectiveLevel);
+
+  const name = itemOrAttack.name || 'Weapon';
+  const nameLower = name.toLowerCase();
+  const notes = (itemOrAttack.notes || '') as string;
+  const notesLower = notes.toLowerCase();
+
+  const weaponStats = itemOrAttack.weaponStats;
+  
+  const isFinesse = weaponStats?.isFinesse ?? (
+    notesLower.includes('finesse') || 
+    nameLower.includes('rapier') || 
+    nameLower.includes('scimitar') || 
+    nameLower.includes('shortsword') || 
+    nameLower.includes('dagger') || 
+    nameLower.includes('whip')
+  );
+
+  const isRanged = weaponStats?.isRanged ?? (
+    notesLower.includes('ranged') || 
+    notesLower.includes('range') ||
+    nameLower.includes('bow') || 
+    nameLower.includes('crossbow') || 
+    nameLower.includes('dart') || 
+    nameLower.includes('sling') || 
+    nameLower.includes('blowgun')
+  );
+
+  const isThrown = weaponStats?.isThrown ?? (
+    notesLower.includes('thrown') || 
+    nameLower.includes('javelin') || 
+    nameLower.includes('spear') || 
+    nameLower.includes('handaxe') || 
+    nameLower.includes('dagger') || 
+    nameLower.includes('light hammer') || 
+    nameLower.includes('trident')
+  );
+
+  const isVersatile = weaponStats?.isVersatile ?? (
+    notesLower.includes('versatile') || 
+    nameLower.includes('longsword') || 
+    nameLower.includes('warhammer') || 
+    nameLower.includes('battleaxe') || 
+    nameLower.includes('trident') || 
+    nameLower.includes('spear') || 
+    nameLower.includes('quarterstaff')
+  );
+
+  const isTwoHanded = weaponStats?.isTwoHanded ?? (
+    notesLower.includes('two-handed') || 
+    nameLower.includes('greatsword') || 
+    nameLower.includes('greataxe') || 
+    nameLower.includes('maul') || 
+    nameLower.includes('glaive') || 
+    nameLower.includes('halberd') || 
+    nameLower.includes('pike') || 
+    nameLower.includes('heavy crossbow') || 
+    nameLower.includes('longbow')
+  );
+
+  let magicBonus = 0;
+  if (weaponStats?.attackBonusModifier !== undefined) {
+    magicBonus = Number(weaponStats.attackBonusModifier) || 0;
+  } else {
+    const magicMatch = nameLower.match(/\+(\d+)/) || notesLower.match(/\+(\d+)/);
+    if (magicMatch) {
+      magicBonus = parseInt(magicMatch[1], 10);
+    }
+  }
+
+  const strMod = getAbilityModifier(effectiveAbilities.STR?.score || 10);
+  const dexMod = getAbilityModifier(effectiveAbilities.DEX?.score || 10);
+
+  let abilityUsed: AbilityName = 'STR';
+  if (options?.abilityOverride) {
+    abilityUsed = options.abilityOverride;
+  } else if (weaponStats?.abilityOverride) {
+    abilityUsed = weaponStats.abilityOverride;
+  } else if (isFinesse) {
+    abilityUsed = dexMod > strMod ? 'DEX' : 'STR';
+  } else if (isRanged && !isThrown) {
+    abilityUsed = 'DEX';
+  } else {
+    abilityUsed = 'STR';
+  }
+
+  const abilityMod = getAbilityModifier(effectiveAbilities[abilityUsed]?.score || 10);
+  const isProficient = options?.isProficient ?? (itemOrAttack.isProficient !== undefined ? itemOrAttack.isProficient : true);
+  const attackBonus = (isProficient ? profBonus : 0) + abilityMod + magicBonus;
+
+  let baseDamageDie = '1d8';
+  if (weaponStats?.damage) {
+    baseDamageDie = weaponStats.damage;
+  } else if (itemOrAttack.damage) {
+    const match = String(itemOrAttack.damage).match(/^(\d+d\d+)/i);
+    if (match) baseDamageDie = match[1];
+    else baseDamageDie = String(itemOrAttack.damage);
+  } else {
+    if (nameLower.includes('greatsword') || nameLower.includes('maul')) baseDamageDie = '2d6';
+    else if (nameLower.includes('greataxe')) baseDamageDie = '1d12';
+    else if (nameLower.includes('heavy crossbow') || nameLower.includes('halberd') || nameLower.includes('glaive') || nameLower.includes('pike')) baseDamageDie = '1d10';
+    else if (nameLower.includes('longsword') || nameLower.includes('battleaxe') || nameLower.includes('warhammer') || nameLower.includes('rapier') || nameLower.includes('longbow')) baseDamageDie = '1d8';
+    else if (nameLower.includes('shortsword') || nameLower.includes('scimitar') || nameLower.includes('handaxe') || nameLower.includes('shortbow') || nameLower.includes('mace') || nameLower.includes('spear') || nameLower.includes('javelin') || nameLower.includes('trident')) baseDamageDie = '1d6';
+    else if (nameLower.includes('dagger') || nameLower.includes('sickle') || nameLower.includes('light hammer') || nameLower.includes('dart') || nameLower.includes('sling') || nameLower.includes('quarterstaff') || nameLower.includes('club')) baseDamageDie = '1d4';
+    else if (nameLower.includes('blowgun') || nameLower.includes('unarmed')) baseDamageDie = '1';
+  }
+
+  if (isVersatile && options?.useVersatile) {
+    if (weaponStats?.versatileDamage) {
+      baseDamageDie = weaponStats.versatileDamage;
+    } else {
+      if (baseDamageDie === '1d6') baseDamageDie = '1d8';
+      else if (baseDamageDie === '1d8') baseDamageDie = '1d10';
+    }
+  }
+
+  const damageModTotal = abilityMod + magicBonus + (weaponStats?.damageBonusModifier || 0);
+  const damageStr = damageModTotal !== 0 
+    ? `${baseDamageDie} ${damageModTotal >= 0 ? '+' : '-'} ${Math.abs(damageModTotal)}`
+    : baseDamageDie;
+
+  let damageType = weaponStats?.damageType || itemOrAttack.damageType || 'Slashing';
+  if (!weaponStats?.damageType && !itemOrAttack.damageType) {
+    if (nameLower.includes('rapier') || nameLower.includes('dagger') || nameLower.includes('shortsword') || nameLower.includes('bow') || nameLower.includes('crossbow') || nameLower.includes('spear') || nameLower.includes('javelin') || nameLower.includes('pike') || nameLower.includes('trident') || nameLower.includes('dart')) {
+      damageType = 'Piercing';
+    } else if (nameLower.includes('warhammer') || nameLower.includes('maul') || nameLower.includes('club') || nameLower.includes('mace') || nameLower.includes('sling') || nameLower.includes('quarterstaff') || nameLower.includes('flail') || nameLower.includes('unarmed')) {
+      damageType = 'Bludgeoning';
+    } else {
+      damageType = 'Slashing';
+    }
+  }
+
+  let range = weaponStats?.range || itemOrAttack.range || (isRanged ? '150/600 ft' : '5 ft Melee');
+
+  const explanation = `${abilityUsed} Mod (${formatModifier(abilityMod)})${isProficient ? ` + Prof (${formatModifier(profBonus)})` : ''}${magicBonus ? ` + Magic (${formatModifier(magicBonus)})` : ''}`;
+
+  return {
+    name,
+    attackBonus,
+    damage: damageStr,
+    damageType,
+    range,
+    abilityUsed,
+    abilityMod,
+    profBonus,
+    isProficient,
+    magicBonus,
+    isVersatile,
+    isFinesse,
+    isRanged,
+    isThrown,
+    isTwoHanded,
+    explanation
   };
 }
 
@@ -1686,4 +2018,30 @@ export function rollHealing(expression: string): { totalHeal: number; breakdown:
 
   return { totalHeal: 5, breakdown: `[5] = 5` };
 }
+
+export function getEffectiveSpellSaveDC(char: CharacterData): number {
+  if (char.spellSaveDCOverride !== undefined && char.spellSaveDCOverride > 0) {
+    return char.spellSaveDCOverride;
+  }
+  const prof = getProficiencyBonus(char.level || 1);
+  const castingAbility = char.spellcastingAbility || 'INT';
+  const abilities = getEffectiveAbilities(char);
+  const mod = getAbilityModifier(abilities[castingAbility]?.score || 10);
+  return 8 + prof + mod;
+}
+
+export function getEffectiveSpellAttackBonus(char: CharacterData): number {
+  if (char.spellAttackBonusOverride !== undefined && char.spellAttackBonusOverride !== 0) {
+    return char.spellAttackBonusOverride;
+  }
+  const prof = getProficiencyBonus(char.level || 1);
+  const castingAbility = char.spellcastingAbility || 'INT';
+  const abilities = getEffectiveAbilities(char);
+  const mod = getAbilityModifier(abilities[castingAbility]?.score || 10);
+  return prof + mod;
+}
+
+export const getSpellSaveDC = getEffectiveSpellSaveDC;
+export const getSpellAttackBonus = getEffectiveSpellAttackBonus;
+
 

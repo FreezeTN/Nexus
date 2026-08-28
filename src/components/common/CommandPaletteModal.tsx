@@ -27,6 +27,7 @@ import { CharacterData } from '../../types';
 import { systemRegistry } from '../../systems';
 import { eventBus } from '../../events/eventBus';
 import { searchIndexer } from '../../utils/searchIndexer';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -70,6 +71,7 @@ export function CommandPaletteModal({
   onNavigateTab,
   onRollDice
 }: CommandPaletteModalProps) {
+  const { t } = useLanguage();
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -400,7 +402,7 @@ export function CommandPaletteModal({
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search anything: dragon, fireball, sword, phandalin, roll, DM..."
+              placeholder={t('command.placeholder', 'Search anything: dragon, fireball, sword, phandalin, roll, DM...')}
               className="w-full bg-transparent text-stone-100 placeholder-stone-500 text-sm font-sans focus:outline-none"
             />
             <div className="flex items-center gap-2 shrink-0">

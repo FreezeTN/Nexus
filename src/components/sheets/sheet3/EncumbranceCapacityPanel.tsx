@@ -8,6 +8,7 @@ import {
   getWeightBreakdown
 } from '../../../utils/dndCalculations';
 import { Weight, ShieldAlert, Scale } from 'lucide-react';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface EncumbranceCapacityPanelProps {
   character: CharacterData;
@@ -16,6 +17,7 @@ interface EncumbranceCapacityPanelProps {
 export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> = ({
   character
 }) => {
+  const { t } = useLanguage();
   const carryingCap = getCarryingCapacity(character);
   const totalWeight = getTotalWeight(character);
   const encumbrance = getEncumbranceDetails(character);
@@ -31,7 +33,7 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
 
   return (
     <CollapsibleBox
-      title="Carrying Capacity & Encumbrance Rules"
+      title={t('inventory.carryingCapacity', 'Carrying Capacity & Encumbrance Rules')}
       icon={<Weight className="w-5 h-5 text-amber-500" />}
       storageKey="sheet3_encumbrance"
       headerExtra={
@@ -80,7 +82,7 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
         {/* Weight Distribution Breakdown */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[11px]">
           <div className="bg-stone-950 p-2 rounded-xl border border-stone-800">
-            <span className="text-stone-500 block text-[9px] uppercase">Equipped Gear</span>
+            <span className="text-stone-500 block text-[9px] uppercase">{t('inventory.equipped', 'Equipped Gear')}</span>
             <span className="font-bold text-amber-300">{weightBreakdown.equippedWeight.toFixed(1)} lbs</span>
           </div>
           <div className="bg-stone-950 p-2 rounded-xl border border-stone-800">

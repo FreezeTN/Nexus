@@ -1,8 +1,13 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
+import os from "os";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import * as pdfParseModule from "pdf-parse";
+
+const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 
 dotenv.config();
 
@@ -21,9 +26,11 @@ function getGeminiClient(customApiKey?: string): GoogleGenAI {
   });
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 function parseErrorMessage(err: any): string {
   if (!err) return "An unexpected error occurred.";
-  const raw = typeof err === "string" ? err : err.message || JSON.stringify(err);
+  let raw = typeof err === "string" ? err : err.message || JSON.stringify(err);
   try {
     const parsed = JSON.parse(raw);
     if (parsed?.error?.message) {
@@ -33,6 +40,17 @@ function parseErrorMessage(err: any): string {
       return parsed.message;
     }
   } catch {}
+
+  // Handle embedded JSON string in error message
+  const jsonMatch = raw.match(/\{[\s\S]*"message"\s*:\s*"([^"]+)"[\s\S]*\}/);
+  if (jsonMatch && jsonMatch[1]) {
+    return jsonMatch[1];
+  }
+
+  if (raw.includes("503") || raw.includes("high demand") || raw.includes("UNAVAILABLE")) {
+    return "The AI Oracle is currently experiencing temporary high demand across the network. Please wait a few moments and try your inquiry again.";
+  }
+
   return raw;
 }
 
@@ -45,74 +63,175 @@ async function generateContentWithRetry(ai: GoogleGenAI, params: any) {
   ];
 
   let lastError: any = null;
-  for (let i = 0; i < modelsToTry.length; i++) {
-    const model = modelsToTry[i];
-    try {
-      const response = await ai.models.generateContent({
-        ...params,
-        model,
-      });
-      return response;
-    } catch (err: any) {
-      lastError = err;
-      const errMsg = String(err?.message || err || "");
-      console.warn(`Model ${model} attempt failed:`, errMsg);
 
-      // If fatal API key error or bad request, throw immediately
-      if (
-        errMsg.includes("API key not valid") ||
-        errMsg.includes("PERMISSION_DENIED") ||
-        errMsg.includes("INVALID_ARGUMENT")
-      ) {
-        throw err;
-      }
+  for (let m = 0; m < modelsToTry.length; m++) {
+    const model = modelsToTry[m];
+    // For primary model, attempt twice with jittered delay; for fallbacks, attempt once
+    const maxAttemptsForModel = m === 0 ? 2 : 1;
 
-      // If transient error (503 / 429 / 500 / Overloaded / UNAVAILABLE), quickly proceed to next model
-      if (
-        errMsg.includes("503") ||
-        errMsg.includes("high demand") ||
-        errMsg.includes("429") ||
-        errMsg.includes("UNAVAILABLE") ||
-        errMsg.includes("RESOURCE_EXHAUSTED") ||
-        errMsg.includes("Overloaded") ||
-        errMsg.includes("500")
-      ) {
-        continue;
+    for (let attempt = 1; attempt <= maxAttemptsForModel; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          ...params,
+          model,
+        });
+        return response;
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = String(err?.message || err || "");
+        console.warn(`[AI Engine] Model ${model} (attempt ${attempt}/${maxAttemptsForModel}) failed:`, errMsg);
+
+        // Fatal API key or bad argument error - throw immediately
+        if (
+          errMsg.includes("API key not valid") ||
+          errMsg.includes("PERMISSION_DENIED") ||
+          errMsg.includes("INVALID_ARGUMENT")
+        ) {
+          throw err;
+        }
+
+        // Transient / capacity errors (503, 429, 500, UNAVAILABLE, high demand, overloaded)
+        const isTransient =
+          errMsg.includes("503") ||
+          errMsg.includes("high demand") ||
+          errMsg.includes("429") ||
+          errMsg.includes("UNAVAILABLE") ||
+          errMsg.includes("RESOURCE_EXHAUSTED") ||
+          errMsg.includes("Overloaded") ||
+          errMsg.includes("500") ||
+          errMsg.includes("fetch failed");
+
+        if (isTransient) {
+          if (attempt < maxAttemptsForModel) {
+            const delay = attempt * 800 + Math.random() * 400;
+            console.log(`[AI Engine] Retrying ${model} after ${Math.round(delay)}ms...`);
+            await sleep(delay);
+            continue;
+          }
+          console.log(`[AI Engine] Cascading from ${model} to fallback models...`);
+          await sleep(250);
+          break;
+        } else {
+          break;
+        }
       }
     }
   }
+
   throw lastError;
 }
 
-function buildSanitizedChatContents(
-  history: Array<{ role?: string; text?: string; isError?: boolean }> | undefined,
-  currentMessage: string
-): Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> {
-  const sanitizedTurns: Array<{ role: "user" | "model"; text: string }> = [];
+async function uploadBase64ToGeminiFiles(
+  ai: GoogleGenAI,
+  base64Data: string,
+  mimeType: string
+): Promise<{ fileUri: string; mimeType: string } | null> {
+  try {
+    const isPdf = mimeType === "application/pdf";
+    const ext = isPdf ? ".pdf" : mimeType.includes("png") ? ".png" : mimeType.includes("webp") ? ".webp" : ".jpg";
+    const tempFilePath = path.join(
+      os.tmpdir(),
+      `nexus_gemini_${Date.now()}_${Math.random().toString(36).substring(7)}${ext}`
+    );
+    const buffer = Buffer.from(base64Data, "base64");
+    await fs.promises.writeFile(tempFilePath, buffer);
+
+    try {
+      const uploadResult = await (ai.files.upload as any)({
+        file: tempFilePath,
+        mimeType: mimeType || (isPdf ? "application/pdf" : "image/png"),
+        config: {
+          mimeType: mimeType || (isPdf ? "application/pdf" : "image/png"),
+        },
+      });
+      return {
+        fileUri: uploadResult.uri || uploadResult.fileUri || uploadResult.name,
+        mimeType: uploadResult.mimeType || mimeType,
+      };
+    } finally {
+      try {
+        await fs.promises.unlink(tempFilePath);
+      } catch {}
+    }
+  } catch (err) {
+    console.warn("Failed to upload file via ai.files.upload, falling back to inlineData:", err);
+    return null;
+  }
+}
+
+interface ChatHistoryItem {
+  role?: string;
+  text?: string;
+  isError?: boolean;
+  image?: { data: string; mimeType: string };
+}
+
+async function buildSanitizedChatContents(
+  ai: GoogleGenAI,
+  history: ChatHistoryItem[] | undefined,
+  currentMessage: string,
+  currentImage?: { data: string; mimeType: string }
+): Promise<Array<{ role: "user" | "model"; parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string }; fileData?: { fileUri: string; mimeType: string } }> }>> {
+  const sanitizedTurns: Array<{
+    role: "user" | "model";
+    parts: Array<{ text?: string; inlineData?: { mimeType: string; data: string }; fileData?: { fileUri: string; mimeType: string } }>;
+  }> = [];
 
   if (Array.isArray(history)) {
     for (const msg of history) {
-      if (!msg || !msg.text || typeof msg.text !== "string") continue;
+      if (!msg) continue;
       // Skip error banners or system alerts from chat history
       if (
         msg.isError ||
-        msg.text.startsWith("⚠️ Error:") ||
-        msg.text.startsWith("⚠️ **Error:**") ||
-        msg.text.includes("unexpected response format")
+        (typeof msg.text === "string" &&
+          (msg.text.startsWith("⚠️ Error:") ||
+            msg.text.startsWith("⚠️ **Error:**") ||
+            msg.text.includes("unexpected response format")))
       ) {
         continue;
       }
 
       const role: "user" | "model" = msg.role === "user" ? "user" : "model";
-      const text = msg.text.trim();
-      if (!text) continue;
+      const text = typeof msg.text === "string" ? msg.text.trim() : "";
+      if (!text && !msg.image) continue;
+
+      const turnParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string }; fileData?: { fileUri: string; mimeType: string } }> = [];
+      if (text) {
+        turnParts.push({ text });
+      }
+      if (msg.image && msg.image.data) {
+        // Strip any data URI header if present
+        const base64Data = msg.image.data.includes(",") ? msg.image.data.split(",")[1] : msg.image.data;
+        // If large file (> 10MB) or PDF, try files API
+        const isPdf = msg.image.mimeType === "application/pdf";
+        if (base64Data.length > 10 * 1024 * 1024 || isPdf) {
+          const uploaded = await uploadBase64ToGeminiFiles(ai, base64Data, msg.image.mimeType || "image/png");
+          if (uploaded) {
+            turnParts.push({ fileData: uploaded });
+          } else {
+            turnParts.push({
+              inlineData: {
+                mimeType: msg.image.mimeType || "image/png",
+                data: base64Data,
+              },
+            });
+          }
+        } else {
+          turnParts.push({
+            inlineData: {
+              mimeType: msg.image.mimeType || "image/png",
+              data: base64Data,
+            },
+          });
+        }
+      }
 
       // Merge consecutive turns with the same role to maintain strict alternating turns
       const lastTurn = sanitizedTurns[sanitizedTurns.length - 1];
       if (lastTurn && lastTurn.role === role) {
-        lastTurn.text += "\n\n" + text;
+        lastTurn.parts.push(...turnParts);
       } else {
-        sanitizedTurns.push({ role, text });
+        sanitizedTurns.push({ role, parts: turnParts });
       }
     }
   }
@@ -123,26 +242,66 @@ function buildSanitizedChatContents(
     sanitizedTurns.shift();
   }
 
-  // Append current message from user
+  // Current turn from user
   const cleanCurrentMessage = (currentMessage || "").trim();
-  const lastTurn = sanitizedTurns[sanitizedTurns.length - 1];
-  if (lastTurn && lastTurn.role === "user") {
-    lastTurn.text += "\n\n" + cleanCurrentMessage;
-  } else {
-    sanitizedTurns.push({ role: "user", text: cleanCurrentMessage });
+  const currentParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string }; fileData?: { fileUri: string; mimeType: string } }> = [];
+
+  if (cleanCurrentMessage) {
+    currentParts.push({ text: cleanCurrentMessage });
+  } else if (currentImage && currentImage.data) {
+    const isPdf = currentImage.mimeType === "application/pdf";
+    currentParts.push({
+      text: isPdf
+        ? "Please thoroughly inspect and analyze this attached PDF compendium / monster manual document. Extract the rules, creatures, statblocks, characters, or items contained within. If asked to extract entities, output rich structured statblocks and include a JSON block with an array of entities so they can be imported directly into the Nexus Hub."
+        : "Please inspect and analyze this attached image/screenshot. Transcribe all text or statblocks, explain the rules, creature stats, map, or mechanics shown, and provide actionable TTRPG conversions or advice.",
+    });
   }
 
-  return sanitizedTurns.map((turn) => ({
-    role: turn.role,
-    parts: [{ text: turn.text }],
-  }));
+  if (currentImage && currentImage.data) {
+    const base64Data = currentImage.data.includes(",") ? currentImage.data.split(",")[1] : currentImage.data;
+    const isPdf = currentImage.mimeType === "application/pdf";
+
+    // For files > 10MB or PDF documents, prefer uploading via Gemini Files API
+    if (base64Data.length > 10 * 1024 * 1024 || isPdf) {
+      const uploaded = await uploadBase64ToGeminiFiles(ai, base64Data, currentImage.mimeType || "application/pdf");
+      if (uploaded) {
+        currentParts.push({ fileData: uploaded });
+      } else {
+        currentParts.push({
+          inlineData: {
+            mimeType: currentImage.mimeType || "application/pdf",
+            data: base64Data,
+          },
+        });
+      }
+    } else {
+      currentParts.push({
+        inlineData: {
+          mimeType: currentImage.mimeType || "image/png",
+          data: base64Data,
+        },
+      });
+    }
+  }
+
+  if (currentParts.length > 0) {
+    const lastTurn = sanitizedTurns[sanitizedTurns.length - 1];
+    if (lastTurn && lastTurn.role === "user") {
+      lastTurn.parts.push(...currentParts);
+    } else {
+      sanitizedTurns.push({ role: "user", parts: currentParts });
+    }
+  }
+
+  return sanitizedTurns;
 }
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json({ limit: "10mb" }));
+  app.use(express.json({ limit: "250mb" }));
+  app.use(express.urlencoded({ limit: "250mb", extended: true }));
 
   // Health check
   app.get("/api/health", (_req, res) => {
@@ -150,14 +309,77 @@ async function startServer() {
     res.json({ status: "ok", geminiConfigured: !!process.env.GEMINI_API_KEY });
   });
 
+  // Server-side PDF Parser endpoint (supports large binary PDF payloads up to 250MB)
+  app.post(
+    "/api/parse-pdf",
+    express.raw({ type: ["application/pdf", "application/octet-stream", "*/*"], limit: "250mb" }),
+    async (req, res) => {
+      res.setHeader("Content-Type", "application/json");
+      try {
+        const rawFileName = req.headers["x-file-name"];
+        const fileName = rawFileName ? decodeURIComponent(Array.isArray(rawFileName) ? rawFileName[0] : rawFileName) : "Document.pdf";
+        const buffer = req.body as Buffer;
+
+        if (!buffer || buffer.length === 0) {
+          return res.status(400).json({ error: "No PDF data received" });
+        }
+
+        console.log(`[PDF Parser] Parsing PDF "${fileName}" (${(buffer.length / (1024 * 1024)).toFixed(2)} MB)...`);
+        const pdfData = await pdfParse(buffer);
+
+        const totalPages = pdfData.numpages || 1;
+        const fullText = (pdfData.text || "").trim();
+
+        // Extract creature & chapter headings
+        const headings: string[] = [];
+        const lines = fullText.split(/\r?\n/);
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (
+            trimmed.length >= 3 &&
+            trimmed.length <= 50 &&
+            !trimmed.match(/^\d+$/) &&
+            (trimmed === trimmed.toUpperCase() || trimmed.startsWith("CR ") || trimmed.startsWith("Challenge Rating"))
+          ) {
+            if (!headings.includes(trimmed) && headings.length < 60) {
+              headings.push(trimmed);
+            }
+          }
+        }
+
+        // Split approximate page blocks
+        const pageTexts: Array<{ pageNumber: number; text: string }> = [];
+        const roughPageLength = Math.max(800, Math.floor(fullText.length / totalPages));
+        for (let i = 0; i < totalPages; i++) {
+          const slice = fullText.substring(i * roughPageLength, (i + 1) * roughPageLength).trim();
+          if (slice) {
+            pageTexts.push({ pageNumber: i + 1, text: slice });
+          }
+        }
+
+        return res.json({
+          success: true,
+          fileName,
+          totalPages,
+          fullText,
+          headings,
+          pageTexts: pageTexts.length > 0 ? pageTexts : [{ pageNumber: 1, text: fullText }],
+        });
+      } catch (err: any) {
+        console.error("[PDF Parser] Failed to parse PDF:", err);
+        return res.status(500).json({ error: `Failed to parse PDF document: ${err?.message || "Unknown error"}` });
+      }
+    }
+  );
+
   // AI Assistant Chat Route
   app.post("/api/ai/chat", async (req, res) => {
     res.setHeader("Content-Type", "application/json");
     try {
-      const { message, history, systemContext, customApiKey, language = "en" } = req.body;
+      const { message, history, systemContext, customApiKey, language = "en", image } = req.body;
 
-      if (!message || typeof message !== "string") {
-        return res.status(400).json({ error: "Missing message parameter" });
+      if ((!message || typeof message !== "string" || !message.trim()) && !image) {
+        return res.status(400).json({ error: "Missing message or attachment parameter" });
       }
 
       const ai = getGeminiClient(customApiKey);
@@ -174,36 +396,108 @@ async function startServer() {
       const systemInstruction = `You are "Nexus Oracle", the intelligent in-app AI Assistant for the Nexus TTRPG Platform.
 You are an expert on tabletop RPG rules (D&D 5e, D&D 3.5e, Pathfinder 2e, Shadowrun 5e, and Call of Cthulhu 7e) as well as an expert guide on all Nexus app features.
 
-### CRITICAL DIRECTIVE: INTERPRET ALL QUESTIONS AS ACTIONABLE TASKS
-- Users very frequently phrase requests, commands, generation tasks, translations, and modifications as polite questions (e.g. "Kannst du mir den Beschreibungstext ins Englische übersetzen?", "Could you translate this scene into English?", "Can you make a CR 4 monster for this lair?", "Kannst du mir einen NPC erstellen?", "Would you write a tavern hook?", "Can you explain how stealth checks work here?").
-- You MUST ALWAYS interpret questions asking if you can/could/would do something as DIRECT ACTIONABLE TASKS and immediately execute the requested task in full!
-- NEVER respond with a hollow confirmation like "Yes, I can do that" or "Sure, would you like me to translate it?".
-- IMMEDIATELY perform the translation, creation, statblock, calculation, rule summary, or narrative text in your response!
-  - If asked: "Kannst du mir den Beschreibungstext ins Englische übersetzen?" / "Can you translate the description into English?" -> Provide the complete, evocative English translation of the scene or description right away!
-  - If asked: "Kannst du mir einen NPC erstellen?" / "Can you create an NPC?" -> Provide the full, ready-to-use NPC stats, personality, and roleplay tips!
-  - If asked: "Kannst du mir die Regeln für X erklären?" -> Give a crystal-clear, structured explanation!
+### MULTIMODAL, SCREENSHOT & PDF DOCUMENT COMPENDIUM PROCESSING
+- You have full multimodal document and image understanding enabled (supporting PNG, JPEG, WebP, and PDF documents).
+- **PDF Documents & Monster Manuals**:
+  - When the user attaches a PDF (such as a monster compendium, adventure module, homebrew supplement, spellbook, or rulebook):
+    - Read through all pages, tables, columns, and statblocks in the document.
+    - If the user asks to extract or generate multiple monsters/entities (e.g. "Extract all monsters in this PDF", "Generate all creatures from this chapter"):
+      - Provide a descriptive overview and individual statblocks for each creature.
+      - Include a single JSON code block containing a JSON array of all extracted creatures/entities or an object with a \`monsters\` / \`characters\` / \`spells\` array.
+      - Example JSON format:
+\`\`\`json
+[
+  {
+    "name": "Goblin Shaman",
+    "isMonster": true,
+    "race": "Goblinoid",
+    "characterClass": "Spellcaster",
+    "challengeRating": "1/2",
+    "hpMax": 18,
+    "armorClass": 13,
+    "abilities": { "STR": {"score": 8}, "DEX": {"score": 14}, "CON": {"score": 10}, "INT": {"score": 10}, "WIS": {"score": 14}, "CHA": {"score": 8} },
+    "attacks": [
+      { "id": "atk_1", "name": "Staff", "bonus": "+4", "damage": "1d6+2 bludgeoning", "type": "Melee" }
+    ],
+    "backstory": "A cunning tribal shaman carrying bone charms."
+  },
+  {
+    "name": "Cave Bear",
+    "isMonster": true,
+    "race": "Beast",
+    "characterClass": "Large Beast",
+    "challengeRating": "2",
+    "hpMax": 42,
+    "armorClass": 12,
+    "abilities": { "STR": {"score": 20}, "DEX": {"score": 10}, "CON": {"score": 16}, "INT": {"score": 2}, "WIS": {"score": 13}, "CHA": {"score": 7} },
+    "attacks": [
+      { "id": "atk_1", "name": "Multiattack", "bonus": "", "damage": "1 Bite + 1 Claws", "type": "Special" },
+      { "id": "atk_2", "name": "Bite", "bonus": "+7", "damage": "1d8+5 piercing", "type": "Melee" },
+      { "id": "atk_3", "name": "Claws", "bonus": "+7", "damage": "2d6+5 slashing", "type": "Melee" }
+    ],
+    "backstory": "A formidable subterranean predator with keen sense of smell."
+  }
+]
+\`\`\`
+      - This allows the Nexus UI to automatically generate individual 1-Click Import buttons AND an **"Import All (N)"** batch button for the user!
+- **Screenshots & Images**:
+  - Carefully inspect and transcribe all relevant text, numbers, formulas, and statblocks shown.
+  - Explain mechanics, clarify ambiguities, evaluate tactical choices, or diagnose character sheet errors.
 
-Key app features you can explain and reference:
-- **Sheet 1 (Stats & Features)**: Ability scores, saving throws, skills, proficiencies, class features, feats, rest mechanics, and health orb.
-- **Sheet 2 (Combat & Turn Order)**: Attacks, damage rolling with advantage/disadvantage, active combat tracker, initiative rolls, status condition tags, transformations (Wild Shape/Polymorph), and companion manager.
-- **Sheet 3 (Gear & Wealth)**: Inventory, equipment weight, attunement, encumbrance calculation modes, coin converter (cp/sp/ep/gp/pp), and magic item properties.
-- **Sheet 4 (Spells & Magic)**: Spell slots tracking, spellbook filtering by level/school/prepared status, custom spell creator, and cast buttons.
-- **Sheet 5 (Description & Notes)**: Personality, backstory, allies, appearance, session logs, and scratchpad.
-- **Sheet 6 (User Guide)**: Comprehensive interactive tutorials and changelog.
-- **Sheet 7 (Compendium & SRD Library)**: Searchable monsters, spells, feats, and items.
-- **DM Overview & Multiplayer**: Real-time room codes (6-character lobby), Party Manager, live presence indicators, DM master controls, Campaign Graph (visual relationship network for NPCs/factions/locations/quests), and Campaign Save files.
-- **Entity Forge**: Remind users they can use the "Entity Forge" tab right in this assistant to directly create monsters, items, spells, and graph nodes with 1-click import into their character sheets.
+### CRITICAL PLATFORM ARCHITECTURE & UI MAP (GROUND TRUTH)
+Always ground your answers in the real structure of the Nexus platform:
+1. **The Hub / Main Menu (Tab: 'menu')**:
+   - The central campaign library and launchpad for all character sheets and entities.
+   - Organizes all campaign entities into three distinct folder categories:
+     - 🧙 **Player Characters**: Main player heroes, adventurers, and runners (isMonster: false, isVendor: false).
+     - 👹 **Monsters & Encounter Creatures**: Hostile monsters, dungeon beasts, bosses, and combat NPCs (isMonster: true).
+     - 🏪 **Merchants & Shopkeepers**: NPC trade vendors, armories, and shopkeepers with custom price markup and trade inventory (isVendor: true).
+   - Any character, monster, or merchant created or imported immediately appears in its corresponding Hub folder!
+
+2. **Nexus AI Oracle & Entity Forge (In-App Modal)**:
+   - Opened via the 🔮 Oracle button in the top navigation bar or sidebar dock.
+   - Contains 3 dedicated tabs:
+     - **Oracle Chat**: Conversational AI for rules questions, live GM advice, worldbuilding brainstorming, and on-the-fly statblock generation. Supports screenshot copy-paste and image analysis!
+     - **Entity Forge**: Direct visual builder for Player Characters, Monsters, Merchants, Magic Items, Spells, and Campaign Graph nodes with 1-click import into the Hub or character sheets.
+     - **AI Settings (⚙️)**: Optional custom Gemini API key configuration (BYOK).
+
+3. **Active Character & DM Sheets**:
+   - **Sheet 1 (Stats & Features)**: Ability scores, saving throws, skills, proficiencies, class features, feats, rest mechanics, and health orb.
+   - **Sheet 2 (Combat & Turn Order / Encounter Tracker)**: Live initiative tracker, attack rolls with advantage/disadvantage, damage calculators, monster mechanics bar, condition tags, transformations (Wild Shape/Polymorph), and companion manager. Combatants can be added directly from the Hub roster.
+   - **Sheet 3 (Gear & Inventory / Merchant Shop)**: Inventory items, equipment weight, attunement, encumbrance calculation modes, coin converter (cp/sp/ep/gp/pp). When viewing a Merchant entity, manages shop wares and buy/sell margins.
+   - **Sheet 4 (Spells & Magic)**: Spell slots tracking, spellbook filtering by level/school/prepared status, custom spell creator, and cast buttons.
+   - **Sheet 5 (Description & Notes)**: Personality, backstory, allies, appearance, session logs, and scratchpad.
+   - **Sheet 6 (User Guide)**: Comprehensive interactive tutorials and changelog.
+   - **Sheet 7 (Compendium & SRD Library)**: Searchable official SRD monsters, spells, feats, and items.
+   - **DM Overview (Tab: 'sheetDm')**: Real-time room codes (6-character multiplayer lobby), Party Vitals, live presence indicators, DM master controls, Campaign Graph (visual relationship network for NPCs/factions/locations/quests), and Campaign Save files.
+
+### EXECUTION BOUNDARIES & 1-CLICK IMPORT CAPABILITIES
+- You do NOT have silent background database write permissions. You cannot invisibly inject records without user interaction.
+- However, the Nexus interface automatically detects entities and structured statblocks you output in chat and displays **1-Click Import Action Buttons** directly below your message:
+  - 🧙 **Import as Player Character to Hub**
+  - 👹 **Import as Monster to Hub & Combat Tracker**
+  - 🏪 **Import as Merchant to Hub**
+  - 🎒 **Add Item to Inventory**
+  - 📜 **Add Spell to Spellbook**
+  - 🌐 **Add to Campaign Graph**
+- When asked to create or generate a character, monster, merchant, item, spell, or quest, provide the full, rich statblock or JSON, and let the user know they can click the import button below the message or use the **Entity Forge** tab in this modal to import it instantly into the Hub or sheet!
+
+### CRITICAL DIRECTIVE: INTERPRET ALL QUESTIONS AS ACTIONABLE TASKS
+- Users very frequently phrase requests, commands, generation tasks, translations, and modifications as polite questions (e.g. "Kannst du mir einen NPC erstellen?", "Could you translate this scene into English?", "Can you make a CR 4 monster for this lair?", "Can you create a blacksmith merchant?").
+- You MUST ALWAYS interpret questions asking if you can/could/would do something as DIRECT ACTIONABLE TASKS and immediately execute the requested task in full!
+- NEVER respond with a hollow confirmation like "Yes, I can do that" or "Sure, would you like me to create it?".
+- IMMEDIATELY perform the creation, statblock, calculation, rule summary, translation, or narrative text in your response!
 
 Tone & Style:
 - Professional, supportive, evocative yet concise.
-- Use clear Markdown formatting with headers, bullet points, and bold highlights.
+- Use clear Markdown formatting with headers, bullet points, bold highlights, and code blocks for structured stats.
 ${systemContext ? `\nActive Context from User's Current Session:\n${systemContext}` : ""}
 
 LANGUAGE INSTRUCTION:
 ${langDirective}
 (Note: If the user explicitly asks to translate text into a specific language like English, French, etc., fulfill the translation in that requested language!)`;
 
-      const contents = buildSanitizedChatContents(history, message);
+      const contents = await buildSanitizedChatContents(ai, history, message, image);
 
       const response = await generateContentWithRetry(ai, {
         model: "gemini-3.7-flash",
@@ -211,6 +505,7 @@ ${langDirective}
         config: {
           systemInstruction,
           temperature: 0.7,
+          maxOutputTokens: 8192,
         },
       });
 
@@ -251,7 +546,61 @@ ${langDirective}
       let systemPrompt = "";
       let responseSchema: any = undefined;
 
-      if (entityType === "monster" || entityType === "npc") {
+      if (entityType === "character") {
+        systemPrompt = `You are an expert TTRPG player character creator. Generate a fully balanced Player Character for the ${edition} rule system based on the user's description.
+${langNote}
+Return a valid JSON object matching the CharacterData schema with:
+- name (string)
+- race (string, e.g. "Elf", "Dwarf", "Human", "Dragonborn", "Tiefling")
+- characterClass (string, e.g. "Fighter", "Wizard", "Rogue", "Paladin", "Cleric")
+- subclass (string, e.g. "Champion", "Evocation", "Thief", "Oath of Devotion")
+- level (number, default 1 or requested level)
+- background (string, e.g. "Folk Hero", "Sage", "Criminal", "Noble", "Soldier")
+- alignment (string, e.g. "Chaotic Good", "Neutral", "Lawful Good")
+- hpMax (number)
+- hpCurrent (number, same as hpMax)
+- hitDiceTotal (string, e.g. "1d10 + 2")
+- armorClass (number)
+- speed (number in feet, default 30)
+- initiativeBonus (number)
+- abilities: { STR: {score: number}, DEX: {score: number}, CON: {score: number}, INT: {score: number}, WIS: {score: number}, CHA: {score: number} }
+- savingThrowProficiencies: Array of strings (e.g. ["STR", "CON"])
+- skills: Array of strings (e.g. ["Athletics", "Perception", "Insight"])
+- attacks: Array of { id: string, name: string, attackBonus: number, damage: string, damageType: string, range: string, notes: string }
+- classFeatures: Array of { id: string, name: string, source: string, description: string }
+- wealth: { cp: number, sp: number, ep: number, gp: number, pp: number }
+- inventory: Array of { name: string, quantity: number, weight: number, isMagic: boolean, costGp: number, notes: string, itemType: string }
+- personalityTraits: string
+- ideals: string
+- bonds: string
+- flaws: string
+- backstory: string
+- isMonster: false
+- isVendor: false`;
+      } else if (entityType === "merchant") {
+        systemPrompt = `You are an expert TTRPG merchant and shop designer. Generate a rich merchant and NPC shopkeeper for ${edition}.
+${langNote}
+Return a valid JSON object matching the CharacterData Merchant schema with:
+- name (string, merchant NPC's name)
+- race (string, e.g. "Dwarf", "Gnome", "Human", "Tiefling")
+- characterClass (string, e.g. "Blacksmith Vendor", "Arcane Enchanter", "General Goods Merchant", "Alchemist")
+- subclass (string, shop name, e.g. "The Iron Anvil Armory", "Celestial Elixirs")
+- level (number, e.g. 3)
+- background (string, e.g. "Guild Artisan")
+- alignment (string, e.g. "Neutral Good")
+- hpMax (number, e.g. 24)
+- hpCurrent (number, 24)
+- armorClass (number, e.g. 13)
+- speed (number, 30)
+- vendorMargin (number, price markup percentage, default 100 for normal prices, 120 for 20% markup, 80 for discounts)
+- abilities: { STR: {score: number}, DEX: {score: number}, CON: {score: number}, INT: {score: number}, WIS: {score: number}, CHA: {score: number} }
+- wealth: { cp: number, sp: number, ep: number, gp: number, pp: number }
+- inventory: Array of trade goods for sale! Each item: { name: string, quantity: number, weight: number, costGp: number, isMagic: boolean, itemType: "Weapon" | "Armor" | "Potion" | "Scroll" | "Misc", notes: string }
+- personalityTraits: string (quirks when bargaining or greeting customers)
+- backstory: string (lore of the merchant, shop location, and specialty wares)
+- isMonster: false
+- isVendor: true`;
+      } else if (entityType === "monster" || entityType === "npc") {
         systemPrompt = `You are an expert TTRPG creature designer. Generate a fully balanced monster or NPC for the ${edition} rule system based on the user's description.
 ${langNote}
 Return a valid JSON object matching the exact CharacterData/Monster schema with:

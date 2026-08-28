@@ -2,6 +2,7 @@ import React from 'react';
 import { CharacterData } from '../../../types';
 import { getAbilityModifier } from '../../../utils/dndCalculations';
 import { Brain, Sparkles, Dices } from 'lucide-react';
+import { useLanguage } from '../../../i18n/LanguageContext';
 
 const SHORT_TERM_MADNESS_TABLE = [
   "The character retreats into his or her mind and becomes paralyzed until cured or 1d10 minutes pass.",
@@ -44,6 +45,7 @@ export const SanityMadnessPanel: React.FC<SanityMadnessPanelProps> = ({
   onUpdateCharacter,
   onRoll
 }) => {
+  const { t } = useLanguage();
   return (
     <div className="bg-stone-900 border border-emerald-600/50 rounded-2xl p-4 md:p-5 shadow-xl space-y-4">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-800 pb-3">
@@ -166,7 +168,7 @@ export const SanityMadnessPanel: React.FC<SanityMadnessPanelProps> = ({
               }}
               className="px-2 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded text-xs font-semibold border border-stone-700 transition"
             >
-              Reset
+              {t('common.reset', 'Reset')}
             </button>
           </div>
 
@@ -205,7 +207,7 @@ export const SanityMadnessPanel: React.FC<SanityMadnessPanelProps> = ({
               }}
               className="px-3 py-1.5 bg-emerald-900 hover:bg-emerald-800 text-emerald-100 font-bold rounded-lg transition flex items-center gap-1.5 shadow"
             >
-              <Dices className="w-3.5 h-3.5 text-emerald-300" /> Roll Save
+              <Dices className="w-3.5 h-3.5 text-emerald-300" /> {t('savingThrows.title', 'Roll Save')}
             </button>
           </div>
         </div>

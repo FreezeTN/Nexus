@@ -60,6 +60,7 @@ import {
   Dices
 } from 'lucide-react';
 import { getPassivePerception, getEffectiveMaxHp } from '../../utils/dndCalculations';
+import { useLanguage } from '../../i18n/LanguageContext';
 
 interface CampaignRulesSelectorProps {
   rules: OptionalRulesConfig;
@@ -261,6 +262,31 @@ export const CampaignRulesSelector: React.FC<CampaignRulesSelectorProps> = ({
           </div>
         </label>
 
+        <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.disableAutoXpGain || rules.useManualXpMode ? 'border-amber-500 bg-amber-950/30' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
+          <input
+            type="checkbox"
+            disabled={readOnly}
+            checked={!!(rules.disableAutoXpGain || rules.useManualXpMode)}
+            onChange={() => {
+              const current = !(rules.disableAutoXpGain || rules.useManualXpMode);
+              onChangeRules({
+                ...rules,
+                disableAutoXpGain: current,
+                useManualXpMode: current
+              });
+            }}
+            className="accent-amber-500 w-3.5 h-3.5 rounded mt-0.5 shrink-0"
+          />
+          <div>
+            <span className="font-bold text-stone-200 flex items-center gap-1">
+              <Zap className="w-3 h-3 text-amber-400 shrink-0" /> Manual Tabletop EXP (Turn Off Auto-XP)
+            </span>
+            <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+              Disables automatic combat encounter XP grants. For groups tracking XP on physical sheets or custom external systems.
+            </p>
+          </div>
+        </label>
+
         <label className={`flex items-start gap-2 bg-stone-900/90 border ${rules.useDiagonal5105Rules ? 'border-amber-600/60 bg-amber-950/20' : 'border-stone-800'} p-2.5 rounded-lg ${readOnly ? 'opacity-80' : 'cursor-pointer hover:border-amber-600/40'} transition`}>
           <input
             type="checkbox"
@@ -420,6 +446,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
   onOpenAuthModal,
   onLoadCampaignSave
 }) => {
+  const { t } = useLanguage();
   const [tab, setTab] = useState<'current' | 'join' | 'create' | 'saves'>('current');
   const [joinCode, setJoinCode] = useState('');
   const [selectedCharId, setSelectedCharId] = useState(activeCharacter?.id || '');
@@ -821,7 +848,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-serif font-bold text-amber-200">
-                Multiplayer Session Lobby
+                {t('session.title', 'Multiplayer Session Lobby')}
               </h2>
               <p className="text-xs text-stone-400">
                 Sync live character stats, rolls & presence with your DM and party
@@ -850,7 +877,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
               >
                 <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse shrink-0" />
                 <span className="truncate max-w-[150px] sm:max-w-[200px]">
-                  {activeSession ? `Active (${displayCampaignName})` : `Active (${activeSessionCode})`}
+                  {activeSession ? `${t('session.statusActive', 'Active')} (${displayCampaignName})` : `${t('session.statusActive', 'Active')} (${activeSessionCode})`}
                 </span>
               </button>
             )}
@@ -864,7 +891,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
               }`}
             >
               <Key className="w-3.5 h-3.5 shrink-0" />
-              <span>Join Room</span>
+              <span>{t('session.join', 'Join Room')}</span>
             </button>
 
             <button
@@ -876,7 +903,7 @@ export const SessionLobbyModal: React.FC<SessionLobbyModalProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 shrink-0" />
-              <span>Host Campaign (DM)</span>
+              <span>{t('session.create', 'Host Campaign (DM)')}</span>
             </button>
 
             <button
