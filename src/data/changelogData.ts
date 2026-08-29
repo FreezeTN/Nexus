@@ -14,11 +14,36 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.2.0',
+    date: 'August 2026',
+    title: 'DM Ambience Broadcaster, Persistent Background Audio Engine & Direct Supporter Checkout',
+    badge: 'Latest Update',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🎙️ DM Overview Ambience & Music Broadcaster',
+        detail: 'Relocated the live YouTube & Spotify campaign music broadcasting studio directly into the DM Overview tab (Sheet 7) for immediate Dungeon Master control with 1-click curated atmosphere presets (Tavern, Combat, Exploration, Dungeon) and custom playlist integration.'
+      },
+      {
+        category: '🎵 Non-Stop Persistent Campaign Background Audio',
+        detail: 'Engineered a root-level persistent audio stream player. Ambient campaign soundtracks and YouTube/Spotify streams now continue playing seamlessly across character sheet swaps, tab navigation, and modal interactions without pausing or restarting.'
+      },
+      {
+        category: '🎛️ Streamlined Sound & SFX Synthesizer Settings',
+        detail: 'Refactored the Sound Options tab in Settings to focus exclusively on master volume controls, individual mute toggles, and Web Audio synthesizers (dice clatter, hits, criticals, elemental bursts, level-up fanfares, and healing chords).'
+      },
+      {
+        category: '💳 Direct PayPal.me Supporter Integration',
+        detail: 'Upgraded supporter tier checkout modals and contribution buttons with direct paypal.me/nexustrpg links and pre-filled amount presets for Hero ($3.99/mo) and Guild Master ($8.99/mo) subscriptions.'
+      }
+    ]
+  },
+  {
     version: 'v5.1.0',
     date: 'August 2026',
     title: 'Interactive UX Suite: Attunement Toggles, Prepared Filter, Stat Breakdowns & Rest Audio',
-    badge: 'Latest Update',
-    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    badge: 'Feature Release',
+    badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
     highlights: [
       {
         category: '🔮 Attunement Quick-Action Toggle & Limit Safeguards',
