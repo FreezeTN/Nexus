@@ -9,6 +9,11 @@ import {
   logoutUser, 
   updateUserRole 
 } from '../../lib/firebase';
+import {
+  TIER_CONFIGS,
+  isDeveloperUser,
+  getEffectiveUserTier
+} from '../../lib/subscription';
 import { 
   User, 
   Shield, 
@@ -22,6 +27,7 @@ import {
   AlertCircle, 
   Cloud, 
   RefreshCw,
+  Zap,
   X
 } from 'lucide-react';
 
@@ -30,13 +36,15 @@ interface AuthModalProps {
   onClose: () => void;
   currentUser: UserProfile | null;
   onUserChange: (user: UserProfile | null) => void;
+  onOpenUpgradeModal?: () => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   currentUser,
-  onUserChange
+  onUserChange,
+  onOpenUpgradeModal
 }) => {
   const [tab, setTab] = useState<'signin' | 'signup' | 'guest'>('signin');
   const [email, setEmail] = useState('');
@@ -236,7 +244,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <div className="space-y-6">
               
               {/* Profile Card */}
-              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-slate-800/60 border border-slate-700/60 flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-lg text-white shadow-md">
                     {currentUser.displayName.charAt(0).toUpperCase()}
@@ -246,12 +254,37 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <p className="text-xs text-slate-400 truncate max-w-[180px]">
                       {currentUser.email || 'Guest User'}
                     </p>
-                    <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                      <Cloud className="w-3 h-3 text-indigo-400" />
-                      <span>Cloud Sync Active</span>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        <Cloud className="w-3 h-3 text-indigo-400" />
+                        <span>Cloud Sync Active</span>
+                      </div>
+                      {(() => {
+                        const effectiveTier = isDeveloperUser(currentUser) ? 'developer' : getEffectiveUserTier(currentUser);
+                        const cfg = TIER_CONFIGS[effectiveTier] || TIER_CONFIGS.free;
+                        return (
+                          <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold border ${cfg.badgeColor}`}>
+                            <span>{cfg.badge}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   </div>
                 </div>
+
+                {onOpenUpgradeModal && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenUpgradeModal();
+                    }}
+                    className="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-lg text-xs transition shadow flex items-center gap-1"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>{isDeveloperUser(currentUser) ? 'Tier Perks' : 'Manage Tier'}</span>
+                  </button>
+                )}
               </div>
 
               {/* Role Configuration */}

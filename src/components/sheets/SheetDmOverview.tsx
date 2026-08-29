@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 
 import { KnowledgeGraphCard, KnowledgeEntity } from '../common/KnowledgeGraphCard';
+import { DmAmbienceBroadcastStudio } from './DmAmbienceBroadcastStudio';
 
 interface SheetDmOverviewProps {
   activeSession: GameSession;
@@ -41,6 +42,7 @@ interface SheetDmOverviewProps {
   currentUser: UserProfile | null;
   onUpdateCharacter: (updated: CharacterData) => void;
   onDetach?: () => void;
+  onOpenUpgradeModal?: (reason?: string, tier?: 'hero' | 'guild') => void;
 }
 
 const COMMON_CONDITIONS = [
@@ -66,7 +68,8 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
   allCharacters,
   currentUser,
   onUpdateCharacter,
-  onDetach
+  onDetach,
+  onOpenUpgradeModal
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [quickAmountMap, setQuickAmountMap] = useState<Record<string, string>>({});
@@ -289,6 +292,13 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Campaign Ambience & Music Broadcast Studio */}
+      <DmAmbienceBroadcastStudio
+        activeSession={activeSession}
+        currentUser={currentUser}
+        onOpenUpgradeModal={onOpenUpgradeModal}
+      />
 
       {/* Main Character Cards Grid */}
       {sessionCharacters.length === 0 ? (

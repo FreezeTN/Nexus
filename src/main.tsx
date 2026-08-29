@@ -34,13 +34,22 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import { LanguageProvider } from './i18n/LanguageContext';
+import { UiModeProvider } from './context/UiModeContext';
+import { ModalProvider } from './context/ModalContext';
+import { HotkeyProvider } from './context/HotkeyContext';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
       <LanguageProvider>
-        <App />
+        <UiModeProvider>
+          <ModalProvider>
+            <HotkeyProvider>
+              <App />
+            </HotkeyProvider>
+          </ModalProvider>
+        </UiModeProvider>
       </LanguageProvider>
     </ErrorBoundary>
   </StrictMode>,

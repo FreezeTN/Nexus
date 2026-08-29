@@ -33,6 +33,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { CharacterData, OptionalRulesConfig, CampaignSaveFile } from '../types';
 
 export type UserRole = 'Player' | 'DM';
+export type SubscriptionTier = 'free' | 'hero' | 'guild' | 'developer';
 
 export interface UserProfile {
   uid: string;
@@ -40,6 +41,11 @@ export interface UserProfile {
   displayName: string;
   role: UserRole;
   photoURL?: string;
+  tier?: SubscriptionTier;
+  tierExpiresAt?: string;
+  paypalTxId?: string;
+  paypalEmail?: string;
+  isLifetime?: boolean;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -191,13 +197,24 @@ export async function createOrUpdateUserProfile(
   const existing = await getUserProfile(user.uid);
   
   const displayName = customDisplayName || user.displayName || user.email?.split('@')[0] || 'Adventurer';
-  
+  const normName = displayName.toLowerCase().trim();
+  const normEmail = (user.email || '').toLowerCase().trim();
+
+  // Automatic Lead Developer Detection for ChaosDwarf and Freeze
+  const isLeadDev = normName === 'chaosdwarf' || normName === 'freeze' || normEmail === 'nik04@hotmail.de' || normEmail === 'tomnik2007@gmail.com';
+  const initialTier: SubscriptionTier = isLeadDev ? 'developer' : (existing?.tier || 'free');
+
   const profileData: UserProfile = {
     uid: user.uid,
     email: user.email,
     displayName: displayName,
     role: existing?.role || role,
     photoURL: user.photoURL || undefined,
+    tier: initialTier,
+    tierExpiresAt: existing?.tierExpiresAt,
+    paypalTxId: existing?.paypalTxId,
+    paypalEmail: existing?.paypalEmail,
+    isLifetime: isLeadDev || existing?.isLifetime,
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -208,6 +225,32 @@ export async function createOrUpdateUserProfile(
     console.warn('Could not save user profile to Firestore:', err);
   }
   return profileData;
+}
+
+/**
+ * Update user subscription tier in Firestore
+ */
+export async function updateUserSubscriptionTier(
+  uid: string,
+  tier: SubscriptionTier,
+  details?: { paypalTxId?: string; paypalEmail?: string; isLifetime?: boolean; tierExpiresAt?: string }
+): Promise<void> {
+  if (!uid || uid.startsWith('guest_')) {
+    return;
+  }
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    await updateDoc(userDocRef, sanitizeForFirestore({
+      tier,
+      paypalTxId: details?.paypalTxId,
+      paypalEmail: details?.paypalEmail,
+      isLifetime: details?.isLifetime,
+      tierExpiresAt: details?.tierExpiresAt,
+      updatedAt: new Date().toISOString()
+    }));
+  } catch (err) {
+    console.warn('Could not update user subscription tier in Firestore:', err);
+  }
 }
 
 /**
@@ -322,11 +365,15 @@ export async function signInAsGuest(role: UserRole = 'Player', displayName: stri
   }
 
   // Unconditional fallback for guest mode so it never errors
+  const normGuestName = (displayName || '').toLowerCase().trim();
+  const isDevGuest = normGuestName === 'chaosdwarf' || normGuestName === 'freeze';
   const localGuestProfile: UserProfile = {
     uid: 'guest_' + Math.random().toString(36).substring(2, 9),
     email: null,
     displayName: displayName || 'Guest Adventurer',
     role: role,
+    tier: isDevGuest ? 'developer' : 'free',
+    isLifetime: isDevGuest,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -713,6 +760,21 @@ export interface SessionMember {
   isUnassignedParticipant?: boolean;
 }
 
+export interface ActiveAmbienceState {
+  streamId?: string;
+  title?: string;
+  url?: string;
+  sourceType?: 'youtube' | 'spotify' | 'audio_url';
+  embedUrl?: string;
+  trackId?: string;
+  isPlaying: boolean;
+  category?: string;
+  intensity?: 'calm' | 'medium' | 'high';
+  presetName?: string;
+  changedBy?: string;
+  updatedAt?: string;
+}
+
 export interface GameSession {
   id: string;
   code: string; // 6-digit room code, e.g. "DRAGON" or "7K9M3P"
@@ -723,6 +785,7 @@ export interface GameSession {
   members: SessionMember[];
   activeCharacterIds: string[];
   optionalRules?: OptionalRulesConfig; // DM-enforced campaign optional rules for all participants
+  activeAmbience?: ActiveAmbienceState; // Synced ambient soundscape state across all party members
   createdAt: string;
   updatedAt: string;
 }
@@ -807,6 +870,21 @@ export async function updateSessionOptionalRules(
   const sessionRef = doc(db, 'sessions', normalizedCode);
   await updateDoc(sessionRef, {
     optionalRules,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Update DM ambient soundscape for a campaign session to sync to all players
+ */
+export async function updateSessionAmbience(
+  sessionCode: string,
+  activeAmbience: ActiveAmbienceState
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  await updateDoc(sessionRef, {
+    activeAmbience: sanitizeForFirestore(activeAmbience),
     updatedAt: new Date().toISOString()
   });
 }

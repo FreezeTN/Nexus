@@ -18,6 +18,7 @@ import { SkillsPanel } from './sheet1/SkillsPanel';
 import { ClassFeaturesPanel } from './sheet1/ClassFeaturesPanel';
 import { FeatsPanel } from './sheet1/FeatsPanel';
 import { useLayoutCustomization } from '../../utils/layoutCustomization';
+import { useUiMode } from '../../context/UiModeContext';
 import { EmptyLayoutState } from '../common/EmptyLayoutState';
 
 interface Sheet1Props {
@@ -45,6 +46,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   const [showHybridHeritageModal, setShowHybridHeritageModal] = useState(false);
 
   const { isVisible } = useLayoutCustomization();
+  const { uiMode } = useUiMode();
   const isDmRole = currentUser?.role === 'DM';
 
   // Check if at least one panel on Sheet 1 is visible
@@ -67,8 +69,8 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Pinned Workspace Customizer Dashboard */}
-      {isVisible('s1_workspace') && (
+      {/* Pinned Workspace Customizer Dashboard (Master Mode) */}
+      {uiMode === 'master' && isVisible('s1_workspace') && (
         <WorkspaceCustomizer
           character={character}
           onNavigateTab={(tab) => {

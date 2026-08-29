@@ -15,8 +15,6 @@ import { Sheet5DescriptionNotes } from './components/sheets/Sheet5DescriptionNot
 import { Sheet6UserGuide } from './components/sheets/Sheet6UserGuide';
 import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
 import { SheetDmOverview } from './components/sheets/SheetDmOverview';
-import { BattlemapSandbox } from './components/battlemap/BattlemapSandbox';
-import { TacticalActionDock } from './components/combat/TacticalActionDock';
 import { LevelUpWizardModal } from './components/modals/LevelUpWizardModal';
 import { DetachedHeaderBanner } from './components/common/DetachedHeaderBanner';
 import {
@@ -29,10 +27,14 @@ import { MainMenu } from './components/MainMenu';
 import { NewCharacterModal } from './components/modals/NewCharacterModal';
 import { AuthModal } from './components/modals/AuthModal';
 import { CommandPaletteModal } from './components/common/CommandPaletteModal';
+import { GuidedTourModal } from './components/common/GuidedTourModal';
 import { PartyVoiceWidget } from './components/voice/PartyVoiceWidget';
+import { PersistentAmbiencePlayer } from './components/audio/PersistentAmbiencePlayer';
 import { eventBus } from './events/eventBus';
 import { useHistoryState } from './utils/useHistoryState';
 import { formatModifier, recalculateCharacterAC, isCharacterDead } from './utils/dndCalculations';
+import { useHotkeys } from './context/HotkeyContext';
+import { useUiMode } from './context/UiModeContext';
 import { Crown } from 'lucide-react';
 
 // Direct Modal Component Imports
@@ -46,6 +48,12 @@ import { PartyManagerModal } from './components/modals/PartyManagerModal';
 import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorModal';
 import { AiAssistantModal } from './components/modals/AiAssistantModal';
 import { PhysicalDiceModal, PhysicalRollRequest } from './components/modals/PhysicalDiceModal';
+import { UpgradeModal } from './components/modals/UpgradeModal';
+import { GlobalUpgradeModal } from './components/modals/GlobalUpgradeModal';
+import { GlobalDiceOverlay } from './components/dice/GlobalDiceOverlay';
+import { ThemeProvider } from './context/ThemeContext';
+import { SubscriptionProvider } from './context/SubscriptionContext';
+import { isDeveloperUser, getEffectiveUserTier, TIER_CONFIGS, SubscriptionTier } from './lib/subscription';
 import { 
   auth, 
   onAuthStateChanged,
@@ -80,10 +88,6 @@ const normalizeTabId = (tab: string): TabId => {
     case 'encounter':
     case 'sheet2':
       return 'sheet2';
-    case 'battlemap':
-    case 'map':
-    case 'sheetBattlemap':
-      return 'sheetBattlemap';
     case 'gear':
     case 'inventory':
     case 'sheet3':
@@ -150,6 +154,9 @@ export default function App() {
   const [showVoiceModal, setShowVoiceModal] = useState<boolean>(false);
   const [showLevelUpWizard, setShowLevelUpWizard] = useState<boolean>(false);
 
+  const { matchesHotkey } = useHotkeys();
+  const { toggleUiMode, startTour } = useUiMode();
+
   // Global listener for opening AI Assistant
   useEffect(() => {
     const handleOpenAi = () => {
@@ -169,18 +176,6 @@ export default function App() {
     };
     window.addEventListener('penpaper_open_campaign_graph', handleOpenGraph);
     return () => window.removeEventListener('penpaper_open_campaign_graph', handleOpenGraph);
-  }, []);
-
-  // Global Ctrl+K / Cmd+K listener for Command Palette
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setShowCommandPalette(prev => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   // Global listener for custom navigation events (e.g. WorkspaceCustomizer dashboard widgets)
@@ -267,6 +262,17 @@ export default function App() {
   const [showPartyModal, setShowPartyModal] = useState(false);
   const [newCharCategory, setNewCharCategory] = useState<'character' | 'monster' | 'vendor'>('character');
   const [previewTheme, setPreviewTheme] = useState<RuleEdition | null>(null);
+
+  // Upgrade / Supporter Modal State
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalReason, setUpgradeModalReason] = useState<string | undefined>(undefined);
+  const [upgradeModalRequiredTier, setUpgradeModalRequiredTier] = useState<SubscriptionTier | undefined>(undefined);
+
+  const handleOpenUpgradeModal = (reason?: string, requiredTier?: SubscriptionTier) => {
+    setUpgradeModalReason(reason);
+    setUpgradeModalRequiredTier(requiredTier);
+    setShowUpgradeModal(true);
+  };
 
   // Session Lobby & Room Code State
   const [activeSessionCode, setActiveSessionCode] = useState<string | null>(() => {
@@ -371,6 +377,20 @@ export default function App() {
       setShowAuthModal(true);
       return;
     }
+
+    // Check tier character limit (Developer bypasses all limits)
+    const isDev = isDeveloperUser(currentUser);
+    const tier = isDev ? 'developer' : getEffectiveUserTier(currentUser);
+    const tierConfig = TIER_CONFIGS[tier] || TIER_CONFIGS.free;
+
+    if (!isDev && tierConfig.characterLimit !== -1 && characters.length >= tierConfig.characterLimit) {
+      handleOpenUpgradeModal(
+        `You have reached the maximum character limit (${tierConfig.characterLimit} slots) for your current ${tierConfig.name} tier. Upgrade to Hero for Unlimited Character Slots!`,
+        'hero'
+      );
+      return;
+    }
+
     setNewCharCategory(category);
     setShowNewCharacterModal(true);
   };
@@ -819,6 +839,111 @@ export default function App() {
     }
   }, [activeSession?.optionalRules?.usePhysicalDiceMode]);
 
+  // Global hotkeys (customizable via Options > Hotkeys)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Command Palette (works even if in input if Ctrl/Cmd modifier is bound)
+      if (matchesHotkey(e, 'commandPalette')) {
+        e.preventDefault();
+        setShowCommandPalette(prev => !prev);
+        return;
+      }
+
+      // If user is currently typing in an input, textarea, or contentEditable element, ignore single key shortcuts
+      const activeEl = document.activeElement;
+      const isInputActive =
+        activeEl &&
+        (activeEl.tagName === 'INPUT' ||
+          activeEl.tagName === 'TEXTAREA' ||
+          activeEl.tagName === 'SELECT' ||
+          (activeEl as HTMLElement).isContentEditable);
+
+      if (isInputActive) {
+        return;
+      }
+
+      // Sheet tab switches
+      if (matchesHotkey(e, 'switchSheet1')) {
+        e.preventDefault();
+        setActiveTab('sheet1');
+        return;
+      }
+      if (matchesHotkey(e, 'switchSheet2')) {
+        e.preventDefault();
+        setActiveTab('sheet2');
+        return;
+      }
+      if (matchesHotkey(e, 'switchSheet3')) {
+        e.preventDefault();
+        setActiveTab('sheet3');
+        return;
+      }
+      if (matchesHotkey(e, 'switchSheet4')) {
+        e.preventDefault();
+        setActiveTab('sheet4');
+        return;
+      }
+      if (matchesHotkey(e, 'switchSheet5')) {
+        e.preventDefault();
+        setActiveTab('sheet5');
+        return;
+      }
+      if (matchesHotkey(e, 'switchSheet6')) {
+        e.preventDefault();
+        setActiveTab('sheet6');
+        return;
+      }
+      if (matchesHotkey(e, 'switchSheet7')) {
+        e.preventDefault();
+        setActiveTab('sheet7');
+        return;
+      }
+      if (matchesHotkey(e, 'switchSheetDm')) {
+        e.preventDefault();
+        setActiveTab('sheetDm');
+        return;
+      }
+
+      // Cycle TRPG systems
+      if (matchesHotkey(e, 'cycleSystem')) {
+        e.preventDefault();
+        const systems: RuleEdition[] =
+          enabledSystems && enabledSystems.length > 0
+            ? enabledSystems
+            : ['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu'];
+        const currentIndex = systems.indexOf(currentSystemTheme);
+        const nextIndex = (currentIndex + 1) % systems.length;
+        const nextSystem = systems[nextIndex];
+        handleSystemChange(nextSystem);
+        return;
+      }
+
+      // Toggle Focus vs Master Mode
+      if (matchesHotkey(e, 'toggleFocusMode')) {
+        e.preventDefault();
+        toggleUiMode();
+        return;
+      }
+
+      // Open Guided Tour
+      if (matchesHotkey(e, 'openTour')) {
+        e.preventDefault();
+        startTour();
+        return;
+      }
+
+      // Open Options Modal
+      if (matchesHotkey(e, 'openOptions')) {
+        e.preventDefault();
+        setShowAudioModal(prev => !prev);
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [matchesHotkey, enabledSystems, currentSystemTheme, characters, toggleUiMode, startTour]);
+
   // Execute and record a completed roll result (shared by digital and physical workflows)
   const executeRollResult = (
     label: string,
@@ -974,6 +1099,7 @@ export default function App() {
                 currentUser={currentUser}
                 onUpdateCharacter={handleUpdateCharacter}
                 onDetach={() => handleDetachTab('sheetDm')}
+                onOpenUpgradeModal={handleOpenUpgradeModal}
               />
             ) : (
               <div className="bg-stone-900 border border-stone-800 rounded-2xl p-6 text-center space-y-3">
@@ -1081,7 +1207,7 @@ export default function App() {
     );
   }
 
-  return (
+  const appContent = (
     <div className="min-h-screen bg-stone-950 text-stone-100 font-sans selection:bg-amber-600 selection:text-stone-950 transition-colors duration-300" data-theme={currentSystemTheme}>
       {/* Top DM Active Banner Indicator */}
       {activeCharacter && presenceMap[activeCharacter.id]?.dmActive && activeTab !== 'menu' && (
@@ -1227,14 +1353,6 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'sheetBattlemap' && activeCharacter && (
-          <BattlemapSandbox
-            activeCharacter={activeCharacter}
-            partyMembers={characters}
-            onRoll={handleRoll}
-          />
-        )}
-
         {activeTab === 'sheet3' && activeCharacter && (
           <Sheet3GearWealth
             character={activeCharacter}
@@ -1289,6 +1407,7 @@ export default function App() {
             currentUser={currentUser}
             onUpdateCharacter={handleUpdateCharacter}
             onDetach={() => handleDetachTab('sheetDm')}
+            onOpenUpgradeModal={handleOpenUpgradeModal}
           />
         )}
       </main>
@@ -1304,16 +1423,8 @@ export default function App() {
         onOpenAudioModal={() => setShowAudioModal(true)}
         isPhysicalDiceMode={isPhysicalDiceMode}
         onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
+        onOpenUpgradeModal={handleOpenUpgradeModal}
       />
-
-      {/* Floating Tactical Action HUD & Quick-Cast Dock */}
-      {activeCharacter && activeTab !== 'menu' && (
-        <TacticalActionDock
-          character={activeCharacter}
-          onUpdateCharacter={handleUpdateCharacter}
-          onRoll={handleRoll}
-        />
-      )}
 
       {/* Level-Up Progression Wizard Modal */}
       {showLevelUpWizard && activeCharacter && (
@@ -1342,6 +1453,9 @@ export default function App() {
           enabledSystems={enabledSystems}
         />
       )}
+
+      {/* Guided Onboarding Tour Modal */}
+      <GuidedTourModal />
 
       {/* Global Command Palette (Ctrl+K / Cmd+K) */}
       <CommandPaletteModal
@@ -1426,11 +1540,13 @@ export default function App() {
             isOpen={showAudioModal}
             onClose={() => setShowAudioModal(false)}
             currentUser={currentUser}
+            activeSession={activeSession}
             activeCharacter={activeCharacter}
             onUpdateCharacter={handleUpdateCharacter}
             onSystemChange={handleSystemChange}
             onExportJson={handleExportJson}
             onImportJson={handleImportJson}
+            onOpenAuthModal={() => setShowAuthModal(true)}
           />
         )}
 
@@ -1510,7 +1626,40 @@ export default function App() {
           isOpenModal={showVoiceModal}
           onCloseModal={() => setShowVoiceModal(false)}
         />
+
+        {/* Global Persistent Campaign Ambience Player (Continues playing across sheet/tab swaps) */}
+        <PersistentAmbiencePlayer
+          activeSession={activeSession}
+          currentUser={currentUser}
+        />
+
+        {/* Supporter Tier Upgrade & PayPal Checkout Modal */}
+        <UpgradeModal
+          isOpen={showUpgradeModal}
+          onClose={() => setShowUpgradeModal(false)}
+          defaultTier={upgradeModalRequiredTier}
+          reason={upgradeModalReason}
+        />
       </Suspense>
     </div>
+  );
+
+  return (
+    <SubscriptionProvider currentUser={currentUser} onUserUpdate={setCurrentUser}>
+      <ThemeProvider>
+        {appContent}
+
+        {/* Center-Screen 3D Animated Dice Roll Overlay for all Rolls (Combat, Spells, Skills, Weapons, etc.) */}
+        <GlobalDiceOverlay
+          rollResult={activeRollResult}
+          onDismiss={() => setActiveRollResult(null)}
+          displayDurationMs={5000}
+        />
+
+        <Suspense fallback={null}>
+          <GlobalUpgradeModal onOpenAuthModal={() => setShowAuthModal(true)} />
+        </Suspense>
+      </ThemeProvider>
+    </SubscriptionProvider>
   );
 }

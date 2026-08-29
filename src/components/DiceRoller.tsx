@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { DiceRollResult } from '../types';
-import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX } from 'lucide-react';
+import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX, Palette, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playDiceSound, isDiceSoundEnabled, setDiceSoundEnabled } from '../utils/diceAudio';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useSubscription } from '../context/SubscriptionContext';
+import { DiceSkin, DICE_SKINS } from './dice/diceSkins';
 
 interface DiceRollerProps {
   rollLogs: DiceRollResult[];
@@ -13,6 +15,7 @@ interface DiceRollerProps {
   onOpenAudioModal?: () => void;
   isPhysicalDiceMode?: boolean;
   onTogglePhysicalDiceMode?: () => void;
+  onOpenUpgradeModal?: (reason?: string, requiredTier?: 'hero' | 'guild') => void;
 }
 
 export const DiceRoller: React.FC<DiceRollerProps> = ({
@@ -22,9 +25,11 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   activeRollResult,
   onOpenAudioModal,
   isPhysicalDiceMode = false,
-  onTogglePhysicalDiceMode
+  onTogglePhysicalDiceMode,
+  onOpenUpgradeModal
 }) => {
   const { t } = useLanguage();
+  const { isHero, isGuild, isDeveloper, openUpgradeModal } = useSubscription();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedDie, setSelectedDie] = useState<number>(20);
   const [diceCount, setDiceCount] = useState<number>(1);
@@ -32,8 +37,57 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   const [rollMode, setRollMode] = useState<'normal' | 'advantage' | 'disadvantage'>('normal');
   const [customLabel, setCustomLabel] = useState<string>(t('dice.customRoll', 'Custom Roll'));
   const [soundOn, setSoundOn] = useState<boolean>(isDiceSoundEnabled());
+  const [isRollingAnimation, setIsRollingAnimation] = useState(false);
+  const [currentAnimatedRolls, setCurrentAnimatedRolls] = useState<number[]>([20]);
+  const [activeSkin, setActiveSkin] = useState<string>(() => {
+    try {
+      return localStorage.getItem('nexus_dice_skin') || 'standard';
+    } catch {
+      return 'standard';
+    }
+  });
+  const [showSkinPicker, setShowSkinPicker] = useState(false);
+
+  // Sync external roll results
+  React.useEffect(() => {
+    if (activeRollResult && activeRollResult.diceRolls && activeRollResult.diceRolls.length > 0) {
+      setCurrentAnimatedRolls(activeRollResult.diceRolls);
+      setIsRollingAnimation(true);
+    }
+  }, [activeRollResult]);
 
   const diceTypes = [4, 6, 8, 10, 12, 20, 100];
+
+  const handleSelectSkin = (skin: DiceSkin) => {
+    // Lead developers bypass all locks
+    if (!isDeveloper) {
+      if (skin.requiredTier === 'guild' && !isGuild) {
+        const msg = `The "${skin.name}" cosmetic dice theme requires the Guild Master Supporter tier.`;
+        if (onOpenUpgradeModal) {
+          onOpenUpgradeModal(msg, 'guild');
+        } else {
+          openUpgradeModal(msg, 'guild');
+        }
+        return;
+      }
+      if (skin.requiredTier === 'hero' && !isHero) {
+        const msg = `The "${skin.name}" cosmetic dice theme requires the Hero Supporter tier.`;
+        if (onOpenUpgradeModal) {
+          onOpenUpgradeModal(msg, 'hero');
+        } else {
+          openUpgradeModal(msg, 'hero');
+        }
+        return;
+      }
+    }
+
+    setActiveSkin(skin.id);
+    try {
+      localStorage.setItem('nexus_dice_skin', skin.id);
+    } catch {}
+  };
+
+  const currentSkin = DICE_SKINS.find(s => s.id === activeSkin) || DICE_SKINS[0];
 
   const handleToggleSound = () => {
     const next = !soundOn;
@@ -44,6 +98,16 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
 
   const handleQuickRoll = (d: number) => {
     playDiceSound();
+    
+    // Generate animated visual dice simulation
+    const simulatedRolls: number[] = [];
+    const countToRoll = d === 20 && rollMode !== 'normal' ? 2 : diceCount;
+    for (let i = 0; i < countToRoll; i++) {
+      simulatedRolls.push(Math.floor(Math.random() * d) + 1);
+    }
+    setCurrentAnimatedRolls(simulatedRolls);
+    setIsRollingAnimation(true);
+
     onRoll(customLabel || `d${d} ${t('dice.roll', 'Roll')}`, d, diceCount, customModifier, d === 20 ? rollMode : 'normal');
   };
 
@@ -91,31 +155,45 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            className="bg-stone-900 border border-amber-600/40 rounded-2xl shadow-2xl p-4 w-80 md:w-96 text-stone-100 backdrop-blur-lg flex flex-col gap-3"
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="bg-stone-900 border-2 border-amber-600/60 rounded-2xl p-4 shadow-2xl w-80 sm:w-96 text-stone-200 flex flex-col gap-3 backdrop-blur-md"
           >
+            {/* Header / Skin & Sound Controls */}
             <div className="flex items-center justify-between border-b border-stone-800 pb-2">
-              <div className="flex items-center gap-2 text-amber-400 font-semibold font-serif">
+              <div className="flex items-center gap-2 font-serif font-bold text-amber-400">
                 <Dices className="w-5 h-5 text-amber-500" />
-                <span>{isPhysicalDiceMode ? t('dice.physicalMode', 'Physical Tabletop Mode') : t('dice.interactiveTitle', 'Interactive Dice Roller')}</span>
+                <span>{t('dice.diceTray', 'Dice Tray')}</span>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 {onTogglePhysicalDiceMode && (
                   <button
                     onClick={onTogglePhysicalDiceMode}
-                    className={`px-2 py-1 rounded-lg border text-[10px] font-mono font-bold transition flex items-center gap-1 cursor-pointer ${
+                    className={`p-1.5 rounded-lg border transition text-xs flex items-center gap-1 ${
                       isPhysicalDiceMode
-                        ? 'bg-amber-500 text-stone-950 border-amber-400 shadow'
-                        : 'bg-stone-800 text-stone-300 border-stone-700 hover:text-amber-300'
+                        ? 'bg-amber-900/80 text-amber-300 border-amber-600/50 hover:bg-amber-800'
+                        : 'bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200'
                     }`}
-                    title={isPhysicalDiceMode ? 'Physical Dice Mode is Active' : 'Switch to Physical Dice Mode'}
+                    title={isPhysicalDiceMode ? 'Switch to Virtual Dice' : 'Switch to Tabletop Physical Dice Mode'}
                   >
-                    <Dices className="w-3 h-3" />
-                    <span>{isPhysicalDiceMode ? t('dice.physical', 'Physical') : t('dice.digital', 'Digital')}</span>
+                    <span className="text-[10px] font-mono font-bold">
+                      {isPhysicalDiceMode ? '🎲 Virtual' : '🖐️ Physical'}
+                    </span>
                   </button>
                 )}
+                {/* Dice Cosmetic Skins Picker Button */}
+                <button
+                  onClick={() => setShowSkinPicker(!showSkinPicker)}
+                  className={`p-1.5 rounded-lg border transition text-xs flex items-center gap-1 ${
+                    showSkinPicker
+                      ? 'bg-purple-950/90 text-purple-300 border-purple-500/80 hover:bg-purple-900 shadow-md'
+                      : 'bg-stone-800 text-stone-400 border-stone-700 hover:text-purple-300'
+                  }`}
+                  title="Dice Skins & Aesthetics"
+                >
+                  <Palette className="w-4 h-4 text-purple-400" />
+                </button>
                 <button
                   onClick={handleToggleSound}
                   className={`p-1.5 rounded-lg border transition text-xs flex items-center gap-1 ${
@@ -123,10 +201,9 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                       ? 'bg-amber-950/80 text-amber-300 border-amber-600/50 hover:bg-amber-900'
                       : 'bg-stone-800 text-stone-400 border-stone-700 hover:text-stone-200'
                   }`}
-                  title={isDiceSoundEnabled() ? 'Sound ON' : 'Sound OFF'}
+                  title={isDiceSoundEnabled() ? 'Mute Roll Sound FX' : 'Enable Roll Sound FX'}
                 >
                   {isDiceSoundEnabled() ? <Volume2 className="w-4 h-4 text-amber-400" /> : <VolumeX className="w-4 h-4 text-stone-500" />}
-                  <span className="text-[10px] font-mono">{isDiceSoundEnabled() ? 'ON' : 'OFF'}</span>
                 </button>
                 {onOpenAudioModal && (
                   <button
@@ -145,6 +222,58 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* Dice Skin Selector Drawer */}
+            {showSkinPicker && (
+              <div className="bg-stone-950/90 border border-purple-500/40 rounded-xl p-2.5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-purple-300 flex items-center gap-1.5">
+                    <Palette className="w-3.5 h-3.5" />
+                    <span>Cosmetic Dice Materials</span>
+                  </span>
+                  <span className="text-[10px] text-stone-400 font-mono">
+                    Active: <strong className="text-amber-300">{currentSkin.name}</strong>
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  {DICE_SKINS.map((skin) => {
+                    const isLocked = !isDeveloper && (
+                      (skin.requiredTier === 'guild' && !isGuild) ||
+                      (skin.requiredTier === 'hero' && !isHero)
+                    );
+                    const isSelected = activeSkin === skin.id;
+
+                    return (
+                      <button
+                        key={skin.id}
+                        type="button"
+                        onClick={() => handleSelectSkin(skin)}
+                        className={`p-2 rounded-lg border text-left text-xs transition flex flex-col justify-between relative overflow-hidden bg-gradient-to-br cursor-pointer ${skin.previewBg} ${
+                          isSelected
+                            ? 'border-amber-400 ring-2 ring-amber-500/50 shadow-md scale-102'
+                            : 'border-stone-700/80 hover:border-stone-500 hover:scale-101'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className={`font-bold text-[11px] truncate ${skin.textColor}`}>
+                            {skin.name}
+                          </span>
+                          {isLocked && (
+                            <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0 drop-shadow" />
+                          )}
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[9px] font-mono text-stone-300">
+                          <span className="uppercase">
+                            {skin.requiredTier === 'free' ? 'Standard' : skin.requiredTier}
+                          </span>
+                          {isSelected && <span className="text-emerald-400 font-bold">● Active</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Mode Banner if Physical Dice Mode is Active */}
             {isPhysicalDiceMode && (
@@ -249,7 +378,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
             {/* Roll Trigger Button */}
             <button
               onClick={() => handleQuickRoll(selectedDie)}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg border border-amber-400/30 flex items-center justify-center gap-2 text-sm transition transform active:scale-98"
+              className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg border border-amber-400/30 flex items-center justify-center gap-2 text-sm transition transform active:scale-98 cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
               <span>{t('dice.roll', 'Roll')} {diceCount}d{selectedDie} {customModifier >= 0 ? `+${customModifier}` : customModifier}</span>

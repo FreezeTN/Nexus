@@ -45,6 +45,20 @@
         "savedAt": { "type": "string" },
         "edition": { "type": "string" }
       }
+    },
+    "Session": {
+      "collection": "sessions",
+      "fields": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "dmUid": { "type": "string" },
+        "dmName": { "type": "string" },
+        "status": { "type": "string" },
+        "activeAmbience": { "type": "map" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      }
     }
   },
   "securityIntents": [

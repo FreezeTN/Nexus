@@ -61,6 +61,8 @@ import {
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useUiMode } from '../context/UiModeContext';
+import { TIER_CONFIGS, isDeveloperUser, getEffectiveUserTier } from '../lib/subscription';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -86,6 +88,7 @@ interface HeaderProps {
   edition?: RuleEdition;
   currentUser?: UserProfile | null;
   onOpenAuthModal?: () => void;
+  onOpenUpgradeModal?: () => void;
   presenceMap?: Record<string, CharacterPresence>;
   enabledSystems?: RuleEdition[];
   onOpenSystemSelector?: () => void;
@@ -119,6 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
   edition,
   currentUser,
   onOpenAuthModal,
+  onOpenUpgradeModal,
   presenceMap = {},
   enabledSystems,
   onOpenSystemSelector,
@@ -133,6 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab
 }) => {
   const { t } = useLanguage();
+  const { uiMode, toggleUiMode, startTour } = useUiMode();
   const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -569,28 +574,107 @@ export const Header: React.FC<HeaderProps> = ({
               )}
 
               {currentUser && onOpenAuthModal && (
+                (() => {
+                  const effectiveTier = isDeveloperUser(currentUser) ? 'developer' : getEffectiveUserTier(currentUser);
+                  const cfg = TIER_CONFIGS[effectiveTier] || TIER_CONFIGS.free;
+
+                  return (
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={onOpenAuthModal}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
+                          effectiveTier === 'developer'
+                            ? 'bg-gradient-to-r from-amber-950 to-cyan-950 hover:from-amber-900 hover:to-cyan-900 text-amber-200 border-cyan-400/80 shadow-cyan-950/40'
+                            : effectiveTier === 'guild'
+                            ? 'bg-purple-950/90 hover:bg-purple-900 text-purple-200 border-purple-500/80'
+                            : effectiveTier === 'hero'
+                            ? 'bg-amber-950/90 hover:bg-amber-900 text-amber-200 border-amber-500/80'
+                            : currentUser.role === 'DM'
+                            ? 'bg-purple-950/90 hover:bg-purple-900 text-purple-200 border-purple-500/80'
+                            : 'bg-indigo-950/90 hover:bg-indigo-900 text-indigo-200 border-indigo-500/80'
+                        }`}
+                        title={`Account: ${currentUser.displayName} (${currentUser.role} • ${cfg.name})`}
+                      >
+                        {effectiveTier === 'developer' ? (
+                          <Crown className="w-4 h-4 text-amber-400 animate-pulse" />
+                        ) : currentUser.role === 'DM' ? (
+                          <Crown className="w-4 h-4 text-purple-400" />
+                        ) : (
+                          <Sword className="w-4 h-4 text-indigo-400" />
+                        )}
+                        <span className="hidden md:inline max-w-[90px] truncate">{currentUser.displayName}</span>
+                        <span className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded ${
+                          effectiveTier === 'developer'
+                            ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/50'
+                            : effectiveTier === 'guild'
+                            ? 'bg-purple-800/80 text-purple-100'
+                            : effectiveTier === 'hero'
+                            ? 'bg-amber-500/30 text-amber-200 border border-amber-400/40'
+                            : currentUser.role === 'DM'
+                            ? 'bg-purple-800/80 text-purple-100'
+                            : 'bg-indigo-800/80 text-indigo-100'
+                        }`}>
+                          {effectiveTier === 'developer' ? 'DEV' : effectiveTier === 'guild' ? 'GUILD' : effectiveTier === 'hero' ? 'HERO' : currentUser.role}
+                        </span>
+                      </button>
+
+                      {!isDeveloperUser(currentUser) && onOpenUpgradeModal && (
+                        <button
+                          type="button"
+                          onClick={onOpenUpgradeModal}
+                          className={`p-1.5 rounded-lg border text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer ${
+                            effectiveTier === 'free'
+                              ? 'bg-amber-500 hover:bg-amber-400 text-stone-950 border-amber-400 shadow-amber-950/30 animate-bounce sm:animate-none'
+                              : 'bg-stone-800 hover:bg-stone-700 text-amber-300 border-stone-700'
+                          }`}
+                          title={effectiveTier === 'free' ? 'Upgrade to Hero for Unlimited Character Slots' : 'Manage Subscription'}
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span className="hidden xl:inline">{effectiveTier === 'free' ? 'Upgrade' : 'Pro'}</span>
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+
+              {/* UI Density Mode Toggle */}
+              <button
+                type="button"
+                onClick={toggleUiMode}
+                className={`px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
+                  uiMode === 'focus'
+                    ? 'bg-amber-950/90 hover:bg-amber-900 text-amber-300 border-amber-500/80'
+                    : 'bg-purple-950/90 hover:bg-purple-900 text-purple-200 border-purple-500/80'
+                }`}
+                title="Toggle between Focus Mode (clean, fast tabletop action) and Master Mode (advanced overrides & DM tools)"
+              >
+                <span>{uiMode === 'focus' ? '⚡ Focus' : '⚙️ Master'}</span>
+              </button>
+
+              {/* Options & Themes Button */}
+              {onOpenAudioModal && (
                 <button
-                  onClick={onOpenAuthModal}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
-                    currentUser.role === 'DM'
-                      ? 'bg-purple-950/90 hover:bg-purple-900 text-purple-200 border-purple-500/80'
-                      : 'bg-indigo-950/90 hover:bg-indigo-900 text-indigo-200 border-indigo-500/80'
-                  }`}
-                  title={`Account: ${currentUser.displayName} (${currentUser.role})`}
+                  type="button"
+                  onClick={onOpenAudioModal}
+                  className="px-2.5 py-1.5 bg-stone-800/90 hover:bg-stone-700 text-amber-300 hover:text-amber-100 border border-stone-700 hover:border-amber-500/50 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer group"
+                  title="Open Options, Visual Themes, Layout & Sound Settings"
                 >
-                  {currentUser.role === 'DM' ? (
-                    <Crown className="w-4 h-4 text-purple-400" />
-                  ) : (
-                    <Sword className="w-4 h-4 text-indigo-400" />
-                  )}
-                  <span className="hidden md:inline max-w-[100px] truncate">{currentUser.displayName}</span>
-                  <span className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded ${
-                    currentUser.role === 'DM' ? 'bg-purple-800/80 text-purple-100' : 'bg-indigo-800/80 text-indigo-100'
-                  }`}>
-                    {currentUser.role}
-                  </span>
+                  <Settings className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
+                  <span className="hidden sm:inline">Options</span>
                 </button>
               )}
+
+              {/* 60-Second Guided Tour Launcher */}
+              <button
+                type="button"
+                onClick={startTour}
+                className="px-2 py-1.5 bg-stone-800/90 hover:bg-stone-700 text-amber-400 hover:text-amber-200 border border-stone-700 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer"
+                title="Launch 60-Second Guided Tour"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Tour</span>
+              </button>
 
               {showCharacterHeader && (
                 <button

@@ -1,6 +1,18 @@
 @import "tailwindcss";
 
-:root, [data-theme="5e"] {
+@layer base {
+  body {
+    @apply bg-stone-950 text-stone-100 min-h-screen antialiased transition-colors duration-200;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* ==========================================================================
+   DEFAULT / TAVERN AMBER THEME (data-sheet-theme="tavern-amber" or default)
+   ========================================================================== */
+:root,
+[data-sheet-theme="tavern-amber"],
+[data-theme="5e"] {
   --theme-accent: #f59e0b;
   --theme-accent-hover: #d97706;
   --theme-accent-light: #fde047;
@@ -14,10 +26,13 @@
   --theme-badge-bg: rgba(245, 158, 11, 0.18);
   --theme-badge-text: #fcd34d;
   --theme-ring: rgba(245, 158, 11, 0.5);
-  --theme-name: "D&D 5th Edition";
+  --theme-name: "Tavern Amber";
 }
 
-[data-theme="3.5e"] {
+/* ==========================================================================
+   1. MIDNIGHT OBSIDIAN THEME (Crimson & Gothic Night)
+   ========================================================================== */
+[data-sheet-theme="midnight-obsidian"] {
   --theme-accent: #f43f5e;
   --theme-accent-hover: #e11d48;
   --theme-accent-light: #fda4af;
@@ -27,48 +42,54 @@
   --theme-bg-accent-solid: #4c0519;
   --theme-border-accent: rgba(225, 29, 72, 0.5);
   --theme-border-strong: #f43f5e;
-  --theme-glow: rgba(244, 63, 94, 0.25);
-  --theme-badge-bg: rgba(244, 63, 94, 0.18);
+  --theme-glow: rgba(244, 63, 94, 0.35);
+  --theme-badge-bg: rgba(244, 63, 94, 0.25);
   --theme-badge-text: #fda4af;
   --theme-ring: rgba(244, 63, 94, 0.5);
-  --theme-name: "D&D 3.5 Edition";
+  --theme-name: "Midnight Obsidian";
 }
 
-[data-theme="shadowrun"] {
-  --theme-accent: #06b6d4;
-  --theme-accent-hover: #0891b2;
-  --theme-accent-light: #67e8f9;
-  --theme-accent-text: #a5f3fc;
-  --theme-accent-subtle: #cffaff;
-  --theme-bg-accent: rgba(8, 51, 68, 0.7);
-  --theme-bg-accent-solid: #083344;
-  --theme-border-accent: rgba(8, 145, 178, 0.5);
-  --theme-border-strong: #06b6d4;
-  --theme-glow: rgba(6, 182, 212, 0.25);
-  --theme-badge-bg: rgba(6, 182, 212, 0.18);
-  --theme-badge-text: #67e8f9;
-  --theme-ring: rgba(6, 182, 212, 0.5);
-  --theme-name: "Shadowrun";
+[data-sheet-theme="midnight-obsidian"] .border-amber-600\/40,
+[data-sheet-theme="midnight-obsidian"] .border-amber-600\/50,
+[data-sheet-theme="midnight-obsidian"] .border-amber-600\/30,
+[data-sheet-theme="midnight-obsidian"] .border-amber-500\/50,
+[data-sheet-theme="midnight-obsidian"] .border-amber-500\/40,
+[data-sheet-theme="midnight-obsidian"] .border-amber-500\/30,
+[data-sheet-theme="midnight-obsidian"] .border-amber-600\/20,
+[data-sheet-theme="midnight-obsidian"] .border-amber-500,
+[data-sheet-theme="midnight-obsidian"] .border-amber-600 {
+  border-color: rgba(244, 63, 94, 0.45) !important;
 }
 
-[data-theme="pathfinder"] {
-  --theme-accent: #a855f7;
-  --theme-accent-hover: #9333ea;
-  --theme-accent-light: #d8b4fe;
-  --theme-accent-text: #e9d5ff;
-  --theme-accent-subtle: #f3e8ff;
-  --theme-bg-accent: rgba(58, 12, 94, 0.7);
-  --theme-bg-accent-solid: #3a0c5e;
-  --theme-border-accent: rgba(147, 51, 234, 0.5);
-  --theme-border-strong: #a855f7;
-  --theme-glow: rgba(168, 85, 247, 0.25);
-  --theme-badge-bg: rgba(168, 85, 247, 0.18);
-  --theme-badge-text: #d8b4fe;
-  --theme-ring: rgba(168, 85, 247, 0.5);
-  --theme-name: "Pathfinder 2e";
+[data-sheet-theme="midnight-obsidian"] .text-amber-300,
+[data-sheet-theme="midnight-obsidian"] .text-amber-400,
+[data-sheet-theme="midnight-obsidian"] .text-amber-200,
+[data-sheet-theme="midnight-obsidian"] .text-amber-500 {
+  color: #fb7185 !important;
 }
 
-[data-theme="cthulhu"] {
+[data-sheet-theme="midnight-obsidian"] .bg-amber-600,
+[data-sheet-theme="midnight-obsidian"] .bg-amber-500 {
+  background-color: #e11d48 !important;
+}
+
+[data-sheet-theme="midnight-obsidian"] .bg-amber-950\/80,
+[data-sheet-theme="midnight-obsidian"] .bg-amber-950\/60,
+[data-sheet-theme="midnight-obsidian"] .bg-amber-950\/40,
+[data-sheet-theme="midnight-obsidian"] .bg-amber-500\/20,
+[data-sheet-theme="midnight-obsidian"] .bg-amber-500\/10 {
+  background-color: rgba(136, 19, 55, 0.5) !important;
+}
+
+[data-sheet-theme="midnight-obsidian"] .hover\:bg-amber-600:hover,
+[data-sheet-theme="midnight-obsidian"] .hover\:bg-amber-500:hover {
+  background-color: #be123c !important;
+}
+
+/* ==========================================================================
+   2. EMERALD GLADE THEME (Forest Green & Jade)
+   ========================================================================== */
+[data-sheet-theme="emerald-glade"] {
   --theme-accent: #10b981;
   --theme-accent-hover: #059669;
   --theme-accent-light: #6ee7b7;
@@ -78,14 +99,205 @@
   --theme-bg-accent-solid: #064e3b;
   --theme-border-accent: rgba(5, 150, 105, 0.5);
   --theme-border-strong: #10b981;
-  --theme-glow: rgba(16, 185, 129, 0.25);
-  --theme-badge-bg: rgba(16, 185, 129, 0.18);
+  --theme-glow: rgba(16, 185, 129, 0.35);
+  --theme-badge-bg: rgba(16, 185, 129, 0.25);
   --theme-badge-text: #6ee7b7;
   --theme-ring: rgba(16, 185, 129, 0.5);
-  --theme-name: "Call of Cthulhu";
+  --theme-name: "Emerald Glade";
 }
 
-/* Dynamic theme helper classes */
+[data-sheet-theme="emerald-glade"] .border-amber-600\/40,
+[data-sheet-theme="emerald-glade"] .border-amber-600\/50,
+[data-sheet-theme="emerald-glade"] .border-amber-600\/30,
+[data-sheet-theme="emerald-glade"] .border-amber-500\/50,
+[data-sheet-theme="emerald-glade"] .border-amber-500\/40,
+[data-sheet-theme="emerald-glade"] .border-amber-500\/30,
+[data-sheet-theme="emerald-glade"] .border-amber-600\/20,
+[data-sheet-theme="emerald-glade"] .border-amber-500,
+[data-sheet-theme="emerald-glade"] .border-amber-600 {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+}
+
+[data-sheet-theme="emerald-glade"] .text-amber-300,
+[data-sheet-theme="emerald-glade"] .text-amber-400,
+[data-sheet-theme="emerald-glade"] .text-amber-200,
+[data-sheet-theme="emerald-glade"] .text-amber-500 {
+  color: #34d399 !important;
+}
+
+[data-sheet-theme="emerald-glade"] .bg-amber-600,
+[data-sheet-theme="emerald-glade"] .bg-amber-500 {
+  background-color: #059669 !important;
+}
+
+[data-sheet-theme="emerald-glade"] .bg-amber-950\/80,
+[data-sheet-theme="emerald-glade"] .bg-amber-950\/60,
+[data-sheet-theme="emerald-glade"] .bg-amber-950\/40,
+[data-sheet-theme="emerald-glade"] .bg-amber-500\/20,
+[data-sheet-theme="emerald-glade"] .bg-amber-500\/10 {
+  background-color: rgba(6, 78, 59, 0.5) !important;
+}
+
+[data-sheet-theme="emerald-glade"] .hover\:bg-amber-600:hover,
+[data-sheet-theme="emerald-glade"] .hover\:bg-amber-500:hover {
+  background-color: #047857 !important;
+}
+
+/* ==========================================================================
+   3. ARCANE VOID THEME (Mystic Violet & Astral Cyan)
+   ========================================================================== */
+[data-sheet-theme="arcane-void"] {
+  --theme-accent: #a855f7;
+  --theme-accent-hover: #9333ea;
+  --theme-accent-light: #d8b4fe;
+  --theme-accent-text: #e9d5ff;
+  --theme-accent-subtle: #f3e8ff;
+  --theme-bg-accent: rgba(58, 12, 94, 0.7);
+  --theme-bg-accent-solid: #3a0c5e;
+  --theme-border-accent: rgba(147, 51, 234, 0.5);
+  --theme-border-strong: #a855f7;
+  --theme-glow: rgba(168, 85, 247, 0.35);
+  --theme-badge-bg: rgba(168, 85, 247, 0.25);
+  --theme-badge-text: #d8b4fe;
+  --theme-ring: rgba(168, 85, 247, 0.5);
+  --theme-name: "Arcane Void";
+}
+
+[data-sheet-theme="arcane-void"] .border-amber-600\/40,
+[data-sheet-theme="arcane-void"] .border-amber-600\/50,
+[data-sheet-theme="arcane-void"] .border-amber-600\/30,
+[data-sheet-theme="arcane-void"] .border-amber-500\/50,
+[data-sheet-theme="arcane-void"] .border-amber-500\/40,
+[data-sheet-theme="arcane-void"] .border-amber-500\/30,
+[data-sheet-theme="arcane-void"] .border-amber-600\/20,
+[data-sheet-theme="arcane-void"] .border-amber-500,
+[data-sheet-theme="arcane-void"] .border-amber-600 {
+  border-color: rgba(168, 85, 247, 0.5) !important;
+}
+
+[data-sheet-theme="arcane-void"] .text-amber-300,
+[data-sheet-theme="arcane-void"] .text-amber-400,
+[data-sheet-theme="arcane-void"] .text-amber-200,
+[data-sheet-theme="arcane-void"] .text-amber-500 {
+  color: #c084fc !important;
+}
+
+[data-sheet-theme="arcane-void"] .bg-amber-600,
+[data-sheet-theme="arcane-void"] .bg-amber-500 {
+  background-color: #9333ea !important;
+}
+
+[data-sheet-theme="arcane-void"] .bg-amber-950\/80,
+[data-sheet-theme="arcane-void"] .bg-amber-950\/60,
+[data-sheet-theme="arcane-void"] .bg-amber-950\/40,
+[data-sheet-theme="arcane-void"] .bg-amber-500\/20,
+[data-sheet-theme="arcane-void"] .bg-amber-500\/10 {
+  background-color: rgba(88, 28, 135, 0.5) !important;
+}
+
+[data-sheet-theme="arcane-void"] .hover\:bg-amber-600:hover,
+[data-sheet-theme="arcane-void"] .hover\:bg-amber-500:hover {
+  background-color: #7e22ce !important;
+}
+
+/* ==========================================================================
+   4. MOLTEN FORGE THEME (Dwarven Magma & Fire)
+   ========================================================================== */
+[data-sheet-theme="molten-forge"] {
+  --theme-accent: #f97316;
+  --theme-accent-hover: #ea580c;
+  --theme-accent-light: #fed7aa;
+  --theme-accent-text: #ffedd5;
+  --theme-accent-subtle: #fff7ed;
+  --theme-bg-accent: rgba(124, 45, 18, 0.7);
+  --theme-bg-accent-solid: #7c2d12;
+  --theme-border-accent: rgba(234, 88, 12, 0.5);
+  --theme-border-strong: #f97316;
+  --theme-glow: rgba(249, 115, 22, 0.35);
+  --theme-badge-bg: rgba(249, 115, 22, 0.25);
+  --theme-badge-text: #fdba74;
+  --theme-ring: rgba(249, 115, 22, 0.5);
+  --theme-name: "Molten Forge";
+}
+
+[data-sheet-theme="molten-forge"] .border-amber-600\/40,
+[data-sheet-theme="molten-forge"] .border-amber-600\/50,
+[data-sheet-theme="molten-forge"] .border-amber-600\/30,
+[data-sheet-theme="molten-forge"] .border-amber-500\/50,
+[data-sheet-theme="molten-forge"] .border-amber-500\/40,
+[data-sheet-theme="molten-forge"] .border-amber-500\/30,
+[data-sheet-theme="molten-forge"] .border-amber-600\/20,
+[data-sheet-theme="molten-forge"] .border-amber-500,
+[data-sheet-theme="molten-forge"] .border-amber-600 {
+  border-color: rgba(249, 115, 22, 0.5) !important;
+}
+
+[data-sheet-theme="molten-forge"] .text-amber-300,
+[data-sheet-theme="molten-forge"] .text-amber-400,
+[data-sheet-theme="molten-forge"] .text-amber-200,
+[data-sheet-theme="molten-forge"] .text-amber-500 {
+  color: #fb923c !important;
+}
+
+[data-sheet-theme="molten-forge"] .bg-amber-600,
+[data-sheet-theme="molten-forge"] .bg-amber-500 {
+  background-color: #ea580c !important;
+}
+
+[data-sheet-theme="molten-forge"] .bg-amber-950\/80,
+[data-sheet-theme="molten-forge"] .bg-amber-950\/60,
+[data-sheet-theme="molten-forge"] .bg-amber-950\/40,
+[data-sheet-theme="molten-forge"] .bg-amber-500\/20,
+[data-sheet-theme="molten-forge"] .bg-amber-500\/10 {
+  background-color: rgba(124, 45, 18, 0.5) !important;
+}
+
+[data-sheet-theme="molten-forge"] .hover\:bg-amber-600:hover,
+[data-sheet-theme="molten-forge"] .hover\:bg-amber-500:hover {
+  background-color: #c2410c !important;
+}
+
+/* ==========================================================================
+   5. ANCIENT PARCHMENT THEME (Warm Sepia & Weathered Manuscript)
+   ========================================================================== */
+[data-sheet-theme="ancient-parchment"] {
+  --theme-accent: #d97706;
+  --theme-accent-hover: #b45309;
+  --theme-accent-light: #fde68a;
+  --theme-accent-text: #fef3c7;
+  --theme-accent-subtle: #fffbeb;
+  --theme-bg-accent: rgba(41, 37, 36, 0.7);
+  --theme-bg-accent-solid: #292524;
+  --theme-border-accent: rgba(180, 83, 9, 0.5);
+  --theme-border-strong: #d97706;
+  --theme-glow: rgba(217, 119, 6, 0.3);
+  --theme-badge-bg: rgba(180, 83, 9, 0.25);
+  --theme-badge-text: #fde68a;
+  --theme-ring: rgba(217, 119, 6, 0.5);
+  --theme-name: "Ancient Parchment";
+}
+
+[data-sheet-theme="ancient-parchment"] body,
+[data-sheet-theme="ancient-parchment"] .bg-stone-950 {
+  background-color: #120f0d !important;
+}
+
+[data-sheet-theme="ancient-parchment"] .bg-stone-900 {
+  background-color: #1c1814 !important;
+}
+
+[data-sheet-theme="ancient-parchment"] .border-amber-600\/40,
+[data-sheet-theme="ancient-parchment"] .border-amber-600\/50,
+[data-sheet-theme="ancient-parchment"] .border-amber-600\/30,
+[data-sheet-theme="ancient-parchment"] .border-amber-500\/50,
+[data-sheet-theme="ancient-parchment"] .border-amber-500\/40,
+[data-sheet-theme="ancient-parchment"] .border-stone-800 {
+  border-color: rgba(180, 83, 9, 0.35) !important;
+}
+
+/* ==========================================================================
+   DYNAMIC THEME HELPER CLASSES
+   ========================================================================== */
 .text-theme-accent { color: var(--theme-accent) !important; }
 .text-theme-light { color: var(--theme-accent-light) !important; }
 .text-theme-text { color: var(--theme-accent-text) !important; }
@@ -99,10 +311,10 @@
 .shadow-theme-glow { box-shadow: 0 0 25px var(--theme-glow) !important; }
 .ring-theme-accent { --tw-ring-color: var(--theme-ring) !important; }
 
-/* Custom theme scrollbar styling - ultra sleek & dark */
+/* Custom theme scrollbar styling */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -124,7 +336,7 @@
   scrollbar-color: rgba(120, 113, 108, 0.4) transparent;
 }
 
-/* Utility to completely hide scrollbars where horizontal sliding tabs or clean views are used */
+/* Utility to completely hide scrollbars */
 .scrollbar-none,
 .no-scrollbar {
   -ms-overflow-style: none !important;
@@ -138,4 +350,3 @@
   height: 0 !important;
   background: transparent !important;
 }
-

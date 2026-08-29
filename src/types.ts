@@ -598,4 +598,20 @@ export interface CampaignSaveFile {
   campaignEntities?: any[];
 }
 
+export interface ActiveAmbienceState {
+  streamId?: string;
+  title?: string;
+  url?: string;
+  sourceType?: 'youtube' | 'spotify' | 'audio_url';
+  embedUrl?: string;
+  trackId?: string; // backwards-compatible optional field
+  isPlaying: boolean;
+  category?: string;
+  intensity?: 'calm' | 'medium' | 'high';
+  presetName?: string;
+  changedBy?: string;
+  updatedAt?: string;
+}
+
+
 
