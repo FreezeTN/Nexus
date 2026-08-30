@@ -2,14 +2,23 @@ import { CharacterData, CharacterId } from '../types';
 import { ICharacterRepository, IRepositoryResult } from './types';
 
 const LOCAL_STORAGE_KEY = 'penpaper_characters_data';
+const inMemoryFallback = new Map<string, string>();
 
 export class LocalCharacterRepository implements ICharacterRepository {
   private loadAllFromStorage(): CharacterData[] {
     try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        }
+      } else {
+        const raw = inMemoryFallback.get(LOCAL_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        }
       }
     } catch (err) {
       console.warn('LocalCharacterRepository: Failed to read localStorage', err);
@@ -19,7 +28,12 @@ export class LocalCharacterRepository implements ICharacterRepository {
 
   private saveAllToStorage(characters: CharacterData[]): void {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(characters));
+      const json = JSON.stringify(characters);
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(LOCAL_STORAGE_KEY, json);
+      } else {
+        inMemoryFallback.set(LOCAL_STORAGE_KEY, json);
+      }
     } catch (err) {
       console.warn('LocalCharacterRepository: Failed to write to localStorage', err);
     }

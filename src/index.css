@@ -350,3 +350,85 @@
   height: 0 !important;
   background: transparent !important;
 }
+
+/* ==========================================================================
+   ACCESSIBILITY ENGINE STYLES (Phase 3 A11y)
+   ========================================================================== */
+
+/* 1. Enhanced Focus Rings */
+[data-a11y-focus-rings="true"] :focus-visible {
+  outline: 3px solid #38bdf8 !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 0 5px rgba(56, 189, 248, 0.4) !important;
+}
+
+/* 2. High Contrast - Increased Contrast */
+[data-a11y-contrast="increased"] {
+  --theme-border-accent: rgba(255, 255, 255, 0.65);
+}
+[data-a11y-contrast="increased"] .text-stone-400,
+[data-a11y-contrast="increased"] .text-stone-500,
+[data-a11y-contrast="increased"] .text-zinc-400,
+[data-a11y-contrast="increased"] .text-zinc-500 {
+  color: #e7e5e4 !important;
+}
+[data-a11y-contrast="increased"] .border-stone-800,
+[data-a11y-contrast="increased"] .border-stone-700,
+[data-a11y-contrast="increased"] .border-zinc-800 {
+  border-color: #78716c !important;
+}
+
+/* 3. High Contrast - Maximum Contrast (Pure B/W + High Saturation) */
+[data-a11y-contrast="maximum"] body,
+[data-a11y-contrast="maximum"] .bg-stone-950,
+[data-a11y-contrast="maximum"] .bg-zinc-950,
+[data-a11y-contrast="maximum"] .bg-slate-950 {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+}
+[data-a11y-contrast="maximum"] .bg-stone-900,
+[data-a11y-contrast="maximum"] .bg-zinc-900,
+[data-a11y-contrast="maximum"] .bg-slate-900 {
+  background-color: #0a0a0a !important;
+  border-color: #ffffff !important;
+}
+[data-a11y-contrast="maximum"] .text-stone-400,
+[data-a11y-contrast="maximum"] .text-stone-500,
+[data-a11y-contrast="maximum"] .text-zinc-400,
+[data-a11y-contrast="maximum"] .text-zinc-500,
+[data-a11y-contrast="maximum"] .text-stone-300 {
+  color: #ffffff !important;
+}
+[data-a11y-contrast="maximum"] input,
+[data-a11y-contrast="maximum"] textarea,
+[data-a11y-contrast="maximum"] select,
+[data-a11y-contrast="maximum"] button {
+  border-color: #ffffff !important;
+}
+
+/* 4. Font Scaling */
+[data-a11y-font-scale="large"] {
+  font-size: 110%;
+}
+[data-a11y-font-scale="extra-large"] {
+  font-size: 125%;
+}
+
+/* 5. Reduced Motion */
+[data-a11y-reduced-motion="true"] *,
+[data-a11y-reduced-motion="true"] *::before,
+[data-a11y-reduced-motion="true"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* 6. Dyslexia-Friendly Typography */
+[data-a11y-dyslexic-font="true"] {
+  font-family: 'OpenDyslexic', 'Comic Sans MS', sans-serif !important;
+  letter-spacing: 0.04em !important;
+  word-spacing: 0.1em !important;
+  line-height: 1.7 !important;
+}
+

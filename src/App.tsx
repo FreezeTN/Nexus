@@ -25,11 +25,13 @@ import { PartyVoiceWidget } from './components/voice/PartyVoiceWidget';
 import { PersistentAmbiencePlayer } from './components/audio/PersistentAmbiencePlayer';
 import { useHotkeys } from './context/HotkeyContext';
 import { useUiMode } from './context/UiModeContext';
+import { useAccessibility } from './context/AccessibilityContext';
 import { Crown } from 'lucide-react';
 
 // Direct Modal Component Imports
 import { CampaignGraphModal } from './components/modals/CampaignGraphModal';
 import { DeveloperSdkModal } from './components/modals/DeveloperSdkModal';
+import { DiagnosticConsoleModal } from './components/diagnostics/DiagnosticConsoleModal';
 import { UserManualModal } from './components/modals/UserManualModal';
 import { ExtensionManagerModal } from './components/modals/ExtensionManagerModal';
 import { AudioOptionsModal } from './components/modals/AudioOptionsModal';
@@ -107,6 +109,7 @@ export default function App() {
 
   const { matchesHotkey } = useHotkeys();
   const { toggleUiMode, startTour } = useUiMode();
+  const { announceLiveMessage } = useAccessibility();
 
   // 1. Authentication Manager
   const { currentUser, setCurrentUser } = useAuthManager();
@@ -231,6 +234,8 @@ export default function App() {
     onNavigateTab: (tab) => setActiveTab(normalizeTabId(tab))
   });
 
+  const [showDiagnosticConsole, setShowDiagnosticConsole] = useState(false);
+
   // Tab auto-navigation guards
   useEffect(() => {
     if (!activeCharacter && ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5'].includes(activeTab)) {
@@ -326,12 +331,14 @@ export default function App() {
         const nextIndex = (currentIndex + 1) % systems.length;
         const nextSystem = systems[nextIndex];
         handleSystemChange(nextSystem);
+        announceLiveMessage(`Switched active game system to ${nextSystem.toUpperCase()}`, 'polite');
         return;
       }
 
       if (matchesHotkey(e, 'toggleFocusMode')) {
         e.preventDefault();
         toggleUiMode();
+        announceLiveMessage('Toggled layout mode between Focus and Master view', 'polite');
         return;
       }
 
@@ -346,11 +353,18 @@ export default function App() {
         setShowAudioModal(prev => !prev);
         return;
       }
+
+      // Observability & Diagnostic Console shortcut (Ctrl+Shift+D or Cmd+Shift+D)
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        setShowDiagnosticConsole(prev => !prev);
+        return;
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [matchesHotkey, enabledSystems, currentSystemTheme, handleSystemChange, setShowAudioModal, setShowCommandPalette, startTour, toggleUiMode]);
+  }, [matchesHotkey, enabledSystems, currentSystemTheme, handleSystemChange, setShowAudioModal, setShowCommandPalette, startTour, toggleUiMode, announceLiveMessage]);
 
   if (isDetachedWindow) {
     return (
@@ -581,109 +595,127 @@ export default function App() {
           {/* Main Content Body */}
           <main className="w-full">
             {activeTab === 'menu' && (
-              <MainMenu
-                characters={characters}
-                activeCharacter={activeCharacter}
-                onSelectCharacter={handleSelectCharacter}
-                onCreateNewCharacter={handleOpenNewCharacterModal}
-                onEnterGame={() => setActiveTab('sheet1')}
-                onSystemChange={handleSystemChange}
-                edition={currentSystemTheme}
-                currentUser={currentUser}
-                presenceMap={presenceMap}
-                onOpenAuthModal={() => setShowAuthModal(true)}
-                enabledSystems={enabledSystems}
-                onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
-                onOpenAudioModal={() => setShowAudioModal(true)}
-                onOpenAiAssistant={() => setShowAiAssistantModal(true)}
-              />
+              <div id="tabpanel-menu" role="tabpanel" aria-labelledby="tab-menu" tabIndex={0}>
+                <MainMenu
+                  characters={characters}
+                  activeCharacter={activeCharacter}
+                  onSelectCharacter={handleSelectCharacter}
+                  onCreateNewCharacter={handleOpenNewCharacterModal}
+                  onEnterGame={() => setActiveTab('sheet1')}
+                  onSystemChange={handleSystemChange}
+                  edition={currentSystemTheme}
+                  currentUser={currentUser}
+                  presenceMap={presenceMap}
+                  onOpenAuthModal={() => setShowAuthModal(true)}
+                  enabledSystems={enabledSystems}
+                  onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
+                  onOpenAudioModal={() => setShowAudioModal(true)}
+                  onOpenAiAssistant={() => setShowAiAssistantModal(true)}
+                />
+              </div>
             )}
 
             {activeTab === 'sheet1' && activeCharacter && (
-              <Sheet1StatsFeatures
-                character={activeCharacter}
-                currentUser={currentUser}
-                activeSession={activeSession}
-                onUpdateCharacter={handleUpdateCharacter}
-                onAddMonsterToRoster={(monster) => {
-                  setCharacters(prev => [...prev, monster]);
-                }}
-                onRoll={handleRoll}
-              />
+              <div id="tabpanel-sheet1" role="tabpanel" aria-labelledby="tab-sheet1" tabIndex={0}>
+                <Sheet1StatsFeatures
+                  character={activeCharacter}
+                  currentUser={currentUser}
+                  activeSession={activeSession}
+                  onUpdateCharacter={handleUpdateCharacter}
+                  onAddMonsterToRoster={(monster) => {
+                    setCharacters(prev => [...prev, monster]);
+                  }}
+                  onRoll={handleRoll}
+                />
+              </div>
             )}
 
             {activeTab === 'sheet2' && activeCharacter && (
-              <Sheet2Combat
-                character={activeCharacter}
-                allCharacters={characters}
-                parties={parties}
-                currentUser={currentUser}
-                onOpenPartyManager={() => setShowPartyModal(true)}
-                onUpdateCharacter={handleUpdateCharacter}
-                onAddMonsterToRoster={(monster) => {
-                  setCharacters(prev => [...prev, monster]);
-                }}
-                onRoll={handleRoll}
-                onRollDamage={handleRollDamage}
-              />
+              <div id="tabpanel-sheet2" role="tabpanel" aria-labelledby="tab-sheet2" tabIndex={0}>
+                <Sheet2Combat
+                  character={activeCharacter}
+                  allCharacters={characters}
+                  parties={parties}
+                  currentUser={currentUser}
+                  onOpenPartyManager={() => setShowPartyModal(true)}
+                  onUpdateCharacter={handleUpdateCharacter}
+                  onAddMonsterToRoster={(monster) => {
+                    setCharacters(prev => [...prev, monster]);
+                  }}
+                  onRoll={handleRoll}
+                  onRollDamage={handleRollDamage}
+                />
+              </div>
             )}
 
             {activeTab === 'sheet3' && activeCharacter && (
-              <Sheet3GearWealth
-                character={activeCharacter}
-                onUpdateCharacter={handleUpdateCharacter}
-                onRollDamage={handleRollDamage}
-              />
+              <div id="tabpanel-sheet3" role="tabpanel" aria-labelledby="tab-sheet3" tabIndex={0}>
+                <Sheet3GearWealth
+                  character={activeCharacter}
+                  onUpdateCharacter={handleUpdateCharacter}
+                  onRollDamage={handleRollDamage}
+                />
+              </div>
             )}
 
             {activeTab === 'sheet4' && activeCharacter && (
-              <Sheet4Spells
-                character={activeCharacter}
-                allCharacters={characters}
-                currentUser={currentUser}
-                onUpdateCharacter={handleUpdateCharacter}
-                onAddMonsterToRoster={(monster) => {
-                  setCharacters(prev => [...prev, monster]);
-                }}
-                onRoll={handleRoll}
-                onRollDamage={handleRollDamage}
-              />
+              <div id="tabpanel-sheet4" role="tabpanel" aria-labelledby="tab-sheet4" tabIndex={0}>
+                <Sheet4Spells
+                  character={activeCharacter}
+                  allCharacters={characters}
+                  currentUser={currentUser}
+                  onUpdateCharacter={handleUpdateCharacter}
+                  onAddMonsterToRoster={(monster) => {
+                    setCharacters(prev => [...prev, monster]);
+                  }}
+                  onRoll={handleRoll}
+                  onRollDamage={handleRollDamage}
+                />
+              </div>
             )}
 
             {activeTab === 'sheet5' && activeCharacter && (
-              <Sheet5DescriptionNotes
-                character={activeCharacter}
-                onUpdateCharacter={handleUpdateCharacter}
-              />
+              <div id="tabpanel-sheet5" role="tabpanel" aria-labelledby="tab-sheet5" tabIndex={0}>
+                <Sheet5DescriptionNotes
+                  character={activeCharacter}
+                  onUpdateCharacter={handleUpdateCharacter}
+                />
+              </div>
             )}
 
             {activeTab === 'sheet6' && (
-              <Sheet6UserGuide
-                edition={currentSystemTheme}
-                enabledSystems={enabledSystems}
-              />
+              <div id="tabpanel-sheet6" role="tabpanel" aria-labelledby="tab-sheet6" tabIndex={0}>
+                <Sheet6UserGuide
+                  edition={currentSystemTheme}
+                  enabledSystems={enabledSystems}
+                />
+              </div>
             )}
 
             {activeTab === 'sheet7' && (
-              <Sheet7Compendium
-                activeCharacter={activeCharacter}
-                onUpdateCharacter={handleUpdateCharacter}
-                onAddMonsterToRoster={(monster) => {
-                  setCharacters(prev => [...prev, monster]);
-                }}
-                enabledSystems={enabledSystems}
-              />
+              <div id="tabpanel-sheet7" role="tabpanel" aria-labelledby="tab-sheet7" tabIndex={0}>
+                <Sheet7Compendium
+                  activeCharacter={activeCharacter}
+                  onUpdateCharacter={handleUpdateCharacter}
+                  onAddMonsterToRoster={(monster) => {
+                    setCharacters(prev => [...prev, monster]);
+                  }}
+                  enabledSystems={enabledSystems}
+                />
+              </div>
             )}
 
             {activeTab === 'sheetDm' && isDm && activeSession && (
-              <SheetDmOverview
-                activeSession={activeSession}
-                allCharacters={characters}
-                currentUser={currentUser}
-                onUpdateCharacter={handleUpdateCharacter}
-                onDetach={() => handleDetachTab('sheetDm')}
-                onOpenUpgradeModal={handleOpenUpgradeModal}
-              />
+              <div id="tabpanel-sheetDm" role="tabpanel" aria-labelledby="tab-sheetDm" tabIndex={0}>
+                <SheetDmOverview
+                  activeSession={activeSession}
+                  allCharacters={characters}
+                  currentUser={currentUser}
+                  onUpdateCharacter={handleUpdateCharacter}
+                  onDetach={() => handleDetachTab('sheetDm')}
+                  onOpenUpgradeModal={handleOpenUpgradeModal}
+                />
+              </div>
             )}
           </main>
         </div>
@@ -847,6 +879,14 @@ export default function App() {
           <DeveloperSdkModal
             isOpen={showDeveloperSdk}
             onClose={() => setShowDeveloperSdk(false)}
+          />
+        )}
+
+        {/* Phase 1: Observability & Structured Tracing Console Modal */}
+        {showDiagnosticConsole && (
+          <DiagnosticConsoleModal
+            isOpen={showDiagnosticConsole}
+            onClose={() => setShowDiagnosticConsole(false)}
           />
         )}
 

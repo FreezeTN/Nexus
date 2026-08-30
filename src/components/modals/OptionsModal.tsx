@@ -41,7 +41,8 @@ import {
   PowerOff,
   Globe,
   Keyboard,
-  Palette
+  Palette,
+  Eye
 } from 'lucide-react';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '../../i18n/languages';
@@ -50,6 +51,7 @@ import { HotkeysOptionsTab } from './options/HotkeysOptionsTab';
 import { SubscriptionOptionsTab } from './options/SubscriptionOptionsTab';
 import { ThemesTab } from './options/ThemesTab';
 import { SoundOptionsTab } from './options/SoundOptionsTab';
+import { AccessibilityOptionsTab } from './options/AccessibilityOptionsTab';
 import { StatblockExportModal } from '../character/StatblockExportModal';
 import { CharacterData, RuleEdition } from '../../types';
 import { UserProfile, GameSession, logoutUser } from '../../lib/firebase';
@@ -76,7 +78,7 @@ import {
 interface OptionsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialCategory?: 'themes' | 'sound' | 'app' | 'layout' | 'character' | 'hotkeys' | 'subscription' | 'credits';
+  initialCategory?: 'themes' | 'sound' | 'app' | 'layout' | 'a11y' | 'character' | 'hotkeys' | 'subscription' | 'credits';
   currentUser?: UserProfile | null;
   activeSession?: GameSession | null;
   activeCharacter?: CharacterData | null;
@@ -103,7 +105,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onOpenAuthModal
 }) => {
   const { language, setLanguage, t } = useLanguage();
-  const [activeCategory, setActiveCategory] = useState<'themes' | 'sound' | 'app' | 'layout' | 'character' | 'hotkeys' | 'subscription' | 'credits'>(initialCategory);
+  const [activeCategory, setActiveCategory] = useState<'themes' | 'sound' | 'app' | 'layout' | 'a11y' | 'character' | 'hotkeys' | 'subscription' | 'credits'>(initialCategory);
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
   const [volume, setVolumeState] = useState<number>(() => Math.round(getMasterVolume() * 100));
   const [lastPlayed, setLastPlayed] = useState<string | null>(null);
@@ -343,6 +345,18 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
             <span>{t('options.tabLayout', 'Layout')}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveCategory('a11y')}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
+              activeCategory === 'a11y'
+                ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
+                : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
+            }`}
+          >
+            <Eye className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Accessibility</span>
           </button>
 
           <button
@@ -715,6 +729,13 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
               )}
             </div>
           )}
+          {/* CATEGORY: ACCESSIBILITY & VISUAL ERGONOMICS */}
+          {activeCategory === 'a11y' && (
+            <div className="animate-fadeIn">
+              <AccessibilityOptionsTab />
+            </div>
+          )}
+
           {/* CATEGORY: HOTKEYS & SHORTCUTS */}
           {activeCategory === 'hotkeys' && (
             <div className="animate-fadeIn">

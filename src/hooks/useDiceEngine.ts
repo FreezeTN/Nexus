@@ -3,6 +3,8 @@ import { DiceRollResult, CharacterData } from '../types';
 import { formatModifier } from '../utils/dndCalculations';
 import { eventBus } from '../events/eventBus';
 import { PhysicalRollRequest } from '../components/modals/PhysicalDiceModal';
+import { structuredLogger } from '../utils/structuredLogger';
+import { userTelemetry } from '../utils/userTelemetry';
 
 interface UseDiceEngineProps {
   activeCharacter: CharacterData | null;
@@ -53,11 +55,17 @@ export function useDiceEngine({ activeCharacter, optionalRulesUsePhysicalDice }:
     isNat20: boolean,
     isNat1: boolean
   ) => {
+    const formula = `${diceCount}d${diceType}${formatModifier(modifier)}`;
+    const spanId = structuredLogger.startSpan(`DiceRoll: ${formula}`, {
+      tier: 'domain',
+      attributes: { label, diceType, diceCount, modifier, mode, total, isNat20, isNat1 }
+    });
+
     const result: DiceRollResult = {
       id: 'roll-' + Date.now(),
       timestamp: new Date().toLocaleTimeString(),
       label,
-      expression: `${diceCount}d${diceType}${formatModifier(modifier)}`,
+      expression: formula,
       diceRolls,
       modifier,
       total,
@@ -69,14 +77,20 @@ export function useDiceEngine({ activeCharacter, optionalRulesUsePhysicalDice }:
     setRollLogs(prev => [result, ...prev]);
     setActiveRollResult(result);
 
+    // Record user telemetry
+    const naturalRoll = diceType === 20 ? (mode === 'advantage' ? Math.max(...diceRolls) : mode === 'disadvantage' ? Math.min(...diceRolls) : diceRolls[0]) : undefined;
+    userTelemetry.recordDiceRoll(formula, total, naturalRoll);
+
     // Broadcast event bus DiceRolled
     eventBus.emit('DiceRolled', {
-      formula: `${diceCount}d${diceType}${formatModifier(modifier)}`,
+      formula,
       total,
       isNat20,
       isNat1,
       rollerName: activeCharacter?.name || label || 'Adventurer'
     });
+
+    structuredLogger.endSpan(spanId, { status: 'ok' });
 
     // Auto dismiss active toast after 4.5 seconds
     setTimeout(() => {

@@ -235,7 +235,7 @@ export const myCustomPlugin: GameSystemPlugin = {
   shortName: 'Vanguard',
   version: '1.0.0',
   minPlatformVersion: '1.5.0',
-  description: 'Custom tactical magic plugin built on PenPaper OS SDK.',
+  description: 'Custom tactical magic plugin built on Nexus Engine SDK.',
   badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
   icon: '🔮',
   primaryResourceName: 'Mana Points',
@@ -764,7 +764,7 @@ export const myCustomPlugin: GameSystemPlugin = {
                   Tabletop Campaign Operating System Architecture
                 </h3>
                 <p className="text-sm text-slate-300 leading-relaxed">
-                  PenPaper OS serves as the central hub connecting character state, combat engines, campaign management, and user extensions. Plugins plug directly into the rule engine registry and communicate asynchronously through the typed central Event Bus.
+                  Nexus Engine serves as the central hub connecting character state, combat engines, campaign management, and user extensions. Plugins plug directly into the rule engine registry and communicate asynchronously through the typed central Event Bus.
                 </p>
               </div>
 
@@ -1294,7 +1294,7 @@ export const myCustomPlugin: GameSystemPlugin = {
 
         {/* Footer */}
         <div className="px-6 py-3 border-t border-slate-800 bg-slate-950 flex items-center justify-between text-xs text-slate-400">
-          <span>PenPaper TRPG OS Platform SDK v1.5.0</span>
+          <span>Nexus TRPG Platform SDK v1.5.0</span>
           <button
             onClick={onClose}
             className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors font-medium"

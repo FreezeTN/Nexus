@@ -181,13 +181,14 @@ export const Navigation: React.FC<NavigationProps> = ({
   if (tabs.length === 0) return null;
 
   return (
-    <nav className={`bg-stone-950 border-b border-stone-800 ${currentUser ? 'sticky top-[108px] z-30 shadow-md' : 'relative z-10'}`}>
+    <nav aria-label="Character Sheet Views" className={`bg-stone-950 border-b border-stone-800 ${currentUser ? 'sticky top-[108px] z-30 shadow-md' : 'relative z-10'}`}>
       <div className="w-full mx-auto px-2 sm:px-4 relative flex items-center">
         {/* Left Scroll Button */}
         <button
           onClick={() => handleScroll('left')}
           disabled={!canScrollLeft}
           title="Scroll Left"
+          aria-label="Scroll sheet tabs left"
           className={`hidden sm:flex items-center justify-center p-1.5 mr-1 rounded-lg border transition shrink-0 ${
             canScrollLeft
               ? 'bg-stone-900 border-amber-500/40 text-amber-300 hover:bg-stone-800 hover:text-amber-200 shadow-sm cursor-pointer'
@@ -201,6 +202,8 @@ export const Navigation: React.FC<NavigationProps> = ({
         <div
           ref={scrollRef}
           onScroll={checkScroll}
+          role="tablist"
+          aria-label="Character and DM sheets"
           className="flex-1 flex items-center overflow-x-auto scrollbar-thin scrollbar-thumb-amber-800/40 scrollbar-track-stone-900 gap-1.5 sm:gap-2 py-2 px-0.5"
         >
           {tabs.map((tab) => {
@@ -210,6 +213,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             return (
               <div
                 key={tab.id}
+                role="none"
                 data-active={isActive ? "true" : "false"}
                 className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition whitespace-nowrap text-left shrink-0 ${
                   isActive
@@ -218,6 +222,10 @@ export const Navigation: React.FC<NavigationProps> = ({
                 }`}
               >
                 <button
+                  id={`tab-${tab.id}`}
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls={`tabpanel-${tab.id}`}
                   onClick={() => onTabChange(tab.id)}
                   className="flex items-center gap-2 cursor-pointer focus:outline-none"
                 >
@@ -247,6 +255,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                       onDetachTab(tab.id);
                     }}
                     title={`Detach ${tab.title} to popup window / secondary screen`}
+                    aria-label={`Detach ${tab.title} to new window`}
                     className={`p-1 rounded-md transition hover:scale-110 ${
                       isActive
                         ? 'text-amber-400 hover:text-amber-200 hover:bg-amber-500/20'
@@ -267,6 +276,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           onClick={() => handleScroll('right')}
           disabled={!canScrollRight}
           title="Scroll Right"
+          aria-label="Scroll sheet tabs right"
           className={`hidden sm:flex items-center justify-center p-1.5 ml-1 rounded-lg border transition shrink-0 ${
             canScrollRight
               ? 'bg-stone-900 border-amber-500/40 text-amber-300 hover:bg-stone-800 hover:text-amber-200 shadow-sm cursor-pointer'

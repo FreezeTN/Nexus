@@ -37,20 +37,23 @@ import { LanguageProvider } from './i18n/LanguageContext';
 import { UiModeProvider } from './context/UiModeContext';
 import { ModalProvider } from './context/ModalContext';
 import { HotkeyProvider } from './context/HotkeyContext';
+import { AccessibilityProvider } from './context/AccessibilityContext';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
-      <LanguageProvider>
-        <UiModeProvider>
-          <ModalProvider>
-            <HotkeyProvider>
-              <App />
-            </HotkeyProvider>
-          </ModalProvider>
-        </UiModeProvider>
-      </LanguageProvider>
+      <AccessibilityProvider>
+        <LanguageProvider>
+          <UiModeProvider>
+            <ModalProvider>
+              <HotkeyProvider>
+                <App />
+              </HotkeyProvider>
+            </ModalProvider>
+          </UiModeProvider>
+        </LanguageProvider>
+      </AccessibilityProvider>
     </ErrorBoundary>
   </StrictMode>,
 );

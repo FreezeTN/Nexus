@@ -14,6 +14,56 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.7.0',
+    date: 'August 2026',
+    title: 'Phase 3: Comprehensive Accessibility (A11y) & Visual Ergonomics Architecture',
+    badge: 'Accessibility & Ergonomics',
+    badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+    highlights: [
+      {
+        category: '👁️ High & Maximum Contrast Modes (WCAG AAA)',
+        detail: 'Engineered high-contrast and monochrome maximum-contrast themes with strict 7:1+ contrast ratios, high-visibility borders, and black/white canvas modes for visually impaired and low-vision players.'
+      },
+      {
+        category: '🔤 Dynamic Typography Scaling & OpenDyslexic Support',
+        detail: 'Added multi-level UI text scaling (100% to 150%) and optional dyslexia-friendly font support (OpenDyslexic / weighted typography) to improve readability and character sheet comprehension.'
+      },
+      {
+        category: '♿ Screen Reader Announcements & ARIA Live Regions',
+        detail: 'Implemented polite and assertive ARIA live announcement queues for active dice rolls, hotkey operations, damage resolution, and TRPG rule edition changes.'
+      },
+      {
+        category: '🎯 Accessible Focus Rings & Reduced Motion Directives',
+        detail: 'Introduced high-visibility 3px focus rings across all interactive buttons, inputs, tabs, and modals alongside full support for reduced motion preferences (`prefers-reduced-motion`).'
+      }
+    ]
+  },
+  {
+    version: 'v5.6.0',
+    date: 'August 2026',
+    title: 'Phase 1: Observability & Structured Tracing Architecture',
+    badge: 'Observability & Telemetry',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    highlights: [
+      {
+        category: '🔍 Real-Time Structured Tracing & Span Instrumentation',
+        detail: 'Implemented zero-overhead trace span measuring across the Four-Tier State Architecture (Server, Domain, UI, Transient), recording microsecond execution latencies, status codes, and context attributes.'
+      },
+      {
+        category: '📊 User Telemetry & Tabletop Interaction Engine',
+        detail: 'Integrated anonymous, privacy-safe interaction metrics capturing dice rolling tempos (rolls/min, natural 20 vs. 1 RNG frequency, polyhedral distributions), combat rounds, and compendium search queries.'
+      },
+      {
+        category: '🖥️ Live Observability HUD & Diagnostic Console',
+        detail: 'Created an accessible diagnostic HUD modal (accessible via `Ctrl+Shift+D` / `Cmd+Shift+D` or menu) featuring a live trace waterfall, structured log search/filtering, V8 heap memory monitor, and 1-click diagnostic bundle export.'
+      },
+      {
+        category: '🛡️ Breadcrumb Error Context Collector',
+        detail: 'Captured global window errors and unhandled promise rejections, automatically associating preceding trace spans and domain logs for rapid root-cause analysis.'
+      }
+    ]
+  },
+  {
     version: 'v5.5.0',
     date: 'August 2026',
     title: 'Production Security Hardening & Zero-Trust Firestore Rules Enforcement',

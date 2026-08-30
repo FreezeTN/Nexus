@@ -249,6 +249,27 @@ MILESTONE 25: PRODUCTION SECURITY HARDENING & ZERO-TRUST FIRESTORE RULES
 * WebRTC Voice Signaling & Presence Protection:
   - Isolated voice signaling packets (`voice_signals`) and active peer states (`voice_peers`) to prevent spoofing, identity hijacking, or unauthorized room state mutation.
 
+--------------------------------------------------------------------------------
+MILESTONE 26: PHASE 1 - OBSERVABILITY, STRUCTURED TRACING & DIAGNOSTIC HUD
+--------------------------------------------------------------------------------
+* Real-Time Structured Tracing & Execution Spans (`src/utils/structuredLogger.ts`):
+  - Created high-performance, zero-overhead tracing engine measuring execution latencies across Server, Domain, UI, and Transient state tiers.
+  - Added global uncaught error and unhandled promise rejection listeners with automatic breadcrumb history capture.
+
+* Real-User Interaction Telemetry (`src/utils/userTelemetry.ts`):
+  - Aggregated privacy-safe, local-first tabletop interaction metrics:
+    - Polyhedral dice distribution (d20, d12, d10, d8, d6, d4, d100), natural 20 vs. natural 1 RNG frequency, rolling tempos.
+    - Combat encounter rounds, average turn durations, and resolution rates.
+    - Compendium searches and spell lookups.
+
+* Interactive Observability & Diagnostic HUD (`src/components/diagnostics/DiagnosticConsoleModal.tsx`):
+  - Designed an accessible, production-grade diagnostic console triggered via `Ctrl+Shift+D` / `Cmd+Shift+D` or top menu.
+  - Live Trace Waterfall: Real-time span visualizer with duration bars, tier tags, and expandable payload inspector.
+  - Structured Logs Terminal: Live multi-tier filtering (by log level and state tier), search indexing, and stack trace view.
+  - Telemetry Dashboard: Visual frequency histograms for tabletop dice rolling and feature adoption.
+  - System & Memory Health Monitor: V8 heap memory tracking, DOM node counts, and network status.
+  - 1-Click Diagnostic Bundle Export: Copy or download complete JSON diagnostic reports for troubleshooting.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================
