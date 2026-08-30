@@ -37,7 +37,8 @@ export function parseExternalMediaUrl(rawUrl: string): {
   titleSuggestion: string;
   error?: string;
 } {
-  const trimmed = (rawUrl || '').trim();
+  // Strip enclosing brackets, quotes, or whitespace
+  let trimmed = (rawUrl || '').trim().replace(/^[<"']+|[>"']+$/g, '');
   if (!trimmed) {
     return {
       isValid: false,
@@ -48,16 +49,32 @@ export function parseExternalMediaUrl(rawUrl: string): {
     };
   }
 
-  // 1. YouTube Video or Playlist
+  // 1. YouTube Video, Playlist, Shorts, Live, or YouTube Music
   // Examples:
   // https://www.youtube.com/watch?v=dQw4w9WgXcQ
   // https://youtu.be/dQw4w9WgXcQ
   // https://www.youtube.com/playlist?list=PL1234567890
   // https://www.youtube.com/embed/dQw4w9WgXcQ
+  // https://www.youtube.com/live/dQw4w9WgXcQ
+  // https://www.youtube.com/shorts/dQw4w9WgXcQ
+  // https://music.youtube.com/watch?v=dQw4w9WgXcQ
   const ytPlaylistMatch = trimmed.match(/[?&]list=([a-zA-Z0-9_-]+)/i);
-  const ytVideoMatch = trimmed.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([a-zA-Z0-9_-]{11})/i);
+  const ytVideoMatch = trimmed.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|live\/|shorts\/)|music\.youtube\.com\/watch\?v=)([a-zA-Z0-9_-]{11})/i
+  );
 
-  if (ytPlaylistMatch) {
+  if (ytVideoMatch && ytPlaylistMatch) {
+    const videoId = ytVideoMatch[1];
+    const listId = ytPlaylistMatch[1];
+    return {
+      isValid: true,
+      sourceType: 'youtube',
+      embedUrl: `https://www.youtube-nocookie.com/embed/${videoId}?list=${listId}&autoplay=1&enablejsapi=1`,
+      titleSuggestion: 'YouTube Soundtrack'
+    };
+  }
+
+  if (ytPlaylistMatch && !ytVideoMatch) {
     const listId = ytPlaylistMatch[1];
     return {
       isValid: true,
@@ -77,21 +94,33 @@ export function parseExternalMediaUrl(rawUrl: string): {
     };
   }
 
-  // 2. Spotify Playlist, Track, Album, or Artist
-  // Examples:
-  // https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M
-  // https://open.spotify.com/album/42eZ2aXz3Z7nJt9n6n9h2S
-  // https://open.spotify.com/track/11dFghVXANMlKmJXsNCbNl
-  // spotify:playlist:37i9dQZF1DXcBWIGoYBM5M
-  const spotifyMatch = trimmed.match(/(?:open\.spotify\.com\/(playlist|track|album|artist)\/|spotify:(playlist|track|album|artist):)([a-zA-Z0-9]+)/i);
-  if (spotifyMatch) {
-    const type = spotifyMatch[1] || spotifyMatch[2];
-    const id = spotifyMatch[3];
+  // 2. Spotify Playlist, Track, Album, Artist, Episode, or Show
+  // Supports:
+  // - https://open.spotify.com/track/11dFghVXANMlKmJXsNCbNl
+  // - https://open.spotify.com/intl-de/track/11dFghVXANMlKmJXsNCbNl?si=...
+  // - https://open.spotify.com/intl-en/playlist/37i9dQZF1DXcBWIGoYBM5M
+  // - https://open.spotify.com/intl-es/album/42eZ2aXz3Z7nJt9n6n9h2S
+  // - https://open.spotify.com/embed/track/11dFghVXANMlKmJXsNCbNl
+  // - https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M
+  // - spotify:track:11dFghVXANMlKmJXsNCbNl
+  // - spotify:playlist:37i9dQZF1DXcBWIGoYBM5M
+  const spotifyWebMatch = trimmed.match(
+    /open\.spotify\.com\/(?:intl-[a-zA-Z]{2,5}\/)?(?:embed\/)?(track|playlist|album|artist|episode|show)\/([a-zA-Z0-9]+)/i
+  );
+  const spotifyUriMatch = trimmed.match(
+    /^spotify:(track|playlist|album|artist|episode|show):([a-zA-Z0-9]+)/i
+  );
+
+  if (spotifyWebMatch || spotifyUriMatch) {
+    const match = spotifyWebMatch || spotifyUriMatch!;
+    const rawType = match[1].toLowerCase();
+    const id = match[2];
+    const typeLabel = rawType.charAt(0).toUpperCase() + rawType.slice(1);
     return {
       isValid: true,
       sourceType: 'spotify',
-      embedUrl: `https://open.spotify.com/embed/${type}/${id}?utm_source=generator&theme=0`,
-      titleSuggestion: `Spotify ${type.charAt(0).toUpperCase() + type.slice(1)} Session`
+      embedUrl: `https://open.spotify.com/embed/${rawType}/${id}?utm_source=generator&theme=0`,
+      titleSuggestion: `Spotify ${typeLabel}`
     };
   }
 
@@ -114,7 +143,7 @@ export function parseExternalMediaUrl(rawUrl: string): {
     sourceType: 'youtube',
     embedUrl: '',
     titleSuggestion: '',
-    error: 'Unrecognized URL format. Please paste a YouTube or Spotify link.'
+    error: 'Unrecognized URL format. Please paste a YouTube link (video/playlist/shorts/live) or a Spotify link (track/playlist/album).'
   };
 }
 

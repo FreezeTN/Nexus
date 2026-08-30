@@ -5,6 +5,8 @@ import {
   TierPerks, 
   TIER_CONFIGS, 
   isDeveloperUser, 
+  isTesterUser,
+  isSubscriptionBypassed,
   getEffectiveUserTier,
   PAYPAL_RECIPIENT_EMAIL
 } from '../lib/subscription';
@@ -14,6 +16,8 @@ interface SubscriptionContextType {
   tier: SubscriptionTier;
   tierConfig: TierPerks;
   isDeveloper: boolean;
+  isTester: boolean;
+  isBypassed: boolean;
   isHero: boolean;
   isGuild: boolean;
   isLifetime: boolean;
@@ -26,6 +30,7 @@ interface SubscriptionContextType {
   hasCampaignGraphPro: boolean;
   hasDmLivePartyHud: boolean;
   hasPriorityAi: boolean;
+  hasAmbienceStreaming: boolean;
   // Upgrade Modal Triggers
   isUpgradeModalOpen: boolean;
   upgradeReason: string | null;
@@ -56,23 +61,25 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   const [upgradeReason, setUpgradeReason] = useState<string | null>(null);
   const [upgradeRequiredTier, setUpgradeRequiredTier] = useState<'hero' | 'guild'>('hero');
 
-  // Compute effective tier taking into account developer bypass
+  // Compute effective tier taking into account developer and tester bypass
   const isDev = isDeveloperUser(currentUser);
-  const effectiveTier: SubscriptionTier = isDev ? 'developer' : getEffectiveUserTier(currentUser);
+  const isTester = isTesterUser(currentUser);
+  const isBypassed = isDev || isTester;
+  const effectiveTier: SubscriptionTier = isDev ? 'developer' : isTester ? 'tester' : getEffectiveUserTier(currentUser);
   const tierConfig = TIER_CONFIGS[effectiveTier] || TIER_CONFIGS.free;
 
-  const isHero = effectiveTier === 'hero' || effectiveTier === 'guild' || effectiveTier === 'developer';
-  const isGuild = effectiveTier === 'guild' || effectiveTier === 'developer';
-  const isLifetime = isDev || !!currentUser?.isLifetime;
+  const isHero = isBypassed || effectiveTier === 'hero' || effectiveTier === 'guild';
+  const isGuild = isBypassed || effectiveTier === 'guild';
+  const isLifetime = isBypassed || !!currentUser?.isLifetime;
 
   const canCreateCharacter = (currentCount: number): boolean => {
-    if (tierConfig.characterLimit === -1) return true;
+    if (isBypassed || tierConfig.characterLimit === -1) return true;
     return currentCount < tierConfig.characterLimit;
   };
 
   const openUpgradeModal = (reason?: string, requiredTier: 'hero' | 'guild' = 'hero') => {
-    // Developers never need to upgrade
-    if (isDev) return;
+    // Developers & Testers never need to upgrade (full lifetime bypass)
+    if (isBypassed) return;
     setUpgradeReason(reason || 'Upgrade to unlock full unlimited Nexus TRPG potential');
     setUpgradeRequiredTier(requiredTier);
     setIsUpgradeModalOpen(true);
@@ -84,7 +91,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
   };
 
   const upgradeToTier = async (
-    newTier: SubscriptionTier,
+    newTier: SubscriptionTier, 
     details?: { paypalTxId?: string; paypalEmail?: string; isLifetime?: boolean; tierExpiresAt?: string }
   ) => {
     if (!currentUser) return;
@@ -112,6 +119,8 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
     tier: effectiveTier,
     tierConfig,
     isDeveloper: isDev,
+    isTester,
+    isBypassed,
     isHero,
     isGuild,
     isLifetime,
@@ -124,13 +133,14 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
     hasCampaignGraphPro: tierConfig.hasCampaignGraphPro,
     hasDmLivePartyHud: tierConfig.hasDmLivePartyHud,
     hasPriorityAi: tierConfig.hasPriorityAi,
+    hasAmbienceStreaming: tierConfig.hasAmbienceStreaming,
     isUpgradeModalOpen,
     upgradeReason,
     upgradeRequiredTier,
     openUpgradeModal,
     closeUpgradeModal,
     upgradeToTier
-  }), [currentUser, effectiveTier, tierConfig, isDev, isHero, isGuild, isLifetime, isUpgradeModalOpen, upgradeReason, upgradeRequiredTier]);
+  }), [currentUser, effectiveTier, tierConfig, isDev, isTester, isBypassed, isHero, isGuild, isLifetime, isUpgradeModalOpen, upgradeReason, upgradeRequiredTier]);
 
   return (
     <SubscriptionContext.Provider value={contextValue}>

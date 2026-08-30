@@ -1,6 +1,7 @@
 import { GameSystemPlugin } from '../types';
 import { getAbilityModifier } from '../../utils/calculators/abilityCalculators';
-import { getEffectiveMaxHp, getArmorClassBreakdown } from '../../utils/dndCalculations';
+import { get35eBaseAttackBonus, get35eArmorClass } from '../../utils/calculators/dnd35eCalculators';
+import { getEffectiveMaxHp } from '../../utils/dndCalculations';
 import { CharacterData, GearItem, Attack } from '../../types';
 
 export const dnd35ePlugin: GameSystemPlugin = {
@@ -34,9 +35,11 @@ export const dnd35ePlugin: GameSystemPlugin = {
       let passiveSpot = 10 + wisMod;
       if (spotSkill?.proficient) passiveSpot += (char.level || 1);
 
+      const acBreakdown = get35eArmorClass(char);
+
       return {
         maxHp: getEffectiveMaxHp(char),
-        armorClass: getArmorClassBreakdown(char).total,
+        armorClass: acBreakdown.totalAc,
         initiativeBonus: dexMod + (char.initiativeBonus || 0),
         speed: char.speed || 30,
         passivePerception: passiveSpot
@@ -62,7 +65,7 @@ export const dnd35ePlugin: GameSystemPlugin = {
       }
       const strMod = getAbilityModifier(char.abilities?.STR?.score || 10);
       const dexMod = getAbilityModifier(char.abilities?.DEX?.score || 10);
-      const bab = Math.floor((char.level || 1) * 0.75);
+      const { bab } = get35eBaseAttackBonus(char);
 
       let statMod = strMod;
       const notes = itemOrAttack.notes || '';

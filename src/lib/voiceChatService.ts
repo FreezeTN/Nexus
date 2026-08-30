@@ -1,12 +1,12 @@
 import { doc, setDoc, onSnapshot, deleteDoc, collection } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, UserRole } from './firebase';
 import { eventBus } from '../events/eventBus';
 
 export interface VoicePeerState {
   uid: string;
   displayName: string;
   characterName?: string;
-  role: 'Player' | 'DM';
+  role: UserRole;
   isMuted: boolean;
   isDeafened: boolean;
   isSpeaking: boolean;
@@ -39,7 +39,7 @@ const ICE_SERVERS: RTCConfiguration = {
 export class WebRTCVoiceManager {
   private sessionCode: string = '';
   private localUid: string = '';
-  private localUser: { displayName: string; role: 'Player' | 'DM'; characterName?: string } = {
+  private localUser: { displayName: string; role: UserRole; characterName?: string } = {
     displayName: 'Adventurer',
     role: 'Player'
   };
@@ -100,7 +100,7 @@ export class WebRTCVoiceManager {
    */
   public async joinVoice(
     sessionCode: string,
-    user: { uid: string; displayName: string; role: 'Player' | 'DM'; characterName?: string }
+    user: { uid: string; displayName: string; role: UserRole; characterName?: string }
   ): Promise<boolean> {
     this.sessionCode = sessionCode.trim().toUpperCase();
     this.localUid = user.uid;

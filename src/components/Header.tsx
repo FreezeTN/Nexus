@@ -56,13 +56,14 @@ import {
   Undo2,
   Redo2,
   Network,
-  Radio
+  Radio,
+  FlaskConical
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useUiMode } from '../context/UiModeContext';
-import { TIER_CONFIGS, isDeveloperUser, getEffectiveUserTier } from '../lib/subscription';
+import { TIER_CONFIGS, isDeveloperUser, isTesterUser, isSubscriptionBypassed, getEffectiveUserTier } from '../lib/subscription';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -585,6 +586,8 @@ export const Header: React.FC<HeaderProps> = ({
                         className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
                           effectiveTier === 'developer'
                             ? 'bg-gradient-to-r from-amber-950 to-cyan-950 hover:from-amber-900 hover:to-cyan-900 text-amber-200 border-cyan-400/80 shadow-cyan-950/40'
+                            : effectiveTier === 'tester' || currentUser.role === 'Tester'
+                            ? 'bg-emerald-950/90 hover:bg-emerald-900 text-emerald-200 border-emerald-500/80 shadow-emerald-950/40'
                             : effectiveTier === 'guild'
                             ? 'bg-purple-950/90 hover:bg-purple-900 text-purple-200 border-purple-500/80'
                             : effectiveTier === 'hero'
@@ -597,6 +600,8 @@ export const Header: React.FC<HeaderProps> = ({
                       >
                         {effectiveTier === 'developer' ? (
                           <Crown className="w-4 h-4 text-amber-400 animate-pulse" />
+                        ) : effectiveTier === 'tester' || currentUser.role === 'Tester' ? (
+                          <FlaskConical className="w-4 h-4 text-emerald-400" />
                         ) : currentUser.role === 'DM' ? (
                           <Crown className="w-4 h-4 text-purple-400" />
                         ) : (
@@ -606,6 +611,8 @@ export const Header: React.FC<HeaderProps> = ({
                         <span className={`text-[10px] uppercase font-bold px-1.5 py-0.2 rounded ${
                           effectiveTier === 'developer'
                             ? 'bg-cyan-500/30 text-cyan-200 border border-cyan-400/50'
+                            : effectiveTier === 'tester' || currentUser.role === 'Tester'
+                            ? 'bg-emerald-800/80 text-emerald-100 border border-emerald-500/40'
                             : effectiveTier === 'guild'
                             ? 'bg-purple-800/80 text-purple-100'
                             : effectiveTier === 'hero'
@@ -614,11 +621,11 @@ export const Header: React.FC<HeaderProps> = ({
                             ? 'bg-purple-800/80 text-purple-100'
                             : 'bg-indigo-800/80 text-indigo-100'
                         }`}>
-                          {effectiveTier === 'developer' ? 'DEV' : effectiveTier === 'guild' ? 'GUILD' : effectiveTier === 'hero' ? 'HERO' : currentUser.role}
+                          {effectiveTier === 'developer' ? 'DEV' : effectiveTier === 'tester' || currentUser.role === 'Tester' ? 'TESTER' : effectiveTier === 'guild' ? 'GUILD' : effectiveTier === 'hero' ? 'HERO' : currentUser.role}
                         </span>
                       </button>
 
-                      {!isDeveloperUser(currentUser) && onOpenUpgradeModal && (
+                      {!isSubscriptionBypassed(currentUser) && onOpenUpgradeModal && (
                         <button
                           type="button"
                           onClick={onOpenUpgradeModal}

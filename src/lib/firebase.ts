@@ -32,8 +32,8 @@ import {
 import firebaseConfig from '../../firebase-applet-config.json';
 import { CharacterData, OptionalRulesConfig, CampaignSaveFile } from '../types';
 
-export type UserRole = 'Player' | 'DM';
-export type SubscriptionTier = 'free' | 'hero' | 'guild' | 'developer';
+export type UserRole = 'Player' | 'DM' | 'Tester';
+export type SubscriptionTier = 'free' | 'hero' | 'guild' | 'developer' | 'tester';
 
 export interface UserProfile {
   uid: string;
@@ -202,19 +202,23 @@ export async function createOrUpdateUserProfile(
 
   // Automatic Lead Developer Detection for ChaosDwarf and Freeze
   const isLeadDev = normName === 'chaosdwarf' || normName === 'freeze' || normEmail === 'nik04@hotmail.de' || normEmail === 'tomnik2007@gmail.com';
-  const initialTier: SubscriptionTier = isLeadDev ? 'developer' : (existing?.tier || 'free');
+  // Automatic QA Tester Detection for Karl or existing Tester role
+  const isTester = normName === 'karl' || normEmail === 'karlbrettmann94@gmail.com' || existing?.role === 'Tester' || role === 'Tester' || existing?.tier === 'tester';
+  
+  const initialRole: UserRole = isTester ? 'Tester' : (existing?.role || role);
+  const initialTier: SubscriptionTier = isLeadDev ? 'developer' : isTester ? 'tester' : (existing?.tier || 'free');
 
   const profileData: UserProfile = {
     uid: user.uid,
     email: user.email,
     displayName: displayName,
-    role: existing?.role || role,
+    role: initialRole,
     photoURL: user.photoURL || undefined,
     tier: initialTier,
     tierExpiresAt: existing?.tierExpiresAt,
     paypalTxId: existing?.paypalTxId,
     paypalEmail: existing?.paypalEmail,
-    isLifetime: isLeadDev || existing?.isLifetime,
+    isLifetime: isLeadDev || isTester || existing?.isLifetime,
     createdAt: existing?.createdAt || new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };

@@ -1,6 +1,6 @@
 import { UserProfile } from '../lib/firebase';
 
-export type SubscriptionTier = 'free' | 'hero' | 'guild' | 'developer';
+export type SubscriptionTier = 'free' | 'hero' | 'guild' | 'developer' | 'tester';
 
 export interface TierPerks {
   name: string;
@@ -27,6 +27,9 @@ export const PAYPAL_RECIPIENT_EMAIL = 'paypal.me/nexustrpg';
 
 export const DEVELOPER_USERNAMES = ['chaosdwarf', 'freeze'];
 export const DEVELOPER_EMAILS = ['nik04@hotmail.de', 'tomnik2007@gmail.com'];
+
+export const TESTER_USERNAMES = ['karl'];
+export const TESTER_EMAILS = ['karlbrettmann94@gmail.com'];
 
 export const TIER_CONFIGS: Record<SubscriptionTier, TierPerks> = {
   free: {
@@ -108,6 +111,30 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierPerks> = {
       '🌟 Exclusive Guild Master community badge & direct roadmap voting'
     ]
   },
+  tester: {
+    name: 'Official QA / Tester',
+    badge: '🧪 QA Tester Bypass',
+    badgeColor: 'bg-emerald-950/90 text-emerald-200 border-emerald-500/80 ring-1 ring-emerald-500/50',
+    monthlyPrice: 'BYPASS',
+    annualPrice: 'BYPASS',
+    description: 'Official TRPG Tester Access: Full lifetime bypass of all subscription limits, paywalls, and quotas.',
+    characterLimit: -1,
+    rollLogLimit: -1,
+    hasCosmeticDice: true,
+    hasCustomThemes: true,
+    hasPdfExport: true,
+    hasCampaignGraphPro: true,
+    hasDmLivePartyHud: true,
+    hasPriorityAi: true,
+    hasAmbienceStreaming: true,
+    perks: [
+      'Full QA Tester bypass for Karl and designated testers',
+      'Unlimited characters, storage, AI queries & tools',
+      'Full access to all DM & Player features without paywalls',
+      'Permanent bypass for all current and future subscriptions',
+      'Access to all premium themes and animated dice'
+    ]
+  },
   developer: {
     name: 'Lead Developer / Founder',
     badge: '⚡👑 Developer God-Tier',
@@ -160,12 +187,49 @@ export function isDeveloperUser(user: UserProfile | null | undefined): boolean {
 }
 
 /**
+ * Checks if a user is a QA Tester (such as Karl) or has the Tester role/tier.
+ * Testers bypass all subscription limits, paywalls, and quotas.
+ */
+export function isTesterUser(user: UserProfile | null | undefined): boolean {
+  if (!user) return false;
+
+  const displayName = (user.displayName || '').toLowerCase().trim();
+  const email = (user.email || '').toLowerCase().trim();
+
+  if (user.role === 'Tester') {
+    return true;
+  }
+
+  if (user.tier === 'tester') {
+    return true;
+  }
+
+  if (TESTER_USERNAMES.includes(displayName)) {
+    return true;
+  }
+
+  if (TESTER_EMAILS.includes(email)) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Checks if a user has a subscription bypass (Lead Developers and QA Testers).
+ */
+export function isSubscriptionBypassed(user: UserProfile | null | undefined): boolean {
+  return isDeveloperUser(user) || isTesterUser(user);
+}
+
+/**
  * Determines the effective active subscription tier for a user.
- * Developers always resolve to 'developer' tier unconditionally.
+ * Developers resolve to 'developer', Testers resolve to 'tester' (both bypass all restrictions).
  */
 export function getEffectiveUserTier(user: UserProfile | null | undefined): SubscriptionTier {
   if (!user) return 'free';
   if (isDeveloperUser(user)) return 'developer';
+  if (isTesterUser(user)) return 'tester';
   return user.tier || 'free';
 }
 

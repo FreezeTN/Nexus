@@ -1,4 +1,5 @@
 export * from './types';
+export * from './semanticVersion';
 export * from './registry';
 export { dnd5ePlugin } from './plugins/dnd5ePlugin';
 export { dnd35ePlugin } from './plugins/dnd35ePlugin';

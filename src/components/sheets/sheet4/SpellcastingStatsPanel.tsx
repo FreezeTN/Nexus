@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { AbilityName, CharacterData } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import {
@@ -7,9 +7,11 @@ import {
   getAbilityModifier,
   formatModifier,
   getEffectiveAbilities,
-  getPreparedSpellsDetails
+  getPreparedSpellsDetails,
+  calculateProgressionSpellSlots,
+  generateProgressionSpellSlots
 } from '../../../utils/dndCalculations';
-import { Wand2, RefreshCw, BookOpen, AlertCircle, Sparkles } from 'lucide-react';
+import { Wand2, RefreshCw, BookOpen, Sparkles, Calculator, Flame } from 'lucide-react';
 import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface SpellcastingStatsPanelProps {
@@ -22,11 +24,14 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
   onUpdateCharacter
 }) => {
   const { t } = useLanguage();
+  const [showProgressionInfo, setShowProgressionInfo] = useState(false);
+
   const spellDC = getSpellSaveDC(character);
   const spellAtk = getSpellAttackBonus(character);
   const effectiveAbilities = getEffectiveAbilities(character);
   const abilityMod = getAbilityModifier(effectiveAbilities[character.spellcastingAbility]?.score || 10);
   const prepDetails = getPreparedSpellsDetails(character);
+  const progression = calculateProgressionSpellSlots(character);
 
   const handleAbilityChange = (ability: AbilityName) => {
     onUpdateCharacter({
@@ -75,6 +80,14 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
     onUpdateCharacter({ ...character, spellSlots: restored });
   };
 
+  const handleAutoCalculateSlots = () => {
+    const calculatedSlots = generateProgressionSpellSlots(character);
+    onUpdateCharacter({
+      ...character,
+      spellSlots: calculatedSlots
+    });
+  };
+
   return (
     <CollapsibleBox
       title={t('spells.spellSlots', 'Spellcasting Stats & Slot Tracker')}
@@ -97,17 +110,58 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
           <button
             onClick={(e) => {
               e.stopPropagation();
+              handleAutoCalculateSlots();
+            }}
+            className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-amber-600/40 text-amber-300 rounded-lg text-xs font-bold transition shadow"
+            title="Auto-calculate standard D&D 5e / 3.5e spell slots based on class and multiclass progression"
+          >
+            <Calculator className="w-3.5 h-3.5 text-amber-400" /> Auto-Progression
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
               handleRestoreAllSlots();
             }}
             className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg text-xs font-bold transition shadow"
             title="Restore all spell slots to maximum (Long Rest)"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> {t('common.reset', 'Restore All Slots')}
+            <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> {t('common.reset', 'Restore All')}
           </button>
         </div>
       }
     >
       <div className="space-y-4 pt-2 text-xs">
+        {/* Multiclass & Pact Magic Progression Summary Bar */}
+        {(progression.isMulticlass || progression.pactMagic) && (
+          <div className="bg-stone-950/80 border border-purple-900/60 rounded-xl p-3 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-400" />
+                <span className="font-bold text-xs text-purple-200">
+                  {progression.isMulticlass ? `Multiclass Caster Level: ${progression.casterLevel}` : 'Pact Magic Active'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProgressionInfo(!showProgressionInfo)}
+                className="text-[11px] text-purple-400 hover:text-purple-300 underline font-mono"
+              >
+                {showProgressionInfo ? 'Hide Breakdown' : 'View Progression Formula'}
+              </button>
+            </div>
+            {showProgressionInfo && (
+              <div className="pt-1.5 border-t border-purple-900/40 text-[11px] font-mono text-stone-400 space-y-0.5">
+                {progression.breakdown.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <span className="text-purple-400">•</span>
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Prepared Spells Limit Banner for Prepared Classes */}
         {prepDetails.isPreparedCaster && (
           <div className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 ${
@@ -175,19 +229,35 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
           </div>
         </div>
 
-
         {/* Spell Slot Trackers (Levels 1 to 9) */}
         <div>
-          <span className="font-serif font-bold text-amber-300 text-xs block mb-2 font-sans">
-            {t('spells.spellSlots', 'Spell Slot Tracker')}
-          </span>
+          <div className="flex items-center justify-between mb-2">
+            <span className="font-serif font-bold text-amber-300 text-xs font-sans">
+              {t('spells.spellSlots', 'Spell Slot Tracker')}
+            </span>
+            {progression.pactMagic && (
+              <span className="text-[11px] font-mono text-purple-300 flex items-center gap-1 bg-purple-950/60 px-2 py-0.5 rounded border border-purple-800/60">
+                <Flame className="w-3 h-3 text-purple-400" />
+                Pact Slots: Level {progression.pactMagic.slotLevel} ({progression.pactMagic.slotsCount} Total)
+              </span>
+            )}
+          </div>
 
           <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-2 font-mono">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((lvl) => {
               const slot = character.spellSlots.find(s => s.level === lvl) || { level: lvl, current: 0, max: 0 };
+              const isPactSlot = progression.pactMagic && progression.pactMagic.slotLevel === lvl;
+
               return (
-                <div key={lvl} className="bg-stone-950 p-2 rounded-xl border border-stone-800 text-center space-y-1">
-                  <span className="text-[10px] text-amber-400 font-bold block uppercase">{t('level.level', 'Lvl')} {lvl}</span>
+                <div key={lvl} className={`bg-stone-950 p-2 rounded-xl border text-center space-y-1 ${
+                  isPactSlot ? 'border-purple-600/60 shadow-sm shadow-purple-950' : 'border-stone-800'
+                }`}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span className={`text-[10px] font-bold block uppercase ${isPactSlot ? 'text-purple-300' : 'text-amber-400'}`}>
+                      {t('level.level', 'Lvl')} {lvl}
+                    </span>
+                    {isPactSlot && <Flame className="w-2.5 h-2.5 text-purple-400" />}
+                  </div>
 
                   {/* Current Slots */}
                   <div className="space-y-0.5">
@@ -200,10 +270,14 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
                       >
                         -
                       </button>
-                      <span className="font-bold text-amber-200 text-xs w-5 text-center">{slot.current}</span>
+                      <span className={`font-bold text-xs w-5 text-center ${isPactSlot ? 'text-purple-200' : 'text-amber-200'}`}>{slot.current}</span>
                       <button
                         onClick={() => handleSlotChange(lvl, slot.current + 1)}
-                        className="w-5 h-5 bg-amber-900/80 hover:bg-amber-800 border border-amber-600/50 text-amber-100 font-bold rounded text-xs flex items-center justify-center cursor-pointer active:scale-95 transition"
+                        className={`w-5 h-5 font-bold rounded text-xs flex items-center justify-center cursor-pointer active:scale-95 transition ${
+                          isPactSlot
+                            ? 'bg-purple-900/80 hover:bg-purple-800 border border-purple-600/50 text-purple-100'
+                            : 'bg-amber-900/80 hover:bg-amber-800 border border-amber-600/50 text-amber-100'
+                        }`}
                         title="Increase remaining slots"
                       >
                         +
@@ -248,3 +322,4 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
     </CollapsibleBox>
   );
 };
+

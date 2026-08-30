@@ -1,5 +1,6 @@
 import { systemRegistry } from './registry';
 import { GameSystemPlugin } from './types';
+import { checkPluginCompatibility } from './semanticVersion';
 
 export interface PluginContractCheck {
   pluginId: string;
@@ -94,8 +95,15 @@ export function verifyPluginContracts(): PluginContractVerificationSummary {
     let passesCompatibility = true;
     let compatibilityMessage = 'Passed compatibility matrix verification.';
 
-    if (plugin.minPlatformVersion) {
-      // Basic semver check assuming current platform is at least 3.9.0
+    if (plugin.requires) {
+      const compat = checkPluginCompatibility(plugin.id, plugin.requires);
+      if (!compat.isCompatible) {
+        passesCompatibility = false;
+        compatibilityMessage = `Semantic compatibility failed: ${compat.errors.join(', ')}`;
+      } else {
+        compatibilityMessage = `Semver compatible with host runtime.`;
+      }
+    } else if (plugin.minPlatformVersion) {
       passesCompatibility = true;
       compatibilityMessage = `Compatible with platform (min required: ${plugin.minPlatformVersion}).`;
     }

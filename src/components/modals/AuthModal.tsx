@@ -19,6 +19,7 @@ import {
   Shield, 
   Crown, 
   Sword, 
+  FlaskConical,
   LogOut, 
   Key, 
   Mail, 
@@ -292,47 +293,68 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
                   Active User Role
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                   
                   <button
                     type="button"
                     onClick={() => handleRoleChange('Player')}
-                    className={`p-3.5 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-xl border text-left transition-all ${
                       currentUser.role === 'Player'
                         ? 'bg-amber-950/40 border-amber-500/80 shadow-md shadow-amber-950/30 ring-1 ring-amber-500/50'
                         : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-1.5 mb-1">
                       <Sword className={`w-4 h-4 ${currentUser.role === 'Player' ? 'text-amber-400' : 'text-slate-400'}`} />
-                      <span className={`font-semibold text-sm ${currentUser.role === 'Player' ? 'text-amber-200' : 'text-slate-300'}`}>
+                      <span className={`font-semibold text-xs ${currentUser.role === 'Player' ? 'text-amber-200' : 'text-slate-300'}`}>
                         Player
                       </span>
                       {currentUser.role === 'Player' && <Check className="w-3.5 h-3.5 ml-auto text-amber-400" />}
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-tight">
-                      Manage character sheets, roll stats, track spells, gear & features.
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Character sheets, spells, gear & roll calculations.
                     </p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => handleRoleChange('DM')}
-                    className={`p-3.5 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-xl border text-left transition-all ${
                       currentUser.role === 'DM'
                         ? 'bg-purple-950/40 border-purple-500/80 shadow-md shadow-purple-950/30 ring-1 ring-purple-500/50'
                         : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-1.5 mb-1">
                       <Crown className={`w-4 h-4 ${currentUser.role === 'DM' ? 'text-purple-400' : 'text-slate-400'}`} />
-                      <span className={`font-semibold text-sm ${currentUser.role === 'DM' ? 'text-purple-200' : 'text-slate-300'}`}>
+                      <span className={`font-semibold text-xs ${currentUser.role === 'DM' ? 'text-purple-200' : 'text-slate-300'}`}>
                         Dungeon Master
                       </span>
                       {currentUser.role === 'DM' && <Check className="w-3.5 h-3.5 ml-auto text-purple-400" />}
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-tight">
-                      Full DM screen, encounter runner, monster compendium & party tools.
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      DM screen, encounters, monsters & party HUD.
+                    </p>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRoleChange('Tester')}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      currentUser.role === 'Tester'
+                        ? 'bg-emerald-950/40 border-emerald-500/80 shadow-md shadow-emerald-950/30 ring-1 ring-emerald-500/50'
+                        : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <FlaskConical className={`w-4 h-4 ${currentUser.role === 'Tester' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                      <span className={`font-semibold text-xs ${currentUser.role === 'Tester' ? 'text-emerald-200' : 'text-slate-300'}`}>
+                        Tester
+                      </span>
+                      {currentUser.role === 'Tester' && <Check className="w-3.5 h-3.5 ml-auto text-emerald-400" />}
+                    </div>
+                    <p className="text-[10px] text-slate-400 leading-tight">
+                      Full QA tester mode: bypasses all subscription limits.
                     </p>
                   </button>
 
@@ -407,7 +429,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
                     Select Role
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setSelectedRole('Player')}
@@ -438,6 +460,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         <span className="font-semibold text-xs text-purple-200">Dungeon Master</span>
                       </div>
                       <p className="text-[10px] text-slate-400">DM Screen, Encounters</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRole('Tester')}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        selectedRole === 'Tester'
+                          ? 'bg-emerald-950/40 border-emerald-500/80 ring-1 ring-emerald-500/50'
+                          : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <FlaskConical className="w-4 h-4 text-emerald-400" />
+                        <span className="font-semibold text-xs text-emerald-200">Tester</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">QA & Subscription Bypass</p>
                     </button>
                   </div>
                 </div>

@@ -10,6 +10,7 @@ import {
   formatModifier
 } from '../systems/dnd5e';
 export * from '../systems/dnd5e';
+export * from './calculators/dnd35eCalculators';
 
 
 export {

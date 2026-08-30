@@ -14,11 +14,40 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.3.0',
+    date: 'August 2026',
+    title: 'Enterprise Architecture Modernization: Four-Tier State, Rich Domain Modeling & Semantic Plugins',
+    badge: 'Latest Update',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🏛️ Four-Tier State Separation Architecture (ADR-0006)',
+        detail: 'Formalized strict boundaries across Server, Domain, UI, and Transient state layers. Ephemeral high-frequency data (3D dice physics, WebRTC audio volume decibels, tooltips) now operates entirely in transient memory, preventing race conditions, network spam, and rubber-banding during live multiplayer sessions.'
+      },
+      {
+        category: '🧩 Semantic Plugin Compatibility & Version Negotiation (ADR-0009)',
+        detail: 'Added semver requirement declarations (`requires: { core: ">=3.2", engine: ">=2.0", api: ">=5" }`) in system plugin manifests. The contract verification engine automatically evaluates compatibility against the active host runtime before executing external code.'
+      },
+      {
+        category: '🎲 Rich Domain AST Modeling & Multi-System Modifier Engine (ADR-0007)',
+        detail: 'Introduced structured domain models for dice expressions (`DiceExpression` AST), contextual skill checks, encumbrance evaluation, and typed modifiers supporting both additive (5e) and highest-only (Pathfinder 2e status bonuses) stacking rules.'
+      },
+      {
+        category: '🛡️ Centralized Error & Telemetry Taxonomy (ADR-0008)',
+        detail: 'Unified application error handling into four predictable resolution channels: non-blocking user toasts, blocking recovery modals, silent exponential backoff retries for network glitches, and background telemetry logging.'
+      },
+      {
+        category: '🎛️ Single-Responsibility Component Refactoring',
+        detail: 'Decomposed monolithic components into reusable custom hooks (e.g., `useAmbienceBroadcast`), decoupling audio state synchronization, URL validation, and subscription tier rules from UI rendering.'
+      }
+    ]
+  },
+  {
     version: 'v5.2.0',
     date: 'August 2026',
     title: 'DM Ambience Broadcaster, Persistent Background Audio Engine & Direct Supporter Checkout',
-    badge: 'Latest Update',
-    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    badge: 'Feature Release',
+    badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
     highlights: [
       {
         category: '🎙️ DM Overview Ambience & Music Broadcaster',

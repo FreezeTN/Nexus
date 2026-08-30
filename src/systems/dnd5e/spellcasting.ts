@@ -7,12 +7,32 @@ import {
   getPreparedSpellsDetails,
   PreparedSpellsDetails
 } from '../../utils/calculators/spellCalculators';
+import {
+  calculateProgressionSpellSlots,
+  generateProgressionSpellSlots,
+  MulticlassSpellSlotProgression,
+  DND_5E_SPELL_SLOT_TABLE
+} from '../../utils/calculators/multiclassSpellCalculators';
+import {
+  getMaxAttunementSlots,
+  getAttunementStatus,
+  itemRequiresAttunement,
+  AttunementStatus
+} from '../../utils/calculators/attunementCalculators';
 
 export {
   getRequiredLevelForSpellSlotLevel,
   getMaxUnlockedSpellSlotLevel,
   getPreparedSpellsDetails,
-  type PreparedSpellsDetails
+  type PreparedSpellsDetails,
+  calculateProgressionSpellSlots,
+  generateProgressionSpellSlots,
+  type MulticlassSpellSlotProgression,
+  DND_5E_SPELL_SLOT_TABLE,
+  getMaxAttunementSlots,
+  getAttunementStatus,
+  itemRequiresAttunement,
+  type AttunementStatus
 };
 
 export function getSpellSaveDC(char: CharacterData): number {

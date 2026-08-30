@@ -1,4 +1,5 @@
 import { RuleEdition, CharacterData, GearItem, Attack, Spell, AbilityName } from '../types';
+import { PluginCompatibilityRequirement } from './semanticVersion';
 
 export type RollModel =
   | { kind: 'd20'; modifier: number; formula: string; targetType: 'AC' | 'DC' }
@@ -91,6 +92,7 @@ export interface GameSystemPlugin {
   category?: 'fantasy' | 'cyberpunk' | 'horror' | 'tactical' | 'universal';
   supportedFeatures?: string[];
   thirdParty?: boolean;
+  requires?: PluginCompatibilityRequirement;
   minPlatformVersion?: string;
   minSystemVersion?: string;
   capabilities?: PluginCapability[];

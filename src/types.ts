@@ -571,7 +571,7 @@ export interface ActiveTransformation {
 export interface CampaignSaveMemberSummary {
   uid: string;
   displayName: string;
-  role: 'Player' | 'DM';
+  role: 'Player' | 'DM' | 'Tester';
   characterId?: string;
   characterName?: string;
   isUnassignedParticipant?: boolean;

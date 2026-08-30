@@ -18,7 +18,8 @@ import {
   Dices, 
   Users, 
   FileText,
-  Copy
+  Copy,
+  FlaskConical
 } from 'lucide-react';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { 
@@ -47,6 +48,7 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
     currentUser,
     tier,
     isDeveloper,
+    isTester,
     upgradeReason: contextReason,
     upgradeRequiredTier: contextRequiredTier,
     upgradeToTier,
@@ -183,6 +185,17 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
               <span><strong>Lead Developer Active:</strong> You have permanent God-Tier bypass for all features!</span>
             </div>
             <span className="bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded text-[10px] font-bold">ChaosDwarf & Freeze Bypass</span>
+          </div>
+        )}
+
+        {/* Tester Bypass Banner if QA Tester */}
+        {isTester && !isDeveloper && (
+          <div className="mx-6 mt-4 p-3 rounded-xl bg-gradient-to-r from-emerald-950/70 to-slate-900/80 border border-emerald-500/60 flex items-center justify-between text-xs text-emerald-200">
+            <div className="flex items-center gap-2 font-mono">
+              <FlaskConical className="w-4 h-4 text-emerald-400" />
+              <span><strong>QA Tester Active:</strong> Full unlimited subscription bypass enabled for testing!</span>
+            </div>
+            <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded text-[10px] font-bold">Tester Bypass</span>
           </div>
         )}
 

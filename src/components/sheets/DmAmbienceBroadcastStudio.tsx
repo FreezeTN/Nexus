@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   RadioTower,
   Crown,
@@ -15,52 +15,13 @@ import {
   AlertCircle,
   Sparkles,
   Volume2,
-  Square
+  Square,
+  FlaskConical,
+  Info
 } from 'lucide-react';
-import {
-  parseExternalMediaUrl,
-  getSavedExternalStreams,
-  saveExternalStream,
-  deleteExternalStream,
-  ExternalAmbienceStream
-} from '../../utils/externalAmbience';
-import { UserProfile, GameSession, updateSessionAmbience } from '../../lib/firebase';
-import { getEffectiveUserTier, isDeveloperUser } from '../../lib/subscription';
-
-const CURATED_PARTY_STREAMS: Omit<ExternalAmbienceStream, 'id' | 'addedAt'>[] = [
-  {
-    title: 'Fantasy Medieval Tavern & Lute',
-    url: 'https://www.youtube.com/watch?v=7bW75BM3m9A',
-    sourceType: 'youtube',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/7bW75BM3m9A?autoplay=1&enablejsapi=1',
-    category: 'tavern',
-    description: 'Cozy rustic tavern lute tunes, crackling fireplace & background alehouse murmurs.'
-  },
-  {
-    title: 'Epic Orchestral Combat & Boss Fights',
-    url: 'https://www.youtube.com/watch?v=k1-TrAvp_xs',
-    sourceType: 'youtube',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/k1-TrAvp_xs?autoplay=1&enablejsapi=1',
-    category: 'combat',
-    description: 'Intense cinematic orchestral battle soundtrack with heavy drums and brass sweeps.'
-  },
-  {
-    title: 'D&D Atmospheric Exploration (Spotify)',
-    url: 'https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M',
-    sourceType: 'spotify',
-    embedUrl: 'https://open.spotify.com/embed/playlist/37i9dQZF1DXcBWIGoYBM5M?utm_source=generator&theme=0',
-    category: 'exploration',
-    description: 'Official Spotify fantasy gaming soundtrack playlist for exploration and journeying.'
-  },
-  {
-    title: 'Deep Catacombs & Dark Dungeon Ambience',
-    url: 'https://www.youtube.com/watch?v=jX6kn9_U8qk',
-    sourceType: 'youtube',
-    embedUrl: 'https://www.youtube-nocookie.com/embed/jX6kn9_U8qk?autoplay=1&enablejsapi=1',
-    category: 'dungeon',
-    description: 'Eerie underground cavern reverberations, dripping water & low subterranean winds.'
-  }
-];
+import { ExternalAmbienceStream } from '../../utils/externalAmbience';
+import { UserProfile, GameSession } from '../../lib/firebase';
+import { useAmbienceBroadcast } from '../../hooks/useAmbienceBroadcast';
 
 interface DmAmbienceBroadcastStudioProps {
   activeSession: GameSession;
@@ -73,130 +34,30 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
   currentUser,
   onOpenUpgradeModal
 }) => {
-  const [customStreams, setCustomStreams] = useState<ExternalAmbienceStream[]>(() => getSavedExternalStreams());
-  const [inputUrl, setInputUrl] = useState<string>('');
-  const [customTitle, setCustomTitle] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<'tavern' | 'combat' | 'exploration' | 'dungeon' | 'mystic' | 'custom'>('exploration');
-  const [urlParseError, setUrlParseError] = useState<string | null>(null);
-  const [broadcastStatus, setBroadcastStatus] = useState<string | null>(null);
-  const [broadcastToParty, setBroadcastToParty] = useState<boolean>(true);
-  const [isExpanded, setIsExpanded] = useState<boolean>(true);
-
-  const effectiveTier = currentUser ? (isDeveloperUser(currentUser) ? 'developer' : getEffectiveUserTier(currentUser)) : 'free';
-  const hasSubscription = effectiveTier === 'hero' || effectiveTier === 'guild' || effectiveTier === 'developer';
-
-  const liveAmbience = activeSession?.activeAmbience;
-  const isPlaying = Boolean(liveAmbience?.isPlaying && liveAmbience?.embedUrl);
-
-  const requireSubscription = (actionName: string): boolean => {
-    if (!hasSubscription) {
-      if (onOpenUpgradeModal) {
-        onOpenUpgradeModal(
-          `${actionName} requires a Hero or Guild Master subscription. Unlock YouTube & Spotify stream broadcasting for your entire party!`,
-          'hero'
-        );
-      }
-      return false;
-    }
-    return true;
-  };
-
-  const handleAddCustomStream = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!requireSubscription('Adding external ambient stream links')) return;
-
-    setUrlParseError(null);
-    const parsed = parseExternalMediaUrl(inputUrl);
-    if (!parsed.isValid) {
-      setUrlParseError(parsed.error || 'Invalid link format.');
-      return;
-    }
-
-    const title = customTitle.trim() || parsed.titleSuggestion;
-    const newStream = saveExternalStream({
-      title,
-      url: inputUrl.trim(),
-      sourceType: parsed.sourceType,
-      embedUrl: parsed.embedUrl,
-      category: selectedCategory,
-      addedBy: currentUser?.displayName || 'Dungeon Master'
-    });
-
-    setCustomStreams(getSavedExternalStreams());
-    setInputUrl('');
-    setCustomTitle('');
-    handleSelectStream(newStream);
-  };
-
-  const handleDeleteStream = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    deleteExternalStream(id);
-    setCustomStreams(getSavedExternalStreams());
-  };
-
-  const handleSelectStream = async (stream: ExternalAmbienceStream | Omit<ExternalAmbienceStream, 'id' | 'addedAt'>) => {
-    if (!requireSubscription('Selecting and streaming ambient audio')) return;
-
-    const streamObj: ExternalAmbienceStream = {
-      ...stream,
-      id: (stream as any).id || `curated_${Date.now()}`
-    };
-
-    try {
-      await updateSessionAmbience(activeSession.code, {
-        streamId: streamObj.id,
-        title: streamObj.title,
-        url: streamObj.url,
-        sourceType: streamObj.sourceType,
-        embedUrl: streamObj.embedUrl,
-        isPlaying: true,
-        category: streamObj.category,
-        changedBy: currentUser?.displayName || 'Dungeon Master',
-        updatedAt: new Date().toISOString()
-      });
-      setBroadcastStatus(`Now broadcasting "${streamObj.title}" to room ${activeSession.code}`);
-      setTimeout(() => setBroadcastStatus(null), 3500);
-    } catch (err) {
-      console.warn('Failed to update session ambience:', err);
-    }
-  };
-
-  const handleTogglePlayback = async () => {
-    if (!requireSubscription('Ambient audio playback')) return;
-    if (!liveAmbience?.embedUrl) return;
-
-    const nextState = !liveAmbience.isPlaying;
-    try {
-      await updateSessionAmbience(activeSession.code, {
-        ...liveAmbience,
-        isPlaying: nextState,
-        changedBy: currentUser?.displayName || 'Dungeon Master',
-        updatedAt: new Date().toISOString()
-      });
-      setBroadcastStatus(nextState ? 'Ambience playback resumed' : 'Ambience paused for party');
-      setTimeout(() => setBroadcastStatus(null), 3000);
-    } catch (err) {
-      console.warn('Failed to toggle session ambience:', err);
-    }
-  };
-
-  const handleStopAmbience = async () => {
-    if (!liveAmbience?.embedUrl) return;
-    try {
-      await updateSessionAmbience(activeSession.code, {
-        ...liveAmbience,
-        isPlaying: false,
-        embedUrl: '',
-        title: 'Playback stopped',
-        changedBy: currentUser?.displayName || 'Dungeon Master',
-        updatedAt: new Date().toISOString()
-      });
-      setBroadcastStatus('Ambience stream stopped');
-      setTimeout(() => setBroadcastStatus(null), 3000);
-    } catch (err) {
-      console.warn('Failed to stop session ambience:', err);
-    }
-  };
+  const {
+    customStreams,
+    inputUrl,
+    setInputUrl,
+    customTitle,
+    setCustomTitle,
+    selectedCategory,
+    setSelectedCategory,
+    urlParseError,
+    setUrlParseError,
+    broadcastStatus,
+    isExpanded,
+    setIsExpanded,
+    isDev,
+    isTester,
+    hasSubscription,
+    liveAmbience,
+    isPlaying,
+    handleAddStream,
+    handleDeleteStream,
+    handleBroadcastStream,
+    handleTogglePlay,
+    handleStop
+  } = useAmbienceBroadcast({ activeSession, currentUser, onOpenUpgradeModal });
 
   return (
     <div className="bg-stone-950/90 p-4 sm:p-5 rounded-2xl border border-amber-900/50 space-y-4 shadow-xl relative overflow-hidden">
@@ -213,9 +74,19 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
               <h2 className="font-serif font-extrabold text-amber-200 text-base">
                 DM Campaign Music & Ambience Broadcaster
               </h2>
-              <span className="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-700/60 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <Crown className="w-2.5 h-2.5 text-amber-400" /> Hero & Guild Master
-              </span>
+              {isDev ? (
+                <span className="text-[10px] font-mono font-bold bg-cyan-950 text-cyan-300 border border-cyan-500/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Crown className="w-2.5 h-2.5 text-cyan-400" /> Developer God-Tier
+                </span>
+              ) : isTester ? (
+                <span className="text-[10px] font-mono font-bold bg-emerald-950 text-emerald-300 border border-emerald-500/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <FlaskConical className="w-2.5 h-2.5 text-emerald-400" /> QA Tester Bypass Active
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono font-bold bg-amber-950 text-amber-300 border border-amber-700/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Crown className="w-2.5 h-2.5 text-amber-400" /> Hero & Guild Master
+                </span>
+              )}
             </div>
             <p className="text-xs text-stone-400 mt-0.5">
               Broadcast YouTube & Spotify audio live to all players in session{' '}
@@ -307,7 +178,7 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleTogglePlayback}
+                  onClick={handleTogglePlay}
                   className={`px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow ${
                     isPlaying
                       ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
@@ -329,7 +200,7 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
 
                 <button
                   type="button"
-                  onClick={handleStopAmbience}
+                  onClick={handleStop}
                   className="px-3 py-2 bg-stone-900 hover:bg-rose-950/80 hover:text-rose-300 border border-stone-700 hover:border-rose-700 text-stone-400 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5"
                   title="Stop and clear active ambience stream"
                 >
@@ -339,6 +210,45 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
               </div>
             )}
           </div>
+
+          {/* Embedded Interactive Live Player */}
+          {isPlaying && (
+            <div className="mt-3 pt-3 border-t border-stone-800/80 space-y-2">
+              {liveAmbience.sourceType === 'spotify' ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-emerald-400 bg-emerald-950/40 border border-emerald-800/50 px-3 py-2 rounded-xl">
+                    <Info className="w-4 h-4 shrink-0" />
+                    <span>
+                      <strong>Spotify Playback Note:</strong> Due to browser DRM security policies, Spotify requires clicking the <strong>Play</strong> button directly inside the player widget below to start playback.
+                    </span>
+                  </div>
+                  <div className="rounded-xl overflow-hidden border border-stone-800 bg-black">
+                    <iframe
+                      src={liveAmbience.embedUrl}
+                      width="100%"
+                      height="152"
+                      frameBorder="0"
+                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                      loading="lazy"
+                      title={liveAmbience.title || 'Spotify Player'}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="aspect-video max-w-xl mx-auto rounded-xl overflow-hidden border border-stone-800 bg-black">
+                  <iframe
+                    src={liveAmbience.embedUrl}
+                    title={liveAmbience.title || 'YouTube Player'}
+                    className="w-full h-full"
+                    frameBorder="0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -355,7 +265,7 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
               </span>
             </div>
 
-            <form onSubmit={handleAddCustomStream} className="space-y-3">
+            <form onSubmit={handleAddStream} className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-mono uppercase text-stone-400 mb-1">
@@ -363,7 +273,7 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
                   </label>
                   <input
                     type="text"
-                    placeholder="https://www.youtube.com/playlist?list=... or spotify.com/..."
+                    placeholder="https://open.spotify.com/... or https://youtube.com/..."
                     value={inputUrl}
                     onChange={(e) => {
                       setInputUrl(e.target.value);
@@ -423,98 +333,72 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
             </form>
           </div>
 
-          {/* Saved & Curated Playlists Selection Grid */}
+          {/* Saved Playlists Selection Grid */}
           <div className="space-y-2.5 pt-1">
             <div className="flex items-center justify-between text-xs font-serif font-bold text-amber-300">
               <span className="flex items-center gap-1.5">
                 <ListMusic className="w-4 h-4 text-amber-400" /> Campaign Playlists & Atmosphere Library
               </span>
               <span className="text-[10px] text-stone-400 font-sans">
-                Click any soundtrack below to instantly broadcast it to the party
+                {customStreams.length > 0
+                  ? 'Click any soundtrack below to instantly broadcast it to the party'
+                  : 'Add your custom campaign tracks above'}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Custom Saved User Streams */}
-              {customStreams.map((stream) => {
-                const isSelected = liveAmbience?.url === stream.url;
-                return (
-                  <div
-                    key={stream.id}
-                    onClick={() => handleSelectStream(stream)}
-                    className={`p-3 rounded-xl border text-left transition flex items-start justify-between gap-2.5 cursor-pointer ${
-                      isSelected && isPlaying
-                        ? 'bg-amber-950/80 border-amber-500 shadow-md ring-1 ring-amber-500/40 text-amber-100'
-                        : 'bg-stone-900/90 border-stone-800 hover:border-amber-600/50 hover:bg-stone-850 text-stone-200'
-                    }`}
-                  >
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-xs truncate">{stream.title}</span>
-                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-stone-800 text-stone-300 border border-stone-700">
-                          {stream.sourceType}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-stone-400 truncate">{stream.url}</p>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {isSelected && isPlaying && (
-                        <span className="flex h-2.5 w-2.5 relative mr-1">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteStream(stream.id, e)}
-                        className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-stone-800 rounded-lg transition"
-                        title="Delete stream"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Curated Default Playlist Templates */}
-              {CURATED_PARTY_STREAMS.map((stream, idx) => {
-                const isSelected = liveAmbience?.url === stream.url;
-                return (
-                  <div
-                    key={`curated_${idx}`}
-                    onClick={() => handleSelectStream(stream)}
-                    className={`p-3 rounded-xl border text-left transition flex flex-col justify-between gap-1.5 cursor-pointer ${
-                      isSelected && isPlaying
-                        ? 'bg-amber-950/80 border-amber-500 shadow-md ring-1 ring-amber-500/40 text-amber-100'
-                        : 'bg-stone-900/90 border-stone-800 hover:border-amber-600/50 hover:bg-stone-850 text-stone-200'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="space-y-0.5">
+            {customStreams.length === 0 ? (
+              <div className="p-6 bg-stone-900/40 border border-dashed border-stone-800 rounded-xl text-center space-y-2">
+                <Music className="w-8 h-8 text-stone-600 mx-auto" />
+                <div className="text-xs font-bold text-stone-300">No Custom Ambience Tracks Added</div>
+                <p className="text-[11px] text-stone-500 max-w-sm mx-auto">
+                  Paste any YouTube video or Spotify playlist URL in the form above to build your campaign's soundscape library.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {customStreams.map((stream) => {
+                  const isSelected = liveAmbience?.url === stream.url;
+                  return (
+                    <div
+                      key={stream.id}
+                      onClick={() => handleBroadcastStream(stream)}
+                      className={`p-3 rounded-xl border text-left transition flex items-start justify-between gap-2.5 cursor-pointer ${
+                        isSelected && isPlaying
+                          ? 'bg-amber-950/80 border-amber-500 shadow-md ring-1 ring-amber-500/40 text-amber-100'
+                          : 'bg-stone-900/90 border-stone-800 hover:border-amber-600/50 hover:bg-stone-850 text-stone-200'
+                      }`}
+                    >
+                      <div className="space-y-1 flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-xs">{stream.title}</span>
-                          <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800">
+                          <span className="font-bold text-xs truncate">{stream.title}</span>
+                          <span className="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-stone-800 text-stone-300 border border-stone-700">
                             {stream.sourceType}
                           </span>
                         </div>
-                        <p className="text-[10.5px] text-stone-400 leading-tight">{stream.description}</p>
+                        <p className="text-[11px] text-stone-400 truncate">{stream.url}</p>
                       </div>
 
-                      {!hasSubscription ? (
-                        <Lock className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                      ) : isSelected && isPlaying ? (
-                        <span className="flex h-2.5 w-2.5 relative mt-1 shrink-0">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
-                        </span>
-                      ) : null}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isSelected && isPlaying && (
+                          <span className="flex h-2.5 w-2.5 relative mr-1">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteStream(stream.id, e)}
+                          className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-stone-800 rounded-lg transition cursor-pointer"
+                          title="Delete stream"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
