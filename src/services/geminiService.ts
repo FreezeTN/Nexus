@@ -58,7 +58,23 @@ export interface ChatMessage {
   attachment?: ChatMessageAttachment;
 }
 
-export type EntityType = 'character' | 'monster' | 'merchant' | 'npc' | 'item' | 'spell' | 'graph_node' | 'quest' | 'encounter';
+export type EntityType =
+  | 'character'
+  | 'monster'
+  | 'merchant'
+  | 'npc'
+  | 'item'
+  | 'spell'
+  | 'graph_node'
+  | 'quest'
+  | 'encounter'
+  | 'treasure'
+  | 'loot'
+  | 'session_summary'
+  | 'campaign_recap'
+  | 'rules_adjudication'
+  | 'dungeon_hazard'
+  | 'tactical_room';
 
 const USER_API_KEY_STORAGE = 'nexus_user_ai_api_key';
 
@@ -715,4 +731,257 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
 
   return detected;
 }
+
+export interface GeneratedEncounter {
+  name: string;
+  difficulty: 'Easy' | 'Medium' | 'Hard' | 'Deadly';
+  environment: string;
+  description: string;
+  enemies: Array<{
+    name: string;
+    count: number;
+    cr: string;
+    role: string;
+    tacticalNotes: string;
+    hpMax: number;
+    armorClass: number;
+    initiativeBonus: number;
+    attacks?: Array<{
+      id: string;
+      name: string;
+      attackBonus: number;
+      damage: string;
+      damageType: string;
+      range: string;
+      notes: string;
+    }>;
+    abilities?: {
+      STR?: { score: number };
+      DEX?: { score: number };
+      CON?: { score: number };
+      INT?: { score: number };
+      WIS?: { score: number };
+      CHA?: { score: number };
+    };
+  }>;
+  lootAndRewards?: {
+    xpTotal: number;
+    goldGp: number;
+    items: Array<{
+      name: string;
+      costGp: number;
+      isMagic: boolean;
+      itemType: string;
+      notes: string;
+    }>;
+  };
+  tacticsAndPhases: string;
+}
+
+export interface GeneratedTreasure {
+  title: string;
+  crTier: string;
+  wealth: {
+    cp: number;
+    sp: number;
+    ep: number;
+    gp: number;
+    pp: number;
+  };
+  totalGpEquivalent: number;
+  gemstonesAndArt: Array<{
+    name: string;
+    valueGp: number;
+    description: string;
+  }>;
+  magicItems: Array<{
+    name: string;
+    itemType: 'Weapon' | 'Armor' | 'Potion' | 'Scroll' | 'Wondrous Item' | 'Ring' | 'Misc';
+    rarity: 'Common' | 'Uncommon' | 'Rare' | 'Very Rare' | 'Legendary';
+    attunement: boolean;
+    costGp: number;
+    notes: string;
+    weaponStats?: {
+      attackBonus: number;
+      damage: string;
+      damageType: string;
+      notes: string;
+    };
+    armorAc?: number;
+  }>;
+  loreOrigin: string;
+}
+
+export interface GeneratedSessionSummary {
+  title: string;
+  previouslyOn: string;
+  keyEvents: Array<{
+    title: string;
+    description: string;
+    participants: string[];
+  }>;
+  keyVictoriesAndCasualties: string;
+  xpAndLootDistributed: {
+    xpPerPlayer: number;
+    goldDistributedGp: number;
+    notableItems: string[];
+  };
+  npcRelationsChanged: Array<{
+    npcName: string;
+    faction: string;
+    newStanding: 'Allied' | 'Friendly' | 'Neutral' | 'Suspicious' | 'Hostile';
+    notes: string;
+  }>;
+  unresolvedHooksAndCliffhangers: string[];
+  dmNotesNextSession: string;
+}
+
+export interface GeneratedRulesAdjudication {
+  query: string;
+  verdict: string;
+  rulesAsWritten: string;
+  rulesAsIntended: string;
+  recommendedTableRuling: string;
+  commonTrapOrMisconception: string;
+}
+
+export interface GeneratedDungeonHazard {
+  roomName: string;
+  sensoryDescription: string;
+  dimensionsAndLighting: string;
+  dynamicHazards: Array<{
+    name: string;
+    trigger: string;
+    dcCheck: string;
+    damageOrEffect: string;
+    countermeasure: string;
+  }>;
+  tacticalFeatures: Array<{
+    feature: string;
+    combatBenefit: string;
+  }>;
+  secretOrHiddenFeature: {
+    description: string;
+    perceptionDc: number;
+    rewardOrShortcut: string;
+  };
+}
+
+export interface TacticalCombatAdvice {
+  combatantName: string;
+  recommendedAction: string;
+  targetPriority: string;
+  positioningTip: string;
+  reactionWarning: string;
+  moraleState: 'Fight to the death' | 'Aggressive' | 'Cautious' | 'Looking to retreat / negotiate';
+}
+
+/**
+ * Phase C: Generates instant 2-3 sentence cinematic action narration for combat events
+ */
+export async function generateCinematicNarration(params: {
+  actorName: string;
+  targetName?: string;
+  actionType: 'attack_hit' | 'attack_miss' | 'critical_hit' | 'spell_cast' | 'kill' | 'death_save';
+  weaponOrSpell?: string;
+  damageDealt?: number | string;
+  damageType?: string;
+  environment?: string;
+}): Promise<string> {
+  const customApiKey = getStoredUserApiKey();
+  const lang = getStoredLanguage();
+
+  const prompt = `You are a legendary tabletop roleplaying Game Master. Write a punchy, visceral 1 to 2 sentence cinematic narration for this combat moment:
+- Actor: ${params.actorName}
+- Target: ${params.targetName || 'the opponent'}
+- Action: ${params.actionType}
+- Weapon/Spell: ${params.weaponOrSpell || 'weapon'}
+- Damage: ${params.damageDealt || ''} (${params.damageType || ''})
+- Scene/Atmosphere: ${params.environment || 'the heat of battle'}
+
+Output ONLY the dramatic narration paragraph. No introductory filler, no bullet points, no quote marks.`;
+
+  try {
+    const res = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: prompt,
+        history: [],
+        systemContext: 'You provide brief, high-impact tabletop RPG combat narrations.',
+        customApiKey: customApiKey || undefined,
+        language: lang
+      })
+    });
+    const data = await res.json();
+    return data.reply?.trim() || `${params.actorName} strikes decisively with ${params.weaponOrSpell || 'their attack'}!`;
+  } catch {
+    return `${params.actorName} delivers a crushing strike against ${params.targetName || 'the foe'}!`;
+  }
+}
+
+/**
+ * Phase C: Tactical AI Turn Advice for DM / Player
+ */
+export async function generateTacticalCombatAdvice(params: {
+  combatantName: string;
+  hpPercent: number;
+  availableAttacks: string[];
+  legendaryActionsRemaining?: number;
+  opponentsSummary: string;
+  battlefieldCondition?: string;
+}): Promise<TacticalCombatAdvice> {
+  const customApiKey = getStoredUserApiKey();
+  const lang = getStoredLanguage();
+
+  const prompt = `Provide intelligent tactical advice for ${params.combatantName} in a 5e TRPG combat round:
+- Current HP: ${params.hpPercent}%
+- Attacks/Features: ${params.availableAttacks.join(', ')}
+- Legendary Actions Remaining: ${params.legendaryActionsRemaining ?? 0}
+- Battlefield Situation: ${params.battlefieldCondition || 'Standard arena'}
+- Opponents: ${params.opponentsSummary}
+
+Return JSON with:
+{
+  "combatantName": "${params.combatantName}",
+  "recommendedAction": "Action, Bonus Action, and movement recommendation",
+  "targetPriority": "Who to focus down and why",
+  "positioningTip": "Cover, range, or engagement strategy",
+  "reactionWarning": "Key trigger to save Reaction or Legendary Actions for",
+  "moraleState": "Aggressive"
+}`;
+
+  try {
+    const res = await fetch('/api/ai/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: prompt,
+        history: [],
+        systemContext: 'You are a tactical combat expert for tabletop RPGs. Always return valid raw JSON only.',
+        customApiKey: customApiKey || undefined,
+        language: lang
+      })
+    });
+    const data = await res.json();
+    let text = data.reply || '';
+    if (text.includes('```json')) {
+      text = text.split('```json')[1].split('```')[0].trim();
+    } else if (text.includes('```')) {
+      text = text.split('```')[1].split('```')[0].trim();
+    }
+    return JSON.parse(text);
+  } catch {
+    return {
+      combatantName: params.combatantName,
+      recommendedAction: `Use highest-damaging attack while maintaining tactical cover.`,
+      targetPriority: `Target spellcasters or bloodied frontline enemies.`,
+      positioningTip: `Stay out of flanking cones and utilize 5ft disengage steps.`,
+      reactionWarning: `Reserve reaction for Opportunity Attacks or Shield / Counterspell.`,
+      moraleState: params.hpPercent < 25 ? 'Looking to retreat / negotiate' : 'Aggressive'
+    };
+  }
+}
+
+
 

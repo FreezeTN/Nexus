@@ -21,7 +21,11 @@ import {
   FileText,
   Users,
   Network,
-  Bot
+  Bot,
+  Radio,
+  Compass,
+  Flag,
+  ShieldCheck
 } from 'lucide-react';
 import { CharacterData } from '../../types';
 import { systemRegistry } from '../../systems';
@@ -42,6 +46,9 @@ interface CommandPaletteModalProps {
   onOpenDeveloperSdk?: () => void;
   onOpenCampaignGraph?: () => void;
   onOpenAiAssistant?: () => void;
+  onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  onOpenCopilot?: () => void;
+  onOpenCampaignLoreVault?: (tab?: any) => void;
   onNavigateTab: (tabId: any) => void;
   onRollDice?: () => void;
 }
@@ -68,6 +75,9 @@ export function CommandPaletteModal({
   onOpenDeveloperSdk,
   onOpenCampaignGraph,
   onOpenAiAssistant,
+  onOpenGenerators,
+  onOpenCopilot,
+  onOpenCampaignLoreVault,
   onNavigateTab,
   onRollDice
 }: CommandPaletteModalProps) {
@@ -98,6 +108,138 @@ export function CommandPaletteModal({
         action: () => {
           onClose();
           if (onOpenAiAssistant) onOpenAiAssistant();
+        }
+      },
+      {
+        id: 'action-generator-npc',
+        title: 'AI Generator: NPCs & Key Contacts',
+        category: 'Actions',
+        description: 'Generate rich NPCs with personality traits, voices, secrets, stat blocks & quests',
+        icon: <Users className="w-4 h-4 text-amber-400" />,
+        action: () => {
+          onClose();
+          if (onOpenGenerators) onOpenGenerators('npc');
+        }
+      },
+      {
+        id: 'action-generator-encounter',
+        title: 'AI Generator: Balanced Combat Encounters',
+        category: 'Actions',
+        description: 'Build tactical encounter packs with CR scaling, terrain hazards & combat AI',
+        icon: <Swords className="w-4 h-4 text-rose-400" />,
+        action: () => {
+          onClose();
+          if (onOpenGenerators) onOpenGenerators('encounter');
+        }
+      },
+      {
+        id: 'action-generator-treasure',
+        title: 'AI Generator: Treasure Hoards & Magic Loot',
+        category: 'Actions',
+        description: 'Roll thematic treasure hoards, appraised art objects, gemstones & magic items',
+        icon: <Sparkles className="w-4 h-4 text-emerald-400" />,
+        action: () => {
+          onClose();
+          if (onOpenGenerators) onOpenGenerators('treasure');
+        }
+      },
+      {
+        id: 'action-generator-dungeon',
+        title: 'AI Generator: Dungeon Hazards, Rooms & Traps',
+        category: 'Actions',
+        description: 'Generate atmospheric dungeon rooms, puzzles, lethal traps & environmental hazards',
+        icon: <MapPin className="w-4 h-4 text-amber-500" />,
+        action: () => {
+          onClose();
+          if (onOpenGenerators) onOpenGenerators('dungeon');
+        }
+      },
+      {
+        id: 'action-generator-session',
+        title: 'AI Generator: Session Chronicle & Story Recap',
+        category: 'Actions',
+        description: 'Synthesize bulleted session notes into narrative chronicles & quest log recaps',
+        icon: <FileText className="w-4 h-4 text-cyan-400" />,
+        action: () => {
+          onClose();
+          if (onOpenGenerators) onOpenGenerators('session');
+        }
+      },
+      {
+        id: 'action-generator-rules',
+        title: 'AI Generator: Instant TRPG Rules Adjudicator',
+        category: 'Actions',
+        description: 'Lookup official rules rulings (RAW vs RAI), edge-cases & fair DM adjudications',
+        icon: <BookOpen className="w-4 h-4 text-indigo-400" />,
+        action: () => {
+          onClose();
+          if (onOpenGenerators) onOpenGenerators('rules');
+        }
+      },
+      {
+        id: 'action-live-copilot',
+        title: 'Live Session Co-Pilot HUD (Phase C)',
+        category: 'Actions',
+        description: 'Instant sensory room intros, cinematic finisher narrations, stunt rulings & concentration DC calculator',
+        icon: <Sparkles className="w-4 h-4 text-amber-300" />,
+        action: () => {
+          onClose();
+          if (onOpenCopilot) onOpenCopilot();
+        }
+      },
+      {
+        id: 'action-soundscapes',
+        title: 'Procedural Soundscape Synthesizer (Web Audio API)',
+        category: 'Actions',
+        description: 'Campfires, rainstorms, dungeons, astral drones & tactile tabletop sound effects',
+        icon: <Radio className="w-4 h-4 text-cyan-400" />,
+        action: () => {
+          onClose();
+          if (onOpenCopilot) onOpenCopilot();
+        }
+      },
+      {
+        id: 'action-campaign-lore-vault',
+        title: 'Open Campaign World Atlas & Lore Vault',
+        category: 'Actions',
+        description: 'World atlas map, questline tracker, faction standing matrix & travel logistics (Ctrl+M)',
+        icon: <Compass className="w-4 h-4 text-amber-400" />,
+        action: () => {
+          onClose();
+          if (onOpenCampaignLoreVault) onOpenCampaignLoreVault('atlas');
+        }
+      },
+      {
+        id: 'action-campaign-quests',
+        title: 'Open Questline & Objective Tracker',
+        category: 'Actions',
+        description: 'Track active, completed, and failed quests with AI generator and rewards',
+        icon: <Flag className="w-4 h-4 text-emerald-400" />,
+        action: () => {
+          onClose();
+          if (onOpenCampaignLoreVault) onOpenCampaignLoreVault('quests');
+        }
+      },
+      {
+        id: 'action-campaign-factions',
+        title: 'Open Faction Standing & Influence Matrix',
+        category: 'Actions',
+        description: 'Manage faction relations, reputation tiers, perks, and secret motives',
+        icon: <ShieldCheck className="w-4 h-4 text-purple-400" />,
+        action: () => {
+          onClose();
+          if (onOpenCampaignLoreVault) onOpenCampaignLoreVault('factions');
+        }
+      },
+      {
+        id: 'action-campaign-travel',
+        title: 'Open Wilderness Travel & Logistics Calculator',
+        category: 'Actions',
+        description: 'Terrain speed, ration/water supplies, foraging checks, and hazard events',
+        icon: <Compass className="w-4 h-4 text-cyan-400" />,
+        action: () => {
+          onClose();
+          if (onOpenCampaignLoreVault) onOpenCampaignLoreVault('travel');
         }
       },
       {

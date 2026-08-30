@@ -664,14 +664,84 @@ Return a valid JSON object matching the CampaignEntity schema:
 - connections: Array of { targetName: string, relationship: string, targetType: string }`;
       } else if (entityType === "encounter") {
         systemPrompt = `You are an encounter design master. Create an exciting, balanced combat/social encounter for ${edition}.
+${langNote}
 Return a valid JSON object with:
 - name (string, title of the encounter)
 - difficulty ("Easy" | "Medium" | "Hard" | "Deadly")
 - environment (string, e.g. "terrestrial", "underwater", "volcanic", "arctic", "shadowfell", "aerial", "lair_active")
 - description (string, sensory room setup, tactical terrain, cover, hazards)
-- enemies: Array of { name: string, count: number, cr: string, role: string, tacticalNotes: string }
-- lootAndRewards: { xpTotal: number, goldGp: number, items: string[] }
+- enemies: Array of {
+    name: string,
+    count: number,
+    cr: string,
+    role: string,
+    tacticalNotes: string,
+    hpMax: number,
+    armorClass: number,
+    initiativeBonus: number,
+    attacks: Array<{ id: string, name: string, attackBonus: number, damage: string, damageType: string, range: string, notes: string }>,
+    abilities: { STR: {score: number}, DEX: {score: number}, CON: {score: number}, INT: {score: number}, WIS: {score: number}, CHA: {score: number} }
+  }
+- lootAndRewards: { xpTotal: number, goldGp: number, items: Array<{ name: string, costGp: number, isMagic: boolean, itemType: string, notes: string }> }
 - tacticsAndPhases: string (how enemies behave, reinforcements, traps)`;
+      } else if (entityType === "treasure" || entityType === "loot") {
+        systemPrompt = `You are an expert TTRPG treasure and loot master. Generate rich, flavorful treasure rewards for ${edition}.
+${langNote}
+Return a valid JSON object with:
+- title (string, e.g. "Sunken Galleon Chest", "Dragon Hoard Tier 2", "Bandit Chief Pouch")
+- crTier (string, e.g. "CR 0-4", "CR 5-10", "CR 11-16", "CR 17+")
+- wealth: { cp: number, sp: number, ep: number, gp: number, pp: number }
+- totalGpEquivalent: number
+- gemstonesAndArt: Array<{ name: string, valueGp: number, description: string }>
+- magicItems: Array<{
+    name: string,
+    itemType: "Weapon" | "Armor" | "Potion" | "Scroll" | "Wondrous Item" | "Ring" | "Misc",
+    rarity: "Common" | "Uncommon" | "Rare" | "Very Rare" | "Legendary",
+    attunement: boolean,
+    costGp: number,
+    notes: string,
+    weaponStats?: { attackBonus: number, damage: string, damageType: string, notes: string },
+    armorAc?: number
+  }>
+- loreOrigin: string (who crafted or accumulated this treasure)`;
+      } else if (entityType === "session_summary" || entityType === "campaign_recap") {
+        systemPrompt = `You are a master tabletop chronicler and storyteller. Turn raw session notes, battle results, or quest developments into an evocative session recap for ${edition}.
+${langNote}
+Return a valid JSON object with:
+- title (string, e.g. "Episode 14: The Siege of Red Larch")
+- previouslyOn: string (1-2 punchy recap paragraphs styled like a cinematic TV show "Previously on...")
+- keyEvents: Array<{ title: string, description: string, participants: string[] }>
+- keyVictoriesAndCasualties: string (bosses defeated, injuries, party hero moments)
+- xpAndLootDistributed: { xpPerPlayer: number, goldDistributedGp: number, notableItems: string[] }
+- npcRelationsChanged: Array<{ npcName: string, faction: string, newStanding: "Allied" | "Friendly" | "Neutral" | "Suspicious" | "Hostile", notes: string }>
+- unresolvedHooksAndCliffhangers: Array<string>
+- dmNotesNextSession: string (suggestions for what to prep for the next session)`;
+      } else if (entityType === "rules_adjudication") {
+        systemPrompt = `You are an impartial, authoritative TTRPG Rules Arbiter and Judge for ${edition}.
+${langNote}
+Return a valid JSON object with:
+- query: string (the rule question summarized)
+- verdict: string (1-sentence clear bottom line: Allowed, Disallowed, or Situational GM Call)
+- rulesAsWritten: string (exact citations, mechanics, action economy, spell slot or interaction details)
+- rulesAsIntended: string (designer intent, Sage Advice rulings or errata context)
+- recommendedTableRuling: string (fair, fast GM ruling that keeps gameplay moving smoothly at the table)
+- commonTrapOrMisconception: string (common mistakes players make with this rule)`;
+      } else if (entityType === "dungeon_hazard" || entityType === "tactical_room") {
+        systemPrompt = `You are a tactical dungeon and encounter environment architect for ${edition}.
+${langNote}
+Return a valid JSON object with:
+- roomName: string (e.g. "The Flooded Scriptorium", "Chasm of Arcane Geysers")
+- sensoryDescription: string (read-aloud text for the GM: sight, sound, smell, temperature)
+- dimensionsAndLighting: string (e.g. "60x40 ft, Dim Light from bioluminescent fungi, 20ft vaulted ceiling")
+- dynamicHazards: Array<{
+    name: string,
+    trigger: string,
+    dcCheck: string,
+    damageOrEffect: string,
+    countermeasure: string
+  }>
+- tacticalFeatures: Array<{ feature: string, combatBenefit: string }> (e.g. half cover pillars, elevated sniper ledges, slippery oil pools)
+- secretOrHiddenFeature: { description: string, perceptionDc: number, rewardOrShortcut: string }`;
       } else if (entityType === "quest") {
         systemPrompt = `You are a master storyteller and adventure designer. Create an immersive quest hook with branching objectives for ${edition}.
 Return a valid JSON object with:

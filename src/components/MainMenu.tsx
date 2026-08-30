@@ -22,11 +22,17 @@ import {
   Bot,
   Sparkles,
   Search,
-  X
+  X,
+  Compass,
+  LayoutGrid,
+  Zap,
+  Sliders
 } from 'lucide-react';
 import { HpOrb } from './HpOrb';
 import { UserProfile, CharacterPresence } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useUiMode } from '../context/UiModeContext';
+import { FirstUseLauncher } from './common/FirstUseLauncher';
 
 interface MainMenuProps {
   characters: CharacterData[];
@@ -43,6 +49,10 @@ interface MainMenuProps {
   onOpenSystemSelector?: () => void;
   onOpenAudioModal?: () => void;
   onOpenAiAssistant?: () => void;
+  onOpenSessionLobby?: () => void;
+  onOpenCampaignGraph?: () => void;
+  onExploreCompendium?: () => void;
+  onOpenDeveloperSdk?: () => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -59,9 +69,22 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   enabledSystems = ['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu'],
   onOpenSystemSelector,
   onOpenAudioModal,
-  onOpenAiAssistant
+  onOpenAiAssistant,
+  onOpenSessionLobby,
+  onOpenCampaignGraph,
+  onExploreCompendium,
+  onOpenDeveloperSdk
 }) => {
   const { t } = useLanguage();
+  const {
+    workspaceRole,
+    setWorkspaceRole,
+    complexityLevel,
+    setComplexityLevel,
+    isStreamlined,
+    showFirstUseLauncher,
+    setShowFirstUseLauncher
+  } = useUiMode();
   const currentEdition = edition || activeCharacter?.edition || '5e';
   const activeSystem = currentEdition === 'shadowrun'
     ? 'shadowrun'
@@ -602,6 +625,47 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
   return (
     <div className="space-y-8 pb-12">
+      {/* First-Use Intent Launcher / Welcome Hub (Phase A) */}
+      {showFirstUseLauncher ? (
+        <FirstUseLauncher
+          onJoinCampaign={onOpenSessionLobby}
+          onCreateCharacter={() => onCreateNewCharacter('character')}
+          onStartCampaignGm={onOpenCampaignGraph || onEnterGame}
+          onExploreCompendium={onExploreCompendium}
+          onOpenAiAssistant={onOpenAiAssistant}
+          onSelectSystem={onOpenSystemSelector}
+          onClose={() => setShowFirstUseLauncher(false)}
+        />
+      ) : (
+        /* Minimized Fast Intent Launcher Bar */
+        <div className="flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-stone-900/60 border border-stone-800 backdrop-blur-md">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400">
+              <Compass className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-serif font-bold text-stone-200 block">
+                Quick Tabletop Launchpad
+              </span>
+              <span className="text-[11px] text-stone-400">
+                Active Workspace: <strong className="text-amber-300 capitalize">{workspaceRole}</strong> | Mode: <strong className="text-cyan-300 capitalize">{complexityLevel}</strong>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setShowFirstUseLauncher(true)}
+              className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-semibold border border-stone-700 transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Open Welcome Hub</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* System Selector Cards */}
       <div className="space-y-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">

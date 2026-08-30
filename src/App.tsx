@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, Suspense } from 'react';
-import { RuleEdition } from './types';
+import { RuleEdition, CharacterData } from './types';
 import { Header } from './components/Header';
 import { Navigation, TabId } from './components/Navigation';
 import { QuickStatsBar } from './components/QuickStatsBar';
@@ -39,6 +39,10 @@ import { SessionLobbyModal } from './components/modals/SessionLobbyModal';
 import { PartyManagerModal } from './components/modals/PartyManagerModal';
 import { TRPGSystemSelectorModal } from './components/modals/TRPGSystemSelectorModal';
 import { AiAssistantModal } from './components/modals/AiAssistantModal';
+import { TabletopGeneratorsModal, GeneratorTab } from './components/modals/TabletopGeneratorsModal';
+import { CampaignLoreVaultModal, CampaignTabId } from './components/modals/CampaignLoreVaultModal';
+import { LiveSessionCopilotDrawer } from './components/common/LiveSessionCopilotDrawer';
+import { GeneratedEncounter, hydrateGeneratedMonster } from './services/geminiService';
 import { PhysicalDiceModal } from './components/modals/PhysicalDiceModal';
 import { UpgradeModal } from './components/modals/UpgradeModal';
 import { GlobalUpgradeModal } from './components/modals/GlobalUpgradeModal';
@@ -235,6 +239,60 @@ export default function App() {
   });
 
   const [showDiagnosticConsole, setShowDiagnosticConsole] = useState(false);
+  const [showTabletopGenerators, setShowTabletopGenerators] = useState(false);
+  const [tabletopGeneratorsTab, setTabletopGeneratorsTab] = useState<GeneratorTab>('npc');
+  const [showLiveCopilotDrawer, setShowLiveCopilotDrawer] = useState(false);
+  const [showCampaignLoreVaultModal, setShowCampaignLoreVaultModal] = useState(false);
+  const [campaignLoreVaultInitialTab, setCampaignLoreVaultInitialTab] = useState<CampaignTabId>('atlas');
+
+  const handleOpenCampaignLoreVault = (tab: CampaignTabId = 'atlas') => {
+    setCampaignLoreVaultInitialTab(tab);
+    setShowCampaignLoreVaultModal(true);
+  };
+
+  const handleOpenGenerators = (tab: GeneratorTab = 'npc') => {
+    setTabletopGeneratorsTab(tab);
+    setShowTabletopGenerators(true);
+  };
+
+  const handlePopulateCombatEncounter = (encounter: GeneratedEncounter) => {
+    if (!encounter || !encounter.enemies) return;
+    const newMonsters: CharacterData[] = [];
+    encounter.enemies.forEach((enemy) => {
+      const count = Math.max(1, enemy.count || 1);
+      for (let i = 0; i < count; i++) {
+        const uniqueName = count > 1 ? `${enemy.name} #${i + 1}` : enemy.name;
+        const monsterData = hydrateGeneratedMonster({
+          name: uniqueName,
+          challengeRating: enemy.cr || '1',
+          hpMax: enemy.hpMax || 25,
+          armorClass: enemy.armorClass || 13,
+          speed: 30,
+          initiativeBonus: enemy.initiativeBonus || 0,
+          abilities: enemy.abilities || { STR: { score: 14 }, DEX: { score: 12 }, CON: { score: 14 } },
+          attacks: enemy.attacks || [],
+          tacticalNotes: enemy.tacticalNotes,
+          backstory: `Encounter: ${encounter.name}. Role: ${enemy.role}. ${enemy.tacticalNotes}`
+        }, currentSystemTheme);
+        newMonsters.push(monsterData);
+      }
+    });
+
+    if (newMonsters.length > 0) {
+      setCharacters(prev => [...prev, ...newMonsters]);
+    }
+    setActiveTab('sheet2');
+  };
+
+  const handleAppendSessionNotes = (notes: string) => {
+    if (!activeCharacter) return;
+    const current = activeCharacter.additionalNotes || '';
+    const updated = current ? `${current}\n\n${notes}` : notes;
+    handleUpdateCharacter({
+      ...activeCharacter,
+      additionalNotes: updated
+    });
+  };
 
   // Tab auto-navigation guards
   useEffect(() => {
@@ -351,6 +409,20 @@ export default function App() {
       if (matchesHotkey(e, 'openOptions')) {
         e.preventDefault();
         setShowAudioModal(prev => !prev);
+        return;
+      }
+
+      // Live Session Co-Pilot HUD shortcut (Ctrl+J or Cmd+J)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setShowLiveCopilotDrawer(prev => !prev);
+        return;
+      }
+
+      // Campaign World Atlas & Questline Lore Vault shortcut (Ctrl+M or Cmd+M)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setShowCampaignLoreVaultModal(prev => !prev);
         return;
       }
 
@@ -535,6 +607,7 @@ export default function App() {
         onOpenCommandPalette={() => setShowCommandPalette(true)}
         onOpenExtensionManager={() => setShowExtensionManager(true)}
         onOpenVoiceModal={() => setShowVoiceModal(true)}
+        onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
         onUndo={undoCharacters}
         onRedo={redoCharacters}
         canUndo={canUndoCharacters}
@@ -560,6 +633,8 @@ export default function App() {
           onOpenSessionLobby={() => setShowSessionModal(true)}
           onOpenVoiceModal={() => setShowVoiceModal(true)}
           onOpenAudioModal={() => setShowAudioModal(true)}
+          onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
+          onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
           currentUser={currentUser}
           activeSession={activeSession}
           isPhysicalDiceMode={isPhysicalDiceMode}
@@ -611,6 +686,13 @@ export default function App() {
                   onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
                   onOpenAudioModal={() => setShowAudioModal(true)}
                   onOpenAiAssistant={() => setShowAiAssistantModal(true)}
+                  onOpenSessionLobby={() => setShowSessionModal(true)}
+                  onOpenCampaignGraph={() => setShowCampaignGraphModal(true)}
+                  onExploreCompendium={() => {
+                    // Navigate to sheet7 (Compendium & Rules) or sheet6 (Guide)
+                    setActiveTab('sheet7');
+                  }}
+                  onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
                 />
               </div>
             )}
@@ -644,6 +726,7 @@ export default function App() {
                   }}
                   onRoll={handleRoll}
                   onRollDamage={handleRollDamage}
+                  onOpenGenerators={handleOpenGenerators}
                 />
               </div>
             )}
@@ -654,6 +737,7 @@ export default function App() {
                   character={activeCharacter}
                   onUpdateCharacter={handleUpdateCharacter}
                   onRollDamage={handleRollDamage}
+                  onOpenGenerators={handleOpenGenerators}
                 />
               </div>
             )}
@@ -679,6 +763,8 @@ export default function App() {
                 <Sheet5DescriptionNotes
                   character={activeCharacter}
                   onUpdateCharacter={handleUpdateCharacter}
+                  onOpenGenerators={handleOpenGenerators}
+                  onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
                 />
               </div>
             )}
@@ -714,6 +800,9 @@ export default function App() {
                   onUpdateCharacter={handleUpdateCharacter}
                   onDetach={() => handleDetachTab('sheetDm')}
                   onOpenUpgradeModal={handleOpenUpgradeModal}
+                  onOpenGenerators={handleOpenGenerators}
+                  onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
+                  onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
                 />
               </div>
             )}
@@ -778,6 +867,9 @@ export default function App() {
         onOpenDeveloperSdk={() => setShowDeveloperSdk(true)}
         onOpenCampaignGraph={() => setShowCampaignGraphModal(true)}
         onOpenAiAssistant={() => setShowAiAssistantModal(true)}
+        onOpenGenerators={handleOpenGenerators}
+        onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
+        onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
         onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
         onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
       />
@@ -932,6 +1024,49 @@ export default function App() {
             }}
           />
         )}
+
+        {/* Phase B: In-Flow Tabletop AI Generators Modal */}
+        {showTabletopGenerators && (
+          <TabletopGeneratorsModal
+            isOpen={showTabletopGenerators}
+            onClose={() => setShowTabletopGenerators(false)}
+            initialTab={tabletopGeneratorsTab}
+            activeCharacter={activeCharacter}
+            ruleEdition={currentSystemTheme}
+            onAddCharacter={(char) => {
+              handleCreateNewCharacter(char);
+            }}
+            onAddItemToInventory={(item) => {
+              handleAddItemToActiveCharacter(item);
+            }}
+            onAddSpellToSpellbook={(spell) => {
+              handleAddSpellToActiveCharacter(spell);
+            }}
+            onPopulateCombatEncounter={handlePopulateCombatEncounter}
+            onAppendSessionNotes={handleAppendSessionNotes}
+          />
+        )}
+
+        {/* Phase C: Live Tabletop Session Co-Pilot HUD Drawer */}
+        <LiveSessionCopilotDrawer
+          isOpen={showLiveCopilotDrawer}
+          onClose={() => setShowLiveCopilotDrawer(false)}
+          activeCharacter={activeCharacter}
+          ruleEdition={currentSystemTheme}
+          onRoll={handleRoll}
+        />
+
+        {/* Phase D: Campaign World Atlas & Knowledge Lore Vault */}
+        <CampaignLoreVaultModal
+          isOpen={showCampaignLoreVaultModal}
+          onClose={() => setShowCampaignLoreVaultModal(false)}
+          initialTab={campaignLoreVaultInitialTab}
+          onOpenKnowledgeGraph={(entityName) => {
+            setInitialGraphEntityName(entityName);
+            setShowCampaignGraphModal(true);
+          }}
+          onOpenGenerators={handleOpenGenerators}
+        />
 
         {/* Integrated Party WebRTC Voice Client Widget */}
         <PartyVoiceWidget

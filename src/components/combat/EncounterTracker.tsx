@@ -44,6 +44,7 @@ import { MerchantEncounterPanel } from './encounter/MerchantEncounterPanel';
 import { eventBus } from '../../events/eventBus';
 import { useEncounterState, loadSavedEncounter } from './encounter/useEncounterState';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { CombatTacticsAssistant } from './CombatTacticsAssistant';
 
 export type { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData };
 export { loadSavedEncounter };
@@ -56,7 +57,8 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   onOpenPartyManager,
   onRoll,
   onUpdateCharacter,
-  encounterState: externalState
+  encounterState: externalState,
+  onOpenGenerators
 }) => {
   const { t } = useLanguage();
   const localEncounter = useEncounterState({
@@ -561,6 +563,15 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         </div>
       )}
 
+      {/* Phase C: Live Tactical Combat Assistant */}
+      {combatants.length > 0 && activeCombatant && (
+        <CombatTacticsAssistant
+          activeCombatant={activeCombatant}
+          allCombatants={combatants}
+          round={roundNumber}
+        />
+      )}
+
       {/* Combatant Roster: Team 1 (Allies) vs Team 2 (Enemies) Layout */}
       {viewMode === 'teams' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
@@ -784,13 +795,26 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                 </div>
               </div>
 
-              <button
-                onClick={() => handleOpenAddModal('enemy')}
-                className="flex items-center gap-1 text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-700/60 px-2.5 py-1 rounded-xl font-bold transition shadow"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add Enemy</span>
-              </button>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {onOpenGenerators && (
+                  <button
+                    onClick={() => onOpenGenerators('encounter')}
+                    className="flex items-center gap-1 text-xs bg-purple-950 hover:bg-purple-900 text-purple-300 border border-purple-700/60 px-2.5 py-1 rounded-xl font-bold transition shadow cursor-pointer"
+                    title="Generate balanced AI encounters with 1-click import"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    <span>AI Encounter Builder</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleOpenAddModal('enemy')}
+                  className="flex items-center gap-1 text-xs bg-rose-950 hover:bg-rose-900 text-rose-300 border border-rose-700/60 px-2.5 py-1 rounded-xl font-bold transition shadow cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Add Enemy</span>
+                </button>
+              </div>
             </div>
 
             {/* Enemies Cards List */}
@@ -799,12 +823,26 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                 <div className="text-center py-8 px-4 border border-dashed border-stone-800 rounded-xl text-stone-500 space-y-2">
                   <Swords className="w-8 h-8 mx-auto text-stone-600 opacity-60" />
                   <p className="text-xs">No enemies or monsters in this encounter.</p>
-                  <button
-                    onClick={() => handleOpenAddModal('enemy')}
-                    className="text-xs text-rose-400 hover:text-rose-300 font-bold underline"
-                  >
-                    + Add Enemy / Monster Target
-                  </button>
+                  <div className="flex items-center justify-center gap-3">
+                    <button
+                      onClick={() => handleOpenAddModal('enemy')}
+                      className="text-xs text-rose-400 hover:text-rose-300 font-bold underline cursor-pointer"
+                    >
+                      + Add Enemy / Monster Target
+                    </button>
+                    {onOpenGenerators && (
+                      <>
+                        <span className="text-stone-600">•</span>
+                        <button
+                          onClick={() => onOpenGenerators('encounter')}
+                          className="text-xs text-purple-400 hover:text-purple-300 font-bold underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>Generate Balanced AI Encounter</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
               ) : (
                 enemies.map((c) => {

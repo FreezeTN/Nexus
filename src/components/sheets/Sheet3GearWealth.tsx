@@ -13,13 +13,15 @@ interface Sheet3Props {
   onUpdateCharacter: (updated: CharacterData) => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage?: (label: string, expression: string) => void;
+  onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
 }
 
 export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   character,
   onUpdateCharacter,
   onRoll,
-  onRollDamage
+  onRollDamage,
+  onOpenGenerators
 }) => {
   const { isVisible } = useLayoutCustomization();
 
@@ -54,6 +56,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
         <WealthCurrencyPanel
           character={character}
           onUpdateCharacter={onUpdateCharacter}
+          onOpenGenerators={onOpenGenerators}
         />
       )}
 

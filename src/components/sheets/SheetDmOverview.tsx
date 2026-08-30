@@ -30,11 +30,20 @@ import {
   UserCheck,
   Check,
   X,
-  ExternalLink
+  ExternalLink,
+  Swords,
+  Coins,
+  Scroll,
+  HelpCircle,
+  MapPin,
+  Compass,
+  Flag,
+  ShieldCheck
 } from 'lucide-react';
 
 import { KnowledgeGraphCard, KnowledgeEntity } from '../common/KnowledgeGraphCard';
 import { DmAmbienceBroadcastStudio } from './DmAmbienceBroadcastStudio';
+import { SoundscapePanel } from '../audio/SoundscapePanel';
 
 interface SheetDmOverviewProps {
   activeSession: GameSession;
@@ -43,6 +52,9 @@ interface SheetDmOverviewProps {
   onUpdateCharacter: (updated: CharacterData) => void;
   onDetach?: () => void;
   onOpenUpgradeModal?: (reason?: string, tier?: 'hero' | 'guild') => void;
+  onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  onOpenCopilot?: () => void;
+  onOpenCampaignLoreVault?: (tab?: any) => void;
 }
 
 const COMMON_CONDITIONS = [
@@ -69,7 +81,10 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
   currentUser,
   onUpdateCharacter,
   onDetach,
-  onOpenUpgradeModal
+  onOpenUpgradeModal,
+  onOpenGenerators,
+  onOpenCopilot,
+  onOpenCampaignLoreVault
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [quickAmountMap, setQuickAmountMap] = useState<Record<string, string>>({});
@@ -292,6 +307,110 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Tabletop In-Flow AI Generators Toolbar for DMs */}
+      {onOpenGenerators && (
+        <div className="bg-stone-950/90 border border-amber-500/30 rounded-2xl p-4 shadow-lg space-y-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span className="font-serif font-bold text-sm text-stone-100">
+                In-Flow Tabletop AI Generators (Phase B)
+              </span>
+              <span className="text-[10px] font-mono uppercase bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                Instant Oracle
+              </span>
+            </div>
+            <span className="text-xs text-stone-400 hidden sm:inline">
+              1-click tactical generators with direct sheet & combat imports
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+            <button
+              onClick={() => onOpenGenerators('encounter')}
+              className="p-2.5 rounded-xl bg-purple-950/50 hover:bg-purple-900/60 border border-purple-800/50 text-purple-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group"
+            >
+              <Swords className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+              <span>⚔️ Encounter</span>
+            </button>
+
+            <button
+              onClick={() => onOpenGenerators('npc')}
+              className="p-2.5 rounded-xl bg-amber-950/50 hover:bg-amber-900/60 border border-amber-800/50 text-amber-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group"
+            >
+              <Users className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span>🧝 Quick NPC</span>
+            </button>
+
+            <button
+              onClick={() => onOpenGenerators('treasure')}
+              className="p-2.5 rounded-xl bg-emerald-950/50 hover:bg-emerald-900/60 border border-emerald-800/50 text-emerald-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group"
+            >
+              <Coins className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+              <span>💎 Roll Hoard</span>
+            </button>
+
+            <button
+              onClick={() => onOpenGenerators('session')}
+              className="p-2.5 rounded-xl bg-cyan-950/50 hover:bg-cyan-900/60 border border-cyan-800/50 text-cyan-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group"
+            >
+              <Scroll className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+              <span>📜 Recap / Log</span>
+            </button>
+
+            <button
+              onClick={() => onOpenGenerators('rules')}
+              className="p-2.5 rounded-xl bg-amber-950/40 hover:bg-amber-900/50 border border-amber-700/50 text-amber-300 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group"
+            >
+              <HelpCircle className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
+              <span>🔮 Rule Arbiter</span>
+            </button>
+
+            <button
+              onClick={() => onOpenGenerators('dungeon')}
+              className="p-2.5 rounded-xl bg-rose-950/50 hover:bg-rose-900/60 border border-rose-800/50 text-rose-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group"
+            >
+              <MapPin className="w-4 h-4 text-rose-400 group-hover:scale-110 transition-transform" />
+              <span>🗺️ Dungeon Room</span>
+            </button>
+
+            {onOpenCampaignLoreVault && (
+              <>
+                <button
+                  onClick={() => onOpenCampaignLoreVault('atlas')}
+                  className="p-2.5 rounded-xl bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/60 text-amber-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group shadow-sm"
+                  title="Open Campaign World Atlas & Region Map"
+                >
+                  <Compass className="w-4 h-4 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
+                  <span>🌍 World Atlas</span>
+                </button>
+
+                <button
+                  onClick={() => onOpenCampaignLoreVault('quests')}
+                  className="p-2.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/60 text-emerald-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group shadow-sm"
+                  title="Open Quest Tracker & Objectives"
+                >
+                  <Flag className="w-4 h-4 text-emerald-400 group-hover:scale-110 transition-transform" />
+                  <span>⚔️ Quests</span>
+                </button>
+
+                <button
+                  onClick={() => onOpenCampaignLoreVault('factions')}
+                  className="p-2.5 rounded-xl bg-purple-950/60 hover:bg-purple-900/70 border border-purple-500/60 text-purple-200 text-xs font-semibold flex flex-col items-center gap-1.5 transition cursor-pointer group shadow-sm"
+                  title="Open Faction Standing Matrix"
+                >
+                  <ShieldCheck className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+                  <span>🛡️ Factions</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Phase C: Live Session Procedural Audio Synthesizer */}
+      <SoundscapePanel />
 
       {/* Campaign Ambience & Music Broadcast Studio */}
       <DmAmbienceBroadcastStudio

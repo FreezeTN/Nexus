@@ -74,6 +74,7 @@ import {
   playLevelUpSound,
   playDeathSound
 } from '../../utils/soundEffects';
+import { useUiMode } from '../../context/UiModeContext';
 
 interface OptionsModalProps {
   isOpen: boolean;
@@ -105,6 +106,14 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onOpenAuthModal
 }) => {
   const { language, setLanguage, t } = useLanguage();
+  const {
+    workspaceRole,
+    setWorkspaceRole,
+    complexityLevel,
+    setComplexityLevel,
+    showFirstUseLauncher,
+    setShowFirstUseLauncher
+  } = useUiMode();
   const [activeCategory, setActiveCategory] = useState<'themes' | 'sound' | 'app' | 'layout' | 'a11y' | 'character' | 'hotkeys' | 'subscription' | 'credits'>(initialCategory);
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
   const [volume, setVolumeState] = useState<number>(() => Math.round(getMasterVolume() * 100));
@@ -433,6 +442,127 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           {/* CATEGORY 2: APP OPTIONS & CACHE CLEARING */}
           {activeCategory === 'app' && (
             <div className="space-y-5 animate-fadeIn">
+              {/* Phase A: Workspace & Progressive Disclosure Personalization */}
+              <div className="bg-stone-950 p-4 rounded-xl border border-amber-500/30 space-y-4">
+                <div className="flex items-center justify-between border-b border-stone-800/80 pb-3">
+                  <div className="flex items-center gap-2.5 text-amber-400 font-serif font-bold text-sm">
+                    <SlidersHorizontal className="w-4 h-4 text-amber-400" />
+                    <span>Workspace & Role Customization</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60 font-bold">
+                    Phase A: Progressive Disclosure
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Default Workspace Role */}
+                  <div>
+                    <label className="text-xs font-semibold text-stone-200 block mb-1">
+                      Active Role Workspace
+                    </label>
+                    <p className="text-[11px] text-stone-400 mb-2">
+                      Tailors the navigation and tool availability so you only see what is relevant to your role.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setWorkspaceRole('player')}
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                          workspaceRole === 'player'
+                            ? 'bg-amber-950/70 border-amber-500 text-amber-200 shadow-sm'
+                            : 'bg-stone-900/80 border-stone-800 text-stone-300 hover:border-stone-700'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-amber-300">🛡️ Player View</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Optimized for character sheets, dice, spells & inventory.</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setWorkspaceRole('gm')}
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                          workspaceRole === 'gm'
+                            ? 'bg-purple-950/70 border-purple-500 text-purple-200 shadow-sm'
+                            : 'bg-stone-900/80 border-stone-800 text-stone-300 hover:border-stone-700'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-purple-300">👑 Game Master</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Focuses on campaign lore graph, encounters & DM tools.</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setWorkspaceRole('unified')}
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                          workspaceRole === 'unified'
+                            ? 'bg-stone-800 border-stone-600 text-stone-100 shadow-sm'
+                            : 'bg-stone-900/80 border-stone-800 text-stone-300 hover:border-stone-700'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-stone-200">⚡ Unified (All)</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Shows all character and campaign tabs without filtering.</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Complexity Level */}
+                  <div className="pt-2 border-t border-stone-800/80">
+                    <label className="text-xs font-semibold text-stone-200 block mb-1">
+                      UI Complexity Level
+                    </label>
+                    <p className="text-[11px] text-stone-400 mb-2">
+                      Switch between a streamlined tabletop experience and advanced power-user controls.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setComplexityLevel('streamlined')}
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                          complexityLevel === 'streamlined'
+                            ? 'bg-cyan-950/70 border-cyan-500 text-cyan-200 shadow-sm'
+                            : 'bg-stone-900/80 border-stone-800 text-stone-300 hover:border-stone-700'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-cyan-300">✨ Streamlined Focus</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Hides technical SDK bars, raw debug profilers and clutter.</div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setComplexityLevel('power')}
+                        className={`p-3 rounded-xl border text-left transition cursor-pointer ${
+                          complexityLevel === 'power'
+                            ? 'bg-stone-800 border-amber-500/60 text-amber-200 shadow-sm'
+                            : 'bg-stone-900/80 border-stone-800 text-stone-300 hover:border-stone-700'
+                        }`}
+                      >
+                        <div className="text-xs font-bold text-amber-300">🛠️ Power-User / Dev</div>
+                        <div className="text-[10px] text-stone-400 mt-0.5">Exposes plugin SDK builders, raw schema inspectors & debug logs.</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Welcome Hub on startup toggle */}
+                  <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-stone-200 block">Show Welcome Launchpad on App Open</span>
+                      <span className="text-[10px] text-stone-400">Presents quick intent cards (Join Campaign, Character, GM, Compendium) when opening the app.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowFirstUseLauncher(!showFirstUseLauncher)}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition cursor-pointer border ${
+                        showFirstUseLauncher
+                          ? 'bg-amber-500 text-stone-950 border-amber-400'
+                          : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+                      }`}
+                    >
+                      {showFirstUseLauncher ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {/* Application Language Selector */}
               <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-4">
                 <div className="flex items-center justify-between border-b border-stone-800/80 pb-3">

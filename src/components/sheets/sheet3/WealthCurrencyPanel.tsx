@@ -2,17 +2,19 @@ import React from 'react';
 import { CharacterData } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { getTotalWealthInGold } from '../../../utils/dndCalculations';
-import { Coins } from 'lucide-react';
+import { Coins, Sparkles } from 'lucide-react';
 import { useLanguage } from '../../../i18n/LanguageContext';
 
 interface WealthCurrencyPanelProps {
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
 }
 
 export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
   character,
-  onUpdateCharacter
+  onUpdateCharacter,
+  onOpenGenerators
 }) => {
   const { t } = useLanguage();
 
@@ -34,8 +36,20 @@ export const WealthCurrencyPanel: React.FC<WealthCurrencyPanelProps> = ({
       icon={<Coins className="w-5 h-5 text-amber-500" />}
       storageKey="sheet3_wealth"
       headerExtra={
-        <div className="text-xs font-mono text-amber-300 font-bold bg-amber-950/80 border border-amber-600/50 px-2.5 py-1 rounded-lg">
-          {t('gear.netWorth', 'Total Net Worth')}: ~{totalWealthGold.toLocaleString(undefined, { maximumFractionDigits: 2 })} GP
+        <div className="flex items-center gap-2">
+          {onOpenGenerators && (
+            <button
+              onClick={() => onOpenGenerators('treasure')}
+              className="text-xs font-serif font-bold text-emerald-300 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-600/50 px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer shadow-sm"
+              title="Roll AI treasure hoards, appraised art & magic items"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Roll AI Loot Hoard</span>
+            </button>
+          )}
+          <div className="text-xs font-mono text-amber-300 font-bold bg-amber-950/80 border border-amber-600/50 px-2.5 py-1 rounded-lg">
+            {t('gear.netWorth', 'Total Net Worth')}: ~{totalWealthGold.toLocaleString(undefined, { maximumFractionDigits: 2 })} GP
+          </div>
         </div>
       }
     >

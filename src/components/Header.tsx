@@ -57,7 +57,9 @@ import {
   Redo2,
   Network,
   Radio,
-  FlaskConical
+  FlaskConical,
+  Compass,
+  MapPin
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
@@ -97,6 +99,7 @@ interface HeaderProps {
   onOpenCommandPalette?: () => void;
   onOpenExtensionManager?: () => void;
   onOpenVoiceModal?: () => void;
+  onOpenCampaignLoreVault?: (tab?: any) => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -131,6 +134,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCommandPalette,
   onOpenExtensionManager,
   onOpenVoiceModal,
+  onOpenCampaignLoreVault,
   onUndo,
   onRedo,
   canUndo = false,
@@ -658,6 +662,19 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <span>{uiMode === 'focus' ? '⚡ Focus' : '⚙️ Master'}</span>
               </button>
+
+              {/* Campaign World Atlas & Questline Hub (Phase D) */}
+              {onOpenCampaignLoreVault && (
+                <button
+                  type="button"
+                  onClick={() => onOpenCampaignLoreVault('atlas')}
+                  className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900/90 text-amber-200 hover:text-amber-100 border border-amber-500/60 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer group"
+                  title="Open Campaign World Atlas, Questline Tracker & Factions (Ctrl+M)"
+                >
+                  <Compass className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
+                  <span className="hidden sm:inline">Atlas & Quests</span>
+                </button>
+              )}
 
               {/* Options & Themes Button */}
               {onOpenAudioModal && (

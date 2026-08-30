@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Eye,
   Type,
@@ -8,6 +8,7 @@ import {
   VolumeX,
   Zap,
   Check,
+  CheckCircle2,
   RotateCcw,
   Sliders,
   Shield,
@@ -17,6 +18,7 @@ import { useAccessibility, HighContrastMode, FontSizeScale } from '../../../cont
 
 export const AccessibilityOptionsTab: React.FC = () => {
   const { settings, updateSetting, resetAccessibility, announceLiveMessage } = useAccessibility();
+  const [testAnnounced, setTestAnnounced] = useState(false);
 
   const contrastOptions: { id: HighContrastMode; label: string; desc: string }[] = [
     { id: 'off', label: 'Standard', desc: 'Default tabletop atmospheric dark mode' },
@@ -31,7 +33,53 @@ export const AccessibilityOptionsTab: React.FC = () => {
   ];
 
   const handleTestAnnouncement = () => {
-    announceLiveMessage('Screen reader test: Accessibility engine is active and broadcasting status updates.', 'assertive');
+    setTestAnnounced(true);
+    setTimeout(() => setTestAnnounced(false), 3000);
+    announceLiveMessage('Nexus Accessibility test message: Screen reader broadcast and auditory announcements are active.', 'assertive');
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance('Nexus Accessibility test: Screen reader broadcast is active.');
+        utterance.lang = 'en-US';
+        utterance.rate = 0.95;
+        utterance.pitch = 0.9; // Lower pitch for clear masculine timbre
+
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+          // Prioritize known American English male voices across Chromium, Safari, Edge, Firefox
+          const americanMaleVoice = voices.find(v => {
+            const lang = v.lang.replace('_', '-').toLowerCase();
+            const name = v.name.toLowerCase();
+            const isUs = lang === 'en-us' || lang.startsWith('en-us') || lang === 'en';
+            const isMale = (
+              name.includes('david') ||
+              name.includes('guy') ||
+              name.includes('alex') ||
+              name.includes('mark') ||
+              name.includes('george') ||
+              name.includes('daniel') ||
+              name.includes('fred') ||
+              name.includes('natural') ||
+              name.includes('male') ||
+              name.includes('us english') ||
+              name.includes('google us english')
+            ) && !name.includes('female') && !name.includes('zira') && !name.includes('samantha') && !name.includes('victoria') && !name.includes('karen');
+            return isUs && isMale;
+          }) || voices.find(v => {
+            const lang = v.lang.replace('_', '-').toLowerCase();
+            return lang === 'en-us' || lang.startsWith('en-us');
+          });
+
+          if (americanMaleVoice) {
+            utterance.voice = americanMaleVoice;
+          }
+        }
+
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        // Fallback silently if speech synthesis is blocked
+      }
+    }
   };
 
   return (
@@ -196,17 +244,29 @@ export const AccessibilityOptionsTab: React.FC = () => {
         {/* Screen Reader Optimization Live Test */}
         <div className="flex items-center justify-between p-3 rounded-xl bg-stone-900/60 border border-stone-800 hover:border-stone-700 transition">
           <div>
-            <span className="font-bold text-sm text-stone-200 block">ARIA Live Speech Region</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-stone-200 block">ARIA Live Speech Region</span>
+              {testAnnounced && (
+                <span className="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-950/80 border border-emerald-500/50 px-2 py-0.5 rounded-full animate-pulse">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                  Broadcasted & Spoken!
+                </span>
+              )}
+            </div>
             <span className="text-xs text-stone-400">
-              Broadcasts dynamic dice roll outcomes, combat turns, and status alerts directly to screen readers.
+              Broadcasts dynamic dice roll outcomes, combat turns, and status alerts directly to screen readers and text-to-speech.
             </span>
           </div>
           <button
             type="button"
             onClick={handleTestAnnouncement}
-            className="px-3 py-1.5 text-xs font-bold font-mono bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 rounded-lg transition cursor-pointer"
+            className={`px-3 py-1.5 text-xs font-bold font-mono rounded-lg border transition cursor-pointer shrink-0 ${
+              testAnnounced
+                ? 'bg-emerald-900 text-emerald-200 border-emerald-500 shadow-md shadow-emerald-950/50'
+                : 'bg-cyan-950 hover:bg-cyan-900 text-cyan-300 border-cyan-700/60'
+            }`}
           >
-            Test ARIA Announce
+            {testAnnounced ? '✓ Broadcasted' : 'Test ARIA Announce'}
           </button>
         </div>
       </div>

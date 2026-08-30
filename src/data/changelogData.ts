@@ -14,6 +14,31 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.8.0',
+    date: 'August 2026',
+    title: 'Phase C: Live Tabletop AI Co-Pilot, Procedural Audio & Tactical Combat Assistant',
+    badge: 'Live Session AI & Web Audio',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🎙️ Live Session Co-Pilot HUD (Ctrl+J)',
+        detail: 'Instant sensory room intros, cinematic finisher narrations, improvised stunt rulings, and concentration DC check watchdog.'
+      },
+      {
+        category: '🔊 Procedural Web Audio Synthesizer',
+        detail: '100% offline procedural ambient soundscapes (Campfire, Rainstorm, Dark Dungeon, Astral Void, Tavern) and tactile SFX generators.'
+      },
+      {
+        category: '⚔️ Real-Time Tactical Combat Assistant',
+        detail: 'Dynamic AI combat recommendations analyzing enemy vulnerabilities, tactical cover, and suggested party maneuvers.'
+      },
+      {
+        category: '🔮 In-Flow Tabletop AI Generators (Phase B)',
+        detail: 'Integrated 1-click generators for NPCs, balanced encounters, treasure hoards, dungeon rooms, session recaps, and rules adjudication.'
+      }
+    ]
+  },
+  {
     version: 'v5.7.0',
     date: 'August 2026',
     title: 'Phase 3: Comprehensive Accessibility (A11y) & Visual Ergonomics Architecture',

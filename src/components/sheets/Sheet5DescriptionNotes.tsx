@@ -1,6 +1,6 @@
 import React from 'react';
 import { CharacterData } from '../../types';
-import { ScrollText, User, Heart, Shield, BookOpen, Users, FileText } from 'lucide-react';
+import { ScrollText, User, Heart, Shield, BookOpen, Users, FileText, Sparkles, Compass, Flag, ShieldCheck } from 'lucide-react';
 import { CollapsibleBox } from '../common/CollapsibleBox';
 import { FormattedTextEditor } from '../common/FormattedTextEditor';
 import { useLayoutCustomization } from '../../utils/layoutCustomization';
@@ -10,11 +10,15 @@ import { useLanguage } from '../../i18n/LanguageContext';
 interface Sheet5Props {
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  onOpenCampaignLoreVault?: (tab?: 'atlas' | 'quests' | 'factions' | 'travel' | 'export') => void;
 }
 
 export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
   character,
-  onUpdateCharacter
+  onUpdateCharacter,
+  onOpenGenerators,
+  onOpenCampaignLoreVault
 }) => {
   const { t } = useLanguage();
   const { isVisible } = useLayoutCustomization();
@@ -254,16 +258,40 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
           title={t('notes.allies', 'Allies, Factions & Campaign Quest Log')}
           icon={<Users className="w-5 h-5 text-emerald-400" />}
           storageKey="sheet5_allies_notes"
+          headerExtra={
+            onOpenGenerators ? (
+              <button
+                onClick={() => onOpenGenerators('session')}
+                className="text-xs font-serif font-bold text-cyan-300 bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-600/50 px-2.5 py-1 rounded-lg transition flex items-center gap-1 cursor-pointer shadow-sm"
+                title="Synthesize structured session chronicles and campaign recaps"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>AI Session Chronicle</span>
+              </button>
+            ) : undefined
+          }
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             {/* Allies & Organizations */}
-            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-xs font-bold text-stone-200">
+                  <Users className="w-3.5 h-3.5 text-emerald-400" /> {t('notes.alliesFactions', 'Allies & Factions')}
+                </span>
+                {onOpenCampaignLoreVault && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenCampaignLoreVault('factions')}
+                    className="px-2 py-0.5 bg-purple-950/70 hover:bg-purple-900 border border-purple-600/60 text-purple-300 rounded text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="Open Campaign Faction Matrix & Standings"
+                  >
+                    <ShieldCheck className="w-3 h-3 text-purple-400" />
+                    <span>Faction Matrix</span>
+                  </button>
+                )}
+              </div>
               <FormattedTextEditor
-                label={
-                  <span className="flex items-center gap-2">
-                    <Users className="w-3.5 h-3.5 text-emerald-400" /> {t('notes.alliesFactions', 'Allies & Factions')}
-                  </span>
-                }
+                label=""
                 value={character.alliesAndOrganizations || ''}
                 onChange={(val) => handleTextChange('alliesAndOrganizations', val)}
                 rows={6}
@@ -272,13 +300,25 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             </div>
 
             {/* Campaign Notes */}
-            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow">
+            <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 shadow space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-xs font-bold text-stone-200">
+                  <ScrollText className="w-3.5 h-3.5 text-amber-400" /> {t('notes.questLog', 'Quest Log & Campaign Notes')}
+                </span>
+                {onOpenCampaignLoreVault && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenCampaignLoreVault('quests')}
+                    className="px-2 py-0.5 bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600/60 text-emerald-300 rounded text-[11px] font-bold flex items-center gap-1 transition cursor-pointer"
+                    title="Open Campaign Quest Tracker & Objectives"
+                  >
+                    <Flag className="w-3 h-3 text-emerald-400" />
+                    <span>Quest Tracker</span>
+                  </button>
+                )}
+              </div>
               <FormattedTextEditor
-                label={
-                  <span className="flex items-center gap-2">
-                    <ScrollText className="w-3.5 h-3.5 text-amber-400" /> {t('notes.questLog', 'Quest Log & Campaign Notes')}
-                  </span>
-                }
+                label=""
                 value={character.additionalNotes || ''}
                 onChange={(val) => handleTextChange('additionalNotes', val)}
                 rows={6}

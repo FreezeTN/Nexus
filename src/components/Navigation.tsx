@@ -1,8 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink, MapPin } from 'lucide-react';
+import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink, MapPin, User, Sliders } from 'lucide-react';
 import { RuleEdition } from '../types';
 import { UserProfile, GameSession } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
+import { useUiMode } from '../context/UiModeContext';
 
 export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
 
@@ -30,6 +31,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   activeSession = null
 }) => {
   const { t } = useLanguage();
+  const { workspaceRole, setWorkspaceRole, isStreamlined } = useUiMode();
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
   const isCthulhu = edition === 'cthulhu';
@@ -286,6 +288,25 @@ export const Navigation: React.FC<NavigationProps> = ({
           <ChevronRight className="w-4 h-4" />
         </button>
 
+        {/* Workspace Quick-Switcher Pill (Phase A) */}
+        <div className="hidden lg:flex items-center gap-1.5 ml-2 pl-2 border-l border-stone-800/80 shrink-0">
+          <button
+            type="button"
+            onClick={() => setWorkspaceRole(workspaceRole === 'player' ? 'gm' : workspaceRole === 'gm' ? 'unified' : 'player')}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+              workspaceRole === 'player'
+                ? 'bg-amber-950/80 border-amber-500/50 text-amber-300 hover:bg-amber-900/80'
+                : workspaceRole === 'gm'
+                ? 'bg-purple-950/80 border-purple-500/50 text-purple-300 hover:bg-purple-900/80'
+                : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-850'
+            }`}
+            title="Click to switch workspace role (Player vs. GM vs. Unified)"
+          >
+            {workspaceRole === 'player' && <span>🛡️ Player Workspace</span>}
+            {workspaceRole === 'gm' && <span>👑 GM Workspace</span>}
+            {workspaceRole === 'unified' && <span>⚡ Unified Sheets</span>}
+          </button>
+        </div>
       </div>
     </nav>
   );
