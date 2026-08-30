@@ -123,11 +123,8 @@ Format concisely:
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-serif font-bold text-amber-200 flex items-center gap-2">
-              <span>Live Session Co-Pilot</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 bg-amber-950 text-amber-300 border border-amber-700/60 rounded">
-                Phase C
-              </span>
+            <h2 className="text-base font-serif font-bold text-amber-200">
+              Live Session Co-Pilot
             </h2>
             <p className="text-xs text-stone-400">
               Live tactical assistant, soundscapes & ambient narration

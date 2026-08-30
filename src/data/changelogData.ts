@@ -14,9 +14,30 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.9.0',
+    date: 'August 2026',
+    title: 'AI Combat Encounter Auto-Deployment & UI Ergonomics Refinement',
+    badge: 'Encounter Engine & UI Polish',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '⚔️ Seamless AI Encounter Auto-Deployment',
+        detail: 'Resolved issue where AI-generated encounters were not populating hostile combatants into Team 2. Generated monsters now immediately inject into the Encounter Tracker with initiative rolls, CR-scaled XP rewards, environmental parameters, and live event synchronization.'
+      },
+      {
+        category: '🧹 UI Hierarchy & Ergonomics Cleanup',
+        detail: 'Cleaned up repetitive development phase badges and redundant trailing pill markers across the navigation sidebar dock, Live Session Co-Pilot HUD, Campaign World Atlas, and settings modals for a cleaner aesthetic.'
+      },
+      {
+        category: '⚡ Live Encounter State Synchronization',
+        detail: 'Added cross-component custom event triggers (dnd_encounter_deployed) ensuring combat state instantly reflects new encounters and writes deployment summaries directly to the combat log.'
+      }
+    ]
+  },
+  {
     version: 'v5.8.0',
     date: 'August 2026',
-    title: 'Phase C: Live Tabletop AI Co-Pilot, Procedural Audio & Tactical Combat Assistant',
+    title: 'Live Tabletop AI Co-Pilot, Procedural Audio & Tactical Combat Assistant',
     badge: 'Live Session AI & Web Audio',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
     highlights: [
@@ -33,7 +54,7 @@ export const changelogData: ChangelogEntry[] = [
         detail: 'Dynamic AI combat recommendations analyzing enemy vulnerabilities, tactical cover, and suggested party maneuvers.'
       },
       {
-        category: '🔮 In-Flow Tabletop AI Generators (Phase B)',
+        category: '🔮 In-Flow Tabletop AI Generators',
         detail: 'Integrated 1-click generators for NPCs, balanced encounters, treasure hoards, dungeon rooms, session recaps, and rules adjudication.'
       }
     ]

@@ -178,7 +178,7 @@ export function CommandPaletteModal({
       },
       {
         id: 'action-live-copilot',
-        title: 'Live Session Co-Pilot HUD (Phase C)',
+        title: 'Live Session Co-Pilot HUD',
         category: 'Actions',
         description: 'Instant sensory room intros, cinematic finisher narrations, stunt rulings & concentration DC calculator',
         icon: <Sparkles className="w-4 h-4 text-amber-300" />,

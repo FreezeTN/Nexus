@@ -449,9 +449,6 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                     <SlidersHorizontal className="w-4 h-4 text-amber-400" />
                     <span>Workspace & Role Customization</span>
                   </div>
-                  <span className="text-[10px] font-mono text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-800/60 font-bold">
-                    Phase A: Progressive Disclosure
-                  </span>
                 </div>
 
                 <div className="space-y-3">

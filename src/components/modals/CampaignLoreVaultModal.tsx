@@ -123,14 +123,9 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
               <Compass className="w-6 h-6" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="font-serif font-bold text-lg text-amber-200">
-                  Campaign World Atlas & Questline Hub
-                </h2>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  Phase D Architecture
-                </span>
-              </div>
+              <h2 className="font-serif font-bold text-lg text-amber-200">
+                Campaign World Atlas & Questline Hub
+              </h2>
               <p className="text-xs text-stone-400">
                 Interactive regional cartography, multi-tier quest tracking, faction diplomacy matrix & expedition logistics.
               </p>

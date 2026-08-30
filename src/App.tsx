@@ -43,6 +43,10 @@ import { TabletopGeneratorsModal, GeneratorTab } from './components/modals/Table
 import { CampaignLoreVaultModal, CampaignTabId } from './components/modals/CampaignLoreVaultModal';
 import { LiveSessionCopilotDrawer } from './components/common/LiveSessionCopilotDrawer';
 import { GeneratedEncounter, hydrateGeneratedMonster } from './services/geminiService';
+import { Combatant, CombatLogEntry, SavedEncounterData } from './components/combat/encounter/encounterTypes';
+import { loadSavedEncounter } from './components/combat/encounter/useEncounterState';
+import { getMonsterPortraitUrl } from './data/monsterPortraits';
+import { EncounterEnvironment } from './types';
 import { PhysicalDiceModal } from './components/modals/PhysicalDiceModal';
 import { UpgradeModal } from './components/modals/UpgradeModal';
 import { GlobalUpgradeModal } from './components/modals/GlobalUpgradeModal';
@@ -258,29 +262,147 @@ export default function App() {
   const handlePopulateCombatEncounter = (encounter: GeneratedEncounter) => {
     if (!encounter || !encounter.enemies) return;
     const newMonsters: CharacterData[] = [];
+    const newCombatants: Combatant[] = [];
+
+    const getCrXp = (crStr: string | number): number => {
+      const cr = String(crStr).trim();
+      switch (cr) {
+        case '0': return 10;
+        case '1/8': return 25;
+        case '1/4': return 50;
+        case '1/2': return 100;
+        case '1': return 200;
+        case '2': return 450;
+        case '3': return 700;
+        case '4': return 1100;
+        case '5': return 1800;
+        case '6': return 2300;
+        case '7': return 2900;
+        case '8': return 3900;
+        case '9': return 5000;
+        case '10': return 5900;
+        case '11': return 7200;
+        case '12': return 8400;
+        case '13': return 10000;
+        case '14': return 11500;
+        case '15': return 13000;
+        case '16': return 15000;
+        case '17': return 18000;
+        case '18': return 20000;
+        case '19': return 22000;
+        case '20': return 25000;
+        default: {
+          const num = Number(cr);
+          return !isNaN(num) && num > 0 ? Math.round(num * 500) : 200;
+        }
+      }
+    };
+
     encounter.enemies.forEach((enemy) => {
       const count = Math.max(1, enemy.count || 1);
+      const initBonus = Number(enemy.initiativeBonus) || 0;
+      const xpReward = getCrXp(enemy.cr || '1');
+
       for (let i = 0; i < count; i++) {
         const uniqueName = count > 1 ? `${enemy.name} #${i + 1}` : enemy.name;
+        const rolledInit = Math.floor(Math.random() * 20) + 1 + initBonus;
         const monsterData = hydrateGeneratedMonster({
           name: uniqueName,
           challengeRating: enemy.cr || '1',
+          monsterXpReward: xpReward,
           hpMax: enemy.hpMax || 25,
           armorClass: enemy.armorClass || 13,
           speed: 30,
-          initiativeBonus: enemy.initiativeBonus || 0,
+          initiativeBonus: initBonus,
           abilities: enemy.abilities || { STR: { score: 14 }, DEX: { score: 12 }, CON: { score: 14 } },
           attacks: enemy.attacks || [],
           tacticalNotes: enemy.tacticalNotes,
           backstory: `Encounter: ${encounter.name}. Role: ${enemy.role}. ${enemy.tacticalNotes}`
         }, currentSystemTheme);
         newMonsters.push(monsterData);
+
+        const combatant: Combatant = {
+          id: 'enemy-' + monsterData.id,
+          name: uniqueName,
+          initiative: rolledInit,
+          armorClass: Number(enemy.armorClass) || monsterData.armorClass || 13,
+          hpCurrent: Number(enemy.hpMax) || monsterData.hpMax || 25,
+          hpMax: Number(enemy.hpMax) || monsterData.hpMax || 25,
+          type: 'enemy',
+          monsterXpReward: xpReward,
+          isDefeated: false,
+          portraitUrl: monsterData.portraitUrl || getMonsterPortraitUrl(monsterData.name, monsterData.id)
+        };
+        newCombatants.push(combatant);
       }
     });
 
     if (newMonsters.length > 0) {
       setCharacters(prev => [...prev, ...newMonsters]);
     }
+
+    if (activeCharacter && newCombatants.length > 0) {
+      const charKey = activeCharacter.id || 'default';
+      const currentSaved = loadSavedEncounter(activeCharacter);
+
+      const playerAndAllies = currentSaved.combatants.filter(c => c.isPlayerChar || c.type === 'player' || c.type === 'ally');
+      const updatedCombatants = [...playerAndAllies, ...newCombatants].sort((a, b) => b.initiative - a.initiative);
+
+      const validEnvs: EncounterEnvironment[] = ['terrestrial', 'underwater', 'volcanic', 'arctic', 'shadowfell', 'aerial', 'lair_active'];
+      const rawEnv = (encounter.environment || '').toLowerCase();
+      let matchedEnv: EncounterEnvironment = 'terrestrial';
+      if (validEnvs.includes(rawEnv as EncounterEnvironment)) {
+        matchedEnv = rawEnv as EncounterEnvironment;
+      } else if (rawEnv.includes('lair') || rawEnv.includes('dungeon') || rawEnv.includes('crypt') || rawEnv.includes('cave')) {
+        matchedEnv = 'lair_active';
+      } else if (rawEnv.includes('water') || rawEnv.includes('sea') || rawEnv.includes('ocean')) {
+        matchedEnv = 'underwater';
+      } else if (rawEnv.includes('lava') || rawEnv.includes('fire') || rawEnv.includes('volcan')) {
+        matchedEnv = 'volcanic';
+      } else if (rawEnv.includes('ice') || rawEnv.includes('snow') || rawEnv.includes('arctic') || rawEnv.includes('frost')) {
+        matchedEnv = 'arctic';
+      } else if (rawEnv.includes('shadow') || rawEnv.includes('dark') || rawEnv.includes('undead')) {
+        matchedEnv = 'shadowfell';
+      } else if (rawEnv.includes('air') || rawEnv.includes('sky') || rawEnv.includes('flight')) {
+        matchedEnv = 'aerial';
+      }
+
+      const newLog: CombatLogEntry = {
+        id: 'log-encounter-' + Date.now(),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        round: 1,
+        actor: 'AI Oracle',
+        category: 'turn',
+        message: `⚔️ Deployed Encounter "${encounter.name}" (${encounter.difficulty} difficulty, ${matchedEnv} environment). Added ${newCombatants.length} hostile combatant(s): ${newCombatants.map(c => `${c.name} [Init ${c.initiative}, AC ${c.armorClass}, HP ${c.hpMax}]`).join(', ')}.`
+      };
+
+      const updatedState: SavedEncounterData = {
+        combatants: updatedCombatants,
+        activeTurnIndex: 0,
+        roundNumber: 1,
+        encounterEnvironment: matchedEnv,
+        encounterMode: 'combat',
+        activeMerchant: null,
+        combatLogs: [newLog, ...(currentSaved.combatLogs || [])]
+      };
+
+      try {
+        localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(updatedState));
+      } catch (err) {
+        console.error('Error saving encounter to localStorage:', err);
+      }
+
+      window.dispatchEvent(new CustomEvent('dnd_encounter_deployed', {
+        detail: {
+          characterId: activeCharacter.id,
+          combatants: updatedCombatants,
+          environment: matchedEnv,
+          logEntry: newLog
+        }
+      }));
+    }
+
+    // Automatically navigate to Sheet 2 (Combat & Encounter Tracker)
     setActiveTab('sheet2');
   };
 

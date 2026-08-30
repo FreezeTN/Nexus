@@ -275,12 +275,12 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
               </button>
             )}
 
-            {/* Live Session Co-Pilot HUD (Phase C) */}
+            {/* Live Session Co-Pilot HUD */}
             {onOpenCopilot && (
               <button
                 onClick={onOpenCopilot}
                 className="p-2 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-500/60 text-amber-300 shadow-md shadow-amber-950/40 transition cursor-pointer animate-pulse"
-                title="Live Session Co-Pilot HUD (Phase C)"
+                title="Live Session Co-Pilot HUD"
               >
                 <Sparkles className="w-4 h-4 text-amber-300" />
               </button>
@@ -569,37 +569,27 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
             </button>
           )}
 
-          {/* Live Session Co-Pilot HUD (Phase C) */}
+          {/* Live Session Co-Pilot */}
           {onOpenCopilot && (
             <button
               onClick={onOpenCopilot}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-amber-950/70 hover:bg-amber-900/80 border border-amber-500/60 hover:border-amber-400 text-amber-200 hover:text-amber-100 text-xs font-bold transition cursor-pointer group shadow-sm"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-amber-950/70 hover:bg-amber-900/80 border border-amber-500/60 hover:border-amber-400 text-amber-200 hover:text-amber-100 text-xs font-bold transition cursor-pointer group shadow-sm"
               title="Open Live Tabletop Session Co-Pilot HUD"
             >
-              <div className="flex items-center gap-2.5">
-                <Sparkles className="w-4 h-4 text-amber-300 group-hover:scale-110 transition-transform" />
-                <span>Live Session Co-Pilot</span>
-              </div>
-              <span className="text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded">
-                HUD
-              </span>
+              <Sparkles className="w-4 h-4 text-amber-300 group-hover:scale-110 transition-transform" />
+              <span>Live Session Co-Pilot</span>
             </button>
           )}
 
-          {/* Campaign World Atlas & Questline Hub (Phase D) */}
+          {/* Campaign World Atlas & Questline Hub */}
           {onOpenCampaignLoreVault && (
             <button
               onClick={() => onOpenCampaignLoreVault('atlas')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-gradient-to-r from-amber-950/80 to-stone-900 hover:from-amber-900/90 hover:to-stone-800 border border-amber-500/70 hover:border-amber-400 text-amber-200 hover:text-amber-100 text-xs font-bold transition cursor-pointer group shadow-md"
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-950/80 to-stone-900 hover:from-amber-900/90 hover:to-stone-800 border border-amber-500/70 hover:border-amber-400 text-amber-200 hover:text-amber-100 text-xs font-bold transition cursor-pointer group shadow-md"
               title="Open Campaign World Atlas, Quests & Faction Matrix (Ctrl+M)"
             >
-              <div className="flex items-center gap-2.5">
-                <Compass className="w-4 h-4 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
-                <span>Atlas & Quests</span>
-              </div>
-              <span className="text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded">
-                Ctrl+M
-              </span>
+              <Compass className="w-4 h-4 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
+              <span>Atlas & Quests</span>
             </button>
           )}
 

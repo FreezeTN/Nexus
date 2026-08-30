@@ -122,6 +122,40 @@ export function useEncounterState({
     setActiveMerchant(saved.activeMerchant || null);
   }, [character.id]);
 
+  // Listen for externally injected / AI-deployed encounters
+  useEffect(() => {
+    const handleEncounterDeployed = (event: Event) => {
+      const customEvent = event as CustomEvent<{
+        characterId?: string;
+        combatants?: Combatant[];
+        environment?: EncounterEnvironment;
+        logEntry?: CombatLogEntry;
+      }>;
+      const detail = customEvent.detail;
+      if (!detail) return;
+      if (detail.characterId && detail.characterId !== character.id) return;
+
+      if (detail.combatants && Array.isArray(detail.combatants)) {
+        setCombatants(detail.combatants);
+      }
+      if (detail.environment) {
+        setEncounterEnvironment(detail.environment);
+      }
+      if (detail.logEntry) {
+        setCombatLogs(prev => [detail.logEntry!, ...prev]);
+      }
+      setEncounterMode('combat');
+      setActiveMerchant(null);
+      setActiveTurnIndex(0);
+      setRoundNumber(1);
+    };
+
+    window.addEventListener('dnd_encounter_deployed', handleEncounterDeployed);
+    return () => {
+      window.removeEventListener('dnd_encounter_deployed', handleEncounterDeployed);
+    };
+  }, [character.id]);
+
   // Save encounter state to localStorage
   useEffect(() => {
     const charKey = character.id || 'default';
