@@ -14,6 +14,94 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.5.0',
+    date: 'August 2026',
+    title: 'Production Security Hardening & Zero-Trust Firestore Rules Enforcement',
+    badge: 'Security & Production Release',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🛡️ Zero-Trust Firestore Security Architecture',
+        detail: 'Eliminated permissive wildcard rule access in favor of strict owner-based authentication boundaries across characters, campaign saves, user accounts, and parties. Established default-deny rule evaluation for all collections.'
+      },
+      {
+        category: '🔒 Character & Campaign Save Isolation',
+        detail: 'Enforced strict ownership invariants ensuring character sheets can only be created, modified, queried, or deleted by their verified owner (`ownerId == request.auth.uid`). Campaign saves are locked exclusively to the hosting Dungeon Master (`hostUid == request.auth.uid`).'
+      },
+      {
+        category: '🎙️ WebRTC Voice Signaling & Peer Protection',
+        detail: 'Hardened real-time WebRTC voice signaling channels (`voice_signals`, `voice_peers`) to prevent peer spoofing, unauthorized signal injection, or session state tampering.'
+      },
+      {
+        category: '📐 Document Schema & Payload Validation',
+        detail: 'Added strict schema checks (`isValidUser`, `isValidCharacter`, `isValidSession`, `isValidCampaignSave`, `isValidId`) preventing prototype injection, oversized malicious payloads, and corrupted campaign states.'
+      }
+    ]
+  },
+  {
+    version: 'v5.4.1',
+    date: 'August 2026',
+    title: 'Precision 3D Polyhedral Dice Geometry & Photorealistic Lighting Engine',
+    badge: 'Visual & Physics Engine',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🎲 Standard Icosahedron Isometric Projection',
+        detail: 'Replaced split-seam geometry with mathematically precise 10-visible-facet isometric projection for 20-sided dice, eliminating distorted vertices, misaligned edges, and flat blueprint wireframes.'
+      },
+      {
+        category: '✨ Physical Surface Shading & Micro-Bevel Edges',
+        detail: 'Implemented directional keylighting with ambient occlusion shadows, acrylic dome specular highlights, and crisp micro-bevel chamfer edge reflections mimicking real resin and gem dice.'
+      },
+      {
+        category: '🪙 Debossed & Engraved Foil Numerals',
+        detail: 'Rendered authentic engraved tabletop numerals featuring crisp debossed top shadows, lower edge catch-lights, and gold leaf, platinum, or enamel foil inking.'
+      }
+    ]
+  },
+  {
+    version: 'v5.4.0',
+    date: 'August 2026',
+    title: 'Mythic & Resplendent Dice Materials: Crystalline, Resin Swirls, Gothic Filigree & Stardust',
+    badge: 'Aesthetic & Visual Update',
+    badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+    highlights: [
+      {
+        category: '💎 Mythic Crystalline & Lunar Facets',
+        detail: 'Introduced Celestial Moonstone with silver wireframe borders and a glowing crescent moon crest on Natural 20, alongside Radiant Storm Prism with chrome refraction rays and divine lightning wrath iconography.'
+      },
+      {
+        category: '🌊 Artisanal Resin Swirls & Inlaid Gold',
+        detail: 'Added Oceanic Abyss with translucent sea-glass cyan and sapphire swirls with gold foil inking, Pearlescent Violet & Teal metallic swirls, and Noir Marble with electric neon pink pips.'
+      },
+      {
+        category: '💀 Gothic Filigree & Eldritch Blood',
+        detail: 'Crafted Eldritch Blood & Silver featuring gothic filigree cages over blood-veined white marble with a dripping crimson skull icon on critical fumbles.'
+      },
+      {
+        category: '🌌 Cosmic Nebula & Live Skin Previews',
+        detail: 'Implemented Cosmic Stardust with deep galaxy nebula fields and stardust glitter, plus an enhanced Dice Tray drawer with category filtering and interactive mini polyhedral live previews.'
+      }
+    ]
+  },
+  {
+    version: 'v5.3.1',
+    date: 'August 2026',
+    title: 'QA Tester Access Control & Role Permission Hardening',
+    badge: 'Security & Access Update',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🔒 Restricted QA Tester Group Access',
+        detail: 'Removed the public Tester role selection from registration, guest access, and standard account management. The Tester QA role and subscription bypass privileges are now strictly restricted to verified whitelisted users and developers.'
+      },
+      {
+        category: '🛡️ Role Enforcement & Security Hardening',
+        detail: 'Enforced verified role assignment on account creation and Firestore synchronization, ensuring only authenticated administrators and designated QA personnel can access testing tier bypasses.'
+      }
+    ]
+  },
+  {
     version: 'v5.3.0',
     date: 'August 2026',
     title: 'Enterprise Architecture Modernization: Four-Tier State, Rich Domain Modeling & Semantic Plugins',

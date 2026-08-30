@@ -2,41 +2,131 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAuthenticated() {
+    // Helper functions
+    function isSignedIn() {
       return request.auth != null;
     }
 
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.displayName is string && data.displayName.size() <= 128 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 256)) &&
+             (!('role' in data) || (data.role is string && data.role.size() <= 64)) &&
+             (!('tier' in data) || (data.tier is string && data.tier.size() <= 64));
+    }
+
+    function isValidCharacter(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.ownerId is string && data.ownerId.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             (!('edition' in data) || (data.edition is string && data.edition.size() <= 32)) &&
+             (!('characterClass' in data) || (data.characterClass is string && data.characterClass.size() <= 64)) &&
+             (!('race' in data) || (data.race is string && data.race.size() <= 64));
+    }
+
+    function isValidSession(data) {
+      return data.code is string && data.code.size() <= 32 &&
+             data.dmUid is string && data.dmUid.size() <= 128 &&
+             (!('status' in data) || (data.status is string && data.status.size() <= 32)) &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 128));
+    }
+
+    function isValidCampaignSave(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.hostUid is string && data.hostUid.size() <= 128 &&
+             (!('name' in data) || (data.name is string && data.name.size() <= 128)) &&
+             (!('sessionCode' in data) || (data.sessionCode is string && data.sessionCode.size() <= 32));
+    }
+
+    function isValidVoicePeer(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.displayName is string && data.displayName.size() <= 128;
+    }
+
+    function isValidVoiceSignal(data) {
+      return data.senderUid is string && data.senderUid.size() <= 128 &&
+             data.receiverUid is string && data.receiverUid.size() <= 128 &&
+             data.type is string && data.type.size() <= 32;
+    }
+
+    function isValidPresence(data) {
+      return data.characterId is string && data.characterId.size() <= 128;
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User profiles
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if true;
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
       allow delete: if false;
     }
 
+    // Characters
     match /characters/{characterId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if true;
+      allow get: if isSignedIn() && isValidId(characterId);
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(characterId) && request.resource.data.ownerId == request.auth.uid && isValidCharacter(request.resource.data);
+      allow update: if isSignedIn() && isValidId(characterId) && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == resource.data.ownerId && isValidCharacter(request.resource.data);
+      allow delete: if isSignedIn() && isValidId(characterId) && resource.data.ownerId == request.auth.uid;
     }
 
+    // Parties
     match /parties/{partyId} {
-      allow read, create, update, delete: if true;
+      allow get: if isSignedIn() && isValidId(partyId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(partyId) && request.resource.data.dmId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(partyId) && (resource.data.dmId == request.auth.uid || request.auth.uid in resource.data.memberIds);
+      allow delete: if isSignedIn() && isValidId(partyId) && resource.data.dmId == request.auth.uid;
     }
 
+    // Game sessions & Voice subcollections
     match /sessions/{sessionId} {
-      allow read, create, update, delete: if true;
+      allow get: if isSignedIn() && isValidId(sessionId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(sessionId) && request.resource.data.dmUid == request.auth.uid && isValidSession(request.resource.data);
+      allow update: if isSignedIn() && isValidId(sessionId) && (resource.data.dmUid == request.auth.uid || request.resource.data.dmUid == resource.data.dmUid) && isValidSession(request.resource.data);
+      allow delete: if isSignedIn() && isValidId(sessionId) && resource.data.dmUid == request.auth.uid;
 
-      match /{allSubcollections=**} {
-        allow read, create, update, delete: if true;
+      match /voice_peers/{peerId} {
+        allow get: if isSignedIn() && isValidId(peerId);
+        allow list: if isSignedIn();
+        allow create, update: if isSignedIn() && isValidId(peerId) && request.auth.uid == peerId && isValidVoicePeer(request.resource.data);
+        allow delete: if isSignedIn() && isValidId(peerId) && request.auth.uid == peerId;
+      }
+
+      match /voice_signals/{signalId} {
+        allow get: if isSignedIn() && isValidId(signalId);
+        allow list: if isSignedIn();
+        allow create: if isSignedIn() && isValidId(signalId) && request.resource.data.senderUid == request.auth.uid && isValidVoiceSignal(request.resource.data);
+        allow delete: if isSignedIn() && isValidId(signalId) && (resource.data.receiverUid == request.auth.uid || resource.data.senderUid == request.auth.uid);
       }
     }
 
+    // Character Presence
     match /presence/{characterId} {
-      allow read, create, update, delete: if true;
+      allow get: if isSignedIn() && isValidId(characterId);
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(characterId) && isValidPresence(request.resource.data);
+      allow delete: if isSignedIn() && isValidId(characterId);
     }
 
+    // Campaign Saves
     match /campaign_saves/{saveId} {
-      allow read, create, update, delete: if true;
+      allow get: if isSignedIn() && isValidId(saveId);
+      allow list: if isSignedIn() && resource.data.hostUid == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(saveId) && request.resource.data.hostUid == request.auth.uid && isValidCampaignSave(request.resource.data);
+      allow update: if isSignedIn() && isValidId(saveId) && resource.data.hostUid == request.auth.uid && request.resource.data.hostUid == resource.data.hostUid && isValidCampaignSave(request.resource.data);
+      allow delete: if isSignedIn() && isValidId(saveId) && resource.data.hostUid == request.auth.uid;
     }
   }
 }
-

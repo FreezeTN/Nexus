@@ -202,8 +202,8 @@ export async function createOrUpdateUserProfile(
 
   // Automatic Lead Developer Detection for ChaosDwarf and Freeze
   const isLeadDev = normName === 'chaosdwarf' || normName === 'freeze' || normEmail === 'nik04@hotmail.de' || normEmail === 'tomnik2007@gmail.com';
-  // Automatic QA Tester Detection for Karl or existing Tester role
-  const isTester = normName === 'karl' || normEmail === 'karlbrettmann94@gmail.com' || existing?.role === 'Tester' || role === 'Tester' || existing?.tier === 'tester';
+  // Automatic QA Tester Detection for Karl or existing verified tester status
+  const isTester = normName === 'karl' || normEmail === 'karlbrettmann94@gmail.com' || (existing?.role === 'Tester' && (existing.displayName?.toLowerCase().trim() === 'karl' || existing.email?.toLowerCase().trim() === 'karlbrettmann94@gmail.com')) || existing?.tier === 'tester';
   
   const initialRole: UserRole = isTester ? 'Tester' : (existing?.role || role);
   const initialTier: SubscriptionTier = isLeadDev ? 'developer' : isTester ? 'tester' : (existing?.tier || 'free');

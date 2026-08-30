@@ -347,6 +347,37 @@ MILESTONE 23: FOUR-TIER STATE ARCHITECTURE, SEMANTIC PLUGINS & DOMAIN MODELS
   - Extracted audio broadcasting, URL validation, and subscription tier checks into `useAmbienceBroadcast.ts`.
   - Reduced `DmAmbienceBroadcastStudio.tsx` to a clean presentation component adhering to the < 400 line heuristic.
 
+--------------------------------------------------------------------------------
+MILESTONE 24: PHOTOREALISTIC 3D DICE ENGINE & DEBOSSED TABLETOP FOIL
+--------------------------------------------------------------------------------
+* Corrected 3D Icosahedron Isometric Projection:
+  - Replaced split-facet mesh geometry with mathematically grounded 10-visible-facet isometric projection for 20-sided dice.
+  - Eliminated seam artifacts, overlapping vertex distortions, and flat blueprint wireframes.
+
+* Directional Keylighting & Micro-Bevel Chamfer Reflections:
+  - Added physical top-left directional keylighting with soft ambient occlusion shadows.
+  - Implemented 0.75 opacity micro-bevel chamfer highlights along illuminated facet edges to emulate polished acrylic and gemstone refraction.
+  - Rendered a smooth curved specular dome highlight across the upper face.
+
+* Authentic Debossed Foil Numerals:
+  - Rendered numbers with an engraved tabletop look: top debossed shadow, lower rim edge highlight, and foil inking (Gold Leaf, Platinum, Crisp Enamel).
+
+--------------------------------------------------------------------------------
+MILESTONE 25: PRODUCTION SECURITY HARDENING & ZERO-TRUST FIRESTORE RULES
+--------------------------------------------------------------------------------
+* Zero-Trust Firestore Security Rules (`firestore.rules`):
+  - Replaced permissive wildcard write rules with strict authentication and role-based validation.
+  - Implemented default-deny rule baseline (`match /{document=**} { allow read, write: if false; }`).
+
+* Strict Ownership & Data Invariants (`security_spec.md` & `firebase-blueprint.json`):
+  - Characters (`/characters/{id}`): Creation, modification, list querying, and deletion restricted strictly to `ownerId == request.auth.uid`.
+  - User Profiles (`/users/{id}`): Confined to account owner (`request.auth.uid == userId`) with client-side deletion permanently blocked.
+  - Campaign Saves (`/campaign_saves/{id}`): Locked strictly to the hosting DM (`hostUid == request.auth.uid`).
+  - Live Game Sessions (`/sessions/{id}`): DM authority enforced for room creation, closure, and deletion (`dmUid == request.auth.uid`).
+
+* WebRTC Voice Signaling & Presence Protection:
+  - Isolated voice signaling packets (`voice_signals`) and active peer states (`voice_peers`) to prevent spoofing, identity hijacking, or unauthorized room state mutation.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

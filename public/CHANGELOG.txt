@@ -199,6 +199,56 @@ MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIE
 * Subsystem Performance Profiler (`src/utils/performanceProfiler.ts`):
   - Built data-driven latency profiler and benchmark suite covering campaign loading, search indexing, graph rendering, plugin initialization, and voice startup.
 
+--------------------------------------------------------------------------------
+MILESTONE 23: FOUR-TIER STATE ARCHITECTURE, SEMANTIC PLUGINS & DOMAIN MODELS
+--------------------------------------------------------------------------------
+* Four-Tier State Separation Architecture (ADR-0006):
+  - Formulated strict separation between Server State (Firestore synchronization), Domain State (rules, combat initiative, entities), UI State (filters, drafts, active tabs), and Transient State (3D dice animations, WebRTC decibels, toasts).
+  - Added runtime boundary verification (`StateTiers.ts`) ensuring high-frequency ephemeral updates never trigger synchronous Firestore document writes.
+
+* Rich Domain Modeling & Modifier Stacking Engine (ADR-0007):
+  - Created dedicated domain AST layer (`src/domain/models.ts`) modeling `DiceExpression`, `EvaluatedDiceResult`, `DomainSkillCheck`, and `DomainSavingThrow`.
+  - Implemented `calculateStackedModifier` supporting both additive (5e standard) and highest-only (Pathfinder 2e status bonuses) modifier stacking rules.
+  - Added structured encumbrance and speed penalty evaluation (`calculateDomainEncumbrance`).
+
+* Semantic Plugin Compatibility & Version Negotiation (ADR-0009):
+  - Implemented semver range parser and validator (`src/systems/semanticVersion.ts`) supporting `>`, `<`, `>=`, `<=`, `^`, and multi-clause requirements.
+  - Integrated version negotiation into `verifyPluginContracts`, checking plugin manifests against active host runtime capabilities before execution.
+
+* Centralized Error Strategy & Telemetry Taxonomy (ADR-0008):
+  - Built unified error classifier (`src/utils/errorStrategy.ts`) routing runtime exceptions to four distinct resolution channels: `show_toast`, `open_dialog`, `retry_silent` (with backoff), and `log_silent`.
+
+--------------------------------------------------------------------------------
+MILESTONE 24: PHOTOREALISTIC 3D DICE ENGINE & DEBOSSED TABLETOP FOIL
+--------------------------------------------------------------------------------
+* Corrected 3D Icosahedron Isometric Projection:
+  - Replaced split-facet mesh geometry with mathematically grounded 10-visible-facet isometric projection for 20-sided dice.
+  - Eliminated seam artifacts, overlapping vertex distortions, and flat blueprint wireframes.
+
+* Directional Keylighting & Micro-Bevel Chamfer Reflections:
+  - Added physical top-left directional keylighting with soft ambient occlusion shadows.
+  - Implemented 0.75 opacity micro-bevel chamfer highlights along illuminated facet edges to emulate polished acrylic and gemstone refraction.
+  - Rendered a smooth curved specular dome highlight across the upper face.
+
+* Authentic Debossed Foil Numerals:
+  - Rendered numbers with an engraved tabletop look: top debossed shadow, lower rim edge highlight, and foil inking (Gold Leaf, Platinum, Crisp Enamel).
+
+--------------------------------------------------------------------------------
+MILESTONE 25: PRODUCTION SECURITY HARDENING & ZERO-TRUST FIRESTORE RULES
+--------------------------------------------------------------------------------
+* Zero-Trust Firestore Security Rules (`firestore.rules`):
+  - Replaced permissive wildcard write rules with strict authentication and role-based validation.
+  - Implemented default-deny rule baseline (`match /{document=**} { allow read, write: if false; }`).
+
+* Strict Ownership & Data Invariants (`security_spec.md` & `firebase-blueprint.json`):
+  - Characters (`/characters/{id}`): Creation, modification, list querying, and deletion restricted strictly to `ownerId == request.auth.uid`.
+  - User Profiles (`/users/{id}`): Confined to account owner (`request.auth.uid == userId`) with client-side deletion permanently blocked.
+  - Campaign Saves (`/campaign_saves/{id}`): Locked strictly to the hosting DM (`hostUid == request.auth.uid`).
+  - Live Game Sessions (`/sessions/{id}`): DM authority enforced for room creation, closure, and deletion (`dmUid == request.auth.uid`).
+
+* WebRTC Voice Signaling & Presence Protection:
+  - Isolated voice signaling packets (`voice_signals`) and active peer states (`voice_peers`) to prevent spoofing, identity hijacking, or unauthorized room state mutation.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

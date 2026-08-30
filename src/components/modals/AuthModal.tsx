@@ -12,6 +12,7 @@ import {
 import {
   TIER_CONFIGS,
   isDeveloperUser,
+  isTesterUser,
   getEffectiveUserTier
 } from '../../lib/subscription';
 import { 
@@ -293,7 +294,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
                   Active User Role
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div className={`grid grid-cols-1 ${ (isTesterUser(currentUser) || isDeveloperUser(currentUser)) ? 'sm:grid-cols-3' : 'sm:grid-cols-2' } gap-2.5`}>
                   
                   <button
                     type="button"
@@ -337,26 +338,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     </p>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleRoleChange('Tester')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      currentUser.role === 'Tester'
-                        ? 'bg-emerald-950/40 border-emerald-500/80 shadow-md shadow-emerald-950/30 ring-1 ring-emerald-500/50'
-                        : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
-                    }`}
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <FlaskConical className={`w-4 h-4 ${currentUser.role === 'Tester' ? 'text-emerald-400' : 'text-slate-400'}`} />
-                      <span className={`font-semibold text-xs ${currentUser.role === 'Tester' ? 'text-emerald-200' : 'text-slate-300'}`}>
-                        Tester
-                      </span>
-                      {currentUser.role === 'Tester' && <Check className="w-3.5 h-3.5 ml-auto text-emerald-400" />}
-                    </div>
-                    <p className="text-[10px] text-slate-400 leading-tight">
-                      Full QA tester mode: bypasses all subscription limits.
-                    </p>
-                  </button>
+                  {(isTesterUser(currentUser) || isDeveloperUser(currentUser)) && (
+                    <button
+                      type="button"
+                      onClick={() => handleRoleChange('Tester')}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        currentUser.role === 'Tester'
+                          ? 'bg-emerald-950/40 border-emerald-500/80 shadow-md shadow-emerald-950/30 ring-1 ring-emerald-500/50'
+                          : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800 hover:border-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <FlaskConical className={`w-4 h-4 ${currentUser.role === 'Tester' ? 'text-emerald-400' : 'text-slate-400'}`} />
+                        <span className={`font-semibold text-xs ${currentUser.role === 'Tester' ? 'text-emerald-200' : 'text-slate-300'}`}>
+                          Tester
+                        </span>
+                        {currentUser.role === 'Tester' && <Check className="w-3.5 h-3.5 ml-auto text-emerald-400" />}
+                      </div>
+                      <p className="text-[10px] text-slate-400 leading-tight">
+                        Full QA tester mode: bypasses all subscription limits.
+                      </p>
+                    </button>
+                  )}
 
                 </div>
               </div>
@@ -429,7 +432,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <label className="block text-xs font-semibold text-slate-300 mb-2 uppercase tracking-wider">
                     Select Role
                   </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setSelectedRole('Player')}
@@ -460,22 +463,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         <span className="font-semibold text-xs text-purple-200">Dungeon Master</span>
                       </div>
                       <p className="text-[10px] text-slate-400">DM Screen, Encounters</p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedRole('Tester')}
-                      className={`p-3 rounded-xl border text-left transition-all ${
-                        selectedRole === 'Tester'
-                          ? 'bg-emerald-950/40 border-emerald-500/80 ring-1 ring-emerald-500/50'
-                          : 'bg-slate-800/40 border-slate-700/60 hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <FlaskConical className="w-4 h-4 text-emerald-400" />
-                        <span className="font-semibold text-xs text-emerald-200">Tester</span>
-                      </div>
-                      <p className="text-[10px] text-slate-400">QA & Subscription Bypass</p>
                     </button>
                   </div>
                 </div>

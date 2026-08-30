@@ -6,6 +6,7 @@ import { playDiceSound, isDiceSoundEnabled, setDiceSoundEnabled } from '../utils
 import { useLanguage } from '../i18n/LanguageContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { DiceSkin, DICE_SKINS } from './dice/diceSkins';
+import { PolyhedralDie } from './dice/PolyhedralDie';
 
 interface DiceRollerProps {
   rollLogs: DiceRollResult[];
@@ -41,12 +42,13 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   const [currentAnimatedRolls, setCurrentAnimatedRolls] = useState<number[]>([20]);
   const [activeSkin, setActiveSkin] = useState<string>(() => {
     try {
-      return localStorage.getItem('nexus_dice_skin') || 'standard';
+      return localStorage.getItem('nexus_dice_skin') || 'lunar_prism';
     } catch {
-      return 'standard';
+      return 'lunar_prism';
     }
   });
   const [showSkinPicker, setShowSkinPicker] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'crystalline' | 'resin' | 'gothic' | 'classic' | 'elemental'>('all');
 
   // Sync external roll results
   React.useEffect(() => {
@@ -225,18 +227,38 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
 
             {/* Dice Skin Selector Drawer */}
             {showSkinPicker && (
-              <div className="bg-stone-950/90 border border-purple-500/40 rounded-xl p-2.5 space-y-2">
+              <div className="bg-stone-950/95 border border-purple-500/50 rounded-xl p-3 space-y-2.5 shadow-2xl backdrop-blur-xl">
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-purple-300 flex items-center gap-1.5">
-                    <Palette className="w-3.5 h-3.5" />
+                    <Palette className="w-3.5 h-3.5 text-purple-400" />
                     <span>Cosmetic Dice Materials</span>
                   </span>
                   <span className="text-[10px] text-stone-400 font-mono">
                     Active: <strong className="text-amber-300">{currentSkin.name}</strong>
                   </span>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                  {DICE_SKINS.map((skin) => {
+
+                {/* Category Filters */}
+                <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] scrollbar-none">
+                  {(['all', 'crystalline', 'resin', 'gothic', 'classic', 'elemental'] as const).map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      className={`px-2 py-0.5 rounded-full capitalize whitespace-nowrap transition font-mono ${
+                        selectedCategory === cat
+                          ? 'bg-purple-600 text-white font-bold shadow-sm'
+                          : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Skin Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {DICE_SKINS.filter(skin => selectedCategory === 'all' || skin.category === selectedCategory).map((skin) => {
                     const isLocked = !isDeveloper && (
                       (skin.requiredTier === 'guild' && !isGuild) ||
                       (skin.requiredTier === 'hero' && !isHero)
@@ -248,13 +270,13 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                         key={skin.id}
                         type="button"
                         onClick={() => handleSelectSkin(skin)}
-                        className={`p-2 rounded-lg border text-left text-xs transition flex flex-col justify-between relative overflow-hidden bg-gradient-to-br cursor-pointer ${skin.previewBg} ${
+                        className={`p-2 rounded-xl border text-left text-xs transition flex flex-col justify-between relative overflow-hidden bg-gradient-to-br cursor-pointer ${skin.previewBg} ${
                           isSelected
-                            ? 'border-amber-400 ring-2 ring-amber-500/50 shadow-md scale-102'
+                            ? 'border-amber-400 ring-2 ring-amber-500/60 shadow-lg scale-102'
                             : 'border-stone-700/80 hover:border-stone-500 hover:scale-101'
                         }`}
                       >
-                        <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center justify-between w-full mb-1">
                           <span className={`font-bold text-[11px] truncate ${skin.textColor}`}>
                             {skin.name}
                           </span>
@@ -262,6 +284,18 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                             <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0 drop-shadow" />
                           )}
                         </div>
+
+                        {/* Mini Visual Polyhedral Preview */}
+                        <div className="my-1 flex items-center justify-center">
+                          <PolyhedralDie
+                            dieType={20}
+                            value={20}
+                            skin={skin}
+                            isRolling={false}
+                            size={44}
+                          />
+                        </div>
+
                         <div className="mt-1 flex items-center justify-between text-[9px] font-mono text-stone-300">
                           <span className="uppercase">
                             {skin.requiredTier === 'free' ? 'Standard' : skin.requiredTier}

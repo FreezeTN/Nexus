@@ -1,108 +1,168 @@
 {
   "entities": {
-    "User": {
-      "collection": "users",
-      "fields": {
-        "uid": { "type": "string" },
-        "email": { "type": "string" },
-        "displayName": { "type": "string" },
-        "role": { "type": "string" },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
-      }
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "User account profile and preferences",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["Player", "Dungeon Master", "Spectator", "Tester"] },
+        "photoURL": { "type": "string", "maxLength": 1024 },
+        "tier": { "type": "string", "enum": ["free", "tester", "developer", "supporter", "adventurer", "dungeon_master"] },
+        "tierExpiresAt": { "type": "string", "maxLength": 64 },
+        "paypalTxId": { "type": "string", "maxLength": 128 },
+        "paypalEmail": { "type": "string", "maxLength": 256 },
+        "isLifetime": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "displayName"]
     },
     "Character": {
-      "collection": "characters",
-      "fields": {
-        "id": { "type": "string" },
-        "ownerId": { "type": "string" },
-        "name": { "type": "string" },
-        "edition": { "type": "string" },
+      "title": "Character Sheet",
+      "description": "Player character sheet data including stats, inventory, and spells",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "edition": { "type": "string", "maxLength": 32 },
         "level": { "type": "number" },
-        "data": { "type": "map" },
-        "createdAt": { "type": "string" }
-      }
+        "characterClass": { "type": "string", "maxLength": 64 },
+        "race": { "type": "string", "maxLength": 64 },
+        "data": { "type": "object" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "name"]
     },
-    "Party": {
-      "collection": "parties",
-      "fields": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "dmId": { "type": "string" },
-        "code": { "type": "string" },
-        "memberIds": { "type": "array" },
-        "createdAt": { "type": "string" }
-      }
+    "GameSession": {
+      "title": "Live Game Session",
+      "description": "Multiplayer live campaign room state, party members, and ambience",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "code": { "type": "string", "maxLength": 16 },
+        "name": { "type": "string", "maxLength": 128 },
+        "dmUid": { "type": "string", "maxLength": 128 },
+        "dmName": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["active", "paused", "closed"] },
+        "members": { "type": "array" },
+        "activeCharacterIds": { "type": "array" },
+        "activeAmbience": { "type": "object" },
+        "optionalRules": { "type": "object" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["code", "dmUid", "status"]
+    },
+    "VoicePeer": {
+      "title": "Voice Chat Peer",
+      "description": "WebRTC voice status and signaling peer state",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 128 },
+        "isMuted": { "type": "boolean" },
+        "isDeafened": { "type": "boolean" },
+        "isSpeaking": { "type": "boolean" },
+        "characterName": { "type": "string", "maxLength": 128 },
+        "lastSeen": { "type": "number" }
+      },
+      "required": ["uid", "displayName"]
+    },
+    "VoiceSignal": {
+      "title": "Voice Signaling Message",
+      "description": "WebRTC handshake signal payload between peers",
+      "type": "object",
+      "properties": {
+        "senderUid": { "type": "string", "maxLength": 128 },
+        "receiverUid": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["offer", "answer", "candidate"] },
+        "payload": { "type": "object" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["senderUid", "receiverUid", "type"]
+    },
+    "CharacterPresence": {
+      "title": "Character Presence Lock",
+      "description": "Real-time presence and concurrency lock for character editing",
+      "type": "object",
+      "properties": {
+        "characterId": { "type": "string", "maxLength": 128 },
+        "activeUserId": { "type": "string", "maxLength": 128 },
+        "activeUserName": { "type": "string", "maxLength": 128 },
+        "activeUserRole": { "type": "string", "maxLength": 64 },
+        "dmActive": { "type": "boolean" },
+        "dmUserId": { "type": "string", "maxLength": 128 },
+        "dmUserName": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["characterId"]
     },
     "CampaignSave": {
-      "collection": "campaign_saves",
-      "fields": {
-        "id": { "type": "string" },
-        "name": { "type": "string" },
-        "sessionCode": { "type": "string" },
-        "hostUid": { "type": "string" },
-        "hostName": { "type": "string" },
-        "savedAt": { "type": "string" },
-        "edition": { "type": "string" }
-      }
+      "title": "Campaign Save File",
+      "description": "Full serialized save checkpoint of a tabletop campaign",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "sessionCode": { "type": "string", "maxLength": 32 },
+        "hostUid": { "type": "string", "maxLength": 128 },
+        "hostName": { "type": "string", "maxLength": 128 },
+        "savedAt": { "type": "string", "maxLength": 64 },
+        "edition": { "type": "string", "maxLength": 32 }
+      },
+      "required": ["id", "hostUid", "savedAt"]
     },
-    "Session": {
-      "collection": "sessions",
-      "fields": {
-        "id": { "type": "string" },
-        "code": { "type": "string" },
-        "name": { "type": "string" },
-        "dmUid": { "type": "string" },
-        "dmName": { "type": "string" },
-        "status": { "type": "string" },
-        "activeAmbience": { "type": "map" },
-        "createdAt": { "type": "string" },
-        "updatedAt": { "type": "string" }
-      }
+    "Party": {
+      "title": "Adventuring Party",
+      "description": "Party grouping for campaigns and shared campaigns",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "dmId": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 32 },
+        "memberIds": { "type": "array" },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "dmId"]
     }
   },
-  "securityIntents": [
-    {
-      "entity": "User",
-      "action": "read",
-      "scope": "authenticated"
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profile records with strict owner-only update and auth-verified access"
     },
-    {
-      "entity": "User",
-      "action": "write",
-      "scope": "owner",
-      "ownerField": "uid"
+    "/characters/{characterId}": {
+      "schema": { "$ref": "#/entities/Character" },
+      "description": "Character sheets isolated by ownerId"
     },
-    {
-      "entity": "Character",
-      "action": "read",
-      "scope": "authenticated"
+    "/sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/GameSession" },
+      "description": "Live tabletop sessions created by DM and joined by players"
     },
-    {
-      "entity": "Character",
-      "action": "write",
-      "scope": "owner",
-      "ownerField": "ownerId"
+    "/sessions/{sessionId}/voice_peers/{peerId}": {
+      "schema": { "$ref": "#/entities/VoicePeer" },
+      "description": "Active voice chat peer participants"
     },
-    {
-      "entity": "Party",
-      "action": "read",
-      "scope": "authenticated"
+    "/sessions/{sessionId}/voice_signals/{signalId}": {
+      "schema": { "$ref": "#/entities/VoiceSignal" },
+      "description": "Ephemeral WebRTC signaling queue"
     },
-    {
-      "entity": "Party",
-      "action": "write",
-      "scope": "authenticated"
+    "/presence/{characterId}": {
+      "schema": { "$ref": "#/entities/CharacterPresence" },
+      "description": "Live character lock and presence indicator"
     },
-    {
-      "entity": "CampaignSave",
-      "action": "read",
-      "scope": "authenticated"
+    "/campaign_saves/{saveId}": {
+      "schema": { "$ref": "#/entities/CampaignSave" },
+      "description": "Exported and cloud-saved campaign snapshots owned by the host DM"
     },
-    {
-      "entity": "CampaignSave",
-      "action": "write",
-      "scope": "authenticated"
+    "/parties/{partyId}": {
+      "schema": { "$ref": "#/entities/Party" },
+      "description": "Adventuring parties created by DM"
     }
-  ]
+  }
 }
