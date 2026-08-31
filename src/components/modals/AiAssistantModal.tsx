@@ -33,12 +33,15 @@ import {
   FileText,
   Layers,
   FolderPlus,
-  RefreshCw
+  RefreshCw,
+  Award,
+  Users
 } from 'lucide-react';
 import { CharacterData, GearItem, Spell, RuleEdition } from '../../types';
 import { CampaignEntity } from '../../utils/searchIndexer';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { extractTextFromPdf, ExtractedPdfData } from '../../utils/pdfExtractor';
+import { saveCustomCompendiumEntry } from '../../data/compendiumData';
 import {
   ChatMessage,
   ChatMessageAttachment,
@@ -53,6 +56,8 @@ import {
   hydrateGeneratedItem,
   hydrateGeneratedSpell,
   hydrateGeneratedGraphNode,
+  hydrateGeneratedClass,
+  hydrateGeneratedRace,
   extractEntitiesFromChatMessage,
   DetectedChatEntity
 } from '../../services/geminiService';
@@ -117,6 +122,16 @@ const FORGE_INSPIRATIONS: Record<string, string[]> = {
     'Level 3 Human Fighter with dual scimitars and battle master tactics',
     'Level 5 Elf Wizard specializing in divination and battlefield control',
     'Level 1 Tiefling Rogue with expertise in stealth and underworld contacts'
+  ],
+  class: [
+    'Chronomancer manipulation specialist with time surge and paradox spellcasting',
+    'Blood Knight frontline fighter with life siphon strikes and vampiric resilience',
+    'Rune Juggernaut armored defender that carves elemental runes into shields'
+  ],
+  race: [
+    'Voidtouched Astralkin with short-range astral warp and radiant resistance',
+    'Clockwork Automaton construct with built-in tool modules and armor plating',
+    'Kitsune shapeshifter with foxfire illusions and innate charm magic'
   ],
   monster: [
     'CR 6 Glacial Drake with frost breath, ice burrowing, and tail sweep',
@@ -628,6 +643,14 @@ INSTRUCTIONS FOR THE ORACLE:
           onAddCharacter(merchant);
           setImportedSuccess(`Added "${merchant.name}" to Hub under Merchants & Shops!`);
         }
+      } else if (targetType === 'class') {
+        const customClass = hydrateGeneratedClass(targetData, ruleEdition);
+        saveCustomCompendiumEntry(customClass);
+        setImportedSuccess(`Added "${customClass.name}" directly to your Compendium Classes!`);
+      } else if (targetType === 'race') {
+        const customRace = hydrateGeneratedRace(targetData, ruleEdition);
+        saveCustomCompendiumEntry(customRace);
+        setImportedSuccess(`Added "${customRace.name}" directly to your Compendium Races & Lineages!`);
       } else if (targetType === 'monster' || targetType === 'npc') {
         const monster = hydrateGeneratedMonster(targetData, ruleEdition);
         if (onAddCharacter) {
@@ -673,6 +696,20 @@ INSTRUCTIONS FOR THE ORACLE:
             [entity.id]: `Added "${pc.name}" to Hub as Player Character!`
           }));
         }
+      } else if (entity.type === 'class') {
+        const customClass = hydrateGeneratedClass(entity.rawJson, ruleEdition);
+        saveCustomCompendiumEntry(customClass);
+        setImportedChatIds(prev => ({
+          ...prev,
+          [entity.id]: `Added "${customClass.name}" to Compendium Classes!`
+        }));
+      } else if (entity.type === 'race') {
+        const customRace = hydrateGeneratedRace(entity.rawJson, ruleEdition);
+        saveCustomCompendiumEntry(customRace);
+        setImportedChatIds(prev => ({
+          ...prev,
+          [entity.id]: `Added "${customRace.name}" to Compendium Races!`
+        }));
       } else if (entity.type === 'merchant') {
         const merchant = hydrateGeneratedMerchant(entity.rawJson, ruleEdition);
         if (onAddCharacter) {
@@ -736,6 +773,16 @@ INSTRUCTIONS FOR THE ORACLE:
           const pc = hydrateGeneratedCharacter(entity.rawJson, ruleEdition);
           if (onAddCharacter) onAddCharacter(pc);
           newImportedRecord[entity.id] = `Added "${pc.name}" (Player Character)`;
+          successCount++;
+        } else if (entity.type === 'class') {
+          const customClass = hydrateGeneratedClass(entity.rawJson, ruleEdition);
+          saveCustomCompendiumEntry(customClass);
+          newImportedRecord[entity.id] = `Added "${customClass.name}" (Class)`;
+          successCount++;
+        } else if (entity.type === 'race') {
+          const customRace = hydrateGeneratedRace(entity.rawJson, ruleEdition);
+          saveCustomCompendiumEntry(customRace);
+          newImportedRecord[entity.id] = `Added "${customRace.name}" (Race)`;
           successCount++;
         } else if (entity.type === 'merchant') {
           const merchant = hydrateGeneratedMerchant(entity.rawJson, ruleEdition);
@@ -1077,6 +1124,8 @@ INSTRUCTIONS FOR THE ORACLE:
                                   <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-stone-950 border border-amber-600/40 flex items-center justify-center flex-shrink-0 text-amber-400">
                                       {entity.type === 'character' && <User className="w-4 h-4 text-sky-400" />}
+                                      {entity.type === 'class' && <Award className="w-4 h-4 text-amber-400" />}
+                                      {entity.type === 'race' && <Users className="w-4 h-4 text-emerald-400" />}
                                       {entity.type === 'monster' && <Skull className="w-4 h-4 text-red-400" />}
                                       {entity.type === 'merchant' && <Store className="w-4 h-4 text-amber-400" />}
                                       {entity.type === 'item' && <Shield className="w-4 h-4 text-emerald-400" />}
@@ -1089,6 +1138,10 @@ INSTRUCTIONS FOR THE ORACLE:
                                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-stone-300 font-mono">
                                           {entity.type === 'character'
                                             ? 'Player Hero'
+                                            : entity.type === 'class'
+                                            ? 'Custom Class'
+                                            : entity.type === 'race'
+                                            ? 'Custom Race'
                                             : entity.type === 'monster'
                                             ? 'Monster'
                                             : entity.type === 'merchant'
@@ -1117,6 +1170,10 @@ INSTRUCTIONS FOR THE ORACLE:
                                         <span>
                                           {entity.type === 'character'
                                             ? 'Import to Hub (Character)'
+                                            : entity.type === 'class'
+                                            ? 'Save to Compendium'
+                                            : entity.type === 'race'
+                                            ? 'Save to Compendium'
                                             : entity.type === 'monster'
                                             ? 'Import to Hub (Monster)'
                                             : entity.type === 'merchant'
@@ -1414,6 +1471,8 @@ INSTRUCTIONS FOR THE ORACLE:
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                     {[
                       { type: 'character' as EntityType, label: 'Player Character', icon: User },
+                      { type: 'class' as EntityType, label: 'Custom Class', icon: Award },
+                      { type: 'race' as EntityType, label: 'Custom Race', icon: Users },
                       { type: 'monster' as EntityType, label: 'Monster / Boss', icon: Skull },
                       { type: 'merchant' as EntityType, label: 'Merchant / Shop', icon: Store },
                       { type: 'npc' as EntityType, label: 'NPC Character', icon: Bot },
@@ -1457,6 +1516,10 @@ INSTRUCTIONS FOR THE ORACLE:
                     placeholder={
                       entityType === 'character'
                         ? 'e.g. Level 3 Human Battle Master Fighter with dual scimitars and gladiator background...'
+                        : entityType === 'class'
+                        ? 'e.g. A Chronomancer subclassing into Paradox Weaver or Time Bender with d8 hit die...'
+                        : entityType === 'race'
+                        ? 'e.g. Astralkin celestial void-dwellers with astral step teleport and radiant resistance...'
                         : entityType === 'merchant'
                         ? 'e.g. Dwarven blacksmith running The Iron Anvil with rare plate armors and runic weapons...'
                         : entityType === 'monster'
@@ -1635,6 +1698,10 @@ INSTRUCTIONS FOR THE ORACLE:
                       <span>
                         {entityType === 'character'
                           ? 'Import to Hub as Player Character'
+                          : entityType === 'class'
+                          ? 'Save to Compendium Classes'
+                          : entityType === 'race'
+                          ? 'Save to Compendium Races'
                           : entityType === 'merchant'
                           ? 'Import to Hub as Merchant Shop'
                           : entityType === 'monster' || entityType === 'npc'

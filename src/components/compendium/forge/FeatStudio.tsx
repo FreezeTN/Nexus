@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CompendiumItem } from '../../../data/compendiumData';
 import { SupportedEdition } from './ForgeTypes';
 import { Scroll, Save, Plus, Shield, Award, Sparkles, BookOpen } from 'lucide-react';
+import { validateHomebrewFeat, ValidationResult } from '../../../utils/homebrewValidator';
+import { ValidationBadgeBanner } from './ValidationBadgeBanner';
+import { ValidationConfirmModal } from './ValidationConfirmModal';
 
 interface FeatStudioProps {
   edition: SupportedEdition;
@@ -43,10 +46,21 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
   const [cocSkillBonuses, setCocSkillBonuses] = useState('+20% Spot Hidden, +15% Stealth, +10% Firearms');
   const [cocSpecialRule, setCocSpecialRule] = useState('Spend 10 Luck to ignore a critical failure once per session.');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
 
+  // Live Validation
+  const validation = useMemo(() => {
+    return validateHomebrewFeat({
+      name,
+      category,
+      prerequisite,
+      statBonus,
+      description,
+      edition
+    });
+  }, [name, category, prerequisite, statBonus, description, edition]);
+
+  const executeSave = () => {
     let featDataPayload: any = {};
     let descSummary = description.trim();
     let itemTags: string[] = ['feats', edition, 'Homebrew'];
@@ -116,6 +130,19 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
     onSave(newItem);
     setName('');
     setDescription('');
+    setShowOverrideModal(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    if (validation.hasCritical) {
+      setShowOverrideModal(true);
+      return;
+    }
+
+    executeSave();
   };
 
   return (
@@ -410,6 +437,9 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
         />
       </div>
 
+      {/* Validation & Game Balance Guard */}
+      <ValidationBadgeBanner validation={validation} categoryLabel="Feat / Quality" />
+
       {/* Footer Controls */}
       <div className="flex items-center justify-between pt-2 border-t border-stone-800/80">
         <button
@@ -428,6 +458,16 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
           <span>Save to Compendium</span>
         </button>
       </div>
+
+      {/* Game-Breaking Warning Confirmation Modal */}
+      <ValidationConfirmModal
+        isOpen={showOverrideModal}
+        entryName={name}
+        category="Feat"
+        validation={validation}
+        onProceedAnyway={executeSave}
+        onCancel={() => setShowOverrideModal(false)}
+      />
     </form>
   );
 };

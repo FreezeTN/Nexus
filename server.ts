@@ -749,6 +749,69 @@ Return a valid JSON object with:
   }>
 - tacticalFeatures: Array<{ feature: string, combatBenefit: string }> (e.g. half cover pillars, elevated sniper ledges, slippery oil pools)
 - secretOrHiddenFeature: { description: string, perceptionDc: number, rewardOrShortcut: string }`;
+      } else if (entityType === "class") {
+        systemPrompt = `You are an expert TTRPG game balance and homebrew class architect. Design a comprehensive, exciting, and well-balanced Homebrew Character Class for ${edition}.
+${langNote}
+Return a valid JSON object with:
+- name: string (Class name, e.g. "Chronomancer", "Blood Knight", "Runecarver Juggernaut", "Shadow Weaver")
+- description: string (evocative lore, role, and thematic identity)
+- hitDie: string ("d6" | "d8" | "d10" | "d12")
+- primaryAbility: string (e.g. "Intelligence", "Strength or Dexterity", "Charisma")
+- savingThrows: Array<string> (e.g. ["Intelligence", "Wisdom"] or ["Strength", "Constitution"])
+- role: string (e.g. "Time-Manipulating Battlefield Controller & Utility Caster")
+- proficiencies: {
+    armor: Array<string>,
+    weapons: Array<string>,
+    tools: Array<string>,
+    savingThrows: Array<string>,
+    skills: string
+  }
+- spellcasting: {
+    type: "None" | "Full" | "Half" | "Third" | "Pact",
+    ability: string,
+    notes: string
+  }
+- featuresByLevel: Array<{
+    level: number,
+    name: string,
+    description: string,
+    actionType: "Action" | "Bonus Action" | "Reaction" | "Passive" | "Special",
+    uses: string
+  }>
+- subclasses: Array<{
+    name: string,
+    description: string,
+    features: Array<{ level: number, name: string, description: string }>
+  }>
+- quickBuild: string`;
+      } else if (entityType === "race") {
+        systemPrompt = `You are an expert TTRPG lineage and species designer. Design a rich, balanced Homebrew Race / Lineage / Ancestry for ${edition}.
+${langNote}
+Return a valid JSON object with:
+- name: string (Race / Lineage name, e.g. "Voidtouched Astralkin", "Clockwork Automaton", "Kitsune Shapeshifter", "Crystal Dragonborn")
+- description: string (rich lore, physical appearance, origins, and cultural roleplay hooks)
+- creatureType: string (e.g. "Humanoid", "Fey", "Construct", "Monstrosity", "Celestial", "Fiend", "Undead")
+- size: "Medium" | "Small" | "Large"
+- speed: number
+- speedNotes: string
+- abilityBonuses: Array<{ ability: string, bonus: number }>
+- abilityBonusesStr: string
+- darkvision: boolean
+- senses: string
+- traits: Array<{
+    name: string,
+    description: string,
+    actionType: "Passive" | "Action" | "Bonus Action" | "Reaction" | "Special",
+    recharge: "Passive" | "Short Rest" | "Long Rest" | "Proficiency Bonus / Long Rest" | "None"
+  }>
+- languages: Array<string>
+- subraces: Array<{
+    name: string,
+    description: string,
+    traitBonus: string
+  }>
+- ageAndLifespan: string
+- alignmentTendencies: string`;
       } else if (entityType === "quest") {
         systemPrompt = `You are a master storyteller and adventure designer. Create an immersive quest hook with branching objectives for ${edition}.
 Return a valid JSON object with:

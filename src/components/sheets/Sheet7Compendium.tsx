@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData, Spell, Feat, ClassFeature, GearItem, RuleEdition } from '../../types';
-import { getAbilityModifier, formatModifier } from '../../utils/dndCalculations';
+import { getAbilityModifier, formatModifier, recalculateCharacterAC } from '../../utils/dndCalculations';
 import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { systemRegistry } from '../../systems';
@@ -70,7 +70,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
   // Combine Base SRD + Custom entries with strict deduplication
   const allCompendiumItems = useMemo(() => {
-    const validCategories: CompendiumCategory[] = ['monsters', 'spells', 'items', 'classes', 'feats', 'features', 'skills'];
+    const validCategories: CompendiumCategory[] = ['monsters', 'spells', 'items', 'classes', 'races', 'feats', 'features', 'skills'];
     const sanitizedCustom = customEntries.filter((item) => item && item.id && item.name && validCategories.includes(item.category));
     
     const combined = [...sanitizedCustom, ...baseEntries];
@@ -134,6 +134,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
       spells: 0,
       items: 0,
       classes: 0,
+      races: 0,
       feats: 0,
       features: 0,
       skills: 0
@@ -159,7 +160,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
     }
   };
 
-  // Add Item/Spell/Feat/Feature to Active Character
+  // Add Item/Spell/Feat/Feature/Class/Race to Active Character
   const handleAddToCharacter = (item: CompendiumItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
 
@@ -169,27 +170,82 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
     }
 
     if (item.category === 'items') {
+      const customItemData = (item.itemData || {}) as any;
+      const isWeapon = customItemData.itemType === 'Weapon' || customItemData.type === 'weapon' || !!customItemData.damage || !!customItemData.weaponStats?.damage;
+      const isArmor = customItemData.itemType === 'Armor' || customItemData.type === 'armor' || customItemData.type === 'shield' || customItemData.armorAc !== undefined || customItemData.armorClass !== undefined;
+      const costVal = typeof customItemData.costGp === 'number' ? customItemData.costGp : (parseFloat(customItemData.cost || '0') || 0);
+
       const newItem: GearItem = {
         id: 'inv-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
         name: item.name,
-        quantity: 1,
-        weight: item.itemData?.weight || 1,
+        quantity: customItemData.quantity || 1,
+        weight: typeof customItemData.weight === 'number' ? customItemData.weight : (parseFloat(customItemData.weight || '1') || 1),
+        costGp: costVal,
         equipped: false,
-        notes: item.description,
-        itemType: item.itemData?.type === 'weapon' ? 'Weapon' : item.itemData?.type === 'armor' || item.itemData?.type === 'shield' ? 'Armor' : 'Misc',
-        armorAc: item.itemData?.armorClass,
-        weaponStats: item.itemData?.damage ? {
-          damage: item.itemData.damage,
-          damageType: item.itemData.damageType,
-          notes: item.itemData.properties?.join(', ')
-        } : undefined
+        stored: false,
+        notes: customItemData.notes || item.description,
+        itemType: customItemData.itemType || (isWeapon ? 'Weapon' : isArmor ? 'Armor' : 'Misc'),
+        armorAc: customItemData.armorAc ?? customItemData.armorClass,
+        armorType: customItemData.armorType,
+        acBonus: customItemData.acBonus,
+        damageReduction: customItemData.damageReduction,
+        resistance: customItemData.resistance,
+        immunity: customItemData.immunity,
+        hpMaxBonus: customItemData.hpMaxBonus,
+        initiativeBonus: customItemData.initiativeBonus,
+        spellDcBonus: customItemData.spellDcBonus,
+        isMagic: customItemData.isMagic || !!customItemData.rarity || item.tags?.includes('Magic'),
+        isCursed: customItemData.isCursed,
+        requiresAttunement: customItemData.attunement ?? customItemData.requiresAttunement,
+        weaponStats: customItemData.weaponStats || (customItemData.damage ? {
+          damage: customItemData.damage,
+          damageType: customItemData.damageType,
+          attackBonus: customItemData.attackBonus,
+          range: customItemData.range,
+          notes: customItemData.properties?.join(', ') || customItemData.notes
+        } : undefined)
       };
+
+      const currentInventory = Array.isArray(activeCharacter.inventory) ? activeCharacter.inventory : [];
+      onUpdateCharacter(recalculateCharacterAC({
+        ...activeCharacter,
+        inventory: [...currentInventory, newItem]
+      }));
+      showToast(`🎒 Added "${item.name}" to ${activeCharacter.name}'s inventory!`);
+    } else if (item.category === 'classes' && item.classData) {
+      const newFeatures: ClassFeature[] = (item.classData.featuresByLevel || [])
+        .filter(f => f.level <= (activeCharacter.level || 1))
+        .map(f => ({
+          id: 'cf-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          name: f.name,
+          source: `${item.name} Lvl ${f.level}`,
+          description: f.description,
+          recharge: 'Long Rest'
+        }));
 
       onUpdateCharacter({
         ...activeCharacter,
-        inventory: [...(activeCharacter.inventory || []), newItem]
+        characterClass: item.name,
+        hitDiceTotal: item.classData.hitDie ? `${activeCharacter.level || 1}${item.classData.hitDie}` : activeCharacter.hitDiceTotal,
+        classFeatures: [...(activeCharacter.classFeatures || []), ...newFeatures]
       });
-      showToast(`🎒 Added "${item.name}" to ${activeCharacter.name}'s inventory!`);
+      showToast(`🛡️ Applied Class "${item.name}" to ${activeCharacter.name}!`);
+    } else if (item.category === 'races' && item.raceData) {
+      const racialTraits: ClassFeature[] = (item.raceData.traits || []).map(t => ({
+        id: 'rt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        name: t.name,
+        source: `${item.name} Racial Trait`,
+        description: t.description,
+        recharge: (t.recharge as any) || 'Special'
+      }));
+
+      onUpdateCharacter({
+        ...activeCharacter,
+        race: item.name,
+        speed: item.raceData.speed || activeCharacter.speed || 30,
+        classFeatures: [...(activeCharacter.classFeatures || []), ...racialTraits]
+      });
+      showToast(`🧬 Applied Race "${item.name}" to ${activeCharacter.name}!`);
     } else if (item.category === 'spells' && item.spellData) {
       const spellCandidate = {
         name: item.spellData.name || item.name,
@@ -355,6 +411,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
             { id: 'spells' as const, label: t('compendium.spells', 'Spells & Magic'), icon: Wand2, count: categoryCounts.spells },
             { id: 'items' as const, label: t('compendium.items', 'Items & Gear'), icon: Sword, count: categoryCounts.items },
             { id: 'classes' as const, label: t('wizard.stepClass', 'Classes'), icon: Shield, count: categoryCounts.classes },
+            { id: 'races' as const, label: t('wizard.stepRace', 'Races & Lineages'), icon: Sparkles, count: categoryCounts.races },
             { id: 'feats' as const, label: t('wizard.stepFeats', 'Feats'), icon: Scroll, count: categoryCounts.feats },
             { id: 'features' as const, label: t('level.featuresUnlocked', 'Features'), icon: Sparkles, count: categoryCounts.features },
             { id: 'skills' as const, label: t('skills.title', 'Skills'), icon: Dices, count: categoryCounts.skills }
@@ -501,13 +558,21 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                         </button>
                       )}
 
-                      {['items', 'spells', 'feats', 'features', 'monsters'].includes(item.category) && (
+                      {['items', 'spells', 'feats', 'features', 'monsters', 'classes', 'races'].includes(item.category) && (
                         <button
                           onClick={(e) => handleAddToCharacter(item, e)}
                           className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg text-[11px] font-bold transition flex items-center gap-1"
                         >
                           <Plus className="w-3 h-3" />
-                          <span>{item.category === 'monsters' ? 'Spawn' : 'Add to Sheet'}</span>
+                          <span>
+                            {item.category === 'monsters'
+                              ? 'Spawn'
+                              : item.category === 'classes'
+                              ? 'Apply Class'
+                              : item.category === 'races'
+                              ? 'Apply Race'
+                              : 'Add to Sheet'}
+                          </span>
                         </button>
                       )}
                     </div>
@@ -821,6 +886,30 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               </div>
             )}
 
+            {selectedDetailItem.category === 'races' && selectedDetailItem.raceData && (
+              <div className="space-y-3 bg-stone-900/80 border border-stone-800 p-4 rounded-2xl text-xs text-stone-300">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+                  <div>Speed: <strong className="text-amber-400">{selectedDetailItem.raceData.speed || 30} ft</strong></div>
+                  <div>Size: <strong className="text-cyan-300">{selectedDetailItem.raceData.size || 'Medium'}</strong></div>
+                  <div>Darkvision: <strong className="text-purple-300">{selectedDetailItem.raceData.darkvision ? `${selectedDetailItem.raceData.darkvision} ft` : 'None'}</strong></div>
+                  <div>Origin: <strong className="text-emerald-300">Lineage</strong></div>
+                </div>
+                {selectedDetailItem.raceData.traits && selectedDetailItem.raceData.traits.length > 0 && (
+                  <div className="pt-2 border-t border-stone-800/80 space-y-2">
+                    <div className="text-[11px] font-mono text-amber-300 uppercase font-bold">Racial Traits:</div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedDetailItem.raceData.traits.map((trait, idx) => (
+                        <div key={idx} className="bg-stone-950/60 p-2.5 rounded-xl border border-stone-800 space-y-0.5">
+                          <div className="font-bold text-amber-200">{trait.name}</div>
+                          <p className="text-[11px] text-stone-400">{trait.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {selectedDetailItem.category === 'skills' && selectedDetailItem.skillData && (
               <div className="bg-stone-900/80 border border-stone-800 p-4 rounded-2xl text-xs space-y-2">
                 <div className="font-mono text-amber-300">Governing Ability: <strong>{selectedDetailItem.skillData.ability}</strong></div>
@@ -856,7 +945,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                 Close
               </button>
 
-              {['items', 'spells', 'feats', 'features', 'monsters'].includes(selectedDetailItem.category) && (
+              {['items', 'spells', 'feats', 'features', 'monsters', 'classes', 'races'].includes(selectedDetailItem.category) && (
                 <button
                   onClick={() => {
                     handleAddToCharacter(selectedDetailItem);
@@ -865,7 +954,15 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                   className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-amber-950/30"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>{selectedDetailItem.category === 'monsters' ? 'Spawn Monster in Roster' : `Add to ${activeCharacter?.name || 'Character'}`}</span>
+                  <span>
+                    {selectedDetailItem.category === 'monsters'
+                      ? 'Spawn Monster in Roster'
+                      : selectedDetailItem.category === 'classes'
+                      ? `Apply Class to ${activeCharacter?.name || 'Character'}`
+                      : selectedDetailItem.category === 'races'
+                      ? `Apply Race to ${activeCharacter?.name || 'Character'}`
+                      : `Add to ${activeCharacter?.name || 'Character'}`}
+                  </span>
                 </button>
               )}
             </div>
@@ -878,6 +975,8 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         <HomebrewForgeModal
           initialSystem={selectedSystem !== 'all' ? (selectedSystem as any) : '5e'}
           onClose={() => setShowCustomModal(false)}
+          activeCharacter={activeCharacter}
+          onUpdateCharacter={onUpdateCharacter}
           onSaved={(newItem) => {
             setCustomEntries(loadCustomCompendiumEntries());
             showToast(`✨ Created custom homebrew entry "${newItem.name}"!`);

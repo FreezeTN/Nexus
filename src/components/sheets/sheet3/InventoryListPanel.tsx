@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData, GearItem, ItemContainer, ContainerType } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { PRESET_DND_ITEMS } from '../../../data/presetItems';
-import { saveCustomCompendiumEntry } from '../../../data/compendiumData';
+import { loadCustomCompendiumEntries, saveCustomCompendiumEntry, CompendiumItem } from '../../../data/compendiumData';
 import { recalculateCharacterAC, getMaxAttunementSlots, getAttunedItemsCount } from '../../../utils/dndCalculations';
 import { getCharacterContainers, PRESET_CONTAINERS, getContainerWeightSummaries } from '../../../utils/containerUtils';
 import { eventBus } from '../../../events/eventBus';
@@ -35,7 +35,13 @@ import {
   Wand2,
   FolderPlus,
   ArrowRightLeft,
-  Briefcase
+  Briefcase,
+  Check,
+  BookOpen,
+  Layers,
+  Crown,
+  Coins,
+  Eye
 } from 'lucide-react';
 
 interface InventoryListPanelProps {
@@ -50,6 +56,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   onRollDamage
 }) => {
   const { t } = useLanguage();
+  const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
   const [showAddItemModal, setShowAddItemModal] = useState(false);
   const [showContainerModal, setShowContainerModal] = useState(false);
   const [editingItem, setEditingItem] = useState<GearItem | null>(null);
@@ -72,6 +79,21 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   // Drag-and-Drop state for manual inventory reordering
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Add Item Modal & Catalog State
+  const [addItemModalTab, setAddItemModalTab] = useState<'catalog' | 'custom'>('catalog');
+  const [catalogCategory, setCatalogCategory] = useState<'all' | 'custom' | 'weapons' | 'armor' | 'magic' | 'consumables' | 'gear'>('all');
+  const [catalogSearch, setCatalogSearch] = useState('');
+  const [customCompendiumList, setCustomCompendiumList] = useState<CompendiumItem[]>([]);
+  const [saveToCompendiumAlso, setSaveToCompendiumAlso] = useState(true);
+  const [quickAddFeedback, setQuickAddFeedback] = useState<string | null>(null);
+
+  // Sync custom compendium items whenever the add item modal opens
+  useEffect(() => {
+    if (showAddItemModal) {
+      setCustomCompendiumList(loadCustomCompendiumEntries());
+    }
+  }, [showAddItemModal]);
 
   // New item form state
   const [newItemName, setNewItemName] = useState('');
@@ -100,6 +122,153 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const [newItemIsMagic, setNewItemIsMagic] = useState(false);
   const [newItemIsCursed, setNewItemIsCursed] = useState(false);
   const [showAdvancedStats, setShowAdvancedStats] = useState(false);
+
+  // Unified Catalog Item Interface
+  interface UnifiedCatalogItem {
+    id: string;
+    name: string;
+    isCustom: boolean;
+    category: 'Weapon' | 'Armor' | 'Magic' | 'Misc';
+    subCategory?: string;
+    weight: number;
+    costGp: number;
+    costDisplay?: string;
+    damage?: string;
+    damageType?: string;
+    attackBonus?: string;
+    range?: string;
+    armorAc?: number;
+    armorType?: string;
+    acBonus?: number;
+    damageReduction?: number;
+    resistance?: string;
+    immunity?: string;
+    hpMaxBonus?: number;
+    initiativeBonus?: number;
+    spellDcBonus?: number;
+    isMagic?: boolean;
+    isCursed?: boolean;
+    rarity?: string;
+    requiresAttunement?: boolean;
+    notes?: string;
+    source?: string;
+    rawItemData?: any;
+  }
+
+  // Combined Catalog Entries: Custom Compendium items + SRD Presets
+  const catalogItems = useMemo<UnifiedCatalogItem[]>(() => {
+    const list: UnifiedCatalogItem[] = [];
+
+    // 1. Custom Compendium Items
+    customCompendiumList
+      .filter(item => item.category === 'items')
+      .forEach(item => {
+        const d: any = item.itemData || {};
+        const costGpVal = typeof d.costGp === 'number' ? d.costGp : (parseFloat(d.cost || '0') || 0);
+        const isWeapon = d.itemType === 'Weapon' || d.type === 'weapon' || !!d.weaponStats?.damage || !!d.damage;
+        const isArmor = d.itemType === 'Armor' || d.type === 'armor' || d.type === 'shield' || d.armorAc !== undefined || d.armorClass !== undefined;
+        const isMagic = d.isMagic || !!d.rarity || item.tags?.includes('Magic') || ['potion', 'scroll', 'wand', 'ring', 'rod', 'staff', 'wondrous'].includes(d.type);
+
+        let cat: 'Weapon' | 'Armor' | 'Magic' | 'Misc' = 'Misc';
+        if (isWeapon) cat = 'Weapon';
+        else if (isArmor) cat = 'Armor';
+        else if (isMagic) cat = 'Magic';
+
+        list.push({
+          id: item.id,
+          name: item.name,
+          isCustom: true,
+          category: cat,
+          subCategory: d.type || (isWeapon ? 'Weapon' : isArmor ? 'Armor' : 'Misc'),
+          weight: typeof d.weight === 'number' ? d.weight : (parseFloat(d.weight || '1') || 1),
+          costGp: costGpVal,
+          costDisplay: d.cost || (costGpVal > 0 ? `${costGpVal} GP` : '0 GP'),
+          damage: d.weaponStats?.damage || d.damage,
+          damageType: d.weaponStats?.damageType || d.damageType,
+          attackBonus: d.weaponStats?.attackBonus || d.attackBonus,
+          range: d.weaponStats?.range || d.range,
+          armorAc: d.armorAc ?? d.armorClass,
+          armorType: d.armorType,
+          acBonus: d.acBonus,
+          damageReduction: d.damageReduction,
+          resistance: d.resistance,
+          immunity: d.immunity,
+          hpMaxBonus: d.hpMaxBonus,
+          initiativeBonus: d.initiativeBonus,
+          spellDcBonus: d.spellDcBonus,
+          isMagic: isMagic,
+          isCursed: d.isCursed,
+          rarity: d.rarity,
+          requiresAttunement: d.attunement ?? d.requiresAttunement,
+          notes: d.notes || item.description,
+          source: item.source || 'Homebrew Compendium',
+          rawItemData: d
+        });
+      });
+
+    // 2. Preset SRD Items
+    PRESET_DND_ITEMS.forEach((preset, idx) => {
+      list.push({
+        id: `srd-preset-${idx}-${preset.name.replace(/\s+/g, '-').toLowerCase()}`,
+        name: preset.name,
+        isCustom: false,
+        category: (preset.category === 'Weapon' || preset.category === 'Armor') ? preset.category : (preset.isMagic ? 'Magic' : 'Misc'),
+        subCategory: preset.subCategory || preset.category,
+        weight: preset.weight || 1,
+        costGp: preset.costGp || 0,
+        costDisplay: `${preset.costGp || 0} GP`,
+        damage: preset.weaponStats?.damage,
+        damageType: preset.weaponStats?.damageType,
+        attackBonus: preset.weaponStats?.attackBonus,
+        range: preset.weaponStats?.range,
+        armorAc: preset.armorAc,
+        armorType: preset.armorType,
+        isMagic: preset.isMagic,
+        notes: preset.notes,
+        source: 'SRD Official'
+      });
+    });
+
+    return list;
+  }, [customCompendiumList]);
+
+  // Filtered Catalog Items based on category filter and search
+  const filteredCatalogItems = useMemo(() => {
+    return catalogItems.filter(item => {
+      // Category filter
+      if (catalogCategory === 'custom' && !item.isCustom) return false;
+      if (catalogCategory === 'weapons' && item.category !== 'Weapon') return false;
+      if (catalogCategory === 'armor' && item.category !== 'Armor') return false;
+      if (catalogCategory === 'magic' && !item.isMagic && item.category !== 'Magic') return false;
+      if (catalogCategory === 'consumables') {
+        const sub = (item.subCategory || '').toLowerCase();
+        const name = item.name.toLowerCase();
+        const isConsumable = sub.includes('potion') || sub.includes('scroll') || sub.includes('consumable') || name.includes('potion') || name.includes('scroll') || name.includes('ration') || name.includes('arrow') || name.includes('bolt') || name.includes('vial');
+        if (!isConsumable) return false;
+      }
+      if (catalogCategory === 'gear') {
+        if (item.category === 'Weapon' || item.category === 'Armor' || item.category === 'Magic') return false;
+      }
+
+      // Search filter
+      if (catalogSearch.trim()) {
+        const q = catalogSearch.toLowerCase();
+        const matchName = item.name.toLowerCase().includes(q);
+        const matchNotes = (item.notes || '').toLowerCase().includes(q);
+        const matchDamage = (item.damage || '').toLowerCase().includes(q);
+        const matchType = (item.subCategory || item.category).toLowerCase().includes(q);
+        const matchSource = (item.source || '').toLowerCase().includes(q);
+        if (!matchName && !matchNotes && !matchDamage && !matchType && !matchSource) return false;
+      }
+
+      return true;
+    });
+  }, [catalogItems, catalogCategory, catalogSearch]);
+
+  const customCatalogItemsCount = useMemo(() => catalogItems.filter(i => i.isCustom).length, [catalogItems]);
+  const weaponsCatalogCount = useMemo(() => catalogItems.filter(i => i.category === 'Weapon').length, [catalogItems]);
+  const armorCatalogCount = useMemo(() => catalogItems.filter(i => i.category === 'Armor').length, [catalogItems]);
+  const magicCatalogCount = useMemo(() => catalogItems.filter(i => i.isMagic || i.category === 'Magic').length, [catalogItems]);
 
   const resetNewItemForm = () => {
     setNewItemName('');
@@ -239,11 +408,109 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   };
 
   const handleDeleteItem = (id: string) => {
-    const updated = character.inventory.filter(i => i.id !== id);
+    const currentInv = Array.isArray(character.inventory) ? character.inventory : [];
+    const itemToDelete = currentInv.find(i => i.id === id);
+    const updated = currentInv.filter(i => i.id !== id);
+    
     onUpdateCharacter(recalculateCharacterAC({
       ...character,
       inventory: updated
     }));
+
+    if (itemToDelete) {
+      eventBus.emit('ItemRemoved', {
+        characterId: character.id,
+        itemName: itemToDelete.name,
+        quantity: itemToDelete.quantity || 1
+      });
+    }
+  };
+
+  const handleAddCatalogItem = (catalogItem: UnifiedCatalogItem, qty: number = 1) => {
+    const hasWeaponData = catalogItem.category === 'Weapon' || !!catalogItem.damage || !!catalogItem.attackBonus || !!catalogItem.range;
+    const weaponStats = hasWeaponData ? {
+      damage: catalogItem.damage,
+      damageType: catalogItem.damageType,
+      attackBonus: catalogItem.attackBonus,
+      range: catalogItem.range,
+      notes: catalogItem.rawItemData?.weaponStats?.notes || (catalogItem.rawItemData?.properties ? catalogItem.rawItemData.properties.join(', ') : catalogItem.notes)
+    } : undefined;
+
+    const determinedItemType: 'Weapon' | 'Armor' | 'Misc' = 
+      catalogItem.category === 'Weapon' || catalogItem.rawItemData?.type === 'weapon' ? 'Weapon' :
+      catalogItem.category === 'Armor' || catalogItem.rawItemData?.type === 'armor' || catalogItem.rawItemData?.type === 'shield' ? 'Armor' : 'Misc';
+
+    const newGearItem: GearItem = {
+      id: 'gear-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+      name: catalogItem.name,
+      quantity: Math.max(1, qty || 1),
+      weight: catalogItem.weight ?? 1,
+      costGp: catalogItem.costGp ?? 0,
+      equipped: false,
+      stored: false,
+      notes: catalogItem.notes || catalogItem.rawItemData?.notes || undefined,
+      itemType: determinedItemType,
+      armorAc: catalogItem.armorAc,
+      armorType: catalogItem.armorType as any,
+      acBonus: catalogItem.acBonus,
+      damageReduction: catalogItem.damageReduction,
+      resistance: catalogItem.resistance,
+      immunity: catalogItem.immunity,
+      hpMaxBonus: catalogItem.hpMaxBonus,
+      initiativeBonus: catalogItem.initiativeBonus,
+      spellDcBonus: catalogItem.spellDcBonus,
+      isMagic: catalogItem.isMagic || undefined,
+      isCursed: catalogItem.isCursed || undefined,
+      requiresAttunement: catalogItem.requiresAttunement || undefined,
+      weaponStats: weaponStats
+    };
+
+    const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
+    const updatedInventory = [...currentInventory, newGearItem];
+
+    const updatedChar = recalculateCharacterAC({
+      ...character,
+      inventory: updatedInventory
+    });
+
+    onUpdateCharacter(updatedChar);
+
+    eventBus.emit('ItemAdded', {
+      characterId: character.id,
+      itemName: newGearItem.name,
+      quantity: newGearItem.quantity || 1
+    });
+
+    setQuickAddFeedback(`Added "${newGearItem.name}" to ${character.name || 'Character'}'s inventory!`);
+    setTimeout(() => setQuickAddFeedback(null), 2500);
+  };
+
+  const handleCustomizeCatalogItem = (item: UnifiedCatalogItem) => {
+    setNewItemName(item.name);
+    setNewItemQty(1);
+    setNewItemWeight(item.weight ?? 1);
+    setNewItemCost(item.costGp ?? 0);
+    setNewItemNotes(item.notes || '');
+    setNewItemType(item.category === 'Weapon' || item.category === 'Armor' ? item.category : 'Misc');
+    setNewItemArmorAc(item.armorAc ?? '');
+    setNewItemAcBonus(item.acBonus ?? '');
+    setNewItemArmorType((item.armorType as any) || 'Light');
+    setNewItemWeaponDamage(item.damage || '');
+    setNewItemWeaponDmgType(item.damageType || 'Slashing');
+    setNewItemWeaponAtkBonus(item.attackBonus || '');
+    setNewItemWeaponRange(item.range || 'Melee');
+    setNewItemDamageReduction(item.damageReduction ?? '');
+    setNewItemResistance(item.resistance || '');
+    setNewItemImmunity(item.immunity || '');
+    setNewItemHpBonus(item.hpMaxBonus ?? '');
+    setNewItemInitiativeBonus(item.initiativeBonus ?? '');
+    setNewItemSpellDcBonus(item.spellDcBonus ?? '');
+    setNewItemIsMagic(!!item.isMagic);
+    setNewItemIsCursed(!!item.isCursed);
+    if (item.damageReduction || item.resistance || item.immunity || item.hpMaxBonus || item.spellDcBonus || item.initiativeBonus) {
+      setShowAdvancedStats(true);
+    }
+    setAddItemModalTab('custom');
   };
 
   const handleAddItem = () => {
@@ -282,9 +549,10 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       isCursed: newItemIsCursed || undefined
     };
 
+    const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
     const updatedChar = recalculateCharacterAC({
       ...character,
-      inventory: [...character.inventory, newItem]
+      inventory: [...currentInventory, newItem]
     });
 
     onUpdateCharacter(updatedChar);
@@ -295,20 +563,23 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       quantity: newItem.quantity || 1
     });
 
-    try {
-      saveCustomCompendiumEntry({
-        id: 'comp-gear-' + newItem.id,
-        name: newItem.name,
-        category: 'items',
-        edition: character.edition || '5e',
-        description: `${newItem.itemType || 'General'} item weighing ${newItem.weight} lbs. ${newItem.notes || ''}`,
-        source: 'Custom Inventory Item',
-        isCustom: true,
-        tags: [character.edition || '5e', newItem.itemType || 'General'],
-        itemData: newItem
-      });
-    } catch (e) {
-      console.error('Failed to auto-add item to compendium', e);
+    if (saveToCompendiumAlso) {
+      try {
+        saveCustomCompendiumEntry({
+          id: 'comp-gear-' + newItem.id,
+          name: newItem.name,
+          category: 'items',
+          edition: character.edition || '5e',
+          description: `${newItem.itemType || 'General'} item weighing ${newItem.weight} lbs. ${newItem.notes || ''}`,
+          source: 'Custom Inventory Item',
+          isCustom: true,
+          tags: [character.edition || '5e', newItem.itemType || 'General'],
+          itemData: newItem
+        });
+        setCustomCompendiumList(loadCustomCompendiumEntries());
+      } catch (e) {
+        console.error('Failed to auto-add item to compendium', e);
+      }
     }
 
     resetNewItemForm();
@@ -331,9 +602,10 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       weaponStats: preset.weaponStats
     };
 
+    const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
     onUpdateCharacter(recalculateCharacterAC({
       ...character,
-      inventory: [...character.inventory, newItem]
+      inventory: [...currentInventory, newItem]
     }));
 
     eventBus.emit('ItemAdded', {
@@ -461,13 +733,13 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   };
 
   // Filtered Inventory List
-  const filteredInventoryWithIndices = character.inventory.map((item, originalIndex) => ({
+  const filteredInventoryWithIndices = currentInventory.map((item, originalIndex) => ({
     item,
     originalIndex
   })).filter(({ item }) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      const matchName = item.name.toLowerCase().includes(q);
+      const matchName = (item.name || '').toLowerCase().includes(q);
       const matchNotes = (item.notes || '').toLowerCase().includes(q);
       const matchType = (item.itemType || '').toLowerCase().includes(q);
       if (!matchName && !matchNotes && !matchType) return false;
@@ -478,13 +750,13 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     return subtype === categoryFilter;
   });
 
-  const countAll = character.inventory.length;
+  const countAll = currentInventory.length;
   const countContainers = characterContainers.length;
-  const countMelee = character.inventory.filter(i => getItemSubtype(i) === 'weapon_melee').length;
-  const countRanged = character.inventory.filter(i => getItemSubtype(i) === 'weapon_ranged').length;
-  const countArmor = character.inventory.filter(i => getItemSubtype(i) === 'armor').length;
-  const countMagic = character.inventory.filter(i => getItemSubtype(i) === 'magic').length;
-  const countMisc = character.inventory.filter(i => getItemSubtype(i) === 'misc').length;
+  const countMelee = currentInventory.filter(i => getItemSubtype(i) === 'weapon_melee').length;
+  const countRanged = currentInventory.filter(i => getItemSubtype(i) === 'weapon_ranged').length;
+  const countArmor = currentInventory.filter(i => getItemSubtype(i) === 'armor').length;
+  const countMagic = currentInventory.filter(i => getItemSubtype(i) === 'magic').length;
+  const countMisc = currentInventory.filter(i => getItemSubtype(i) === 'misc').length;
 
   return (
     <CollapsibleBox
@@ -1172,385 +1444,708 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
         )}
       </div>
 
-      {/* MODAL: Add New Item / SRD Preset Picker */}
+      {/* MODAL: Add New Item / Unified Compendium & SRD Catalog Picker */}
       {showAddItemModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-stone-900 border border-amber-600/50 rounded-2xl p-6 max-w-xl w-full shadow-2xl text-stone-100 space-y-4 max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between border-b border-stone-800 pb-2.5">
-              <h3 className="text-lg font-serif font-bold text-amber-300 flex items-center gap-2">
-                <Package className="w-5 h-5 text-amber-500" /> Add Gear & Equipment
-              </h3>
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-stone-900 border border-amber-600/50 rounded-2xl p-4 sm:p-5 max-w-3xl w-full shadow-2xl text-stone-100 space-y-3 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-stone-800 pb-3 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-950/80 border border-amber-600/50 flex items-center justify-center">
+                  <Package className="w-4 h-4 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-serif font-bold text-amber-300">
+                    Add Gear, Weapons & Magic Items
+                  </h3>
+                  <p className="text-[11px] text-stone-400">
+                    Browse official SRD gear, your custom homebrew compendium, or craft a custom item.
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => { resetNewItemForm(); setShowAddItemModal(false); }}
-                className="text-stone-400 hover:text-stone-200 transition p-1"
+                className="text-stone-400 hover:text-stone-200 transition p-1.5 rounded-lg hover:bg-stone-800"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Form Fields for Custom Item */}
-            <div className="space-y-3 text-xs overflow-y-auto flex-1 pr-1.5">
-              {/* Row 1: Name */}
-              <div>
-                <label className="block text-stone-300 mb-1 font-semibold">Item Name *</label>
-                <input
-                  type="text"
-                  value={newItemName}
-                  onChange={(e) => setNewItemName(e.target.value)}
-                  placeholder="e.g. Dragon Slayer Greatsword, Adamantine Full Plate, Ring of Protection"
-                  className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-bold focus:border-amber-500 focus:outline-none"
-                />
+            {/* Quick Add Feedback Toast */}
+            {quickAddFeedback && (
+              <div className="bg-emerald-950/90 border border-emerald-500/70 text-emerald-200 px-3 py-1.5 rounded-xl text-xs flex items-center gap-2 shadow-lg animate-pulse shrink-0">
+                <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold">{quickAddFeedback}</span>
               </div>
+            )}
 
-              {/* Row 2: Quantity, Weight, Cost */}
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-stone-400 mb-1 font-semibold">Quantity</label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newItemQty}
-                    onChange={(e) => setNewItemQty(parseInt(e.target.value) || 1)}
-                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-amber-200 font-mono font-bold"
-                  />
-                </div>
-                <div>
-                  <label className="block text-stone-400 mb-1 font-semibold">Weight (lbs)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={newItemWeight}
-                    onChange={(e) => setNewItemWeight(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-stone-400 mb-1 font-semibold">Cost (GP)</label>
-                  <input
-                    type="number"
-                    value={newItemCost}
-                    onChange={(e) => setNewItemCost(parseFloat(e.target.value) || 0)}
-                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-amber-300 font-mono"
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: Category Selector */}
-              <div>
-                <label className="block text-stone-400 mb-1 font-semibold">Category / Type</label>
-                <select
-                  value={newItemType}
-                  onChange={(e: any) => setNewItemType(e.target.value)}
-                  className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-medium"
-                >
-                  <option value="Misc">General Adventuring Gear / Wondrous Item / Consumable</option>
-                  <option value="Weapon">⚔️ Weapon (Melee / Ranged)</option>
-                  <option value="Armor">🛡️ Armor / Shield</option>
-                </select>
-              </div>
-
-              {/* Weapon Specific Fields */}
-              {newItemType === 'Weapon' && (
-                <div className="bg-rose-950/20 border border-rose-800/40 rounded-xl p-3 space-y-2.5">
-                  <div className="flex items-center gap-1.5 text-rose-300 font-bold font-serif text-xs">
-                    <Swords className="w-4 h-4 text-rose-400" />
-                    <span>Weapon Combat Statistics</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div>
-                      <label className="block text-stone-400 text-[11px] mb-1">Damage Dice</label>
-                      <input
-                        type="text"
-                        value={newItemWeaponDamage}
-                        onChange={(e) => setNewItemWeaponDamage(e.target.value)}
-                        placeholder="e.g. 1d8 + 2, 2d6"
-                        className="w-full bg-stone-800 border border-rose-700/50 rounded-lg p-1.5 text-rose-200 font-mono font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-stone-400 text-[11px] mb-1">Damage Type</label>
-                      <input
-                        type="text"
-                        value={newItemWeaponDmgType}
-                        onChange={(e) => setNewItemWeaponDmgType(e.target.value)}
-                        placeholder="Slashing, Fire..."
-                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-stone-400 text-[11px] mb-1">Attack Bonus</label>
-                      <input
-                        type="text"
-                        value={newItemWeaponAtkBonus}
-                        onChange={(e) => setNewItemWeaponAtkBonus(e.target.value)}
-                        placeholder="e.g. +1, +2"
-                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-stone-400 text-[11px] mb-1">Range / Reach</label>
-                      <input
-                        type="text"
-                        value={newItemWeaponRange}
-                        onChange={(e) => setNewItemWeaponRange(e.target.value)}
-                        placeholder="Melee, 20/60 ft"
-                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Armor / Shield Specific Fields */}
-              {newItemType === 'Armor' && (
-                <div className="bg-blue-950/20 border border-blue-800/40 rounded-xl p-3 space-y-2.5">
-                  <div className="flex items-center gap-1.5 text-blue-300 font-bold font-serif text-xs">
-                    <Shield className="w-4 h-4 text-blue-400" />
-                    <span>Armor & Shield Statistics</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div>
-                      <label className="block text-stone-400 text-[11px] mb-1">Base AC Value</label>
-                      <input
-                        type="number"
-                        value={newItemArmorAc}
-                        onChange={(e) => setNewItemArmorAc(e.target.value === '' ? '' : parseInt(e.target.value))}
-                        placeholder="e.g. 14, 16, 18"
-                        className="w-full bg-stone-800 border border-blue-700/50 rounded-lg p-1.5 text-blue-200 font-mono font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-stone-400 text-[11px] mb-1">AC Bonus (+)</label>
-                      <input
-                        type="number"
-                        value={newItemAcBonus}
-                        onChange={(e) => setNewItemAcBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
-                        placeholder="e.g. 1, 2"
-                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200 font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-stone-400 text-[11px] mb-1">Armor Class</label>
-                      <select
-                        value={newItemArmorType}
-                        onChange={(e: any) => setNewItemArmorType(e.target.value)}
-                        className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
-                      >
-                        <option value="Light">Light Armor</option>
-                        <option value="Medium">Medium Armor</option>
-                        <option value="Heavy">Heavy Armor</option>
-                        <option value="Shield">Shield (+2 Base)</option>
-                        <option value="Bonus">Accessory Bonus</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center pt-5">
-                      <label className="flex items-center gap-1.5 text-stone-300 text-[11px] cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={newItemStealthDisadv}
-                          onChange={(e) => setNewItemStealthDisadv(e.target.checked)}
-                          className="rounded text-amber-500"
-                        />
-                        <span>Stealth Disadv.</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Damage Reduction, Resistances & Magical Stats (Collapsible or always expandable) */}
-              <div className="border border-stone-800 rounded-xl bg-stone-950/60 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowAdvancedStats(!showAdvancedStats)}
-                  className="w-full px-3 py-2 text-left flex items-center justify-between text-xs font-bold text-amber-300/90 hover:bg-stone-850 transition"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                    <span>Damage Reduction (DR), Resistances & Magical Bonuses</span>
-                    {(newItemDamageReduction !== '' || newItemResistance || newItemImmunity || newItemHpBonus !== '' || newItemSpellDcBonus !== '') && (
-                      <span className="px-1.5 py-0.2 bg-amber-900/60 text-amber-200 text-[10px] rounded-full border border-amber-600/40">Active</span>
-                    )}
+            {/* Modal Navigation Tabs */}
+            <div className="flex items-center gap-2 border-b border-stone-800 pb-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setAddItemModalTab('catalog')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                  addItemModalTab === 'catalog'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Browse Catalog & Compendium</span>
+                <span className="px-1.5 py-0.2 bg-black/40 rounded-full text-[10px] font-mono">
+                  {catalogItems.length}
+                </span>
+                {customCatalogItemsCount > 0 && (
+                  <span className="px-1.5 py-0.2 bg-amber-400 text-stone-950 rounded-full text-[10px] font-bold">
+                    {customCatalogItemsCount} Homebrew
                   </span>
-                  {showAdvancedStats ? <ChevronUp className="w-3.5 h-3.5 text-stone-400" /> : <ChevronDown className="w-3.5 h-3.5 text-stone-400" />}
-                </button>
+                )}
+              </button>
 
-                {showAdvancedStats && (
-                  <div className="p-3 border-t border-stone-800 space-y-3 bg-stone-900/40 text-xs">
-                    {/* DR & Defenses */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      <div>
-                        <label className="block text-amber-300 text-[11px] mb-1 font-semibold" title="Damage Reduction absorbs flat damage from every incoming hit before HP is reduced.">
-                          🛡️ Damage Reduction (DR)
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          value={newItemDamageReduction}
-                          onChange={(e) => setNewItemDamageReduction(e.target.value === '' ? '' : parseInt(e.target.value))}
-                          placeholder="e.g. 2, 5, 10"
-                          className="w-full bg-stone-800 border border-amber-600/40 rounded-lg p-1.5 text-amber-200 font-mono font-bold"
-                        />
-                        <span className="text-[10px] text-stone-500 mt-0.5 block">Flat damage absorbed per hit</span>
-                      </div>
+              <button
+                type="button"
+                onClick={() => setAddItemModalTab('custom')}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                  addItemModalTab === 'custom'
+                    ? 'bg-amber-600 text-white shadow-md'
+                    : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+              >
+                <Edit3 className="w-3.5 h-3.5" />
+                <span>Craft Custom Item</span>
+              </button>
+            </div>
 
-                      <div>
-                        <label className="block text-orange-300 text-[11px] mb-1 font-semibold">
-                          🔥 Damage Resistance
-                        </label>
-                        <input
-                          type="text"
-                          value={newItemResistance}
-                          onChange={(e) => setNewItemResistance(e.target.value)}
-                          placeholder="e.g. Fire, Cold, Slashing"
-                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
-                        />
-                        <span className="text-[10px] text-stone-500 mt-0.5 block">Halves damage of this type</span>
-                      </div>
+            {/* TAB 1: BROWSE CATALOG & COMPENDIUM */}
+            {addItemModalTab === 'catalog' && (
+              <div className="flex-1 flex flex-col min-h-0 space-y-3">
+                {/* Search & Category Filter Bar */}
+                <div className="space-y-2 shrink-0">
+                  <div className="relative flex items-center">
+                    <Search className="w-4 h-4 text-stone-400 absolute left-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={catalogSearch}
+                      onChange={(e) => setCatalogSearch(e.target.value)}
+                      placeholder="Search items by name, properties, damage type, source..."
+                      className="w-full bg-stone-950 border border-stone-800 rounded-xl pl-9 pr-8 py-2 text-xs text-stone-100 placeholder-stone-500 focus:border-amber-500 focus:outline-none"
+                    />
+                    {catalogSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setCatalogSearch('')}
+                        className="absolute right-2.5 text-stone-500 hover:text-stone-300"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
 
-                      <div>
-                        <label className="block text-emerald-300 text-[11px] mb-1 font-semibold">
-                          ✨ Damage Immunity
-                        </label>
-                        <input
-                          type="text"
-                          value={newItemImmunity}
-                          onChange={(e) => setNewItemImmunity(e.target.value)}
-                          placeholder="e.g. Poison, Necrotic, All"
-                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
-                        />
-                        <span className="text-[10px] text-stone-500 mt-0.5 block">Reduces damage to 0</span>
-                      </div>
+                  {/* Category Filter Pills */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setCatalogCategory('all')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap ${
+                        catalogCategory === 'all'
+                          ? 'bg-amber-700 text-white'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      All ({catalogItems.length})
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCatalogCategory('custom')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1.5 ${
+                        catalogCategory === 'custom'
+                          ? 'bg-amber-500 text-stone-950 shadow-sm'
+                          : 'bg-amber-950/40 text-amber-300 hover:bg-amber-900/60 border border-amber-600/40'
+                      }`}
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-400" />
+                      <span>Homebrew ({customCatalogItemsCount})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCatalogCategory('weapons')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1 ${
+                        catalogCategory === 'weapons'
+                          ? 'bg-rose-700 text-white'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      <Swords className="w-3 h-3 text-rose-400" />
+                      <span>Weapons ({weaponsCatalogCount})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCatalogCategory('armor')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1 ${
+                        catalogCategory === 'armor'
+                          ? 'bg-blue-700 text-white'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      <Shield className="w-3 h-3 text-blue-400" />
+                      <span>Armor & Shields ({armorCatalogCount})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCatalogCategory('magic')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1 ${
+                        catalogCategory === 'magic'
+                          ? 'bg-purple-700 text-white'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      <Sparkles className="w-3 h-3 text-purple-400" />
+                      <span>Magic Items ({magicCatalogCount})</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCatalogCategory('consumables')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1 ${
+                        catalogCategory === 'consumables'
+                          ? 'bg-emerald-700 text-white'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      <span>🧪 Potions & Consumables</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCatalogCategory('gear')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1 ${
+                        catalogCategory === 'gear'
+                          ? 'bg-stone-700 text-white'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      <Package className="w-3 h-3 text-stone-400" />
+                      <span>Adventuring Gear</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Catalog Items Scroll List */}
+                <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                  {filteredCatalogItems.length === 0 ? (
+                    <div className="p-8 text-center bg-stone-950/60 rounded-xl border border-stone-800 space-y-2">
+                      <Package className="w-8 h-8 text-stone-600 mx-auto" />
+                      <p className="text-stone-300 font-semibold text-xs">No matching items found</p>
+                      <p className="text-stone-500 text-[11px]">
+                        {catalogCategory === 'custom'
+                          ? 'You have not created any custom items in the Homebrew Forge or Compendium yet.'
+                          : 'Try adjusting your search query or switch to "Craft Custom Item" to make a new one.'}
+                      </p>
+                      {catalogCategory === 'custom' && (
+                        <button
+                          type="button"
+                          onClick={() => setAddItemModalTab('custom')}
+                          className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Craft Custom Item Now
+                        </button>
+                      )}
                     </div>
+                  ) : (
+                    filteredCatalogItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`p-3 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${
+                          item.isCustom
+                            ? 'bg-amber-950/20 border-amber-700/50 hover:border-amber-500/80'
+                            : 'bg-stone-950 border-stone-800 hover:border-stone-700'
+                        }`}
+                      >
+                        {/* Item Details */}
+                        <div className="space-y-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-stone-100 text-xs sm:text-sm">
+                              {item.name}
+                            </span>
 
-                    {/* Magical Modifiers & Mod Toggles */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-stone-800/80">
+                            {item.isCustom ? (
+                              <span className="px-2 py-0.5 bg-amber-400/20 text-amber-300 border border-amber-500/50 rounded text-[10px] font-bold flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-amber-400" /> Homebrew
+                              </span>
+                            ) : (
+                              <span className="px-1.5 py-0.5 bg-stone-800 text-stone-400 rounded text-[10px] font-mono">
+                                SRD
+                              </span>
+                            )}
+
+                            {item.rarity && (
+                              <span className="px-1.5 py-0.5 bg-purple-950/80 text-purple-300 border border-purple-700/50 rounded text-[10px] capitalize">
+                                {item.rarity}
+                              </span>
+                            )}
+
+                            {item.requiresAttunement && (
+                              <span className="px-1.5 py-0.5 bg-indigo-950/80 text-indigo-300 border border-indigo-700/50 rounded text-[10px]">
+                                Attunement
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Stats Chips */}
+                          <div className="flex items-center gap-2 flex-wrap text-[11px] font-mono">
+                            <span className="text-stone-400">
+                              ⚖️ {item.weight} lbs
+                            </span>
+                            <span className="text-amber-400 font-bold">
+                              💰 {item.costDisplay || `${item.costGp} GP`}
+                            </span>
+
+                            {item.damage && (
+                              <span className="text-rose-300 bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-800/50 font-bold">
+                                ⚔️ {item.damage} {item.damageType || ''}
+                              </span>
+                            )}
+
+                            {item.armorAc !== undefined && (
+                              <span className="text-blue-300 bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/50 font-bold">
+                                🛡️ {item.armorAc} AC ({item.armorType || 'Armor'})
+                              </span>
+                            )}
+
+                            {item.acBonus !== undefined && item.acBonus > 0 && (
+                              <span className="text-blue-300 bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/50 font-bold">
+                                +{item.acBonus} AC
+                              </span>
+                            )}
+
+                            {item.damageReduction !== undefined && item.damageReduction > 0 && (
+                              <span className="text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-700/50 font-bold">
+                                🛡️ DR {item.damageReduction}
+                              </span>
+                            )}
+
+                            {item.resistance && (
+                              <span className="text-orange-300 bg-orange-950/60 px-1.5 py-0.5 rounded border border-orange-800/50">
+                                🔥 Resist: {item.resistance}
+                              </span>
+                            )}
+
+                            {item.hpMaxBonus !== undefined && item.hpMaxBonus !== 0 && (
+                              <span className="text-red-300 bg-red-950/60 px-1.5 py-0.5 rounded border border-red-800/50">
+                                ❤️ {item.hpMaxBonus > 0 ? `+${item.hpMaxBonus}` : item.hpMaxBonus} HP
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Notes/Description */}
+                          {item.notes && (
+                            <p className="text-[11px] text-stone-400 line-clamp-2 leading-relaxed">
+                              {item.notes}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-800">
+                          <button
+                            type="button"
+                            onClick={() => handleCustomizeCatalogItem(item)}
+                            className="px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-stone-100 rounded-xl text-xs font-semibold transition border border-stone-700 flex items-center gap-1"
+                            title="Customize this item before adding"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                            <span>Customize</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddCatalogItem(item, 1)}
+                            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-1.5"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>Add</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: CRAFT CUSTOM ITEM */}
+            {addItemModalTab === 'custom' && (
+              <div className="space-y-3 text-xs overflow-y-auto flex-1 pr-1.5">
+                {/* Row 1: Name */}
+                <div>
+                  <label className="block text-stone-300 mb-1 font-semibold">Item Name *</label>
+                  <input
+                    type="text"
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    placeholder="e.g. Dragon Slayer Greatsword, Adamantine Full Plate, Ring of Protection"
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-bold focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Row 2: Quantity, Weight, Cost */}
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-stone-400 mb-1 font-semibold">Quantity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={newItemQty}
+                      onChange={(e) => setNewItemQty(parseInt(e.target.value) || 1)}
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-amber-200 font-mono font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-400 mb-1 font-semibold">Weight (lbs)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newItemWeight}
+                      onChange={(e) => setNewItemWeight(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-400 mb-1 font-semibold">Cost (GP)</label>
+                    <input
+                      type="number"
+                      value={newItemCost}
+                      onChange={(e) => setNewItemCost(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-amber-300 font-mono"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Category Selector */}
+                <div>
+                  <label className="block text-stone-400 mb-1 font-semibold">Category / Type</label>
+                  <select
+                    value={newItemType}
+                    onChange={(e: any) => setNewItemType(e.target.value)}
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 font-medium"
+                  >
+                    <option value="Misc">General Adventuring Gear / Wondrous Item / Consumable</option>
+                    <option value="Weapon">⚔️ Weapon (Melee / Ranged)</option>
+                    <option value="Armor">🛡️ Armor / Shield</option>
+                  </select>
+                </div>
+
+                {/* Weapon Specific Fields */}
+                {newItemType === 'Weapon' && (
+                  <div className="bg-rose-950/20 border border-rose-800/40 rounded-xl p-3 space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-rose-300 font-bold font-serif text-xs">
+                      <Swords className="w-4 h-4 text-rose-400" />
+                      <span>Weapon Combat Statistics</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div>
-                        <label className="block text-red-300 text-[11px] mb-1 font-semibold">
-                          ❤️ Max HP Modifier
-                        </label>
+                        <label className="block text-stone-400 text-[11px] mb-1">Damage Dice</label>
                         <input
-                          type="number"
-                          value={newItemHpBonus}
-                          onChange={(e) => setNewItemHpBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
-                          placeholder="e.g. +10, -5"
-                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-red-200 font-mono"
+                          type="text"
+                          value={newItemWeaponDamage}
+                          onChange={(e) => setNewItemWeaponDamage(e.target.value)}
+                          placeholder="e.g. 1d8 + 2, 2d6"
+                          className="w-full bg-stone-800 border border-rose-700/50 rounded-lg p-1.5 text-rose-200 font-mono font-bold"
                         />
                       </div>
-
                       <div>
-                        <label className="block text-indigo-300 text-[11px] mb-1 font-semibold">
-                          🔮 Spell Save DC Bonus
-                        </label>
+                        <label className="block text-stone-400 text-[11px] mb-1">Damage Type</label>
                         <input
-                          type="number"
-                          value={newItemSpellDcBonus}
-                          onChange={(e) => setNewItemSpellDcBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
+                          type="text"
+                          value={newItemWeaponDmgType}
+                          onChange={(e) => setNewItemWeaponDmgType(e.target.value)}
+                          placeholder="Slashing, Fire..."
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-stone-400 text-[11px] mb-1">Attack Bonus</label>
+                        <input
+                          type="text"
+                          value={newItemWeaponAtkBonus}
+                          onChange={(e) => setNewItemWeaponAtkBonus(e.target.value)}
                           placeholder="e.g. +1, +2"
-                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-indigo-200 font-mono"
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200 font-mono"
                         />
                       </div>
-
                       <div>
-                        <label className="block text-yellow-300 text-[11px] mb-1 font-semibold">
-                          ⚡ Initiative Bonus
-                        </label>
+                        <label className="block text-stone-400 text-[11px] mb-1">Range / Reach</label>
                         <input
-                          type="number"
-                          value={newItemInitiativeBonus}
-                          onChange={(e) => setNewItemInitiativeBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
-                          placeholder="e.g. +2"
-                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-yellow-200 font-mono"
+                          type="text"
+                          value={newItemWeaponRange}
+                          onChange={(e) => setNewItemWeaponRange(e.target.value)}
+                          placeholder="Melee, 20/60 ft"
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
                         />
                       </div>
-                    </div>
-
-                    {/* Flags */}
-                    <div className="flex items-center gap-4 pt-1">
-                      <label className="flex items-center gap-1.5 text-purple-300 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={newItemIsMagic}
-                          onChange={(e) => setNewItemIsMagic(e.target.checked)}
-                          className="rounded text-purple-600"
-                        />
-                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                        <span>Magical Item</span>
-                      </label>
-
-                      <label className="flex items-center gap-1.5 text-rose-400 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={newItemIsCursed}
-                          onChange={(e) => setNewItemIsCursed(e.target.checked)}
-                          className="rounded text-rose-600"
-                        />
-                        <Skull className="w-3.5 h-3.5 text-rose-400" />
-                        <span>Cursed Item</span>
-                      </label>
                     </div>
                   </div>
                 )}
-              </div>
 
-              {/* Item Notes */}
-              <div>
-                <label className="block text-stone-400 mb-1 font-semibold">Item Notes & Magical Properties</label>
-                <textarea
-                  value={newItemNotes}
-                  onChange={(e) => setNewItemNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Properties, effects, charges, command words..."
-                  className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 focus:border-amber-500 focus:outline-none"
-                />
-              </div>
-
-              {/* Quick SRD Presets Library */}
-              <div className="pt-3 border-t border-stone-800 space-y-2">
-                <span className="font-serif font-bold text-amber-300 text-xs block">
-                  Quick Add Official SRD Gear Presets
-                </span>
-                <input
-                  type="text"
-                  value={presetSearch}
-                  onChange={(e) => setPresetSearch(e.target.value)}
-                  placeholder="Search SRD gear catalog..."
-                  className="w-full bg-stone-950 border border-stone-800 rounded-lg p-1.5 text-xs text-stone-200"
-                />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pt-1">
-                  {PRESET_DND_ITEMS.filter(p => p.name?.toLowerCase().includes(presetSearch.toLowerCase())).map((preset) => (
-                    <button
-                      key={preset.name}
-                      onClick={() => handleAddPresetItem(preset as any)}
-                      className="text-left bg-stone-950 hover:bg-stone-800 p-2 rounded-lg border border-stone-800 text-xs flex justify-between items-center transition"
-                    >
+                {/* Armor / Shield Specific Fields */}
+                {newItemType === 'Armor' && (
+                  <div className="bg-blue-950/20 border border-blue-800/40 rounded-xl p-3 space-y-2.5">
+                    <div className="flex items-center gap-1.5 text-blue-300 font-bold font-serif text-xs">
+                      <Shield className="w-4 h-4 text-blue-400" />
+                      <span>Armor & Shield Statistics</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div>
-                        <div className="font-bold text-amber-200">{preset.name}</div>
-                        <div className="text-[10px] text-stone-400 font-mono">{preset.weight} lbs | {preset.costGp} GP</div>
+                        <label className="block text-stone-400 text-[11px] mb-1">Base AC Value</label>
+                        <input
+                          type="number"
+                          value={newItemArmorAc}
+                          onChange={(e) => setNewItemArmorAc(e.target.value === '' ? '' : parseInt(e.target.value))}
+                          placeholder="e.g. 14, 16, 18"
+                          className="w-full bg-stone-800 border border-blue-700/50 rounded-lg p-1.5 text-blue-200 font-mono font-bold"
+                        />
                       </div>
-                      <span className="text-amber-400 text-xs font-bold">+ Add</span>
-                    </button>
-                  ))}
+                      <div>
+                        <label className="block text-stone-400 text-[11px] mb-1">AC Bonus (+)</label>
+                        <input
+                          type="number"
+                          value={newItemAcBonus}
+                          onChange={(e) => setNewItemAcBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
+                          placeholder="e.g. 1, 2"
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-stone-400 text-[11px] mb-1">Armor Class</label>
+                        <select
+                          value={newItemArmorType}
+                          onChange={(e: any) => setNewItemArmorType(e.target.value)}
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
+                        >
+                          <option value="Light">Light Armor</option>
+                          <option value="Medium">Medium Armor</option>
+                          <option value="Heavy">Heavy Armor</option>
+                          <option value="Shield">Shield (+2 Base)</option>
+                          <option value="Bonus">Accessory Bonus</option>
+                        </select>
+                      </div>
+                      <div className="flex items-center pt-5">
+                        <label className="flex items-center gap-1.5 text-stone-300 text-[11px] cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newItemStealthDisadv}
+                            onChange={(e) => setNewItemStealthDisadv(e.target.checked)}
+                            className="rounded text-amber-500"
+                          />
+                          <span>Stealth Disadv.</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Damage Reduction, Resistances & Magical Stats */}
+                <div className="border border-stone-800 rounded-xl bg-stone-950/60 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedStats(!showAdvancedStats)}
+                    className="w-full px-3 py-2 text-left flex items-center justify-between text-xs font-bold text-amber-300/90 hover:bg-stone-850 transition"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Damage Reduction (DR), Resistances & Magical Bonuses</span>
+                      {(newItemDamageReduction !== '' || newItemResistance || newItemImmunity || newItemHpBonus !== '' || newItemSpellDcBonus !== '') && (
+                        <span className="px-1.5 py-0.2 bg-amber-900/60 text-amber-200 text-[10px] rounded-full border border-amber-600/40">Active</span>
+                      )}
+                    </span>
+                    {showAdvancedStats ? <ChevronUp className="w-3.5 h-3.5 text-stone-400" /> : <ChevronDown className="w-3.5 h-3.5 text-stone-400" />}
+                  </button>
+
+                  {showAdvancedStats && (
+                    <div className="p-3 border-t border-stone-800 space-y-3 bg-stone-900/40 text-xs">
+                      {/* DR & Defenses */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div>
+                          <label className="block text-amber-300 text-[11px] mb-1 font-semibold" title="Damage Reduction absorbs flat damage from every incoming hit before HP is reduced.">
+                            🛡️ Damage Reduction (DR)
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={newItemDamageReduction}
+                            onChange={(e) => setNewItemDamageReduction(e.target.value === '' ? '' : parseInt(e.target.value))}
+                            placeholder="e.g. 2, 5, 10"
+                            className="w-full bg-stone-800 border border-amber-600/40 rounded-lg p-1.5 text-amber-200 font-mono font-bold"
+                          />
+                          <span className="text-[10px] text-stone-500 mt-0.5 block">Flat damage absorbed per hit</span>
+                        </div>
+
+                        <div>
+                          <label className="block text-orange-300 text-[11px] mb-1 font-semibold">
+                            🔥 Damage Resistance
+                          </label>
+                          <input
+                            type="text"
+                            value={newItemResistance}
+                            onChange={(e) => setNewItemResistance(e.target.value)}
+                            placeholder="e.g. Fire, Cold, Slashing"
+                            className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
+                          />
+                          <span className="text-[10px] text-stone-500 mt-0.5 block">Halves damage of this type</span>
+                        </div>
+
+                        <div>
+                          <label className="block text-emerald-300 text-[11px] mb-1 font-semibold">
+                            ✨ Damage Immunity
+                          </label>
+                          <input
+                            type="text"
+                            value={newItemImmunity}
+                            onChange={(e) => setNewItemImmunity(e.target.value)}
+                            placeholder="e.g. Poison, Necrotic, All"
+                            className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200"
+                          />
+                          <span className="text-[10px] text-stone-500 mt-0.5 block">Reduces damage to 0</span>
+                        </div>
+                      </div>
+
+                      {/* Magical Modifiers & Mod Toggles */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-2 border-t border-stone-800/80">
+                        <div>
+                          <label className="block text-red-300 text-[11px] mb-1 font-semibold">
+                            ❤️ Max HP Modifier
+                          </label>
+                          <input
+                            type="number"
+                            value={newItemHpBonus}
+                            onChange={(e) => setNewItemHpBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
+                            placeholder="e.g. +10, -5"
+                            className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-red-200 font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-indigo-300 text-[11px] mb-1 font-semibold">
+                            🔮 Spell Save DC Bonus
+                          </label>
+                          <input
+                            type="number"
+                            value={newItemSpellDcBonus}
+                            onChange={(e) => setNewItemSpellDcBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
+                            placeholder="e.g. +1, +2"
+                            className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-indigo-200 font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-yellow-300 text-[11px] mb-1 font-semibold">
+                            ⚡ Initiative Bonus
+                          </label>
+                          <input
+                            type="number"
+                            value={newItemInitiativeBonus}
+                            onChange={(e) => setNewItemInitiativeBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
+                            placeholder="e.g. +2"
+                            className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-yellow-200 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Flags */}
+                      <div className="flex items-center gap-4 pt-1">
+                        <label className="flex items-center gap-1.5 text-purple-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newItemIsMagic}
+                            onChange={(e) => setNewItemIsMagic(e.target.checked)}
+                            className="rounded text-purple-600"
+                          />
+                          <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                          <span>Magical Item</span>
+                        </label>
+
+                        <label className="flex items-center gap-1.5 text-rose-400 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newItemIsCursed}
+                            onChange={(e) => setNewItemIsCursed(e.target.checked)}
+                            className="rounded text-rose-600"
+                          />
+                          <Skull className="w-3.5 h-3.5 text-rose-400" />
+                          <span>Cursed Item</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Item Notes */}
+                <div>
+                  <label className="block text-stone-400 mb-1 font-semibold">Item Notes & Magical Properties</label>
+                  <textarea
+                    value={newItemNotes}
+                    onChange={(e) => setNewItemNotes(e.target.value)}
+                    rows={2}
+                    placeholder="Properties, effects, charges, command words..."
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Save to Compendium checkbox */}
+                <div className="p-2.5 bg-stone-950/80 border border-stone-800 rounded-xl flex items-center justify-between">
+                  <label className="flex items-center gap-2 cursor-pointer text-stone-300">
+                    <input
+                      type="checkbox"
+                      checked={saveToCompendiumAlso}
+                      onChange={(e) => setSaveToCompendiumAlso(e.target.checked)}
+                      className="rounded text-amber-500 focus:ring-0"
+                    />
+                    <div>
+                      <span className="font-semibold text-xs text-amber-200 flex items-center gap-1">
+                        <Sparkles className="w-3 h-3 text-amber-400" />
+                        Save to Compendium
+                      </span>
+                      <span className="text-[10px] text-stone-500 block">
+                        Stores this item in your custom compendium for all characters
+                      </span>
+                    </div>
+                  </label>
                 </div>
               </div>
-            </div>
+            )}
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-stone-800">
-              <button
-                type="button"
-                onClick={() => { resetNewItemForm(); setShowAddItemModal(false); }}
-                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-semibold"
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={handleAddItem}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"
-              >
-                Save Custom Item
-              </button>
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center pt-3 border-t border-stone-800 shrink-0">
+              <div className="text-[11px] text-stone-500">
+                {addItemModalTab === 'catalog' ? (
+                  <span>Showing {filteredCatalogItems.length} items in catalog</span>
+                ) : (
+                  <span>Custom item will be added to {character.name || 'character'}'s inventory</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => { resetNewItemForm(); setShowAddItemModal(false); }}
+                  className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-semibold transition"
+                >
+                  Close
+                </button>
+                {addItemModalTab === 'custom' && (
+                  <button
+                    type="button"
+                    onClick={handleAddItem}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
+                  >
+                    Save & Add Custom Item
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1883,28 +2478,42 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2 border-t border-stone-800">
-              <button
-                type="button"
-                onClick={() => setEditingItem(null)}
-                className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-semibold"
-              >
-                Cancel
-              </button>
+            <div className="flex items-center justify-between pt-2 border-t border-stone-800">
               <button
                 type="button"
                 onClick={() => {
-                  const updatedInventory = character.inventory.map(i => i.id === editingItem.id ? editingItem : i);
-                  onUpdateCharacter(recalculateCharacterAC({
-                    ...character,
-                    inventory: updatedInventory
-                  }));
+                  handleDeleteItem(editingItem.id);
                   setEditingItem(null);
                 }}
-                className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"
+                className="px-3 py-2 bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
               >
-                Save Changes
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete Item
               </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingItem(null)}
+                  className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentInv = Array.isArray(character.inventory) ? character.inventory : [];
+                    const updatedInventory = currentInv.map(i => i.id === editingItem.id ? editingItem : i);
+                    onUpdateCharacter(recalculateCharacterAC({
+                      ...character,
+                      inventory: updatedInventory
+                    }));
+                    setEditingItem(null);
+                  }}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"
+                >
+                  Save Changes
+                </button>
+              </div>
             </div>
           </div>
         </div>

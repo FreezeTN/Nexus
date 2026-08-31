@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CompendiumItem } from '../../../data/compendiumData';
 import { SupportedEdition, FANTASY_MAGIC_SCHOOLS, FANTASY_DAMAGE_TYPES } from './ForgeTypes';
 import { Save, Sparkles, Wand2, Zap, Shield, Flame, Radio, Plus, X } from 'lucide-react';
+import { validateHomebrewSpell, ValidationResult } from '../../../utils/homebrewValidator';
+import { ValidationBadgeBanner } from './ValidationBadgeBanner';
+import { ValidationConfirmModal } from './ValidationConfirmModal';
 
 interface SpellStudioProps {
   edition: SupportedEdition;
@@ -63,10 +66,24 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
   const [cocResistance, setCocResistance] = useState('Opposed POW vs POW');
   const [cocReagents, setCocReagents] = useState('A bowl of silver water, chanted invocation in Aklo');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
 
+  // Live Validation
+  const validation = useMemo(() => {
+    return validateHomebrewSpell({
+      name,
+      level,
+      school,
+      damageFormula,
+      duration,
+      castingTime,
+      isConcentration,
+      description,
+      edition
+    });
+  }, [name, level, school, damageFormula, duration, castingTime, isConcentration, description, edition]);
+
+  const executeSave = () => {
     let descSummary = description.trim();
     let spellDataPayload: any = {};
     let itemTags: string[] = ['spells', edition, 'Homebrew'];
@@ -177,6 +194,19 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
     onSave(newItem);
     setName('');
     setDescription('');
+    setShowOverrideModal(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    if (validation.hasCritical) {
+      setShowOverrideModal(true);
+      return;
+    }
+
+    executeSave();
   };
 
   return (
@@ -672,6 +702,9 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
         />
       </div>
 
+      {/* Validation & Balance Guard */}
+      <ValidationBadgeBanner validation={validation} categoryLabel="Homebrew Spell" />
+
       {/* Footer Controls */}
       <div className="flex items-center justify-between pt-2 border-t border-stone-800/80">
         <button
@@ -690,6 +723,16 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
           <span>Save to Compendium</span>
         </button>
       </div>
+
+      {/* Game-Breaking Warning Confirmation Modal */}
+      <ValidationConfirmModal
+        isOpen={showOverrideModal}
+        entryName={name}
+        category="Spell"
+        validation={validation}
+        onProceedAnyway={executeSave}
+        onCancel={() => setShowOverrideModal(false)}
+      />
     </form>
   );
 };

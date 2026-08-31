@@ -406,6 +406,7 @@ export interface ActiveConcentration {
 export interface CharacterData {
   id: string;
   name: string;
+  updatedAt?: string;
   race: string;
   characterClass: string;
   subclass: string;

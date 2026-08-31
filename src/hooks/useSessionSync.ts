@@ -86,6 +86,14 @@ export function useSessionSync({
             if (JSON.stringify(existing) === JSON.stringify(updatedCloudChar)) {
               return prev;
             }
+            // Protect against reverting newer local character edits with older cloud snapshots
+            if (existing && existing.updatedAt && updatedCloudChar.updatedAt) {
+              const localTime = new Date(existing.updatedAt).getTime();
+              const cloudTime = new Date(updatedCloudChar.updatedAt).getTime();
+              if (localTime >= cloudTime) {
+                return prev;
+              }
+            }
             const copy = [...prev];
             copy[index] = updatedCloudChar;
             return copy;

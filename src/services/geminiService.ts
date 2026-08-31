@@ -68,6 +68,8 @@ export type EntityType =
   | 'npc'
   | 'item'
   | 'spell'
+  | 'class'
+  | 'race'
   | 'graph_node'
   | 'quest'
   | 'encounter'
@@ -576,9 +578,69 @@ export function hydrateGeneratedGraphNode(raw: any): any {
   };
 }
 
+/**
+ * Hydrates raw AI class JSON into a structured homebrew class object
+ */
+export function hydrateGeneratedClass(raw: any, edition: RuleEdition = '5e'): any {
+  const id = `class_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  return {
+    id,
+    name: raw.name || 'Homebrew Class',
+    category: 'classes',
+    edition,
+    description: raw.description || '',
+    hitDie: raw.hitDie || 'd8',
+    primaryAbility: raw.primaryAbility || 'Strength',
+    savingThrows: Array.isArray(raw.savingThrows) ? raw.savingThrows : ['Strength', 'Constitution'],
+    role: raw.role || 'Combat Specialist',
+    proficiencies: {
+      armor: Array.isArray(raw.proficiencies?.armor) ? raw.proficiencies.armor : ['Light armor', 'Medium armor'],
+      weapons: Array.isArray(raw.proficiencies?.weapons) ? raw.proficiencies.weapons : ['Simple weapons', 'Martial weapons'],
+      tools: Array.isArray(raw.proficiencies?.tools) ? raw.proficiencies.tools : [],
+      savingThrows: Array.isArray(raw.proficiencies?.savingThrows) ? raw.proficiencies.savingThrows : (raw.savingThrows || ['STR', 'CON']),
+      skills: raw.proficiencies?.skills || 'Choose two skills from Athletics, Acrobatics, Insight, Perception, Survival'
+    },
+    spellcasting: raw.spellcasting ? {
+      type: raw.spellcasting.type || 'None',
+      ability: raw.spellcasting.ability || 'None',
+      notes: raw.spellcasting.notes || ''
+    } : undefined,
+    featuresByLevel: Array.isArray(raw.featuresByLevel) ? raw.featuresByLevel : [],
+    subclasses: Array.isArray(raw.subclasses) ? raw.subclasses : [],
+    quickBuild: raw.quickBuild || ''
+  };
+}
+
+/**
+ * Hydrates raw AI race JSON into a structured homebrew race object
+ */
+export function hydrateGeneratedRace(raw: any, edition: RuleEdition = '5e'): any {
+  const id = `race_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  return {
+    id,
+    name: raw.name || 'Homebrew Race',
+    category: 'races',
+    edition,
+    description: raw.description || '',
+    creatureType: raw.creatureType || 'Humanoid',
+    size: raw.size || 'Medium',
+    speed: Number(raw.speed) || 30,
+    speedNotes: raw.speedNotes || `${Number(raw.speed) || 30} ft. walking`,
+    abilityBonuses: Array.isArray(raw.abilityBonuses) ? raw.abilityBonuses : [{ ability: 'STR', bonus: 2 }, { ability: 'CON', bonus: 1 }],
+    abilityBonusesStr: raw.abilityBonusesStr || '+2 / +1 to Ability Scores',
+    darkvision: Boolean(raw.darkvision),
+    senses: raw.senses || (raw.darkvision ? 'Darkvision 60 ft.' : 'Normal'),
+    traits: Array.isArray(raw.traits) ? raw.traits : [],
+    languages: Array.isArray(raw.languages) ? raw.languages : ['Common'],
+    subraces: Array.isArray(raw.subraces) ? raw.subraces : [],
+    ageAndLifespan: raw.ageAndLifespan || '',
+    alignmentTendencies: raw.alignmentTendencies || ''
+  };
+}
+
 export interface DetectedChatEntity {
   id: string;
-  type: 'character' | 'monster' | 'merchant' | 'item' | 'spell' | 'graph_node';
+  type: 'character' | 'monster' | 'merchant' | 'item' | 'spell' | 'class' | 'race' | 'graph_node';
   name: string;
   subtitle?: string;
   summary?: string;
@@ -664,6 +726,28 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
           itemObj.backstory ||
           itemObj.personalityTraits ||
           (itemObj.inventory ? `${itemObj.inventory.length} items in shop stock` : undefined),
+        rawJson: itemObj,
+      });
+    }
+    // Check if it's a homebrew class
+    else if (itemObj.hitDie !== undefined || itemObj.featuresByLevel || (itemObj.savingThrows && itemObj.subclasses && !itemObj.abilities)) {
+      detected.push({
+        id: `det_class_${Date.now()}_${detected.length}`,
+        type: 'class',
+        name: itemObj.name || 'Homebrew Class',
+        subtitle: `Class (${itemObj.hitDie || 'd8'}) • ${itemObj.primaryAbility || 'Core'}`,
+        summary: itemObj.description || itemObj.role || (itemObj.featuresByLevel ? `${itemObj.featuresByLevel.length} class features` : undefined),
+        rawJson: itemObj,
+      });
+    }
+    // Check if it's a homebrew race
+    else if (itemObj.creatureType !== undefined || itemObj.abilityBonuses || (itemObj.traits && itemObj.speed !== undefined && !itemObj.hpMax)) {
+      detected.push({
+        id: `det_race_${Date.now()}_${detected.length}`,
+        type: 'race',
+        name: itemObj.name || 'Homebrew Race',
+        subtitle: `Race / Lineage • ${itemObj.size || 'Medium'} ${itemObj.creatureType || 'Humanoid'}`,
+        summary: itemObj.description || itemObj.abilityBonusesStr || (itemObj.traits ? `${itemObj.traits.length} racial traits` : undefined),
         rawJson: itemObj,
       });
     }

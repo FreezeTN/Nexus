@@ -1,25 +1,78 @@
 import { RuleEdition } from '../../../types';
 import { systemRegistry } from '../../../systems';
+import { loadCustomCompendiumEntries } from '../../../data/compendiumData';
 
 export function getRacesForSystem(edition: RuleEdition): string[] {
   const plugin = systemRegistry.getSystem(edition);
-  if (plugin?.data?.races && plugin.data.races.length > 0) {
-    return plugin.data.races;
+  const baseRaces: string[] = plugin?.data?.races && plugin.data.races.length > 0
+    ? [...plugin.data.races]
+    : [...(RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e'])];
+
+  try {
+    const customEntries = loadCustomCompendiumEntries();
+    const customRaces = customEntries
+      .filter(e => e.category === 'races' && (!e.edition || e.edition === edition))
+      .map(e => e.name);
+
+    for (const cr of customRaces) {
+      if (!baseRaces.includes(cr)) {
+        baseRaces.push(cr);
+      }
+    }
+  } catch (e) {
+    // ignore
   }
-  return RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e'];
+
+  return baseRaces;
 }
 
 export function getClassesForSystem(edition: RuleEdition): string[] {
   const plugin = systemRegistry.getSystem(edition);
-  if (plugin?.data?.classes && plugin.data.classes.length > 0) {
-    return plugin.data.classes;
+  const baseClasses: string[] = plugin?.data?.classes && plugin.data.classes.length > 0
+    ? [...plugin.data.classes]
+    : [...(CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e'])];
+
+  try {
+    const customEntries = loadCustomCompendiumEntries();
+    const customClasses = customEntries
+      .filter(e => e.category === 'classes' && (!e.edition || e.edition === edition))
+      .map(e => e.name);
+
+    for (const cc of customClasses) {
+      if (!baseClasses.includes(cc)) {
+        baseClasses.push(cc);
+      }
+    }
+  } catch (e) {
+    // ignore
   }
-  return CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e'];
+
+  return baseClasses;
 }
 
 export function getSubclassesForSystemClass(edition: RuleEdition, clsName: string): string[] {
-  const map = SUBCLASS_MAP_BY_SYSTEM[edition] || SUBCLASS_MAP_BY_SYSTEM['5e'];
-  return map[clsName] || ['General'];
+  const mapObj = SUBCLASS_MAP_BY_SYSTEM[edition] || SUBCLASS_MAP_BY_SYSTEM['5e'];
+  if (mapObj[clsName] && mapObj[clsName].length > 0) {
+    return mapObj[clsName];
+  }
+
+  // Check if it's a custom class in compendium
+  try {
+    const customEntries = loadCustomCompendiumEntries();
+    const customClass = customEntries.find(
+      e => e.category === 'classes' && e.name.toLowerCase() === clsName.toLowerCase()
+    );
+    if (customClass?.classData?.subclasses && customClass.classData.subclasses.length > 0) {
+      return customClass.classData.subclasses;
+    }
+    if (customClass?.classData?.subclassDetails && customClass.classData.subclassDetails.length > 0) {
+      return customClass.classData.subclassDetails.map(s => s.name);
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return ['General'];
 }
 
 export const RACE_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {

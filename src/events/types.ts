@@ -8,6 +8,7 @@ export type EventType =
   | 'NPCUpdated'
   | 'CombatStarted'
   | 'ItemAdded'
+  | 'ItemRemoved'
   | 'SpellLearned'
   | 'SessionStarted'
   | 'WorldChanged'
@@ -25,6 +26,7 @@ export interface EventPayloadMap {
   NPCUpdated: { npcId: string; name: string; role?: string };
   CombatStarted: { encounterName?: string; participantsCount: number };
   ItemAdded: { characterId: string; itemName: string; quantity?: number };
+  ItemRemoved: { characterId: string; itemName: string; quantity?: number };
   SpellLearned: { characterId: string; spellName: string; level?: number };
   SessionStarted: { sessionId: string; sessionTitle: string };
   WorldChanged: { worldId: string; worldName: string };

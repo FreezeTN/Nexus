@@ -555,6 +555,401 @@ export function generateProceduralRules(
 }
 
 // ==========================================
+// 7. HOMEBREW CLASS PROCEDURAL GENERATOR
+// ==========================================
+export function generateProceduralClass(prompt: string = '', edition: RuleEdition = '5e'): any {
+  const classArchetypes = [
+    {
+      name: 'Chronomancer',
+      hitDie: 'd6',
+      primaryAbility: 'Intelligence',
+      savingThrows: ['Intelligence', 'Wisdom'],
+      role: 'Time Manipulation, Battlefield Controller & Reversal Specialist',
+      description: 'Scholars of the temporal weave who alter the velocity of time, glimpse seconds into the future to avoid fatal strikes, and freeze adversaries in chronological stasis.',
+      proficiencies: {
+        armor: ['Light armor'],
+        weapons: ['Daggers', 'Darts', 'Slings', 'Quarterstaffs', 'Light crossbows'],
+        tools: ["Clockmaker's tools", "Calligrapher's supplies"],
+        savingThrows: ['Intelligence', 'Wisdom'],
+        skills: 'Choose three from Arcana, History, Insight, Investigation, Perception'
+      },
+      spellcasting: {
+        type: 'Full',
+        ability: 'Intelligence',
+        notes: 'Prepares temporal spells from an inscribed Chronometer relic.'
+      },
+      featuresByLevel: [
+        {
+          level: 1,
+          name: 'Temporal Slip',
+          description: 'When hit by an attack, use a Reaction to shift 1 second back in time, adding your INT modifier to AC against that attack. Usable INT mod times per Long Rest.',
+          actionType: 'Reaction',
+          uses: 'INT mod / Long Rest'
+        },
+        {
+          level: 2,
+          name: 'Chronal Stasis',
+          description: 'As an Action, force a target within 30 ft to make a Wisdom saving throw. On a failure, they are immobilized in a temporal lock until the end of their next turn.',
+          actionType: 'Action',
+          uses: '1 / Short Rest'
+        },
+        {
+          level: 3,
+          name: 'Temporal Order Specialization',
+          description: 'Choose a Chronomancy Order archetype (Order of Paradox or Epoch Weaver).',
+          actionType: 'Passive',
+          uses: 'Passive'
+        },
+        {
+          level: 5,
+          name: 'Accelerated Step',
+          description: 'Double your movement speed for 1 minute and gain an additional Bonus Action each round.',
+          actionType: 'Bonus Action',
+          uses: '1 / Long Rest'
+        },
+        {
+          level: 20,
+          name: 'Master of Eternity (Capstone)',
+          description: 'Once per long rest, take an extra turn immediately following your current turn. During this turn, time is frozen for all other creatures.',
+          actionType: 'Special',
+          uses: '1 / Long Rest'
+        }
+      ],
+      subclasses: [
+        {
+          name: 'Order of Paradox',
+          description: 'Masters of rewinding enemy momentum and weaponizing causality loops.',
+          features: [
+            { level: 3, name: 'Echo Strike', description: 'When an enemy misses you in melee, an alternate timeline version of yourself strikes back for 1d8 + INT force damage.' },
+            { level: 6, name: 'Fate Defiance', description: 'Reroll any saving throw or force an attacker to reroll a natural 20.' }
+          ]
+        },
+        {
+          name: 'Epoch Weaver',
+          description: 'Guardians of cosmic history who manipulate aging, decay, and cellular acceleration.',
+          features: [
+            { level: 3, name: 'Withering Touch', description: 'Inflict 2d6 necrotic damage on a hit and reduce the target’s walking speed by 15 feet.' },
+            { level: 6, name: 'Aura of Timelessness', description: 'All allies within 15 ft cannot be magically aged and have advantage on saves vs paralyzed/stunned.' }
+          ]
+        }
+      ],
+      quickBuild: 'Prioritize Intelligence as your highest score, followed by Constitution or Dexterity for survival.'
+    },
+    {
+      name: 'Runecarver Juggernaut',
+      hitDie: 'd10',
+      primaryAbility: 'Strength & Constitution',
+      savingThrows: ['Strength', 'Constitution'],
+      role: 'Heavy Armored Frontline Bruiser, Elemental Glyphs & Arcane Impact',
+      description: 'Ancient martial artisans who etch glowing runic scripts directly into armor, skin, and weapons to channel primordial elemental forces.',
+      proficiencies: {
+        armor: ['All armor', 'Shields'],
+        weapons: ['Simple weapons', 'Martial weapons'],
+        tools: ["Mason's tools", "Smith's tools"],
+        savingThrows: ['Strength', 'Constitution'],
+        skills: 'Choose two from Athletics, Arcana, Intimidation, Perception, Survival'
+      },
+      spellcasting: {
+        type: 'None',
+        ability: 'Constitution',
+        notes: 'Inscribes runic glyphs that store latent magical surges without spell slots.'
+      },
+      featuresByLevel: [
+        {
+          level: 1,
+          name: 'Runic Inscription',
+          description: 'Inscribe up to 2 active Runes (Frost, Flame, Stone, Storm) onto your gear during a short rest. Each rune grants a passive resistance and an active burst.',
+          actionType: 'Passive',
+          uses: 'Passive'
+        },
+        {
+          level: 2,
+          name: 'Runic Overcharge',
+          description: 'Expend an active rune to deal 2d8 elemental damage on a weapon hit and knock the enemy prone (DC 8 + Prof + CON).',
+          actionType: 'Bonus Action',
+          uses: 'CON mod / Short Rest'
+        },
+        {
+          level: 3,
+          name: 'Glyph Archetype Choice',
+          description: 'Select your Runecarver Order (Order of the Stone Warden or Order of the Storm Cleaver).',
+          actionType: 'Passive',
+          uses: 'Passive'
+        },
+        {
+          level: 5,
+          name: 'Extra Attack',
+          description: 'You can attack twice instead of once whenever you take the Attack action on your turn.',
+          actionType: 'Passive',
+          uses: 'Passive'
+        },
+        {
+          level: 20,
+          name: 'Living Primordial Monument (Capstone)',
+          description: 'Transform into a 12-foot titan of glowing stone and energy for 1 minute: gain resistance to all damage, +4 STR, and melee attacks deal +2d10 force damage.',
+          actionType: 'Bonus Action',
+          uses: '1 / Long Rest'
+        }
+      ],
+      subclasses: [
+        {
+          name: 'Order of the Stone Warden',
+          description: 'Impenetrable defenders who draw strength from tectonic plates and subterranean bedrock.',
+          features: [
+            { level: 3, name: 'Bedrock Bastion', description: 'While wearing heavy armor, reduce all incoming bludgeoning, piercing, and slashing damage by 3.' },
+            { level: 6, name: 'Tremor Shockwave', description: 'Slam the ground to create a 20ft radius difficult terrain zone and force enemies to make DEX saves or fall prone.' }
+          ]
+        },
+        {
+          name: 'Order of the Storm Cleaver',
+          description: 'Fierce warriors who channel lightning arcs through two-handed blades.',
+          features: [
+            { level: 3, name: 'Thunderous Impact', description: 'Melee strikes release thunder claps dealing 1d6 thunder damage to adjacent foes.' },
+            { level: 6, name: 'Lightning Leap', description: 'Leap up to 30 ft in an arc of lightning as a bonus action, dealing 2d8 lightning damage where you land.' }
+          ]
+        }
+      ],
+      quickBuild: 'Make Strength your highest score for powerful attacks, followed closely by Constitution for high hit points and rune save DCs.'
+    },
+    {
+      name: 'Blood Hunter / Hemomancer',
+      hitDie: 'd10',
+      primaryAbility: 'Dexterity or Strength & Wisdom',
+      savingThrows: ['Dexterity', 'Wisdom'],
+      role: 'Sacrificial Striker, Dark Arcana & Crimson Rites',
+      description: 'Tenacious warriors who have mastered forbidden hemocraft to imbue their weapons with elemental blood rites and curse their foes.',
+      proficiencies: {
+        armor: ['Light armor', 'Medium armor', 'Shields'],
+        weapons: ['Simple weapons', 'Martial weapons'],
+        tools: ["Alchemist's supplies"],
+        savingThrows: ['Dexterity', 'Wisdom'],
+        skills: 'Choose three from Athletics, Acrobatics, Arcana, History, Insight, Investigation, Survival'
+      },
+      spellcasting: {
+        type: 'Third',
+        ability: 'Wisdom',
+        notes: 'Casts dark banishment and blood pact spells using hemocraft focus.'
+      },
+      featuresByLevel: [
+        {
+          level: 1,
+          name: 'Crimson Rite',
+          description: 'Sacrifice HP equal to your character level to awaken an elemental rite (Flame, Frost, or Storm) on your weapon, adding 1d4 damage of that type to every hit.',
+          actionType: 'Bonus Action',
+          uses: 'At Will (HP Cost)'
+        },
+        {
+          level: 2,
+          name: 'Blood Maledict & Blood Curses',
+          description: 'Invoke dark blood curses to bind, blind, or debilitate enemies. You can amplify a curse by suffering damage equal to one hemocraft die.',
+          actionType: 'Bonus Action',
+          uses: 'WIS mod / Short Rest'
+        },
+        {
+          level: 3,
+          name: 'Blood Hunter Order',
+          description: 'Choose your Hunter Order (Order of the Lycan or Order of the Ghostslayer).',
+          actionType: 'Passive',
+          uses: 'Passive'
+        },
+        {
+          level: 5,
+          name: 'Extra Attack',
+          description: 'Attack twice whenever you take the Attack action on your turn.',
+          actionType: 'Passive',
+          uses: 'Passive'
+        },
+        {
+          level: 20,
+          name: 'Sanguine Mastery (Capstone)',
+          description: 'Maximize all crimson rite and blood curse damage rolls. When you are reduced to 0 HP, immediately regain half your max HP once per Long Rest.',
+          actionType: 'Passive',
+          uses: '1 / Long Rest'
+        }
+      ],
+      subclasses: [
+        {
+          name: 'Order of the Ghostslayer',
+          description: 'Specialists in hunting undead, incorporeal spirits, and planar horrors.',
+          features: [
+            { level: 3, name: 'Rite of the Dawn', description: 'Crimson rite deals radiant damage, and deals extra damage against undead and fiends.' },
+            { level: 6, name: 'Ethereal Step', description: 'Move through physical objects and creatures as if they were difficult terrain for 1 round.' }
+          ]
+        },
+        {
+          name: 'Order of the Lycan',
+          description: 'Warriors who tame the beast within through controlled lycanthropic hybrid transformation.',
+          features: [
+            { level: 3, name: 'Hybrid Transformation', description: 'Transform into a predatory hybrid gaining +1 AC, Advantage on STR checks, and 1d6 slashing claws with bonus unarmed strike.' },
+            { level: 6, name: 'Predatory Pounce', description: 'Gain +10 ft movement speed and advantage on tracking by scent.' }
+          ]
+        }
+      ],
+      quickBuild: 'Prioritize Dexterity (or Strength) for melee/ranged attacks, and Wisdom for Blood Curse DCs.'
+    }
+  ];
+
+  const selected = pick(classArchetypes);
+  const customName = prompt.trim() ? prompt.trim().split(' ')[0] : selected.name;
+
+  return {
+    ...selected,
+    name: prompt.trim() ? prompt.trim() : selected.name,
+    edition
+  };
+}
+
+// ==========================================
+// 8. HOMEBREW RACE PROCEDURAL GENERATOR
+// ==========================================
+export function generateProceduralRace(prompt: string = '', edition: RuleEdition = '5e'): any {
+  const raceArchetypes = [
+    {
+      name: 'Voidtouched Astralkin',
+      creatureType: 'Aberration',
+      size: 'Medium',
+      speed: 30,
+      speedNotes: '30 ft. walking, 30 ft. hover fly speed while phased',
+      abilityBonuses: [{ ability: 'INT', bonus: 2 }, { ability: 'DEX', bonus: 1 }],
+      abilityBonusesStr: '+2 Intelligence, +1 Dexterity',
+      darkvision: true,
+      senses: 'Superior Darkvision 120 ft., Void Sense',
+      description: 'Humanoids bathed in the cold radiance of deep space and astral rifts. Their skin glimmers with faint starlight constellations, and they can momentarily phase between dimensions to avoid harm.',
+      traits: [
+        {
+          name: 'Astral Step',
+          description: 'As a Bonus Action, teleport up to 30 feet to an unoccupied space you can see. Usable a number of times equal to your Proficiency Bonus per Long Rest.',
+          actionType: 'Bonus Action',
+          recharge: 'Proficiency Bonus / Long Rest'
+        },
+        {
+          name: 'Cosmic Ward',
+          description: 'You have resistance to Psychic damage and Force damage.',
+          actionType: 'Passive',
+          recharge: 'Passive'
+        },
+        {
+          name: 'Vacuum Breath',
+          description: 'You do not need to breathe air and can survive in the vacuum of the Astral Sea.',
+          actionType: 'Passive',
+          recharge: 'Passive'
+        },
+        {
+          name: 'Innate Star-Sight',
+          description: 'You know the Dancing Lights cantrip. At level 3, you can cast Misty Step once per long rest without spell slots.',
+          actionType: 'Action',
+          recharge: 'Long Rest'
+        }
+      ],
+      languages: ['Common', 'Deep Speech', 'Celestial'],
+      subraces: [
+        { name: 'Nebula Stalker', description: 'Gains proficiency in Stealth and can turn invisible in dim light.', traitBonus: '+1 Stealth proficiency' },
+        { name: 'Singularity Binder', description: 'Can create a 10ft gravity pull once per short rest pulling enemies 10ft toward you.', traitBonus: 'Gravity Pull ability' }
+      ],
+      ageAndLifespan: 'Mature around age 20 and can live up to 400 years.',
+      alignmentTendencies: 'Tend toward chaotic or neutral alignments due to their detachment from worldly conventions.'
+    },
+    {
+      name: 'Clockwork Automaton',
+      creatureType: 'Construct',
+      size: 'Medium',
+      speed: 30,
+      speedNotes: '30 ft. walking (Heavy armor does not reduce speed)',
+      abilityBonuses: [{ ability: 'CON', bonus: 2 }, { ability: 'INT', bonus: 1 }],
+      abilityBonusesStr: '+2 Constitution, +1 Intelligence (or +1 STR)',
+      darkvision: true,
+      senses: 'Darkvision 60 ft., Mechanical Auditory Sensors',
+      description: 'Sentient beings constructed from reinforced brass alloys, springwork gears, and an alchemical ether-heart. Highly analytical, precise, and resilient against biological hazards.',
+      traits: [
+        {
+          name: 'Construct Resilience',
+          description: 'You have advantage on saving throws against being poisoned or paralyzed, and you are immune to poison damage and disease.',
+          actionType: 'Passive',
+          recharge: 'Passive'
+        },
+        {
+          name: 'Integrated Plating',
+          description: 'Your base AC cannot be lower than 16 (plus shield bonus if equipped). Armor cannot be removed against your will.',
+          actionType: 'Passive',
+          recharge: 'Passive'
+        },
+        {
+          name: 'Sentry Rest',
+          description: 'You do not need to sleep, eat, or drink. During a long rest, you remain motionless and alert for 6 hours.',
+          actionType: 'Passive',
+          recharge: 'Passive'
+        },
+        {
+          name: 'Overcharge Core',
+          description: 'As a Reaction when hit by a melee attack, discharge an electric burst dealing 2d8 lightning damage to the attacker (DC 8 + Prof + CON save for half).',
+          actionType: 'Reaction',
+          recharge: 'Short Rest'
+        }
+      ],
+      languages: ['Common', 'Gnomish', 'Binary/Automaton Code'],
+      subraces: [
+        { name: 'Siege Engine Chassis', description: 'Counts as Large for carry/push/drag capacity and gains +1 STR.', traitBonus: 'Powerful Build' },
+        { name: 'Chrono-Clockwork Chassis', description: 'Gains +2 to Initiative rolls and +5 ft walking speed.', traitBonus: '+2 Initiative' }
+      ],
+      ageAndLifespan: 'Immune to natural aging; with proper maintenance and oiling, can live indefinitely.',
+      alignmentTendencies: 'Tend heavily toward lawful alignments (Lawful Neutral or Lawful Good).'
+    },
+    {
+      name: 'Feywild Kitsune',
+      creatureType: 'Fey',
+      size: 'Medium',
+      speed: 35,
+      speedNotes: '35 ft. walking, nimble acrobatics',
+      abilityBonuses: [{ ability: 'CHA', bonus: 2 }, { ability: 'DEX', bonus: 1 }],
+      abilityBonusesStr: '+2 Charisma, +1 Dexterity',
+      darkvision: true,
+      senses: 'Darkvision 60 ft., Fey Perception',
+      description: 'Graceful fox-humanoid shapechangers blessed by the archfey of the Feywild. They possess multiple fox tails reflecting their magical wisdom and can conjure illusions and foxfire.',
+      traits: [
+        {
+          name: 'Shapechanger',
+          description: 'As an Action, you can transform into the shape of a small red or arctic fox or return to your humanoid form. Your stats remain the same in both forms.',
+          actionType: 'Action',
+          recharge: 'At Will'
+        },
+        {
+          name: 'Foxfire Magic',
+          description: 'You know the Produce Flame cantrip. At level 3, cast Charm Person once per long rest. At level 5, cast Mirror Image once per long rest using CHA.',
+          actionType: 'Action',
+          recharge: 'Long Rest'
+        },
+        {
+          name: 'Fey Ancestry',
+          description: 'You have advantage on saving throws against being charmed, and magic cannot put you to sleep.',
+          actionType: 'Passive',
+          recharge: 'Passive'
+        },
+        {
+          name: 'Nine-Tailed Grace',
+          description: 'You have proficiency in the Acrobatics and Deception skills.',
+          actionType: 'Passive',
+          recharge: 'Passive'
+        }
+      ],
+      languages: ['Common', 'Sylvan', 'Elvish'],
+      subraces: [
+        { name: 'Solar Spirit Kitsune', description: 'Foxfire deals radiant damage and sheds bright golden sunlight.', traitBonus: 'Radiant Foxfire' },
+        { name: 'Shadow Moon Kitsune', description: 'Foxfire deals cold damage and gains proficiency in Stealth.', traitBonus: 'Cold Foxfire + Stealth' }
+      ],
+      ageAndLifespan: 'Grow an additional tail every century, living up to 900 years.',
+      alignmentTendencies: 'Tend toward playful chaotic good or chaotic neutral alignments.'
+    }
+  ];
+
+  const selected = pick(raceArchetypes);
+  return {
+    ...selected,
+    name: prompt.trim() ? prompt.trim() : selected.name,
+    edition
+  };
+}
+
+// ==========================================
 // CENTRAL PROCEDURAL DISPATCHER
 // ==========================================
 export function generateProceduralEntity(
@@ -563,6 +958,20 @@ export function generateProceduralEntity(
   edition: RuleEdition = '5e',
   context?: any
 ): { entity: any; entityType: EntityType } {
+  if (entityType === 'class') {
+    return {
+      entity: generateProceduralClass(prompt, edition),
+      entityType
+    };
+  }
+
+  if (entityType === 'race') {
+    return {
+      entity: generateProceduralRace(prompt, edition),
+      entityType
+    };
+  }
+
   if (entityType === 'treasure' || entityType === 'loot') {
     const tier = context?.tier || 'CR 5-10 (Tier 2)';
     return {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { CharacterData, RuleEdition, Party, GearItem, Spell } from '../types';
 import { SAMPLE_CHARACTERS } from '../data/defaultCharacters';
 import { DEFAULT_PARTIES } from '../data/defaultParties';
@@ -127,7 +127,7 @@ export function useCharacterManager({
   }, [parties]);
 
   // Real-time cross-window / secondary monitor synchronization
-  useDetachedSyncListener((syncedChars, syncedActiveId, syncedParties) => {
+  const handleDetachedSync = useCallback((syncedChars: CharacterData[], syncedActiveId: string, syncedParties?: Party[]) => {
     if (syncedChars && syncedChars.length > 0) {
       setCharacters(syncedChars);
     }
@@ -137,7 +137,9 @@ export function useCharacterManager({
     if (syncedParties) {
       setParties(syncedParties);
     }
-  });
+  }, [setCharacters, setActiveCharacterId, setParties]);
+
+  useDetachedSyncListener(handleDetachedSync);
 
   // Character Presence & Role Sync
   const [presenceMap, setPresenceMap] = useState<Record<string, CharacterPresence>>({});
@@ -271,21 +273,26 @@ export function useCharacterManager({
       }
     }
 
-    const recalculated = recalculateCharacterAC(finalChar);
+    const recalculated = recalculateCharacterAC({
+      ...finalChar,
+      updatedAt: new Date().toISOString()
+    });
+
     setCharacters(prev => {
       const updatedList = prev.map(c => c.id === recalculated.id ? recalculated : c);
-      broadcastStateUpdate(updatedList, activeCharacterId, parties);
       return updatedList;
     });
+
+    const updatedList = characters.map(c => c.id === recalculated.id ? recalculated : c);
+    broadcastStateUpdate(updatedList, activeCharacterId, parties);
+
     if (recalculated.id === activeCharacterId && recalculated.edition && onThemeChange) {
       onThemeChange(recalculated.edition);
     }
 
     eventBus.emit('CharacterUpdated', { character: recalculated });
 
-    if (currentUser?.uid) {
-      saveCharacterToCloud(currentUser.uid, recalculated);
-    }
+    saveCharacterToCloud(currentUser?.uid || 'guest_user', recalculated);
   };
 
   const handleSelectCharacter = (id: string) => {

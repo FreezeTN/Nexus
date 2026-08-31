@@ -2,7 +2,7 @@ import { CharacterData, Spell, Feat, ClassFeature } from '../types';
 import { OFFICIAL_BULK_MONSTERS, OFFICIAL_5E_FEATS, OFFICIAL_35E_FEATS, OFFICIAL_5E_CLASS_FEATURES, OFFICIAL_35E_CLASS_FEATURES } from './srdRulesLibrary';
 import { PRESET_5E_SPELLS, PRESET_35E_SPELLS } from './presetSpells';
 
-export type CompendiumCategory = 'monsters' | 'spells' | 'items' | 'classes' | 'feats' | 'features' | 'skills';
+export type CompendiumCategory = 'monsters' | 'spells' | 'items' | 'classes' | 'races' | 'feats' | 'features' | 'skills';
 
 export interface CompendiumItem {
   id: string;
@@ -35,7 +35,42 @@ export interface CompendiumItem {
     primaryAbility?: string;
     savingThrows?: string[];
     subclasses?: string[];
+    subclassDetails?: Array<{ name: string; description: string; features?: string[] }>;
     role?: string;
+    proficiencies?: {
+      armor?: string[];
+      weapons?: string[];
+      tools?: string[];
+      savingThrows?: string[];
+      skills?: string;
+    };
+    spellcasting?: {
+      type?: 'None' | 'Full' | 'Half' | 'Third' | 'Pact';
+      ability?: string;
+      notes?: string;
+    };
+    featuresByLevel?: Array<{
+      level: number;
+      name: string;
+      description: string;
+      actionType?: string;
+      uses?: string;
+    }>;
+  };
+  raceData?: {
+    size?: string;
+    speed?: number;
+    speedNotes?: string;
+    creatureType?: string;
+    abilityBonuses?: Array<{ ability: string; bonus: number }>;
+    abilityBonusesStr?: string;
+    traits?: Array<{ name: string; description: string; actionType?: string; recharge?: string }>;
+    subraces?: Array<{ name: string; description: string; traitBonus?: string }> | string[];
+    languages?: string[];
+    darkvision?: boolean;
+    senses?: string;
+    ageAndLifespan?: string;
+    alignmentTendencies?: string;
   };
   skillData?: {
     ability?: string;
@@ -468,6 +503,179 @@ export const BASE_COMPENDIUM_CLASSES: CompendiumItem[] = [
   }
 ];
 
+// Base SRD Races / Lineages
+export const BASE_COMPENDIUM_RACES: CompendiumItem[] = [
+  {
+    id: 'race-human',
+    name: 'Human',
+    category: 'races',
+    edition: '5e',
+    description: 'Versatile and adaptable, humans are among the most numerous and driven peoples in the realms, capable of excelling in any pursuit.',
+    source: 'SRD 5e',
+    tags: ['Humanoid', 'Medium', 'Versatile'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid',
+      abilityBonuses: [
+        { ability: 'STR', bonus: 1 }, { ability: 'DEX', bonus: 1 }, { ability: 'CON', bonus: 1 },
+        { ability: 'INT', bonus: 1 }, { ability: 'WIS', bonus: 1 }, { ability: 'CHA', bonus: 1 }
+      ],
+      abilityBonusesStr: '+1 to all Ability Scores (or Variant +1/+1 with Feat)',
+      languages: ['Common', 'One extra language of choice'],
+      traits: [
+        { name: 'Versatility', description: 'Gains proficiency in one extra skill of your choice, or standard +1 to all ability scores.' }
+      ]
+    }
+  },
+  {
+    id: 'race-elf',
+    name: 'Elf',
+    category: 'races',
+    edition: '5e',
+    description: 'A magical people of otherworldly grace, living in the world but not entirely part of it. Elves love nature and magic, art and artistry.',
+    source: 'SRD 5e',
+    tags: ['Humanoid', 'Medium', 'Fey Ancestry', 'Darkvision'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid',
+      abilityBonuses: [{ ability: 'DEX', bonus: 2 }],
+      abilityBonusesStr: '+2 Dexterity (+1 INT for High Elf, +1 WIS for Wood Elf, +1 CHA for Drow)',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      languages: ['Common', 'Elvish'],
+      subraces: ['High Elf', 'Wood Elf', 'Dark Elf (Drow)'],
+      traits: [
+        { name: 'Darkvision', description: 'Accustomed to twilit forests and the night sky, you have superior vision in dark and dim conditions out to 60 ft.' },
+        { name: 'Keen Senses', description: 'You have proficiency in the Perception skill.' },
+        { name: 'Fey Ancestry', description: 'You have advantage on saving throws against being charmed, and magic cannot put you to sleep.' },
+        { name: 'Trance', description: 'Elves do not sleep. Instead they meditate deeply for 4 hours a day, gaining the same benefit as 8 hours of human sleep.' }
+      ]
+    }
+  },
+  {
+    id: 'race-dwarf',
+    name: 'Dwarf',
+    category: 'races',
+    edition: '5e',
+    description: 'Bold and hardy, dwarves are known as skilled warriors, miners, and workers of stone and metal. They value tradition and ancestral honor.',
+    source: 'SRD 5e',
+    tags: ['Humanoid', 'Medium', 'Poison Resilience', 'Darkvision'],
+    raceData: {
+      size: 'Medium',
+      speed: 25,
+      speedNotes: '25 ft. (Speed not reduced by wearing heavy armor)',
+      creatureType: 'Humanoid',
+      abilityBonuses: [{ ability: 'CON', bonus: 2 }],
+      abilityBonusesStr: '+2 Constitution (+1 WIS for Hill Dwarf, +2 STR for Mountain Dwarf)',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      languages: ['Common', 'Dwarvish'],
+      subraces: ['Hill Dwarf', 'Mountain Dwarf'],
+      traits: [
+        { name: 'Darkvision', description: 'Accustomed to life underground, you have superior vision in dark and dim conditions out to 60 ft.' },
+        { name: 'Dwarven Resilience', description: 'You have advantage on saving throws against poison, and you have resistance against poison damage.' },
+        { name: 'Dwarven Combat Training', description: 'Proficiency with battleaxe, handaxe, light hammer, and warhammer.' },
+        { name: 'Stonecunning', description: 'Double proficiency bonus on History checks related to the origin of stonework.' }
+      ]
+    }
+  },
+  {
+    id: 'race-halfling',
+    name: 'Halfling',
+    category: 'races',
+    edition: '5e',
+    description: 'The diminutive halflings survive in a world full of larger creatures by avoiding notice or, barring that, avoiding offense.',
+    source: 'SRD 5e',
+    tags: ['Humanoid', 'Small', 'Lucky', 'Brave'],
+    raceData: {
+      size: 'Small',
+      speed: 25,
+      creatureType: 'Humanoid',
+      abilityBonuses: [{ ability: 'DEX', bonus: 2 }],
+      abilityBonusesStr: '+2 Dexterity (+1 CHA for Lightfoot, +1 CON for Stout)',
+      languages: ['Common', 'Halfling'],
+      subraces: ['Lightfoot Halfling', 'Stout Halfling'],
+      traits: [
+        { name: 'Lucky', description: 'When you roll a 1 on the d20 for an attack roll, ability check, or saving throw, you can reroll the die and must use the new roll.' },
+        { name: 'Brave', description: 'You have advantage on saving throws against being frightened.' },
+        { name: 'Halfling Nimbleness', description: 'You can move through the space of any creature that is of a size larger than yours.' }
+      ]
+    }
+  },
+  {
+    id: 'race-dragonborn',
+    name: 'Dragonborn',
+    category: 'races',
+    edition: '5e',
+    description: 'Born of dragons, as their name proclaims, the dragonborn walk proudly through a world that greets them with fearful incomprehension.',
+    source: 'SRD 5e',
+    tags: ['Humanoid', 'Medium', 'Breath Weapon', 'Draconic Resistance'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid',
+      abilityBonuses: [{ ability: 'STR', bonus: 2 }, { ability: 'CHA', bonus: 1 }],
+      abilityBonusesStr: '+2 Strength, +1 Charisma',
+      languages: ['Common', 'Draconic'],
+      traits: [
+        { name: 'Draconic Ancestry', description: 'You have draconic ancestry (Black, Blue, Brass, Bronze, Copper, Gold, Green, Red, Silver, or White).' },
+        { name: 'Breath Weapon', description: 'Exhale destructive elemental energy (2d6 damage, scaling at levels 6, 11, 16) in a 15ft cone or 30ft line once per short/long rest.' },
+        { name: 'Damage Resistance', description: 'You have resistance to the damage type associated with your draconic ancestry.' }
+      ]
+    }
+  },
+  {
+    id: 'race-gnome',
+    name: 'Gnome',
+    category: 'races',
+    edition: '5e',
+    description: 'A constant hum of busy activity pervades the warrens and neighborhoods where gnomes form their close-knit communities.',
+    source: 'SRD 5e',
+    tags: ['Humanoid', 'Small', 'Gnome Cunning', 'Darkvision'],
+    raceData: {
+      size: 'Small',
+      speed: 25,
+      creatureType: 'Humanoid',
+      abilityBonuses: [{ ability: 'INT', bonus: 2 }],
+      abilityBonusesStr: '+2 Intelligence (+1 DEX for Forest Gnome, +1 CON for Rock Gnome)',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      languages: ['Common', 'Gnomish'],
+      subraces: ['Forest Gnome', 'Rock Gnome'],
+      traits: [
+        { name: 'Darkvision', description: 'Superior vision in dark and dim conditions out to 60 ft.' },
+        { name: 'Gnome Cunning', description: 'You have advantage on all Intelligence, Wisdom, and Charisma saving throws against magic.' }
+      ]
+    }
+  },
+  {
+    id: 'race-tiefling',
+    name: 'Tiefling',
+    category: 'races',
+    edition: '5e',
+    description: 'To be greeted with stares and whispers, to suffer violence and insult on the street: this is the lot of the tiefling.',
+    source: 'SRD 5e',
+    tags: ['Humanoid', 'Medium', 'Hellish Resistance', 'Infernal Legacy', 'Darkvision'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid',
+      abilityBonuses: [{ ability: 'CHA', bonus: 2 }, { ability: 'INT', bonus: 1 }],
+      abilityBonusesStr: '+2 Charisma, +1 Intelligence',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      languages: ['Common', 'Infernal'],
+      traits: [
+        { name: 'Darkvision', description: 'Superior vision in dark and dim conditions out to 60 ft.' },
+        { name: 'Hellish Resistance', description: 'You have resistance to fire damage.' },
+        { name: 'Infernal Legacy', description: 'Thaumaturgy cantrip (Level 1), Hellish Rebuke 2nd-level (Level 3), Darkness (Level 5) once per long rest using CHA.' }
+      ]
+    }
+  }
+];
+
 // Base Equipment / Items
 export const BASE_COMPENDIUM_ITEMS: CompendiumItem[] = [
   {
@@ -736,10 +944,13 @@ export function getInitialBaseCompendium(): CompendiumItem[] {
   // 5. Classes
   items.push(...BASE_COMPENDIUM_CLASSES);
 
-  // 6. Skills
+  // 6. Races / Lineages
+  items.push(...BASE_COMPENDIUM_RACES);
+
+  // 7. Skills
   items.push(...BASE_COMPENDIUM_SKILLS);
 
-  // 7. Equipment / Items
+  // 8. Equipment / Items
   items.push(...BASE_COMPENDIUM_ITEMS);
 
   return items;

@@ -1,23 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CompendiumItem } from '../../../data/compendiumData';
+import { CharacterData, GearItem } from '../../../types';
 import { SupportedEdition, FANTASY_DAMAGE_TYPES } from './ForgeTypes';
-import { Sword, Save, Shield, Wand2, Package, Sparkles, Plus, Trash2 } from 'lucide-react';
+import { Sword, Save, Shield, Wand2, Package, Sparkles, Plus, Trash2, Backpack } from 'lucide-react';
+import { validateHomebrewItem, ValidationResult } from '../../../utils/homebrewValidator';
+import { recalculateCharacterAC } from '../../../utils/dndCalculations';
+import { ValidationBadgeBanner } from './ValidationBadgeBanner';
+import { ValidationConfirmModal } from './ValidationConfirmModal';
 
 interface ItemStudioProps {
   edition: SupportedEdition;
   sourceAuthor: string;
   onSave: (item: CompendiumItem) => void;
   onClose: () => void;
+  activeCharacter?: CharacterData | null;
+  onUpdateCharacter?: (updated: CharacterData) => void;
 }
 
 export const ItemStudio: React.FC<ItemStudioProps> = ({
   edition,
   sourceAuthor,
   onSave,
-  onClose
+  onClose,
+  activeCharacter,
+  onUpdateCharacter
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [addToInventory, setAddToInventory] = useState(!!activeCharacter);
 
   // Fantasy Item fields
   const [itemType, setItemType] = useState<'weapon' | 'armor' | 'shield' | 'potion' | 'ring' | 'scroll' | 'wand' | 'gear'>('weapon');
@@ -64,10 +74,26 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
   const [cocRelicSanCost, setCocRelicSanCost] = useState('1d6 Sanity per activation');
   const [cocRelicMpCost, setCocRelicMpCost] = useState('3 MP');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
 
+  // Live Item Validation
+  const validation = useMemo(() => {
+    return validateHomebrewItem({
+      name,
+      itemType,
+      rarity,
+      cost,
+      weight,
+      requiresAttunement,
+      damageFormula,
+      damageType,
+      acBonus: (itemType === 'armor' || itemType === 'shield') ? acBonus : undefined,
+      description,
+      edition
+    });
+  }, [name, itemType, rarity, cost, weight, requiresAttunement, damageFormula, damageType, acBonus, description, edition]);
+
+  const executeSave = () => {
     let itemDataPayload: any = {};
     let descSummary = description.trim();
     let itemTags: string[] = ['items', edition, 'Homebrew'];
@@ -165,8 +191,60 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
     };
 
     onSave(newItem);
+
+    // If opted into adding directly to active character
+    if (addToInventory && activeCharacter && onUpdateCharacter) {
+      const isWeapon = itemType === 'weapon' || !!itemDataPayload.damage;
+      const isArmor = itemType === 'armor' || itemType === 'shield' || itemDataPayload.armorClass !== undefined;
+      const costVal = typeof itemDataPayload.costGp === 'number' ? itemDataPayload.costGp : (parseFloat(itemDataPayload.cost || '0') || 0);
+
+      const newGearItem: GearItem = {
+        id: 'gear-forged-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        name: newItem.name,
+        quantity: 1,
+        weight: typeof itemDataPayload.weight === 'number' ? itemDataPayload.weight : (parseFloat(itemDataPayload.weight || '1') || 1),
+        costGp: costVal,
+        equipped: false,
+        stored: false,
+        notes: newItem.description,
+        itemType: isWeapon ? 'Weapon' : isArmor ? 'Armor' : 'Misc',
+        armorAc: isArmor ? (itemDataPayload.armorClass ?? acBonus) : undefined,
+        armorType: isArmor ? 'Light' : undefined,
+        acBonus: isArmor ? acBonus : undefined,
+        isMagic: !!itemDataPayload.rarity || itemTags.includes('Magic'),
+        requiresAttunement: requiresAttunement,
+        weaponStats: isWeapon ? {
+          damage: damageFormula,
+          damageType: damageType,
+          range: 'Melee',
+          notes: propertiesText
+        } : undefined
+      };
+
+      const currentInv = Array.isArray(activeCharacter.inventory) ? activeCharacter.inventory : [];
+      const updatedChar = recalculateCharacterAC({
+        ...activeCharacter,
+        inventory: [...currentInv, newGearItem]
+      });
+
+      onUpdateCharacter(updatedChar);
+    }
+
     setName('');
     setDescription('');
+    setShowOverrideModal(false);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    if (validation.hasCritical) {
+      setShowOverrideModal(true);
+      return;
+    }
+
+    executeSave();
   };
 
   return (
@@ -646,6 +724,38 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
         />
       </div>
 
+      {/* Validation & Balance Guard */}
+      <ValidationBadgeBanner validation={validation} categoryLabel="Homebrew Item" />
+
+      {/* Direct Add to Character Inventory Option */}
+      {activeCharacter && (
+        <div className="p-3.5 bg-stone-900/90 border border-stone-800 rounded-2xl flex items-center justify-between gap-3 shadow-inner">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/30 text-amber-400 shrink-0">
+              <Backpack className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold font-serif text-stone-200 truncate">
+                Add directly to <span className="text-amber-400 font-bold">{activeCharacter.name || 'Active Character'}</span>'s Inventory
+              </div>
+              <div className="text-[10px] text-stone-400 font-mono">
+                Item will be forged into compendium and immediately placed in active equipment gear
+              </div>
+            </div>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={addToInventory}
+              onChange={(e) => setAddToInventory(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-9 h-5 bg-stone-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+      )}
+
       {/* Footer Controls */}
       <div className="flex items-center justify-between pt-2 border-t border-stone-800/80">
         <button
@@ -661,9 +771,19 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>Save Item to Compendium</span>
+          <span>{addToInventory && activeCharacter ? 'Forge & Add to Character' : 'Save Item to Compendium'}</span>
         </button>
       </div>
+
+      {/* Game-Breaking Warning Confirmation Modal */}
+      <ValidationConfirmModal
+        isOpen={showOverrideModal}
+        entryName={name}
+        category="Item"
+        validation={validation}
+        onProceedAnyway={executeSave}
+        onCancel={() => setShowOverrideModal(false)}
+      />
     </form>
   );
 };

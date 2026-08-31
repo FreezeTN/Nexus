@@ -1,18 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { CompendiumItem, saveCustomCompendiumEntry } from '../../data/compendiumData';
-import { RuleEdition } from '../../types';
+import { RuleEdition, CharacterData } from '../../types';
 import { SupportedEdition, SYSTEM_DISPLAY_NAMES } from './forge/ForgeTypes';
 import { SpellStudio } from './forge/SpellStudio';
 import { MonsterStudio } from './forge/MonsterStudio';
 import { FeatStudio } from './forge/FeatStudio';
 import { ItemStudio } from './forge/ItemStudio';
+import { ClassStudio } from './forge/ClassStudio';
+import { RaceStudio } from './forge/RaceStudio';
 import {
   Sparkles,
   Download,
   Upload,
   X,
   Check,
-  FileJson
+  FileJson,
+  Swords,
+  Users
 } from 'lucide-react';
 
 interface HomebrewForgeModalProps {
@@ -21,6 +25,8 @@ interface HomebrewForgeModalProps {
   onSaved: (item: CompendiumItem) => void;
   allCustomItems?: CompendiumItem[];
   onImportCustomItems?: (imported: CompendiumItem[]) => void;
+  activeCharacter?: CharacterData | null;
+  onUpdateCharacter?: (updated: CharacterData) => void;
 }
 
 export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
@@ -28,7 +34,9 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
   onClose,
   onSaved,
   allCustomItems = [],
-  onImportCustomItems
+  onImportCustomItems,
+  activeCharacter,
+  onUpdateCharacter
 }) => {
   const [systemEdition, setSystemEdition] = useState<SupportedEdition>(() => {
     if (['5e', '3.5e', 'pathfinder', 'shadowrun', 'cthulhu'].includes(initialSystem)) {
@@ -37,7 +45,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
     return '5e';
   });
 
-  const [activeTab, setActiveTab] = useState<'spells' | 'monsters' | 'feats' | 'items' | 'packs'>('spells');
+  const [activeTab, setActiveTab] = useState<'classes' | 'races' | 'spells' | 'monsters' | 'feats' | 'items' | 'packs'>('classes');
   const [sourceAuthor, setSourceAuthor] = useState('Custom DM');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -130,6 +138,8 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
   const isCthulhu = systemEdition === 'cthulhu';
 
   const tabLabels = {
+    classes: isShadowrun ? '💼 Roles & Archetypes' : isCthulhu ? '🕵️ Occupations' : '🛡️ Classes & Paths',
+    races: isShadowrun ? '🧬 Metatypes' : isCthulhu ? '🩸 Lineages' : '🧝 Races & Lineages',
     spells: isShadowrun ? '⚡ Spells & Matrix' : isCthulhu ? '🔮 Spells & Rituals' : '🪄 Spell Studio',
     monsters: isShadowrun ? '👥 Grunts & NPCs' : isCthulhu ? '🐙 Monsters & Entities' : '👹 Monsters & NPCs',
     feats: isShadowrun ? '🧬 Qualities & Augments' : isCthulhu ? '📜 Talents & Occupations' : '📜 Feats & Features',
@@ -150,7 +160,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
       <div className="bg-stone-950 border-2 border-amber-500/50 rounded-3xl max-w-5xl w-full shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
         
         {/* Header Bar */}
-        <div className="p-5 bg-gradient-to-r from-stone-950 via-amber-950/40 to-stone-950 border-b border-stone-800 flex items-center justify-between shrink-0 flex-wrap gap-3">
+        <div className="p-5 bg-linear-to-r from-stone-950 via-amber-950/40 to-stone-950 border-b border-stone-800 flex items-center justify-between shrink-0 flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-500/60 flex items-center justify-center text-amber-300 shadow-lg shrink-0">
               <Sparkles className="w-5 h-5 animate-pulse" />
@@ -205,6 +215,30 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
 
         {/* Studio Navigation Tabs */}
         <div className="px-4 sm:px-5 pt-3 bg-stone-900/90 border-b border-stone-800 flex items-center gap-1.5 sm:gap-2 overflow-x-auto shrink-0 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveTab('classes')}
+            className={`flex items-center px-3.5 py-2.5 rounded-t-xl text-xs font-bold font-mono transition border-b-2 cursor-pointer whitespace-nowrap ${
+              activeTab === 'classes'
+                ? 'bg-stone-950 text-amber-300 border-amber-500'
+                : 'text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-800/50'
+            }`}
+          >
+            <span>{tabLabels.classes}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('races')}
+            className={`flex items-center px-3.5 py-2.5 rounded-t-xl text-xs font-bold font-mono transition border-b-2 cursor-pointer whitespace-nowrap ${
+              activeTab === 'races'
+                ? 'bg-stone-950 text-amber-300 border-amber-500'
+                : 'text-stone-400 border-transparent hover:text-stone-200 hover:bg-stone-800/50'
+            }`}
+          >
+            <span>{tabLabels.races}</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setActiveTab('spells')}
@@ -292,7 +326,27 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
             </div>
           )}
 
-          {/* TAB 1: SPELL STUDIO */}
+          {/* TAB 1: CLASS STUDIO */}
+          {activeTab === 'classes' && (
+            <ClassStudio
+              edition={systemEdition}
+              sourceAuthor={sourceAuthor}
+              onSave={handleSavedItem}
+              onClose={onClose}
+            />
+          )}
+
+          {/* TAB 2: RACE STUDIO */}
+          {activeTab === 'races' && (
+            <RaceStudio
+              edition={systemEdition}
+              sourceAuthor={sourceAuthor}
+              onSave={handleSavedItem}
+              onClose={onClose}
+            />
+          )}
+
+          {/* TAB 3: SPELL STUDIO */}
           {activeTab === 'spells' && (
             <SpellStudio
               edition={systemEdition}
@@ -302,7 +356,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
             />
           )}
 
-          {/* TAB 2: MONSTER STUDIO */}
+          {/* TAB 4: MONSTER STUDIO */}
           {activeTab === 'monsters' && (
             <MonsterStudio
               edition={systemEdition}
@@ -312,7 +366,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
             />
           )}
 
-          {/* TAB 3: FEAT STUDIO */}
+          {/* TAB 5: FEAT STUDIO */}
           {activeTab === 'feats' && (
             <FeatStudio
               edition={systemEdition}
@@ -322,42 +376,50 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
             />
           )}
 
-          {/* TAB 4: ITEM STUDIO */}
+          {/* TAB 6: ITEM STUDIO */}
           {activeTab === 'items' && (
             <ItemStudio
               edition={systemEdition}
               sourceAuthor={sourceAuthor}
               onSave={handleSavedItem}
               onClose={onClose}
+              activeCharacter={activeCharacter}
+              onUpdateCharacter={onUpdateCharacter}
             />
           )}
 
-          {/* TAB 5: IMPORT / EXPORT PACKS */}
+          {/* TAB 7: IMPORT / EXPORT */}
           {activeTab === 'packs' && (
             <div className="space-y-6 animate-fade-in">
-              <div className="bg-stone-900/60 border border-stone-800 p-6 rounded-2xl space-y-4">
+              <div className="p-6 bg-stone-900/60 border border-stone-800 rounded-3xl space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                    <Download className="w-5 h-5" />
+                  <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/30 text-amber-400">
+                    <Download className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-base font-serif font-bold text-stone-100">
-                      Export Custom Compendium Vault ({SYSTEM_DISPLAY_NAMES[systemEdition]})
+                    <h3 className="text-base font-bold font-serif text-stone-100">
+                      Export Homebrew Compendium Vault
                     </h3>
                     <p className="text-xs text-stone-400">
-                      Download all your forged spells, monsters, feats, and items as a JSON campaign bundle.
+                      Export all your custom created classes, races, spells, monsters, feats, and items as a JSON pack to share or back up.
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-stone-800">
-                  <span className="text-xs font-mono text-stone-400">
-                    Total custom entries in storage: <strong className="text-amber-400">{allCustomItems.length}</strong>
-                  </span>
+                <div className="p-4 bg-stone-950 border border-stone-800 rounded-2xl flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="text-xs font-mono text-stone-300">
+                      Total Custom Items in Compendium:{' '}
+                      <strong className="text-amber-400">{allCustomItems.length}</strong>
+                    </div>
+                    <div className="text-[11px] text-stone-500">
+                      Format: Nexus Compendium v2.5 JSON
+                    </div>
+                  </div>
                   <button
                     type="button"
                     onClick={handleExportCustomPack}
-                    className="flex items-center gap-2 bg-stone-900 hover:bg-stone-800 border border-amber-500/40 text-amber-300 font-bold px-4 py-2 rounded-xl text-xs transition cursor-pointer"
+                    className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-xl transition flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20"
                   >
                     <Download className="w-4 h-4" />
                     <span>Download JSON Pack</span>
@@ -365,65 +427,49 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
                 </div>
               </div>
 
-              <div className="bg-stone-900/60 border border-stone-800 p-6 rounded-2xl space-y-4">
+              <div className="p-6 bg-stone-900/60 border border-stone-800 rounded-3xl space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-                    <Upload className="w-5 h-5" />
+                  <div className="p-3 bg-cyan-500/10 rounded-2xl border border-cyan-500/30 text-cyan-400">
+                    <Upload className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-base font-serif font-bold text-stone-100">
-                      Import Campaign Homebrew Pack
+                    <h3 className="text-base font-bold font-serif text-stone-100">
+                      Import Homebrew Compendium Pack
                     </h3>
                     <p className="text-xs text-stone-400">
-                      Upload a shared homebrew JSON file to merge items directly into your local Compendium.
+                      Load a community or pre-built JSON compendium file into your current campaign.
                     </p>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-stone-800 space-y-3">
+                <div className="p-5 bg-stone-950 border border-stone-800 rounded-2xl space-y-4">
                   <input
-                    ref={fileInputRef}
                     type="file"
-                    accept=".json"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        setSelectedFileName(file.name);
-                      }
-                      handleImportFile(e);
-                    }}
+                    ref={fileInputRef}
+                    accept=".json,application/json"
+                    onChange={handleImportFile}
                     className="hidden"
                   />
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 px-4 py-2.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/50 rounded-xl text-cyan-300 text-xs font-mono font-bold transition cursor-pointer shadow-sm"
-                    >
-                      <FileJson className="w-4 h-4" />
-                      <span>Select JSON File</span>
-                    </button>
-                    <span className="text-xs font-mono text-stone-400 truncate max-w-xs">
-                      {selectedFileName ? selectedFileName : 'No file selected'}
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-stone-700 hover:border-cyan-400/60 bg-stone-900/40 hover:bg-stone-900/80 transition p-6 rounded-xl flex flex-col items-center justify-center gap-2 cursor-pointer text-center"
+                  >
+                    <FileJson className="w-8 h-8 text-cyan-400" />
+                    <span className="text-xs font-bold text-stone-200">
+                      Click to Browse or Drag & Drop JSON Pack
+                    </span>
+                    <span className="text-[11px] text-stone-500">
+                      Supports Nexus Compendium exports (.json)
                     </span>
                   </div>
+
                   {importStatus && (
-                    <div className="p-3 bg-stone-950 border border-cyan-500/30 rounded-xl text-xs font-mono text-cyan-300 flex items-center gap-2">
-                      <Check className="w-4 h-4 shrink-0" />
+                    <div className="p-3 bg-stone-900 border border-cyan-500/40 rounded-xl text-xs font-mono text-cyan-300 flex items-center gap-2">
+                      <Check className="w-4 h-4 text-cyan-400 shrink-0" />
                       <span>{importStatus}</span>
                     </div>
                   )}
                 </div>
-              </div>
-
-              <div className="flex justify-end pt-3">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-5 py-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 text-stone-300 text-xs font-bold font-mono transition border border-stone-800 cursor-pointer"
-                >
-                  Close Forge
-                </button>
               </div>
             </div>
           )}
