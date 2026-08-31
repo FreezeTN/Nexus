@@ -56,7 +56,7 @@ export const UserManualModal: React.FC<UserManualModalProps> = ({ isOpen, onClos
   if (!isOpen) return null;
 
   const handleCopySummary = () => {
-    const text = `Nexus TRPG Platform (v4.8.0) - Complete User Manual Overview\n\n` +
+    const text = `Nexus TRPG Platform (v5.11.0) - Complete User Manual Overview\n\n` +
       `• Guest Adventurer Mode: Local storage access without login. Sign in for Firebase Cloud Sync.\n` +
       `• Rulesets Supported: D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, Custom TRPG Systems.\n` +
       `• Character Sheets: 7 dedicated views covering Stats, Combat, Inventory, Spells, Notes, Rules & User Guide, Compendium & DM Overview.\n` +

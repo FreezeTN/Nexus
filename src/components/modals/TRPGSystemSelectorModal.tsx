@@ -171,6 +171,43 @@ export const TRPGSystemSelectorModal: React.FC<TRPGSystemSelectorModalProps> = (
             Choose which Tabletop RPG rulesets you want enabled in your workspace. Unselected systems will be completely hidden from top system selectors, character creation, compendiums, and user guides for a clean, customized experience.
           </p>
 
+          {/* QUICK SYSTEM PRESETS BAR */}
+          <div className="bg-stone-950 p-4 rounded-2xl border border-stone-800 space-y-2.5">
+            <div className="flex items-center gap-2 text-xs font-mono font-bold text-amber-400 uppercase">
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Quick Presets:</span>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {[
+                { label: 'All 5 Systems (Default)', systems: ['5e', '3.5e', 'shadowrun', 'pathfinder', 'cthulhu'] as RuleEdition[] },
+                { label: 'Fantasy Masters (5e + 3.5e + PF2e)', systems: ['5e', '3.5e', 'pathfinder'] as RuleEdition[] },
+                { label: 'D&D 5e Focused', systems: ['5e'] as RuleEdition[] },
+                { label: 'D&D Generations (5e + 3.5e)', systems: ['5e', '3.5e'] as RuleEdition[] },
+                { label: 'Grimdark Horror & Eldritch (CoC + PF2e)', systems: ['cthulhu', 'pathfinder'] as RuleEdition[] },
+                { label: 'Cyberpunk & Noir (Shadowrun + CoC)', systems: ['shadowrun', 'cthulhu'] as RuleEdition[] }
+              ].map(preset => {
+                const isMatch = preset.systems.length === selected.length && preset.systems.every(s => selected.includes(s));
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setErrorMsg(null);
+                      setSelected(preset.systems);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition border cursor-pointer ${
+                      isMatch
+                        ? 'bg-amber-500 text-stone-950 border-amber-400 shadow'
+                        : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border-stone-700'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {errorMsg && (
             <div className="p-3 bg-rose-950/90 border border-rose-600/80 text-rose-200 text-xs font-bold rounded-xl flex items-center justify-between">
               <span>⚠️ {errorMsg}</span>

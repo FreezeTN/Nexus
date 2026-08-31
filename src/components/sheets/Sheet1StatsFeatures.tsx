@@ -3,6 +3,8 @@ import { CharacterData } from '../../types';
 import { GameSession } from '../../lib/firebase';
 import { ShadowrunStatsPanel } from '../shadowrun/ShadowrunStatsPanel';
 import { ShadowrunSkillsPanel } from '../shadowrun/ShadowrunSkillsPanel';
+import { PathfinderTacticalPanel } from '../pathfinder/PathfinderTacticalPanel';
+import { CthulhuInvestigatorPanel } from '../cthulhu/CthulhuInvestigatorPanel';
 import { LevelProgressionModal } from '../modals/LevelProgressionModal';
 import { TransformationModal } from '../modals/TransformationModal';
 import { CompanionModal } from '../modals/CompanionModal';
@@ -261,7 +263,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
         </>
       )}
 
-      {/* SECTION 2: Ability Scores, Saving Throws, Sanity */}
+      {/* SECTION 2: Ability Scores, Saving Throws, Sanity & System Suites */}
       {character.edition === 'shadowrun' ? (
         <div className="space-y-6">
           {isVisible('sr_stats') && (
@@ -278,6 +280,54 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
               onRollPool={(label, poolSize) => onRoll(label, 6, poolSize, 0, 'normal')}
             />
           )}
+        </div>
+      ) : character.edition === 'pathfinder' ? (
+        <div className="space-y-6">
+          <PathfinderTacticalPanel
+            character={character}
+            onUpdateCharacter={onUpdateCharacter}
+            onRoll={onRoll}
+          />
+          {(isVisible('s1_abilityScores')) && (
+            <AbilityScoresPanel
+              character={character}
+              editingAbilities={editingAbilities}
+              onUpdateCharacter={onUpdateCharacter}
+              onRoll={onRoll}
+            />
+          )}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-5">
+              <SkillsPanel
+                character={character}
+                onUpdateCharacter={onUpdateCharacter}
+                onRoll={onRoll}
+              />
+            </div>
+            <div className="lg:col-span-7 space-y-6">
+              <ClassFeaturesPanel
+                character={character}
+                isDmRole={isDmRole}
+                onUpdateCharacter={onUpdateCharacter}
+                onOpenShapeshift={() => setShowTransformationModal(true)}
+                onOpenSummonCompanion={() => setShowCompanionModal(true)}
+              />
+              <FeatsPanel
+                character={character}
+                onUpdateCharacter={onUpdateCharacter}
+                onOpenShapeshift={() => setShowTransformationModal(true)}
+                onOpenSummonCompanion={() => setShowCompanionModal(true)}
+              />
+            </div>
+          </div>
+        </div>
+      ) : character.edition === 'cthulhu' ? (
+        <div className="space-y-6">
+          <CthulhuInvestigatorPanel
+            character={character}
+            onUpdateCharacter={onUpdateCharacter}
+            onRoll={onRoll}
+          />
         </div>
       ) : (
         <>
@@ -300,14 +350,6 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 />
               )}
             </div>
-          )}
-
-          {character.edition === 'cthulhu' && isVisible('s1_sanityMadness') && (
-            <SanityMadnessPanel
-              character={character}
-              onUpdateCharacter={onUpdateCharacter}
-              onRoll={onRoll}
-            />
           )}
 
           {/* SECTION 3: Skills & Features Grid */}

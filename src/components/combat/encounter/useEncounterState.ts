@@ -4,8 +4,9 @@ import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp } from '../../..
 import { getLevelFromTotalXp } from '../../../data/levelProgressionData';
 import { getMonsterPortraitUrl } from '../../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../../utils/environmentRules';
-import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound } from '../../../utils/diceAudio';
-import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState } from './encounterTypes';
+import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound, playHitSound, playMissSound, playDiceSound } from '../../../utils/diceAudio';
+import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState, ConcentrationPrompt } from './encounterTypes';
+import { eventBus } from '../../../events/eventBus';
 
 export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
   const defaultPlayer: Combatant = {
@@ -100,6 +101,7 @@ export function useEncounterState({
   const [encounterEnvironment, setEncounterEnvironment] = useState<EncounterEnvironment>(() => loadSavedEncounter(character).encounterEnvironment || 'terrestrial');
   const [encounterMode, setEncounterMode] = useState<EncounterMode>(() => loadSavedEncounter(character).encounterMode || 'combat');
   const [activeMerchant, setActiveMerchant] = useState<MerchantEncounterState | null>(() => loadSavedEncounter(character).activeMerchant || null);
+  const [concentrationPrompt, setConcentrationPrompt] = useState<ConcentrationPrompt | null>(null);
 
   const [xpAlert, setXpAlert] = useState<{
     monsterName: string;
@@ -403,6 +405,75 @@ export function useEncounterState({
       } else {
         addLogEntry('damage', `${target.name} took ${Math.abs(delta)} damage (${nextHp}/${target.hpMax} HP)`, target.name);
       }
+
+      // Concentration Watchdog: Check if target is actively concentrating
+      const isTargetConcentrating = Boolean(
+        target.isConcentrating ||
+        target.concentratingSpell ||
+        target.conditions?.some(c => c.toLowerCase().includes('concentrat'))
+      );
+
+      if (isTargetConcentrating && nextHp > 0) {
+        const damageTaken = Math.abs(delta);
+        const conSaveDc = Math.max(10, Math.floor(damageTaken / 2));
+
+        // Calculate CON saving throw modifier
+        let conMod = 0;
+        if (target.isPlayerChar) {
+          conMod = Math.floor(((character.abilities?.CON?.score ?? 10) - 10) / 2);
+          const prof = Math.floor(((character.level || 1) - 1) / 4) + 2;
+          const isProficient = (character.savingThrowProficiencies?.includes('CON')) ||
+            ['sorcerer', 'fighter', 'barbarian', 'artificer'].some(cls => (character.characterClass || '').toLowerCase().includes(cls));
+          if (isProficient) conMod += prof;
+        } else {
+          const targetChar = allCharacters.find(ch => ch.id === target.id || ch.name.toLowerCase() === target.name.toLowerCase());
+          if (targetChar?.abilities?.CON?.score) {
+            conMod = Math.floor((targetChar.abilities.CON.score - 10) / 2);
+          } else {
+            conMod = 1;
+          }
+        }
+
+        const spellName = target.concentratingSpell?.spellName ||
+          (target.conditions?.find(c => c.toLowerCase().includes('concentrat'))?.replace(/^Concentrating:\s*/i, '')) ||
+          'Concentration Spell';
+
+        setConcentrationPrompt({
+          combatantId: target.id,
+          combatantName: target.name,
+          damageTaken,
+          conSaveDc,
+          spellName,
+          conMod
+        });
+
+        eventBus.emit('ConcentrationCheckRequested', {
+          combatantId: target.id,
+          combatantName: target.name,
+          damageTaken,
+          conSaveDc,
+          spellName
+        });
+
+        addLogEntry('condition', `⚠️ ${target.name} must make a DC ${conSaveDc} CON saving throw to maintain concentration on ${spellName}!`, target.name);
+      } else if (isTargetConcentrating && nextHp === 0) {
+        // Dropping to 0 HP automatically breaks concentration
+        const spellName = target.concentratingSpell?.spellName || 'Concentration';
+        setCombatants(prev => prev.map(c => c.id === target.id ? {
+          ...c,
+          isConcentrating: false,
+          concentratingSpell: undefined,
+          conditions: (c.conditions || []).filter(cond => !cond.toLowerCase().includes('concentrat'))
+        } : c));
+
+        if (target.isPlayerChar && onUpdateCharacter) {
+          onUpdateCharacter({
+            ...character,
+            conditions: (character.conditions || []).filter(cond => !cond.toLowerCase().includes('concentrat'))
+          });
+        }
+        addLogEntry('condition', `💥 ${target.name} dropped to 0 HP and lost concentration on ${spellName}!`, target.name);
+      }
     } else if (delta > 0) {
       playHealSound();
       addLogEntry('heal', `${target.name} healed for ${delta} HP (${nextHp}/${target.hpMax} HP)`, target.name);
@@ -436,18 +507,119 @@ export function useEncounterState({
         conditions: conds
       });
     }
-  }, [combatants, character, onUpdateCharacter, addLogEntry, awardDefeatedMonsterXp]);
+  }, [combatants, character, allCharacters, onUpdateCharacter, addLogEntry, awardDefeatedMonsterXp]);
+
+  const handleResolveConcentration = useCallback((passed: boolean, customRollTotal?: number) => {
+    if (!concentrationPrompt) return;
+    const { combatantId, combatantName, spellName = 'Spell', conSaveDc } = concentrationPrompt;
+
+    if (passed) {
+      playHitSound(false);
+      const rollStr = customRollTotal !== undefined ? ` (Rolled ${customRollTotal} vs DC ${conSaveDc})` : '';
+      addLogEntry('condition', `✨ ${combatantName} PASSED Concentration Check${rollStr} — Maintained ${spellName}!`, combatantName);
+    } else {
+      playMissSound();
+      const rollStr = customRollTotal !== undefined ? ` (Rolled ${customRollTotal} vs DC ${conSaveDc})` : '';
+      addLogEntry('condition', `💥 ${combatantName} FAILED Concentration Check${rollStr} — Concentration on ${spellName} was BROKEN!`, combatantName);
+
+      // Break concentration on combatant
+      setCombatants(prev => prev.map(c => c.id === combatantId ? {
+        ...c,
+        isConcentrating: false,
+        concentratingSpell: undefined,
+        conditions: (c.conditions || []).filter(cond => !cond.toLowerCase().includes('concentrat') && !cond.toLowerCase().includes(spellName.toLowerCase()))
+      } : c));
+
+      // If player character, update character conditions
+      const promptTarget = combatants.find(c => c.id === combatantId);
+      if (promptTarget?.isPlayerChar && onUpdateCharacter) {
+        onUpdateCharacter({
+          ...character,
+          conditions: (character.conditions || []).filter(cond => !cond.toLowerCase().includes('concentrat') && !cond.toLowerCase().includes(spellName.toLowerCase()))
+        });
+      }
+    }
+
+    setConcentrationPrompt(null);
+  }, [concentrationPrompt, combatants, character, onUpdateCharacter, addLogEntry]);
+
+  const handleRollConcentrationCheck = useCallback(() => {
+    if (!concentrationPrompt) return;
+    const { conSaveDc, conMod } = concentrationPrompt;
+    playDiceSound();
+
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const total = d20 + conMod;
+    const passed = (d20 === 20) || (d20 !== 1 && total >= conSaveDc);
+
+    if (onRoll) {
+      onRoll(`CON Save (Concentration vs DC ${conSaveDc})`, 20, 1, conMod, 'normal');
+    }
+
+    handleResolveConcentration(passed, total);
+  }, [concentrationPrompt, onRoll, handleResolveConcentration]);
 
   const handleNextTurn = useCallback(() => {
     if (combatants.length === 0) return;
     let nextIndex = activeTurnIndex + 1;
     let nextRound = roundNumber;
+    let isNewRound = false;
 
     if (nextIndex >= combatants.length) {
       nextIndex = 0;
       nextRound += 1;
+      isNewRound = true;
       setRoundNumber(nextRound);
       addLogEntry('turn', `⚔️ Round ${nextRound} began!`);
+    }
+
+    // Condition Expiry Watchdog: decrement durations on round transition
+    if (isNewRound) {
+      setCombatants(prev => {
+        return prev.map(c => {
+          if (!c.conditionDurations || Object.keys(c.conditionDurations).length === 0) {
+            return c;
+          }
+
+          const newDurations: Record<string, number> = {};
+          const activeConditions = [...(c.conditions || [])];
+          const expiredConditions: string[] = [];
+
+          for (const [cond, roundsLeft] of Object.entries(c.conditionDurations)) {
+            const nextRoundsLeft = roundsLeft - 1;
+            if (nextRoundsLeft <= 0) {
+              expiredConditions.push(cond);
+            } else {
+              newDurations[cond] = nextRoundsLeft;
+            }
+          }
+
+          if (expiredConditions.length > 0) {
+            const remainingConditions = activeConditions.filter(cond => !expiredConditions.includes(cond));
+            expiredConditions.forEach(cond => {
+              addLogEntry('condition', `⏳ Condition Expired: "${cond}" on ${c.name} has ended (Round ${nextRound})!`, c.name);
+            });
+
+            if (c.isPlayerChar && onUpdateCharacter) {
+              onUpdateCharacter({
+                ...character,
+                conditions: (character.conditions || []).filter(cond => !expiredConditions.includes(cond))
+              });
+            }
+
+            return {
+              ...c,
+              conditions: remainingConditions,
+              conditionDurations: newDurations
+            };
+          }
+
+          return {
+            ...c,
+            conditionDurations: newDurations
+          };
+        });
+      });
     }
 
     setActiveTurnIndex(nextIndex);
@@ -456,7 +628,134 @@ export function useEncounterState({
       playInitiativeTurnSound();
       addLogEntry('turn', `Turn started for ${nextCombatant.name} (Round ${nextRound})`, nextCombatant.name);
     }
-  }, [combatants, activeTurnIndex, roundNumber, addLogEntry]);
+  }, [combatants, activeTurnIndex, roundNumber, character, onUpdateCharacter, addLogEntry]);
+
+  // Condition Management Helpers
+  const handleApplyCondition = useCallback((combatantId: string, conditionName: string, durationRounds?: number) => {
+    setCombatants(prev => prev.map(c => {
+      if (c.id !== combatantId) return c;
+      const currentConds = c.conditions || [];
+      const newConds = currentConds.includes(conditionName) ? currentConds : [...currentConds, conditionName];
+      const newDurations = { ...(c.conditionDurations || {}) };
+      if (durationRounds && durationRounds > 0) {
+        newDurations[conditionName] = durationRounds;
+      } else {
+        delete newDurations[conditionName];
+      }
+      return {
+        ...c,
+        conditions: newConds,
+        conditionDurations: Object.keys(newDurations).length > 0 ? newDurations : undefined
+      };
+    }));
+
+    const target = combatants.find(c => c.id === combatantId);
+    const targetName = target ? target.name : combatantId;
+    const durStr = durationRounds ? ` (${durationRounds} round${durationRounds > 1 ? 's' : ''})` : '';
+    addLogEntry('condition', `Applied condition "${conditionName}"${durStr} to ${targetName}`, targetName);
+
+    if (target?.isPlayerChar && onUpdateCharacter) {
+      const cur = character.conditions || [];
+      if (!cur.includes(conditionName)) {
+        onUpdateCharacter({
+          ...character,
+          conditions: [...cur, conditionName]
+        });
+      }
+    }
+  }, [combatants, character, onUpdateCharacter, addLogEntry]);
+
+  const handleRemoveCondition = useCallback((combatantId: string, conditionName: string) => {
+    setCombatants(prev => prev.map(c => {
+      if (c.id !== combatantId) return c;
+      const newConds = (c.conditions || []).filter(cond => cond !== conditionName);
+      const newDurations = { ...(c.conditionDurations || {}) };
+      delete newDurations[conditionName];
+      return {
+        ...c,
+        conditions: newConds,
+        conditionDurations: Object.keys(newDurations).length > 0 ? newDurations : undefined
+      };
+    }));
+
+    const target = combatants.find(c => c.id === combatantId);
+    const targetName = target ? target.name : combatantId;
+    addLogEntry('condition', `Removed condition "${conditionName}" from ${targetName}`, targetName);
+
+    if (target?.isPlayerChar && onUpdateCharacter) {
+      onUpdateCharacter({
+        ...character,
+        conditions: (character.conditions || []).filter(cond => cond !== conditionName)
+      });
+    }
+  }, [combatants, character, onUpdateCharacter, addLogEntry]);
+
+  const handleToggleConcentration = useCallback((combatantId: string, spellName: string = 'Concentration Spell') => {
+    setCombatants(prev => prev.map(c => {
+      if (c.id !== combatantId) return c;
+      const nextConc = !c.isConcentrating;
+      const condName = `Concentrating: ${spellName}`;
+      let nextConds = c.conditions || [];
+
+      if (nextConc) {
+        if (!nextConds.includes(condName)) nextConds = [...nextConds, condName];
+      } else {
+        nextConds = nextConds.filter(cond => !cond.toLowerCase().includes('concentrat'));
+      }
+
+      return {
+        ...c,
+        isConcentrating: nextConc,
+        concentratingSpell: nextConc ? { spellName, castRound: roundNumber } : undefined,
+        conditions: nextConds
+      };
+    }));
+
+    const target = combatants.find(c => c.id === combatantId);
+    const targetName = target ? target.name : combatantId;
+    const isNow = !target?.isConcentrating;
+    addLogEntry('condition', `${isNow ? '✨ Started' : '💥 Stopped'} concentrating on ${spellName} (${targetName})`, targetName);
+
+    if (target?.isPlayerChar && onUpdateCharacter) {
+      let nextConds = character.conditions || [];
+      const condName = `Concentrating: ${spellName}`;
+      if (isNow) {
+        if (!nextConds.includes(condName)) nextConds = [...nextConds, condName];
+      } else {
+        nextConds = nextConds.filter(cond => !cond.toLowerCase().includes('concentrat'));
+      }
+      onUpdateCharacter({
+        ...character,
+        conditions: nextConds
+      });
+    }
+  }, [combatants, roundNumber, character, onUpdateCharacter, addLogEntry]);
+
+  // EventBus Subscription for Direct Damage / Healing Application
+  useEffect(() => {
+    const unsub = eventBus.on('ApplyDamageOrHeal', (payload) => {
+      const { targetCombatantId, targetName, amount, sourceLabel } = payload;
+      let targetId = targetCombatantId;
+      if (!targetId && targetName) {
+        const found = combatants.find(c => c.name.toLowerCase() === targetName.toLowerCase());
+        if (found) targetId = found.id;
+      }
+      if (!targetId) {
+        const enemy = combatants.find(c => c.type === 'enemy' && c.hpCurrent > 0);
+        if (enemy) targetId = enemy.id;
+        else if (combatants[activeTurnIndex]) targetId = combatants[activeTurnIndex].id;
+      }
+
+      if (targetId) {
+        handleAdjustHp(targetId, amount);
+        if (sourceLabel) {
+          addLogEntry(amount < 0 ? 'damage' : 'heal', `${amount < 0 ? '💥' : '💚'} ${sourceLabel}: ${amount < 0 ? `Dealt ${Math.abs(amount)} damage` : `Restored ${amount} HP`}`);
+        }
+      }
+    });
+
+    return () => unsub();
+  }, [combatants, activeTurnIndex, handleAdjustHp, addLogEntry]);
 
   const handlePrevTurn = useCallback(() => {
     if (combatants.length === 0) return;
@@ -720,6 +1019,13 @@ export function useEncounterState({
     enemies,
     xpAlert,
     setXpAlert,
+    concentrationPrompt,
+    setConcentrationPrompt,
+    handleResolveConcentration,
+    handleRollConcentrationCheck,
+    handleApplyCondition,
+    handleRemoveCondition,
+    handleToggleConcentration,
     handleAdjustHp,
     handleNextTurn,
     handlePrevTurn,

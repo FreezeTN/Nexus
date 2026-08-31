@@ -41,6 +41,8 @@ import { EncounterLogModal } from './encounter/EncounterLogModal';
 import { AddCombatantModal } from './encounter/AddCombatantModal';
 import { MonsterMechanicsBar } from './encounter/MonsterMechanicsBar';
 import { MerchantEncounterPanel } from './encounter/MerchantEncounterPanel';
+import { ConcentrationWatchdogBanner } from './encounter/ConcentrationWatchdogBanner';
+import { CombatantRowCard } from './encounter/CombatantRowCard';
 import { eventBus } from '../../events/eventBus';
 import { useEncounterState, loadSavedEncounter } from './encounter/useEncounterState';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -88,6 +90,13 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     enemies,
     xpAlert,
     setXpAlert,
+    concentrationPrompt,
+    setConcentrationPrompt,
+    handleResolveConcentration,
+    handleRollConcentrationCheck,
+    handleApplyCondition,
+    handleRemoveCondition,
+    handleToggleConcentration,
     handleAdjustHp,
     handleNextTurn,
     handlePrevTurn,
@@ -513,6 +522,16 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         />
       )}
 
+      {/* Concentration Watchdog Alert Banner */}
+      {concentrationPrompt && (
+        <ConcentrationWatchdogBanner
+          prompt={concentrationPrompt}
+          onRollCheck={handleRollConcentrationCheck}
+          onResolve={handleResolveConcentration}
+          onDismiss={() => setConcentrationPrompt(null)}
+        />
+      )}
+
       {/* Turn Navigation & Battle Stage Bar */}
       {combatants.length > 0 && (
         <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 flex items-center justify-between flex-wrap gap-3 shadow-md">
@@ -625,147 +644,21 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                   const isActive = combatants[activeTurnIndex]?.id === c.id;
                   const isSpeaking = activeSpeakerNames.has(c.name.toLowerCase().trim());
                   const globalRank = combatants.findIndex(item => item.id === c.id) + 1;
-                  const hpPercent = Math.max(0, Math.min(100, Math.round((c.hpCurrent / Math.max(1, c.hpMax)) * 100)));
 
                   return (
-                    <div
+                    <CombatantRowCard
                       key={c.id}
-                      className={`p-3 rounded-xl border transition space-y-2 ${
-                        isSpeaking
-                          ? 'bg-emerald-950/50 border-emerald-500 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/20'
-                          : isActive
-                          ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/60 shadow-lg'
-                          : c.hpCurrent === 0
-                          ? 'bg-stone-950/60 border-rose-900/60 opacity-80'
-                          : 'bg-stone-900/90 border-stone-800 text-stone-300 hover:border-emerald-700/50'
-                      }`}
-                    >
-                      {/* Top Row: Avatar, Info, Badges */}
-                      <div className="flex items-center justify-between gap-2.5 flex-wrap">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="relative shrink-0">
-                            <img
-                              src={c.portraitUrl || (c.type === 'enemy' ? getMonsterPortraitUrl(c.name) : '/default-avatar.png')}
-                              alt={c.name}
-                              className={`w-10 h-10 rounded-xl object-cover border shadow shrink-0 ${
-                                isSpeaking
-                                  ? 'border-emerald-400 ring-2 ring-emerald-400/60 animate-pulse'
-                                  : isActive
-                                  ? 'border-amber-400 ring-1 ring-amber-400/50'
-                                  : 'border-emerald-600/40'
-                              }`}
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                const img = e.target as HTMLImageElement;
-                                img.onerror = null;
-                                img.src = generateMonsterSvgPortrait(c?.name);
-                              }}
-                            />
-                            <div className="absolute -bottom-1 -right-1 px-1 min-w-[18px] h-4 rounded bg-emerald-600 text-stone-950 font-mono font-bold text-[9px] border border-emerald-300 shadow flex items-center justify-center" title={`Initiative Roll: ${c.initiative}`}>
-                              {isNaN(c.initiative) ? 0 : c.initiative}
-                            </div>
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-1.5 flex-wrap">
-                              <span className="truncate max-w-[150px]">{c.name}</span>
-                              <span className="text-[10px] text-stone-400 font-mono" title="Global Turn Order">
-                                #{globalRank}
-                              </span>
-                              {c.isPlayerChar && (
-                                <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.2 rounded font-mono font-bold">
-                                  YOU
-                                </span>
-                              )}
-                              {isActive && (
-                                <span className="text-[9px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.2 rounded font-mono animate-pulse">
-                                  ACTIVE TURN
-                                </span>
-                              )}
-                              {isSpeaking && (
-                                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 animate-pulse">
-                                  <Mic className="w-2.5 h-2.5 text-emerald-400" /> SPEAKING
-                                </span>
-                              )}
-                              {c.hpCurrent === 0 && (
-                                <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600 px-1.5 py-0.2 rounded font-mono font-bold">
-                                  UNCONSCIOUS
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="text-[11px] text-stone-400 font-mono flex items-center gap-2 mt-0.5">
-                              <span>AC: <strong className="text-stone-200">{c.armorClass}</strong></span>
-                              <span>HP: <strong className={c.hpCurrent === 0 ? 'text-rose-500 font-bold' : c.hpCurrent <= (c.hpMax / 4) ? 'text-rose-400' : 'text-emerald-400'}>{c.hpCurrent}</strong> / {c.hpMax}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions (HP controls, Allegiance switch, remove) */}
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex items-center gap-0.5 bg-stone-950 border border-stone-800 p-0.5 rounded-lg">
-                            <button
-                              onClick={() => handleAdjustHp(c.id, -5)}
-                              className="px-1.5 py-0.5 bg-rose-950 hover:bg-rose-900 text-rose-200 rounded font-mono font-bold text-[11px]"
-                              title="-5 HP"
-                            >
-                              -5
-                            </button>
-                            <button
-                              onClick={() => handleAdjustHp(c.id, -1)}
-                              className="px-1.5 py-0.5 bg-rose-900/70 hover:bg-rose-800 text-rose-100 rounded font-mono font-bold text-[11px]"
-                              title="-1 HP"
-                            >
-                              -1
-                            </button>
-                            <button
-                              onClick={() => handleAdjustHp(c.id, 1)}
-                              className="px-1.5 py-0.5 bg-emerald-900/70 hover:bg-emerald-800 text-emerald-100 rounded font-mono font-bold text-[11px]"
-                              title="+1 HP"
-                            >
-                              +1
-                            </button>
-                            <button
-                              onClick={() => handleAdjustHp(c.id, 5)}
-                              className="px-1.5 py-0.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 rounded font-mono font-bold text-[11px]"
-                              title="+5 HP"
-                            >
-                              +5
-                            </button>
-                          </div>
-
-                          {!c.isPlayerChar && (
-                            <button
-                              onClick={() => handleToggleCombatantType(c.id)}
-                              className="p-1 bg-stone-950 hover:bg-stone-800 text-stone-400 hover:text-rose-400 border border-stone-800 rounded-lg transition"
-                              title="Switch to Team 2 (Enemy)"
-                            >
-                              <ArrowRightLeft className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-
-                          {!c.isPlayerChar && (
-                            <button
-                              onClick={() => handleRemoveCombatant(c.id)}
-                              className="p-1 text-stone-500 hover:text-rose-400 transition"
-                              title="Remove from encounter"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Health Progress Bar */}
-                      <div className="w-full bg-stone-950 rounded-full h-1.5 border border-stone-800 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-amber-500' : 'bg-rose-500'
-                          }`}
-                          style={{ width: `${hpPercent}%` }}
-                        />
-                      </div>
-                    </div>
+                      combatant={c}
+                      isActive={isActive}
+                      isSpeaking={isSpeaking}
+                      globalRank={globalRank}
+                      onAdjustHp={handleAdjustHp}
+                      onToggleType={handleToggleCombatantType}
+                      onRemove={handleRemoveCombatant}
+                      onApplyCondition={handleApplyCondition}
+                      onRemoveCondition={handleRemoveCondition}
+                      onToggleConcentration={handleToggleConcentration}
+                    />
                   );
                 })
               )}
@@ -849,144 +742,21 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                   const isActive = combatants[activeTurnIndex]?.id === c.id;
                   const isSpeaking = activeSpeakerNames.has(c.name.toLowerCase().trim());
                   const globalRank = combatants.findIndex(item => item.id === c.id) + 1;
-                  const isDefeated = c.isDefeated || c.hpCurrent === 0;
-                  const hpPercent = Math.max(0, Math.min(100, Math.round((c.hpCurrent / Math.max(1, c.hpMax)) * 100)));
 
                   return (
-                    <div
+                    <CombatantRowCard
                       key={c.id}
-                      className={`p-3 rounded-xl border transition space-y-2 ${
-                        isSpeaking
-                          ? 'bg-emerald-950/50 border-emerald-500 ring-2 ring-emerald-400/80 shadow-lg shadow-emerald-500/20'
-                          : isActive
-                          ? 'bg-amber-950/40 border-amber-500 ring-1 ring-amber-500/60 shadow-lg'
-                          : isDefeated
-                          ? 'bg-stone-950/50 border-stone-800/80 opacity-60'
-                          : 'bg-stone-900/90 border-stone-800 text-stone-300 hover:border-rose-700/50'
-                      }`}
-                    >
-                      {/* Top Row: Avatar, Info, Badges */}
-                      <div className="flex items-center justify-between gap-2.5 flex-wrap">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="relative shrink-0">
-                            <img
-                              src={c.portraitUrl || getMonsterPortraitUrl(c.name)}
-                              alt={c.name}
-                              className={`w-10 h-10 rounded-xl object-cover border shadow shrink-0 ${
-                                isSpeaking
-                                  ? 'border-emerald-400 ring-2 ring-emerald-400/60 animate-pulse'
-                                  : isActive
-                                  ? 'border-amber-400 ring-1 ring-amber-400/50'
-                                  : isDefeated
-                                  ? 'border-stone-800 grayscale'
-                                  : 'border-rose-700/50'
-                              }`}
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                const img = e.target as HTMLImageElement;
-                                img.onerror = null;
-                                img.src = generateMonsterSvgPortrait(c?.name);
-                              }}
-                            />
-                            <div className="absolute -bottom-1 -right-1 px-1 min-w-[18px] h-4 rounded bg-rose-600 text-stone-950 font-mono font-bold text-[9px] border border-rose-300 shadow flex items-center justify-center" title={`Initiative Roll: ${c.initiative}`}>
-                              {isNaN(c.initiative) ? 0 : c.initiative}
-                            </div>
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="font-serif font-bold text-stone-100 text-xs flex items-center gap-1.5 flex-wrap">
-                              <span className="truncate max-w-[150px]">{c.name}</span>
-                              <span className="text-[10px] text-stone-400 font-mono" title="Global Turn Order">
-                                #{globalRank}
-                              </span>
-                              {isActive && (
-                                <span className="text-[9px] bg-amber-500 text-stone-950 font-bold px-1.5 py-0.2 rounded font-mono animate-pulse">
-                                  ACTIVE TURN
-                                </span>
-                              )}
-                              {isSpeaking && (
-                                <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/50 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1 animate-pulse">
-                                  <Mic className="w-2.5 h-2.5 text-emerald-400" /> SPEAKING
-                                </span>
-                              )}
-                              {isDefeated && (
-                                <span className="text-[9px] bg-rose-950 text-rose-300 border border-rose-600/80 px-1.5 py-0.2 rounded font-mono font-bold flex items-center gap-1">
-                                  <Skull className="w-2.5 h-2.5" /> DEFEATED
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="text-[11px] text-stone-400 font-mono flex items-center gap-2 mt-0.5">
-                              <span>AC: <strong className="text-stone-200">{c.armorClass}</strong></span>
-                              <span>HP: <strong className={isDefeated ? 'text-rose-500 font-bold' : c.hpCurrent <= (c.hpMax / 4) ? 'text-rose-400' : 'text-emerald-400'}>{c.hpCurrent}</strong> / {c.hpMax}</span>
-                              {c.monsterXpReward ? (
-                                <span className="text-amber-300 text-[10px] font-bold">+{c.monsterXpReward} XP</span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions (HP controls, Allegiance switch, remove) */}
-                        <div className="flex items-center gap-1.5">
-                          <div className="flex items-center gap-0.5 bg-stone-950 border border-stone-800 p-0.5 rounded-lg">
-                            <button
-                              onClick={() => handleAdjustHp(c.id, -5)}
-                              className="px-1.5 py-0.5 bg-rose-950 hover:bg-rose-900 text-rose-200 rounded font-mono font-bold text-[11px]"
-                              title="-5 HP"
-                            >
-                              -5
-                            </button>
-                            <button
-                              onClick={() => handleAdjustHp(c.id, -1)}
-                              className="px-1.5 py-0.5 bg-rose-900/70 hover:bg-rose-800 text-rose-100 rounded font-mono font-bold text-[11px]"
-                              title="-1 HP"
-                            >
-                              -1
-                            </button>
-                            <button
-                              onClick={() => handleAdjustHp(c.id, 1)}
-                              className="px-1.5 py-0.5 bg-emerald-900/70 hover:bg-emerald-800 text-emerald-100 rounded font-mono font-bold text-[11px]"
-                              title="+1 HP"
-                            >
-                              +1
-                            </button>
-                            <button
-                              onClick={() => handleAdjustHp(c.id, 5)}
-                              className="px-1.5 py-0.5 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 rounded font-mono font-bold text-[11px]"
-                              title="+5 HP"
-                            >
-                              +5
-                            </button>
-                          </div>
-
-                          <button
-                            onClick={() => handleToggleCombatantType(c.id)}
-                            className="p-1 bg-stone-950 hover:bg-stone-800 text-stone-400 hover:text-emerald-400 border border-stone-800 rounded-lg transition"
-                            title="Switch to Team 1 (Ally)"
-                          >
-                            <ArrowRightLeft className="w-3.5 h-3.5" />
-                          </button>
-
-                          <button
-                            onClick={() => handleRemoveCombatant(c.id)}
-                            className="p-1 text-stone-500 hover:text-rose-400 transition"
-                            title="Remove from encounter"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Health Progress Bar */}
-                      <div className="w-full bg-stone-950 rounded-full h-1.5 border border-stone-800 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            isDefeated ? 'bg-rose-900' : hpPercent > 50 ? 'bg-emerald-500' : hpPercent > 25 ? 'bg-amber-500' : 'bg-rose-500'
-                          }`}
-                          style={{ width: `${hpPercent}%` }}
-                        />
-                      </div>
-                    </div>
+                      combatant={c}
+                      isActive={isActive}
+                      isSpeaking={isSpeaking}
+                      globalRank={globalRank}
+                      onAdjustHp={handleAdjustHp}
+                      onToggleType={handleToggleCombatantType}
+                      onRemove={handleRemoveCombatant}
+                      onApplyCondition={handleApplyCondition}
+                      onRemoveCondition={handleRemoveCondition}
+                      onToggleConcentration={handleToggleConcentration}
+                    />
                   );
                 })
               )}

@@ -5,6 +5,7 @@ import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { systemRegistry } from '../../systems';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { HomebrewForgeModal } from '../compendium/HomebrewForgeModal';
 import {
   CompendiumItem,
   CompendiumCategory,
@@ -35,7 +36,9 @@ import {
   ChevronRight,
   Eye,
   Crown,
-  Tag
+  Tag,
+  Download,
+  Upload
 } from 'lucide-react';
 
 interface Sheet7CompendiumProps {
@@ -278,10 +281,6 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-400 rounded-full text-xs font-bold font-mono">
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>DYNAMIC COMPENDIUM & SRD VAULT</span>
-            </div>
             <h2 className="text-2xl sm:text-3xl font-serif font-black text-stone-100 flex items-center gap-3">
               <span>Monsters, Spells, Items & Rules Compendium</span>
             </h2>
@@ -290,13 +289,15 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={() => setShowCustomModal(true)}
-            className="px-5 py-3 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 shrink-0 text-sm"
-          >
-            <Plus className="w-5 h-5" />
-            <span>+ Add Custom Entry</span>
-          </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => setShowCustomModal(true)}
+              className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 shrink-0 text-sm cursor-pointer"
+            >
+              <Sparkles className="w-5 h-5 text-stone-950 animate-pulse" />
+              <span>✨ Homebrew & Rules Forge Studio</span>
+            </button>
+          </div>
         </div>
 
         {/* SEARCH AND SYSTEM FILTER BAR */}
@@ -872,341 +873,22 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         </div>
       )}
 
-      {/* CREATE NEW CUSTOM ENTRY MODAL */}
+      {/* HOMEBREW & RULES FORGE STUDIO MODAL */}
       {showCustomModal && (
-        <CreateCustomEntryModal
+        <HomebrewForgeModal
+          initialSystem={selectedSystem !== 'all' ? (selectedSystem as any) : '5e'}
           onClose={() => setShowCustomModal(false)}
-          onSave={(newItem) => {
-            const updated = saveCustomCompendiumEntry(newItem);
-            setCustomEntries(updated);
-            setShowCustomModal(false);
-            showToast(`✨ Created custom compendium entry "${newItem.name}"!`);
+          onSaved={(newItem) => {
+            setCustomEntries(loadCustomCompendiumEntries());
+            showToast(`✨ Created custom homebrew entry "${newItem.name}"!`);
+          }}
+          allCustomItems={customEntries}
+          onImportCustomItems={(imported) => {
+            setCustomEntries(imported);
+            showToast('✨ Compendium entries refreshed!');
           }}
         />
       )}
-    </div>
-  );
-};
-
-// Modal for creating custom compendium entry
-interface CreateCustomEntryModalProps {
-  onClose: () => void;
-  onSave: (newItem: CompendiumItem) => void;
-}
-
-const CreateCustomEntryModal: React.FC<CreateCustomEntryModalProps> = ({ onClose, onSave }) => {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<CompendiumCategory>('items');
-  const [edition, setEdition] = useState<'5e' | '3.5e' | 'pathfinder' | 'shadowrun' | 'cthulhu'>('5e');
-  const [source, setSource] = useState('Custom DM Homebrew');
-  const [description, setDescription] = useState('');
-
-  // Item fields
-  const [itemType, setItemType] = useState<'weapon' | 'armor' | 'shield' | 'potion' | 'ring' | 'scroll' | 'wand' | 'gear'>('weapon');
-  const [itemDamage, setItemDamage] = useState('1d8');
-  const [itemDamageType, setItemDamageType] = useState('Slashing');
-  const [itemCost, setItemCost] = useState('10 gp');
-  const [itemWeight, setItemWeight] = useState(2);
-  const [itemAc, setItemAc] = useState(0);
-
-  // Spell fields
-  const [spellLevel, setSpellLevel] = useState(1);
-  const [spellSchool, setSpellSchool] = useState('Evocation');
-  const [spellRange, setSpellRange] = useState('60 ft');
-
-  // Monster fields
-  const [monsterHp, setMonsterHp] = useState(15);
-  const [monsterAc, setMonsterAc] = useState(12);
-  const [monsterCr, setMonsterCr] = useState('1');
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    const newItem: CompendiumItem = {
-      id: 'custom-comp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      name: name.trim(),
-      category,
-      edition,
-      source: source.trim() || 'Custom Homebrew',
-      description: description.trim() || 'No description provided.',
-      isCustom: true,
-      tags: [category, edition, 'Homebrew'],
-      ...(category === 'items' && {
-        itemData: {
-          type: itemType,
-          cost: itemCost,
-          weight: itemWeight,
-          damage: itemType === 'weapon' ? itemDamage : undefined,
-          damageType: itemType === 'weapon' ? itemDamageType : undefined,
-          armorClass: itemType === 'armor' || itemType === 'shield' ? itemAc : undefined
-        }
-      }),
-      ...(category === 'spells' && {
-        spellData: {
-          name: name.trim(),
-          level: spellLevel,
-          school: spellSchool,
-          range: spellRange,
-          castingTime: '1 action',
-          components: 'V, S',
-          duration: 'Instantaneous',
-          description
-        }
-      }),
-      ...(category === 'monsters' && {
-        monsterData: {
-          name: name.trim(),
-          hpMax: monsterHp,
-          hpCurrent: monsterHp,
-          armorClass: monsterAc,
-          challengeRating: monsterCr,
-          race: 'Custom Monster',
-          characterClass: 'Monster'
-        }
-      })
-    };
-
-    onSave(newItem);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-stone-950 border border-stone-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-5 text-stone-400 hover:text-stone-100 p-1.5 rounded-full hover:bg-stone-900 transition"
-        >
-          <X className="w-5 h-5" />
-        </button>
-
-        <div className="space-y-1">
-          <div className="text-amber-400 font-mono text-xs font-bold uppercase">Homebrew Creator</div>
-          <h3 className="text-xl font-serif font-bold text-stone-100">Add Entry to Compendium</h3>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-xs font-mono text-stone-400 mb-1">Entry Name *</label>
-            <input
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Flameburst Greatsword, Ancient Dragon, Arcane Shield"
-              className="w-full px-3.5 py-2 bg-stone-900 border border-stone-800 rounded-xl text-stone-200 text-sm focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-mono text-stone-400 mb-1">Category</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value as CompendiumCategory)}
-                className="w-full px-3 py-2 bg-stone-900 border border-stone-800 rounded-xl text-stone-200 text-xs font-mono focus:outline-none focus:border-amber-500"
-              >
-                <option value="items">⚔️ Item / Gear / Weapon</option>
-                <option value="spells">🪄 Spell / Magic</option>
-                <option value="monsters">👹 Monster / NPC</option>
-                <option value="feats">📜 Feat</option>
-                <option value="features">✨ Class Feature</option>
-                <option value="classes">🛡️ Class</option>
-                <option value="skills">🎲 Skill</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-mono text-stone-400 mb-1">System Edition</label>
-              <select
-                value={edition}
-                onChange={(e) => setEdition(e.target.value as any)}
-                className="w-full px-3 py-2 bg-stone-900 border border-stone-800 rounded-xl text-stone-200 text-xs font-mono focus:outline-none focus:border-amber-500"
-              >
-                <option value="5e">D&D 5e</option>
-                <option value="3.5e">D&D 3.5e</option>
-                <option value="pathfinder">Pathfinder 2e</option>
-                <option value="shadowrun">Shadowrun 5e</option>
-                <option value="cthulhu">Call of Cthulhu 7e</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Dynamic Item Inputs */}
-          {category === 'items' && (
-            <div className="p-3 bg-stone-900/60 border border-stone-800 rounded-2xl space-y-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-400">Item Type</label>
-                  <select
-                    value={itemType}
-                    onChange={(e) => setItemType(e.target.value as any)}
-                    className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                  >
-                    <option value="weapon">Weapon</option>
-                    <option value="armor">Armor</option>
-                    <option value="shield">Shield</option>
-                    <option value="potion">Potion</option>
-                    <option value="ring">Ring / Accessory</option>
-                    <option value="gear">Adventuring Gear</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-400">Cost / Value</label>
-                  <input
-                    type="text"
-                    value={itemCost}
-                    onChange={(e) => setItemCost(e.target.value)}
-                    className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                  />
-                </div>
-              </div>
-
-              {itemType === 'weapon' && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[10px] font-mono text-stone-400">Damage Die</label>
-                    <input
-                      type="text"
-                      value={itemDamage}
-                      onChange={(e) => setItemDamage(e.target.value)}
-                      placeholder="e.g. 1d8+1 or 2d6"
-                      className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-mono text-stone-400">Damage Type</label>
-                    <input
-                      type="text"
-                      value={itemDamageType}
-                      onChange={(e) => setItemDamageType(e.target.value)}
-                      className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {(itemType === 'armor' || itemType === 'shield') && (
-                <div>
-                  <label className="block text-[10px] font-mono text-stone-400">Armor Class Bonus</label>
-                  <input
-                    type="number"
-                    value={itemAc}
-                    onChange={(e) => setItemAc(Number(e.target.value))}
-                    className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Dynamic Spell Inputs */}
-          {category === 'spells' && (
-            <div className="p-3 bg-stone-900/60 border border-stone-800 rounded-2xl grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-[10px] font-mono text-stone-400">Spell Level</label>
-                <input
-                  type="number"
-                  min={0}
-                  max={9}
-                  value={spellLevel}
-                  onChange={(e) => setSpellLevel(Number(e.target.value))}
-                  className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-mono text-stone-400">School</label>
-                <input
-                  type="text"
-                  value={spellSchool}
-                  onChange={(e) => setSpellSchool(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-mono text-stone-400">Range</label>
-                <input
-                  type="text"
-                  value={spellRange}
-                  onChange={(e) => setSpellRange(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Dynamic Monster Inputs */}
-          {category === 'monsters' && (
-            <div className="p-3 bg-stone-900/60 border border-stone-800 rounded-2xl grid grid-cols-3 gap-2">
-              <div>
-                <label className="block text-[10px] font-mono text-stone-400">Hit Points</label>
-                <input
-                  type="number"
-                  value={monsterHp}
-                  onChange={(e) => setMonsterHp(Number(e.target.value))}
-                  className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-mono text-stone-400">Armor Class</label>
-                <input
-                  type="number"
-                  value={monsterAc}
-                  onChange={(e) => setMonsterAc(Number(e.target.value))}
-                  className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-mono text-stone-400">Challenge Rating</label>
-                <input
-                  type="text"
-                  value={monsterCr}
-                  onChange={(e) => setMonsterCr(e.target.value)}
-                  className="w-full px-2 py-1.5 bg-stone-950 border border-stone-800 rounded-lg text-stone-200 text-xs"
-                />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="block text-xs font-mono text-stone-400 mb-1">Source Label</label>
-            <input
-              type="text"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-              placeholder="e.g. DM Homebrew, campaign chapter 3"
-              className="w-full px-3.5 py-2 bg-stone-900 border border-stone-800 rounded-xl text-stone-200 text-xs focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-mono text-stone-400 mb-1">Description & Rules</label>
-            <textarea
-              rows={4}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detailed description, stats, properties, rules, and effects..."
-              className="w-full px-3.5 py-2 bg-stone-900 border border-stone-800 rounded-xl text-stone-200 text-xs focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          <div className="pt-2 flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-stone-300 rounded-xl text-xs font-bold transition"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl text-xs transition shadow-lg shadow-amber-950/40"
-            >
-              Save to Compendium
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 };

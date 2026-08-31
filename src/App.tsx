@@ -53,6 +53,7 @@ import { GlobalUpgradeModal } from './components/modals/GlobalUpgradeModal';
 import { GlobalDiceOverlay } from './components/dice/GlobalDiceOverlay';
 import { ThemeProvider } from './context/ThemeContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
+import { TableModeHud } from './components/tableMode/TableModeHud';
 
 // Modular Hooks
 import {
@@ -116,11 +117,23 @@ export default function App() {
   });
 
   const { matchesHotkey } = useHotkeys();
-  const { toggleUiMode, startTour } = useUiMode();
+  const { toggleUiMode, startTour, isTableMode, toggleTableMode, setIsTableMode } = useUiMode();
   const { announceLiveMessage } = useAccessibility();
 
   // 1. Authentication Manager
   const { currentUser, setCurrentUser } = useAuthManager();
+
+  // Session Code State
+  const [activeSessionCode, setActiveSessionCode] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const sessionFromUrl = urlParams.get('session');
+      if (sessionFromUrl) return sessionFromUrl.toUpperCase();
+      return localStorage.getItem('dnd_app_session_code_v1') || null;
+    } catch {
+      return null;
+    }
+  });
 
   // 2. Character & Party State Manager
   const {
@@ -146,6 +159,7 @@ export default function App() {
     handleImportJson
   } = useCharacterManager({
     currentUser,
+    activeSessionCode,
     initialCharIdFromDetached: detachedParams.initialCharId,
     onNavigateToTab: (tab) => setActiveTab(tab)
   });
@@ -167,8 +181,6 @@ export default function App() {
 
   // 4. Session & Multiplayer Sync Manager
   const {
-    activeSessionCode,
-    setActiveSessionCode,
     activeSession,
     showSessionModal,
     setShowSessionModal,
@@ -176,6 +188,8 @@ export default function App() {
     handleLoadCampaignSave
   } = useSessionSync({
     currentUser,
+    activeSessionCode,
+    setActiveSessionCode,
     setCharacters,
     onSelectCharacter: handleSelectCharacter,
     onSetPreviewTheme: setPreviewTheme
@@ -522,6 +536,14 @@ export default function App() {
         return;
       }
 
+      // Table / Focused Play Mode shortcut (Alt+T)
+      if (e.altKey && e.key.toLowerCase() === 't') {
+        e.preventDefault();
+        toggleTableMode();
+        announceLiveMessage('Toggled Tabletop Play Mode HUD', 'polite');
+        return;
+      }
+
       if (matchesHotkey(e, 'openTour')) {
         e.preventDefault();
         startTour();
@@ -737,10 +759,29 @@ export default function App() {
         activeTab={activeTab}
       />
 
-      {/* Main App Workspace Layout Container with Left Sidebar Dock */}
-      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-4 flex flex-col lg:flex-row gap-5 items-start">
-        {/* Left Vertical Dock Sidebar */}
-        <SidebarDock
+      {/* Main App Workspace Layout Container */}
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-4">
+        {isTableMode && activeCharacter && activeTab !== 'menu' ? (
+          <TableModeHud
+            character={activeCharacter}
+            edition={currentSystemTheme}
+            onUpdateCharacter={handleUpdateCharacter}
+            onRoll={handleRoll}
+            onRollDamage={handleRollDamage}
+            onRollInitiative={handleRollInitiative}
+            onExitTableMode={() => setIsTableMode(false)}
+            onOpenCombatTracker={() => {
+              setIsTableMode(false);
+              setActiveTab('sheet2');
+            }}
+            onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
+            onOpenCampaignAtlas={() => handleOpenCampaignLoreVault('atlas')}
+            onOpenAudioSettings={() => setShowAudioModal(true)}
+          />
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-5 items-start">
+            {/* Left Vertical Dock Sidebar */}
+            <SidebarDock
           activeTab={activeTab}
           onTabChange={setActiveTab}
           edition={currentSystemTheme}
@@ -928,8 +969,10 @@ export default function App() {
                 />
               </div>
             )}
-          </main>
-        </div>
+              </main>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Floating Interactive Dice Roller */}

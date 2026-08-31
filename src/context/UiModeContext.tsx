@@ -9,10 +9,14 @@ interface UiModeContextType {
   setUiMode: (mode: UiMode) => void;
   toggleUiMode: () => void;
   isFocusMode: boolean;
+  // Table / Focused Play Mode
+  isTableMode: boolean;
+  setIsTableMode: (mode: boolean) => void;
+  toggleTableMode: () => void;
   isTourOpen: boolean;
   setIsTourOpen: (open: boolean) => void;
   startTour: () => void;
-  // Phase A: Progressive Disclosure & Workspace Personalization
+  // Progressive Disclosure & Workspace Personalization
   workspaceRole: WorkspaceRole;
   setWorkspaceRole: (role: WorkspaceRole) => void;
   complexityLevel: ComplexityLevel;
@@ -47,11 +51,29 @@ export const UiModeProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     return saved !== 'true';
   });
 
+  const [isTableMode, setIsTableModeState] = useState<boolean>(() => {
+    const saved = localStorage.getItem('nexus_table_mode_v1');
+    return saved === 'true';
+  });
+
   const [isTourOpen, setIsTourOpen] = useState<boolean>(false);
 
   const setUiMode = (mode: UiMode) => {
     setUiModeState(mode);
     localStorage.setItem('dnd_ui_mode_pref', mode);
+  };
+
+  const setIsTableMode = (mode: boolean) => {
+    setIsTableModeState(mode);
+    localStorage.setItem('nexus_table_mode_v1', mode ? 'true' : 'false');
+  };
+
+  const toggleTableMode = () => {
+    setIsTableModeState(prev => {
+      const next = !prev;
+      localStorage.setItem('nexus_table_mode_v1', next ? 'true' : 'false');
+      return next;
+    });
   };
 
   const setWorkspaceRole = (role: WorkspaceRole) => {
@@ -85,6 +107,9 @@ export const UiModeProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         setUiMode,
         toggleUiMode,
         isFocusMode: uiMode === 'focus',
+        isTableMode,
+        setIsTableMode,
+        toggleTableMode,
         isTourOpen,
         setIsTourOpen,
         startTour,
@@ -107,6 +132,9 @@ const defaultUiModeContext: UiModeContextType = {
   setUiMode: () => {},
   toggleUiMode: () => {},
   isFocusMode: true,
+  isTableMode: false,
+  setIsTableMode: () => {},
+  toggleTableMode: () => {},
   isTourOpen: false,
   setIsTourOpen: () => {},
   startTour: () => {},

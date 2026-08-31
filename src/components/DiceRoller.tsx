@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { DiceRollResult } from '../types';
-import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX, Palette, Lock } from 'lucide-react';
+import { DiceRollResult, DiePoolItem } from '../types';
+import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX, Palette, Lock, Plus, Minus, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playDiceSound, isDiceSoundEnabled, setDiceSoundEnabled } from '../utils/diceAudio';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -10,7 +10,13 @@ import { PolyhedralDie } from './dice/PolyhedralDie';
 
 interface DiceRollerProps {
   rollLogs: DiceRollResult[];
-  onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
+  onRoll: (
+    label: string,
+    diceTypeOrPool: number | DiePoolItem[],
+    diceCount?: number,
+    modifier?: number,
+    mode?: 'normal' | 'advantage' | 'disadvantage'
+  ) => void;
   onClearLogs: () => void;
   activeRollResult?: DiceRollResult | null;
   onOpenAudioModal?: () => void;
@@ -32,8 +38,18 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   const { t } = useLanguage();
   const { isHero, isGuild, isDeveloper, openUpgradeModal } = useSubscription();
   const [isOpen, setIsOpen] = useState(false);
-  const [selectedDie, setSelectedDie] = useState<number>(20);
-  const [diceCount, setDiceCount] = useState<number>(1);
+
+  // Multi-Dice Pool State: tracks quantity for each die type
+  const [dicePool, setDicePool] = useState<{ [die: number]: number }>({
+    4: 0,
+    6: 0,
+    8: 0,
+    10: 0,
+    12: 0,
+    20: 1,
+    100: 0
+  });
+
   const [customModifier, setCustomModifier] = useState<number>(0);
   const [rollMode, setRollMode] = useState<'normal' | 'advantage' | 'disadvantage'>('normal');
   const [customLabel, setCustomLabel] = useState<string>(t('dice.customRoll', 'Custom Roll'));
@@ -50,6 +66,62 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   const [showSkinPicker, setShowSkinPicker] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'crystalline' | 'resin' | 'gothic' | 'classic' | 'elemental'>('all');
 
+  const diceTypes = [4, 6, 8, 10, 12, 20, 100];
+
+  // Active pool items (only die types with count > 0)
+  const poolItems: DiePoolItem[] = diceTypes
+    .filter(d => (dicePool[d] || 0) > 0)
+    .map(d => ({ die: d, count: dicePool[d] }));
+
+  const hasD20 = (dicePool[20] || 0) > 0;
+  const totalDiceInPool = poolItems.reduce((sum, item) => sum + item.count, 0);
+
+  // Formatted pool expression: e.g. "2d20 + 1d6 + 3"
+  const poolFormula = poolItems.length > 0
+    ? poolItems.map(p => `${p.count}d${p.die}`).join(' + ')
+    : '1d20';
+
+  const fullFormulaWithMod = `${poolFormula}${customModifier !== 0 ? (customModifier > 0 ? ` + ${customModifier}` : ` - ${Math.abs(customModifier)}`) : ''}`;
+
+  const handleAddDie = (die: number, amount: number = 1) => {
+    setDicePool(prev => ({
+      ...prev,
+      [die]: Math.min(50, (prev[die] || 0) + amount)
+    }));
+  };
+
+  const handleRemoveDie = (die: number, amount: number = 1) => {
+    setDicePool(prev => ({
+      ...prev,
+      [die]: Math.max(0, (prev[die] || 0) - amount)
+    }));
+  };
+
+  const handleClearPool = () => {
+    setDicePool({
+      4: 0,
+      6: 0,
+      8: 0,
+      10: 0,
+      12: 0,
+      20: 0,
+      100: 0
+    });
+  };
+
+  const handleQuickSingleDie = (die: number) => {
+    setDicePool({
+      4: 0,
+      6: 0,
+      8: 0,
+      10: 0,
+      12: 0,
+      20: 0,
+      100: 0,
+      [die]: 1
+    });
+  };
+
   // Sync external roll results
   React.useEffect(() => {
     if (activeRollResult && activeRollResult.diceRolls && activeRollResult.diceRolls.length > 0) {
@@ -57,8 +129,6 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
       setIsRollingAnimation(true);
     }
   }, [activeRollResult]);
-
-  const diceTypes = [4, 6, 8, 10, 12, 20, 100];
 
   const handleSelectSkin = (skin: DiceSkin) => {
     // Lead developers bypass all locks
@@ -98,19 +168,23 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
     if (next) playDiceSound();
   };
 
-  const handleQuickRoll = (d: number) => {
+  const handleExecutePoolRoll = () => {
     playDiceSound();
-    
+
+    const activePool = poolItems.length > 0 ? poolItems : [{ die: 20, count: 1 }];
+
     // Generate animated visual dice simulation
     const simulatedRolls: number[] = [];
-    const countToRoll = d === 20 && rollMode !== 'normal' ? 2 : diceCount;
-    for (let i = 0; i < countToRoll; i++) {
-      simulatedRolls.push(Math.floor(Math.random() * d) + 1);
-    }
+    activePool.forEach(item => {
+      for (let i = 0; i < item.count; i++) {
+        simulatedRolls.push(Math.floor(Math.random() * item.die) + 1);
+      }
+    });
     setCurrentAnimatedRolls(simulatedRolls);
     setIsRollingAnimation(true);
 
-    onRoll(customLabel || `d${d} ${t('dice.roll', 'Roll')}`, d, diceCount, customModifier, d === 20 ? rollMode : 'normal');
+    const rollLabel = customLabel || `${poolFormula} ${t('dice.roll', 'Roll')}`;
+    onRoll(rollLabel, activePool, 1, customModifier, hasD20 ? rollMode : 'normal');
   };
 
   return (
@@ -126,7 +200,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
           >
             <div className="flex justify-between items-center text-xs font-semibold uppercase tracking-wider text-amber-400/90 mb-1">
               <span>{activeRollResult.label}</span>
-              <span className="text-[10px] bg-amber-900/60 px-2 py-0.5 rounded text-amber-300">
+              <span className="text-[10px] bg-amber-900/60 px-2 py-0.5 rounded text-amber-300 font-mono">
                 {activeRollResult.mode !== 'normal' ? activeRollResult.mode : activeRollResult.expression}
               </span>
             </div>
@@ -145,8 +219,8 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 )}
               </div>
               <div className="text-xs text-amber-300/80 text-right">
-                <div>Dice: [{activeRollResult.diceRolls.join(', ')}]</div>
-                <div>Mod: {activeRollResult.modifier >= 0 ? `+${activeRollResult.modifier}` : activeRollResult.modifier}</div>
+                <div className="font-mono">Dice: [{activeRollResult.diceRolls.join(', ')}]</div>
+                <div className="font-mono">Mod: {activeRollResult.modifier >= 0 ? `+${activeRollResult.modifier}` : activeRollResult.modifier}</div>
               </div>
             </div>
           </motion.div>
@@ -328,25 +402,95 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
               </div>
             )}
 
-            {/* Dice Selector Buttons */}
-            <div className="grid grid-cols-7 gap-1">
-              {diceTypes.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setSelectedDie(d)}
-                  className={`py-1.5 px-1 text-xs font-bold rounded-lg border transition-all ${
-                    selectedDie === d
-                      ? 'bg-amber-600 text-white border-amber-400 shadow'
-                      : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
-                  }`}
-                >
-                  d{d}
-                </button>
-              ))}
+            {/* Section 1: Quick Add / Increment Dice Selector Buttons */}
+            <div>
+              <div className="flex items-center justify-between text-[11px] text-stone-400 font-semibold mb-1">
+                <span>Add Dice to Pool (e.g. 2× d20 + 1× d6)</span>
+                {totalDiceInPool > 0 && (
+                  <button
+                    onClick={handleClearPool}
+                    className="text-amber-400/80 hover:text-amber-300 text-[10px] flex items-center gap-0.5"
+                    title="Clear All Dice from Pool"
+                  >
+                    <RotateCcw className="w-2.5 h-2.5" /> Clear Pool
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-7 gap-1">
+                {diceTypes.map((d) => {
+                  const count = dicePool[d] || 0;
+                  return (
+                    <button
+                      key={d}
+                      onClick={() => handleAddDie(d, 1)}
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        handleRemoveDie(d, 1);
+                      }}
+                      className={`relative py-1.5 px-0.5 text-xs font-bold rounded-lg border transition-all flex flex-col items-center justify-center cursor-pointer ${
+                        count > 0
+                          ? 'bg-amber-600/90 text-white border-amber-400 shadow-md ring-1 ring-amber-400/50'
+                          : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border-stone-700'
+                      }`}
+                      title={`Click to add 1d${d}, right click to remove`}
+                    >
+                      <span>d{d}</span>
+                      {count > 0 && (
+                        <span className="text-[9px] font-mono font-black bg-amber-950/90 text-amber-300 px-1 rounded-full border border-amber-400/60 leading-tight">
+                          ×{count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Roll Mode Toggle for d20 */}
-            {selectedDie === 20 && (
+            {/* Section 2: Active Dice Pool Chips & Steppers */}
+            <div className="bg-stone-950/70 border border-stone-800 rounded-xl p-2 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] font-mono text-stone-400">
+                <span>Active Pool: <strong className="text-amber-300 font-sans">{fullFormulaWithMod}</strong></span>
+                <span className="text-stone-500">({totalDiceInPool} {totalDiceInPool === 1 ? 'die' : 'dice'})</span>
+              </div>
+
+              {poolItems.length === 0 ? (
+                <div className="text-[11px] text-stone-500 italic text-center py-1">
+                  Click the dice buttons above to build your roll pool (e.g. 2d20 + 1d6)
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  {poolItems.map((item) => (
+                    <div
+                      key={item.die}
+                      className="flex items-center gap-1 bg-stone-800/90 border border-amber-500/40 rounded-lg px-2 py-0.5 text-xs text-amber-200"
+                    >
+                      <span className="font-mono font-bold">{item.count}d{item.die}</span>
+                      <div className="flex items-center gap-0.5 ml-1 border-l border-stone-700 pl-1">
+                        <button
+                          type="button"
+                          onClick={() => handleAddDie(item.die, 1)}
+                          className="p-0.5 hover:bg-stone-700 rounded text-stone-300 hover:text-white"
+                          title="Add 1"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveDie(item.die, 1)}
+                          className="p-0.5 hover:bg-stone-700 rounded text-stone-300 hover:text-rose-400"
+                          title="Remove 1"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Section 3: Roll Mode Toggle (if D20 is included in pool) */}
+            {hasD20 && (
               <div className="flex bg-stone-800/80 p-1 rounded-lg border border-stone-700 text-xs font-medium">
                 <button
                   onClick={() => setRollMode('advantage')}
@@ -375,27 +519,32 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
               </div>
             )}
 
-            {/* Inputs: Count, Modifier & Label */}
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <div>
-                <label className="block text-stone-400 mb-1">{t('dice.numberOfDice', 'Number of Dice')}</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="100"
-                  value={diceCount}
-                  onChange={(e) => setDiceCount(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-center text-stone-100 font-mono"
-                />
-              </div>
+            {/* Section 4: Modifier & Label */}
+            <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <label className="block text-stone-400 mb-1">{t('dice.modifier', 'Modifier (+/-)')}</label>
-                <input
-                  type="number"
-                  value={customModifier}
-                  onChange={(e) => setCustomModifier(parseInt(e.target.value) || 0)}
-                  className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-center text-stone-100 font-mono"
-                />
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    value={customModifier}
+                    onChange={(e) => setCustomModifier(parseInt(e.target.value) || 0)}
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-center text-stone-100 font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setCustomModifier(prev => prev + 1)}
+                    className="px-1.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded border border-stone-700 text-xs font-mono"
+                  >
+                    +1
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCustomModifier(prev => prev - 1)}
+                    className="px-1.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded border border-stone-700 text-xs font-mono"
+                  >
+                    -1
+                  </button>
+                </div>
               </div>
               <div>
                 <label className="block text-stone-400 mb-1">{t('dice.rollTag', 'Roll Tag')}</label>
@@ -403,22 +552,22 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                   type="text"
                   value={customLabel}
                   onChange={(e) => setCustomLabel(e.target.value)}
-                  placeholder="e.g. Check"
+                  placeholder="e.g. Attack + Sneak"
                   className="w-full bg-stone-800 border border-stone-700 rounded-lg px-2 py-1.5 text-stone-100 text-xs"
                 />
               </div>
             </div>
 
-            {/* Roll Trigger Button */}
+            {/* Section 5: Roll Trigger Button */}
             <button
-              onClick={() => handleQuickRoll(selectedDie)}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg border border-amber-400/30 flex items-center justify-center gap-2 text-sm transition transform active:scale-98 cursor-pointer"
+              onClick={handleExecutePoolRoll}
+              className="w-full py-2.5 bg-gradient-to-r from-amber-600 via-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg border border-amber-400/40 flex items-center justify-center gap-2 text-sm transition transform active:scale-98 cursor-pointer"
             >
-              <Sparkles className="w-4 h-4" />
-              <span>{t('dice.roll', 'Roll')} {diceCount}d{selectedDie} {customModifier >= 0 ? `+${customModifier}` : customModifier}</span>
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>{t('dice.roll', 'Roll')} {fullFormulaWithMod}</span>
             </button>
 
-            {/* Roll Logs History */}
+            {/* Section 6: Roll Logs History */}
             <div className="border-t border-stone-800 pt-2 max-h-40 overflow-y-auto space-y-1.5 pr-1">
               <div className="flex items-center justify-between text-xs text-stone-400 mb-1">
                 <span className="flex items-center gap-1 font-semibold text-stone-300">
@@ -427,7 +576,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 {rollLogs.length > 0 && (
                   <button
                     onClick={onClearLogs}
-                    className="text-stone-500 hover:text-rose-400 transition flex items-center gap-1"
+                    className="text-stone-500 hover:text-rose-400 transition flex items-center gap-1 cursor-pointer"
                   >
                     <Trash2 className="w-3 h-3" /> {t('common.clear', 'Clear')}
                   </button>
@@ -447,7 +596,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                     <div>
                       <div className="font-medium text-amber-300/90">{log.label}</div>
                       <div className="text-[10px] text-stone-400 font-mono">
-                        {log.expression} ({log.diceRolls.join(', ')}) {log.modifier >= 0 ? `+${log.modifier}` : log.modifier}
+                        {log.expression} [{log.diceRolls.join(', ')}]
                       </div>
                     </div>
                     <div className="text-base font-bold text-amber-200 font-mono pl-2">

@@ -692,6 +692,8 @@ export interface WeightBreakdown {
   equippedWeight: number;
   carriedWeight: number;
   storedWeight: number;
+  extradimensionalWeight: number;
+  coinWeight: number;
   activeWeight: number;
   mode: 'equipped_only' | 'carried_only' | 'all_items';
 }
@@ -702,32 +704,63 @@ export function getWeightBreakdown(char: CharacterData): WeightBreakdown {
   let equippedWeight = 0;
   let carriedWeight = 0;
   let storedWeight = 0;
+  let extradimensionalWeight = 0;
 
-  for (const item of char.inventory) {
+  const containers = char.containers || [];
+  const extradimensionalContainerIds = new Set<string>();
+  containers.forEach(c => {
+    if (c.isExtradimensional || c.type === 'bag_of_holding' || c.type === 'handy_haversack' || c.type === 'portable_hole') {
+      extradimensionalContainerIds.add(c.id);
+    }
+  });
+
+  // Also check items in inventory that are extradimensional containers
+  for (const item of (char.inventory || [])) {
+    if (item.isContainer || item.isExtradimensional || (item.name || '').toLowerCase().includes('bag of holding') || (item.name || '').toLowerCase().includes('handy haversack') || (item.name || '').toLowerCase().includes('portable hole')) {
+      extradimensionalContainerIds.add(`item-${item.id}`);
+      if (item.containerId) extradimensionalContainerIds.add(item.containerId);
+    }
+  }
+
+  for (const item of (char.inventory || [])) {
     const itemTotalWeight = (item.weight || 0) * (item.quantity || 1);
+    
+    // Check if item is held inside an extradimensional container (Bag of Holding, etc.)
+    const isInsideExtradimensional = item.containerId && extradimensionalContainerIds.has(item.containerId);
+
     if (item.stored) {
       storedWeight += itemTotalWeight;
     } else if (item.equipped) {
       equippedWeight += itemTotalWeight;
+    } else if (isInsideExtradimensional) {
+      // Weight inside extradimensional space does NOT weigh down the bearer!
+      extradimensionalWeight += itemTotalWeight;
     } else {
       carriedWeight += itemTotalWeight;
     }
   }
 
+  // Coin Weight calculation: 50 coins = 1 lb standard D&D 5e rule
+  const coinCount = ((char.wealth?.cp || 0) + (char.wealth?.sp || 0) + (char.wealth?.ep || 0) + (char.wealth?.gp || 0) + (char.wealth?.pp || 0));
+  const isCoinWeightActive = char.optionalRules?.includeCoinWeight ?? true;
+  const coinWeight = isCoinWeightActive ? (coinCount * 0.02) : 0;
+
   let activeWeight = 0;
   if (mode === 'equipped_only') {
     activeWeight = equippedWeight;
   } else if (mode === 'carried_only') {
-    activeWeight = equippedWeight + carriedWeight;
+    activeWeight = equippedWeight + carriedWeight + coinWeight;
   } else {
-    activeWeight = equippedWeight + carriedWeight + storedWeight;
+    activeWeight = equippedWeight + carriedWeight + storedWeight + coinWeight;
   }
 
   return {
-    equippedWeight,
-    carriedWeight,
-    storedWeight,
-    activeWeight,
+    equippedWeight: Number(equippedWeight.toFixed(1)),
+    carriedWeight: Number(carriedWeight.toFixed(1)),
+    storedWeight: Number(storedWeight.toFixed(1)),
+    extradimensionalWeight: Number(extradimensionalWeight.toFixed(1)),
+    coinWeight: Number(coinWeight.toFixed(1)),
+    activeWeight: Number(activeWeight.toFixed(1)),
     mode
   };
 }

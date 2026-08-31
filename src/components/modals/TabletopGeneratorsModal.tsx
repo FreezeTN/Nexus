@@ -23,7 +23,9 @@ import {
   FolderPlus,
   Compass,
   Layers,
-  Wand2
+  Wand2,
+  Dices,
+  Zap
 } from 'lucide-react';
 import { CharacterData, GearItem, Spell, RuleEdition } from '../../types';
 import {
@@ -38,6 +40,14 @@ import {
   hydrateGeneratedCharacter,
   hydrateGeneratedMerchant
 } from '../../services/geminiService';
+import {
+  generateProceduralNpc,
+  generateProceduralEncounter,
+  generateProceduralTreasure,
+  generateProceduralSessionSummary,
+  generateProceduralRules,
+  generateProceduralDungeon
+} from '../../services/proceduralGenerators';
 import { useLanguage } from '../../i18n/LanguageContext';
 
 export type GeneratorTab = 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon';
@@ -131,10 +141,18 @@ Include a secret motive, distinct voice quirk, roleplay hooks, balanced stats, a
       const res = await generateEntity('character', prompt, ruleEdition, { activeLevel: activeCharacter?.level }, language);
       setGeneratedNpc(res.entity);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to generate NPC.');
+      console.warn('AI NPC generation failed, falling back to procedural table:', err);
+      const fallback = generateProceduralNpc(npcArchetype, npcTone, npcCustomPrompt, ruleEdition, activeCharacter?.level || 3);
+      setGeneratedNpc(fallback);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInstantNpc = () => {
+    setErrorMsg(null);
+    const result = generateProceduralNpc(npcArchetype, npcTone, npcCustomPrompt, ruleEdition, activeCharacter?.level || 3);
+    setGeneratedNpc(result);
   };
 
   const handleGenerateEncounter = async () => {
@@ -149,10 +167,18 @@ Provide tactical phases, terrain features, interactive hazards, complete statblo
       const res = await generateEntity('encounter', prompt, ruleEdition, { partySize: encounterPartySize, level: encounterPartyLevel }, language);
       setGeneratedEncounter(res.entity as GeneratedEncounter);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to generate encounter.');
+      console.warn('AI Encounter generation failed, falling back to procedural table:', err);
+      const fallback = generateProceduralEncounter(encounterPartySize, encounterPartyLevel, encounterDifficulty as any, encounterEnv, encounterCustomPrompt, ruleEdition);
+      setGeneratedEncounter(fallback);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInstantEncounter = () => {
+    setErrorMsg(null);
+    const result = generateProceduralEncounter(encounterPartySize, encounterPartyLevel, encounterDifficulty as any, encounterEnv, encounterCustomPrompt, ruleEdition);
+    setGeneratedEncounter(result);
   };
 
   const handleGenerateTreasure = async () => {
@@ -168,10 +194,18 @@ Include coin denominations (cp, sp, ep, gp, pp), appraised art/gems with GP valu
       const res = await generateEntity('treasure', prompt, ruleEdition, { tier: treasureTier }, language);
       setGeneratedTreasure(res.entity as GeneratedTreasure);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to generate treasure.');
+      console.warn('AI Treasure generation failed, falling back to procedural table:', err);
+      const fallback = generateProceduralTreasure(treasureTier, treasureType, treasureCustomPrompt, ruleEdition);
+      setGeneratedTreasure(fallback);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInstantTreasure = () => {
+    setErrorMsg(null);
+    const result = generateProceduralTreasure(treasureTier, treasureType, treasureCustomPrompt, ruleEdition);
+    setGeneratedTreasure(result);
   };
 
   const handleGenerateSessionSummary = async () => {
@@ -186,10 +220,18 @@ Focus: ${sessionFocus}`;
       const res = await generateEntity('session_summary', prompt, ruleEdition, { characterName: activeCharacter?.name }, language);
       setGeneratedSummary(res.entity as GeneratedSessionSummary);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to synthesize session summary.');
+      console.warn('AI Session Summary failed, falling back to procedural table:', err);
+      const fallback = generateProceduralSessionSummary(sessionNotesInput, sessionFocus, ruleEdition);
+      setGeneratedSummary(fallback);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInstantSessionSummary = () => {
+    setErrorMsg(null);
+    const result = generateProceduralSessionSummary(sessionNotesInput, sessionFocus, ruleEdition);
+    setGeneratedSummary(result);
   };
 
   const handleGenerateRules = async (queryToRun?: string) => {
@@ -204,10 +246,20 @@ Provide a bottom-line verdict, exact RAW (Rules As Written) citations, RAI (Rule
       const res = await generateEntity('rules_adjudication', prompt, ruleEdition, {}, language);
       setGeneratedRules(res.entity as GeneratedRulesAdjudication);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to adjudicate rules question.');
+      console.warn('AI Rules adjudication failed, falling back to rule tables:', err);
+      const fallback = generateProceduralRules(q, ruleEdition);
+      setGeneratedRules(fallback);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInstantRules = (queryToRun?: string) => {
+    const q = queryToRun || rulesQuery;
+    if (!q.trim()) return;
+    setErrorMsg(null);
+    const result = generateProceduralRules(q, ruleEdition);
+    setGeneratedRules(result);
   };
 
   const handleGenerateDungeon = async () => {
@@ -223,10 +275,18 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
       const res = await generateEntity('dungeon_hazard', prompt, ruleEdition, {}, language);
       setGeneratedDungeon(res.entity as GeneratedDungeonHazard);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to generate dungeon room.');
+      console.warn('AI Dungeon generation failed, falling back to procedural table:', err);
+      const fallback = generateProceduralDungeon(dungeonArchetype, dungeonThreatLevel, dungeonCustomPrompt, ruleEdition);
+      setGeneratedDungeon(fallback);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleInstantDungeon = () => {
+    setErrorMsg(null);
+    const result = generateProceduralDungeon(dungeonArchetype, dungeonThreatLevel, dungeonCustomPrompt, ruleEdition);
+    setGeneratedDungeon(result);
   };
 
   return (
@@ -407,7 +467,18 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleInstantNpc}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                  title="Generate instantly using local DM roll tables (zero waiting / offline)"
+                >
+                  <Dices className="w-4 h-4 text-amber-400" />
+                  <span>Instant Table Roll</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleGenerateNpc}
@@ -422,7 +493,7 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4" />
-                      <span>Forge Instant NPC</span>
+                      <span>Forge AI NPC</span>
                     </>
                   )}
                 </button>
@@ -586,7 +657,18 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleInstantEncounter}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                  title="Generate balanced combatants instantly using local tables"
+                >
+                  <Dices className="w-4 h-4 text-purple-400" />
+                  <span>Instant Table Roll</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleGenerateEncounter}
@@ -596,12 +678,12 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                   {isLoading ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Building Balanced Encounter...</span>
+                      <span>Building Encounter...</span>
                     </>
                   ) : (
                     <>
                       <Swords className="w-4 h-4" />
-                      <span>Generate Combat Encounter</span>
+                      <span>Generate AI Encounter</span>
                     </>
                   )}
                 </button>
@@ -749,7 +831,18 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleInstantTreasure}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                  title="Roll hoard loot and magic items instantly using DMG tables (zero waiting)"
+                >
+                  <Dices className="w-4 h-4 text-emerald-400" />
+                  <span>Instant Table Roll</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleGenerateTreasure}
@@ -764,7 +857,7 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                   ) : (
                     <>
                       <Coins className="w-4 h-4" />
-                      <span>Roll Treasure Hoard</span>
+                      <span>Roll AI Hoard</span>
                     </>
                   )}
                 </button>
@@ -890,7 +983,18 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                 />
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleInstantSessionSummary}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                  title="Synthesize chronicle notes instantly using structured campaign recap engine"
+                >
+                  <Dices className="w-4 h-4 text-cyan-400" />
+                  <span>Instant Chronicle</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleGenerateSessionSummary}
@@ -905,7 +1009,7 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                   ) : (
                     <>
                       <Scroll className="w-4 h-4" />
-                      <span>Synthesize Session Chronicle</span>
+                      <span>Synthesize AI Chronicle</span>
                     </>
                   )}
                 </button>
@@ -1004,6 +1108,16 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                 />
                 <button
                   type="button"
+                  onClick={() => handleInstantRules()}
+                  disabled={isLoading || !rulesQuery.trim()}
+                  className="px-4 py-3 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 flex items-center gap-1.5 cursor-pointer transition disabled:opacity-50 shrink-0"
+                  title="Instant reference adjudication from core rule tables"
+                >
+                  <Dices className="w-4 h-4 text-amber-400" />
+                  <span>Instant RAW</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleGenerateRules()}
                   disabled={isLoading || !rulesQuery.trim()}
                   className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-lg shadow-amber-950/50 flex items-center gap-2 cursor-pointer transition disabled:opacity-50 shrink-0"
@@ -1094,7 +1208,18 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleInstantDungeon}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs border border-stone-700 flex items-center gap-2 cursor-pointer transition disabled:opacity-50"
+                  title="Generate dungeon layout, hazards, and traps instantly using tactical chamber tables"
+                >
+                  <Dices className="w-4 h-4 text-rose-400" />
+                  <span>Instant Table Roll</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleGenerateDungeon}
@@ -1109,7 +1234,7 @@ Provide read-aloud sensory descriptions, lighting, tactical features (cover/elev
                   ) : (
                     <>
                       <MapPin className="w-4 h-4" />
-                      <span>Generate Dungeon Chamber</span>
+                      <span>Generate AI Chamber</span>
                     </>
                   )}
                 </button>

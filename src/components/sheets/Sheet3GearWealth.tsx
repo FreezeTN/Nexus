@@ -72,6 +72,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
       {showEncumbrance && (
         <EncumbranceCapacityPanel
           character={character}
+          onUpdateCharacter={onUpdateCharacter}
         />
       )}
 

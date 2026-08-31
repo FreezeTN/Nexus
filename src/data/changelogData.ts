@@ -14,6 +14,68 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v5.11.0',
+    date: 'August 2026',
+    title: 'Multi-Dice Pool Engine, Homebrew AI Forge & Campaign Lobby Presence Isolation',
+    badge: 'AI Forge, Dice Engine & Multiplayer Sync',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    highlights: [
+      {
+        category: '🧙 AI Homebrew Entity Forge & 1-Click Importer',
+        detail: 'Generate complete, balanced homebrew entities powered by Gemini and rule-aware prompt engineering. Supports custom creation of Monsters & Bosses (with CR scaling and legendary actions), Player Characters, Merchants & Shops (with dynamic inventories), Magic Items & Artifacts, Spells, Quests, Encounters, and Campaign Graph Nodes with 1-click import into character sheets and the Campaign Lore Hub.'
+      },
+      {
+        category: '📜 PDF Compendium Parser & Extraction Engine',
+        detail: 'Attach custom TRPG rulebooks, third-party supplements, or monster manual PDFs directly in the AI Assistant. Extracts raw text, headings, and statblocks, allowing the AI to synthesize custom homebrew statblocks directly from attached compendium chapters.'
+      },
+      {
+        category: '🔮 In-Flow Tabletop AI Generators & Procedural Fallbacks',
+        detail: 'Instant generation modal for NPCs (with motives and quirks), balanced Encounters (with environmental hazards and XP rewards), Treasure Hoards, Session Summaries with plot hooks, and Rules Arbiter adjudications with 100% offline procedural generators as fallback.'
+      },
+      {
+        category: '🎲 Mixed Multi-Dice Pool Builder & Expression Evaluator',
+        detail: 'Extended the interactive Dice Tray to support rolling custom combinations of different polyhedral dice (e.g., 2× D20 + 1× D6 + modifier) in a single action, complete with quick-increment steppers, live pool chips, and automatic multi-term formula parsing.'
+      },
+      {
+        category: '✨ 3D Polyhedral Visuals for Mixed Dice Pools',
+        detail: 'Center-screen 3D dice overlays now simultaneously render each distinct die in its authentic polyhedral geometry (icosahedral D20s, cubes, octahedrons, etc.) with animated roll physics and individual result breakdowns.'
+      },
+      {
+        category: '👑 Campaign Lobby-Scoped Character Presence & Locks',
+        detail: 'Character presence indicators ([👑 DM Active] and [🔒 Active: PlayerName]) are now strictly partitioned by active Game Lobby room code, preventing cross-user presence collision and keeping solo/offline sheet management private.'
+      },
+      {
+        category: '🔒 Cloud Document Partitioning & Rules Security',
+        detail: 'Updated Firestore presence document schemas, Firestore security rules, and tab-to-tab BroadcastChannels with session-specific keys to ensure strict real-time isolation across concurrent adventuring parties.'
+      }
+    ]
+  },
+  {
+    version: 'v5.10.0',
+    date: 'August 2026',
+    title: 'Distraction-Free "Table Mode" HUD (Focused Play View)',
+    badge: 'Tabletop UX & Live Play HUD',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🎲 Distraction-Free Table Mode HUD (Alt+T)',
+        detail: 'Introduced an ultra-focused, high-contrast Play Mode that hides all administrative menus, sidebars, and tab chrome, surfacing only what matters in the middle of a live turn: vitality, equipped weapons, spell slots, active buffs, and immediate rolls.'
+      },
+      {
+        category: '❤️ Rapid Vitality & Combat Dashboard',
+        detail: 'Features large interactive HP controls with instant delta buttons (-10, -5, -1, +1, +5, +10), custom heal/damage calculator, temp HP tracker, hit dice spending, inspiration toggle, and automatic death save evaluator with natural 20/1 handling.'
+      },
+      {
+        category: '⚔️ 1-Click Action Strip & Spell Bubble Matrix',
+        detail: 'Equipped attacks with 1-click Attack and Damage rolls, interactive spell slot bubbles (1st-9th level) to track and cast spells with single clicks, custom class power counters (Rages, Ki, Inspiration, etc.), 5e condition toggles, and instant skill checks.'
+      },
+      {
+        category: '⚡ Frictionless Navigation & Hotkey Integration',
+        detail: 'Seamlessly switch in and out of Table Mode via the Header button, Navigation pill, Command Palette action, or global Alt+T hotkey.'
+      }
+    ]
+  },
+  {
     version: 'v5.9.0',
     date: 'August 2026',
     title: 'AI Combat Encounter Auto-Deployment & UI Ergonomics Refinement',

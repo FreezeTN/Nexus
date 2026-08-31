@@ -22,6 +22,7 @@ const STORAGE_KEY_PARTIES = 'dnd_app_parties_v1';
 
 interface UseCharacterManagerProps {
   currentUser: UserProfile | null;
+  activeSessionCode?: string | null;
   initialCharIdFromDetached?: string | null;
   optionalRules?: Record<string, any>;
   onThemeChange?: (theme: RuleEdition) => void;
@@ -30,6 +31,7 @@ interface UseCharacterManagerProps {
 
 export function useCharacterManager({
   currentUser,
+  activeSessionCode,
   initialCharIdFromDetached,
   optionalRules,
   onThemeChange,
@@ -141,17 +143,21 @@ export function useCharacterManager({
   const [presenceMap, setPresenceMap] = useState<Record<string, CharacterPresence>>({});
   const prevActiveCharIdRef = useRef<string | null>(null);
 
-  // Subscribe to real-time character presence (Firestore + local tab broadcast)
+  // Subscribe to real-time character presence (Firestore + local tab broadcast), strictly scoped to the active session lobby
   useEffect(() => {
+    if (!activeSessionCode) {
+      setPresenceMap({});
+      return;
+    }
     const unsub = subscribeToCharacterPresence((updatedMap) => {
       setPresenceMap(updatedMap);
-    });
+    }, activeSessionCode);
     return () => unsub();
-  }, []);
+  }, [activeSessionCode]);
 
-  // Sync active presence whenever activeCharacterId or currentUser changes, with periodic heartbeat
+  // Sync active presence whenever activeCharacterId, currentUser, or activeSessionCode changes, with periodic heartbeat
   useEffect(() => {
-    if (!activeCharacterId) return;
+    if (!activeCharacterId || !activeSessionCode) return;
 
     const currentInfo = {
       uid: currentUser?.uid || 'guest_player',
@@ -160,7 +166,7 @@ export function useCharacterManager({
     };
 
     const prevId = prevActiveCharIdRef.current || undefined;
-    updateCharacterPresence(activeCharacterId, currentInfo, prevId);
+    updateCharacterPresence(activeCharacterId, currentInfo, prevId, activeSessionCode);
     prevActiveCharIdRef.current = activeCharacterId;
 
     const heartbeatInterval = setInterval(() => {
@@ -168,11 +174,11 @@ export function useCharacterManager({
         uid: currentUser?.uid || 'guest_player',
         displayName: currentUser?.displayName || 'Guest Adventurer',
         role: (currentUser?.role || 'Player') as UserRole
-      });
+      }, undefined, activeSessionCode);
     }, 45000);
 
     return () => clearInterval(heartbeatInterval);
-  }, [activeCharacterId, currentUser]);
+  }, [activeCharacterId, currentUser, activeSessionCode]);
 
   const rawActiveCharacter = characters.find(c => c.id === activeCharacterId) || null;
   const activeCharacter = useMemo(() => {

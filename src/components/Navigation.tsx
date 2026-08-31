@@ -31,7 +31,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   activeSession = null
 }) => {
   const { t } = useLanguage();
-  const { workspaceRole, setWorkspaceRole, isStreamlined } = useUiMode();
+  const { workspaceRole, setWorkspaceRole, isStreamlined, isTableMode, toggleTableMode } = useUiMode();
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
   const isCthulhu = edition === 'cthulhu';
@@ -288,8 +288,21 @@ export const Navigation: React.FC<NavigationProps> = ({
           <ChevronRight className="w-4 h-4" />
         </button>
 
-        {/* Workspace Quick-Switcher Pill (Phase A) */}
+        {/* Table Mode & Workspace Quick-Switcher Pill */}
         <div className="hidden lg:flex items-center gap-1.5 ml-2 pl-2 border-l border-stone-800/80 shrink-0">
+          <button
+            type="button"
+            onClick={toggleTableMode}
+            className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+              isTableMode
+                ? 'bg-amber-500 border-amber-400 text-stone-950 shadow-amber-500/20'
+                : 'bg-stone-900 border-stone-800 text-amber-300 hover:bg-amber-950/60 hover:border-amber-500/40'
+            }`}
+            title="Launch Distraction-Free Table Mode HUD (Alt+T)"
+          >
+            <span>🎲 Table Mode</span>
+          </button>
+
           <button
             type="button"
             onClick={() => setWorkspaceRole(workspaceRole === 'player' ? 'gm' : workspaceRole === 'gm' ? 'unified' : 'player')}
@@ -302,9 +315,9 @@ export const Navigation: React.FC<NavigationProps> = ({
             }`}
             title="Click to switch workspace role (Player vs. GM vs. Unified)"
           >
-            {workspaceRole === 'player' && <span>🛡️ Player Workspace</span>}
-            {workspaceRole === 'gm' && <span>👑 GM Workspace</span>}
-            {workspaceRole === 'unified' && <span>⚡ Unified Sheets</span>}
+            {workspaceRole === 'player' && <span>🛡️ Player</span>}
+            {workspaceRole === 'gm' && <span>👑 GM</span>}
+            {workspaceRole === 'unified' && <span>⚡ Unified</span>}
           </button>
         </div>
       </div>

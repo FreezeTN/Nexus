@@ -91,6 +91,7 @@
       "type": "object",
       "properties": {
         "characterId": { "type": "string", "maxLength": 128 },
+        "sessionCode": { "type": "string", "maxLength": 32 },
         "activeUserId": { "type": "string", "maxLength": 128 },
         "activeUserName": { "type": "string", "maxLength": 128 },
         "activeUserRole": { "type": "string", "maxLength": 64 },

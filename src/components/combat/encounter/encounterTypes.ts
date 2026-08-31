@@ -31,6 +31,15 @@ export interface MerchantEncounterState {
   };
 }
 
+export interface ConcentrationPrompt {
+  combatantId: string;
+  combatantName: string;
+  damageTaken: number;
+  conSaveDc: number;
+  spellName?: string;
+  conMod: number;
+}
+
 export interface Combatant {
   id: string;
   name: string;
@@ -38,9 +47,13 @@ export interface Combatant {
   armorClass: number;
   hpCurrent: number;
   hpMax: number;
+  tempHp?: number;
   type: 'player' | 'ally' | 'enemy';
   isPlayerChar?: boolean;
   conditions?: string[];
+  conditionDurations?: Record<string, number>; // Maps condition to remaining rounds (e.g. { 'Stunned': 1 })
+  isConcentrating?: boolean;
+  concentratingSpell?: { spellName: string; castRound: number; dc?: number };
   monsterXpReward?: number;
   isDefeated?: boolean;
   portraitUrl?: string;

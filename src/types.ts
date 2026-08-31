@@ -26,6 +26,8 @@ export interface SanityData {
   madnessState?: MadnessState;
   madnessEffect?: string;
   sanityNotes?: string;
+  isTempMad?: boolean;
+  isIndefMad?: boolean;
 }
 
 // Shadowrun Types
@@ -196,6 +198,8 @@ export interface OptionalRulesConfig {
   usePhysicalDiceMode?: boolean;    // Physical Dice Mode: Prompts to input physical dice roll results rather than virtual rolling
   disableAutoXpGain?: boolean;      // Disable Automatic EXP Gain (For groups using manual EXP systems, physical paper logs, or external campaign tracking)
   useManualXpMode?: boolean;        // Manual Tabletop EXP Mode (Turns off automated encounter XP distribution to character sheets)
+  includeCoinWeight?: boolean;      // D&D 5e Standard Coin Weight (50 coins = 1 lb). When enabled/true, currency coins contribute to encumbrance.
+  useContainerManagement?: boolean; // Container & Bag system (Backpack, Bag of Holding, Handy Haversack, etc.)
   // Shadowrun rules
   strictEssenceCap?: boolean;
   glitchRules?: boolean;
@@ -279,6 +283,26 @@ export interface Feat {
   hpMaxBonus?: number;
 }
 
+export type ContainerType = 
+  | 'backpack' 
+  | 'bag_of_holding' 
+  | 'handy_haversack' 
+  | 'pouch' 
+  | 'chest' 
+  | 'portable_hole' 
+  | 'quiver' 
+  | 'custom';
+
+export interface ItemContainer {
+  id: string;
+  name: string;
+  type: ContainerType;
+  capacityLbs: number;
+  isExtradimensional?: boolean; // If true, contents weight 0 lbs to carrying encumbrance!
+  fixedWeightLbs: number; // The physical weight of the bag itself on the bearer
+  notes?: string;
+}
+
 export interface GearItem {
   id: string;
   name: string;
@@ -286,6 +310,11 @@ export interface GearItem {
   weight: number; // in lbs
   equipped: boolean;
   stored?: boolean; // stored away in camp/stash (does not contribute to active carried weight)
+  containerId?: string; // ID of container item or virtual container (e.g. 'container-bag-of-holding')
+  isContainer?: boolean;
+  containerType?: ContainerType;
+  containerCapacityLbs?: number;
+  isExtradimensional?: boolean;
   attuned?: boolean;
   requiresAttunement?: boolean;
   isMagic?: boolean;
@@ -354,6 +383,7 @@ export interface Spell {
   saveType?: string; // e.g. 'DEX', 'WIS', 'CON'
   damage?: string; // e.g. '3d6', '8d6'
   damageType?: string; // Acid, Cold, Fire, Force, Lightning, Necrotic, Piercing, Poison, Psychic, Radiant, Slashing, Thunder, etc.
+  higherLevel?: string; // At Higher Levels upcasting text (5e/PF2e)
   edition?: '5e' | '3.5e' | 'both';
   classLevels?: Record<string, number>; // e.g. { 'Bard': 2, 'Sor/Wiz': 3, 'Cleric': 3 }
   classLevelsStr?: string; // e.g. "Brd 2, Sor/Wiz 3, Clr 3"
@@ -420,8 +450,13 @@ export interface CharacterData {
   // Half-Breed / Hybrid Heritage Data (The Alpine DM System)
   hybridHeritage?: HybridHeritageData;
 
-  // Sanity & Madness System Data (DMG p.264)
+  // Sanity & Madness System Data (DMG p.264 / Call of Cthulhu)
   sanity?: SanityData;
+  luck?: { current: number; max: number };
+
+  // Pathfinder 2e Focus Pool
+  focusPointsCurrent?: number;
+  focusPointsMax?: number;
 
   // Shadowrun System Data
   shadowrun?: ShadowrunData;
@@ -431,6 +466,7 @@ export interface CharacterData {
 
   // Conditions & Status Effects
   conditions?: string[];
+  conditionDurations?: Record<string, number>; // Maps condition name to remaining rounds (e.g. { 'Stunned': 1, 'Poisoned': 3 })
   exhaustionLevel?: number; // 0-6
   activeConcentration?: ActiveConcentration;
 
@@ -475,6 +511,7 @@ export interface CharacterData {
   // Gear & Wealth
   wealth: Wealth;
   inventory: GearItem[];
+  containers?: ItemContainer[]; // Registered containers (e.g. Backpack, Bag of Holding, Handy Haversack)
 
   // Spellcasting
   isSpellcaster: boolean;
@@ -511,12 +548,24 @@ export interface Party {
   createdAt?: string;
 }
 
+export interface DieRollDetail {
+  die: number;
+  value: number;
+  discarded?: boolean;
+}
+
+export interface DiePoolItem {
+  die: number;
+  count: number;
+}
+
 export interface DiceRollResult {
   id: string;
   timestamp: string;
   label: string;
   expression: string;
   diceRolls: number[];
+  diceDetails?: DieRollDetail[];
   modifier: number;
   total: number;
   mode?: 'normal' | 'advantage' | 'disadvantage';

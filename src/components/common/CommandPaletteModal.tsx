@@ -32,6 +32,7 @@ import { systemRegistry } from '../../systems';
 import { eventBus } from '../../events/eventBus';
 import { searchIndexer } from '../../utils/searchIndexer';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useUiMode } from '../../context/UiModeContext';
 
 interface CommandPaletteModalProps {
   isOpen: boolean;
@@ -82,6 +83,7 @@ export function CommandPaletteModal({
   onRollDice
 }: CommandPaletteModalProps) {
   const { t } = useLanguage();
+  const { isTableMode, toggleTableMode } = useUiMode();
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -99,6 +101,17 @@ export function CommandPaletteModal({
 
   const allCommands = useMemo<CommandItem[]>(() => {
     const list: CommandItem[] = [
+      {
+        id: 'action-table-mode',
+        title: isTableMode ? 'Exit Table Mode (Return to Full Workspace)' : 'Launch Table Mode / Focused Play HUD (Alt+T)',
+        category: 'Actions',
+        description: 'Distraction-free tabletop play HUD with vital HP controls, attack rolls, spell slots & live scratchpad',
+        icon: <Dices className="w-4 h-4 text-amber-400" />,
+        action: () => {
+          onClose();
+          toggleTableMode();
+        }
+      },
       {
         id: 'action-ai-oracle',
         title: 'Nexus AI Oracle & Forge (Rules, Chat & Generator)',

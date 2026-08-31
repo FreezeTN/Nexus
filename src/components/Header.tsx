@@ -58,6 +58,7 @@ import {
   Network,
   Radio,
   FlaskConical,
+  Dices,
   Compass,
   MapPin
 } from 'lucide-react';
@@ -142,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab
 }) => {
   const { t } = useLanguage();
-  const { uiMode, toggleUiMode, startTour } = useUiMode();
+  const { uiMode, toggleUiMode, startTour, isTableMode, toggleTableMode } = useUiMode();
   const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -661,6 +662,21 @@ export const Header: React.FC<HeaderProps> = ({
                 title="Toggle between Focus Mode (clean, fast tabletop action) and Master Mode (advanced overrides & DM tools)"
               >
                 <span>{uiMode === 'focus' ? '⚡ Focus' : '⚙️ Master'}</span>
+              </button>
+
+              {/* Table / Play Mode HUD Launcher */}
+              <button
+                type="button"
+                onClick={toggleTableMode}
+                className={`px-2.5 py-1.5 rounded-lg font-sans text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
+                  isTableMode
+                    ? 'bg-amber-500 text-stone-950 border-amber-400 font-black shadow-amber-500/30'
+                    : 'bg-stone-900 hover:bg-amber-950 text-amber-300 hover:text-amber-200 border-amber-500/60'
+                }`}
+                title="Toggle Distraction-Free Table Mode HUD (Alt+T)"
+              >
+                <Dices className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Table Mode</span>
               </button>
 
               {/* Campaign World Atlas & Questline Hub (Phase D) */}

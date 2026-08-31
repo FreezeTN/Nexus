@@ -1,5 +1,8 @@
 import { CharacterData, GearItem, Spell, RuleEdition, AbilityName, Skill } from '../types';
 import { CampaignEntity } from '../utils/searchIndexer';
+import { generateProceduralEntity } from './proceduralGenerators';
+
+export { generateProceduralEntity };
 
 export const DND5E_SKILL_DEFS: Array<{ name: string; ability: AbilityName }> = [
   { name: 'Acrobatics', ability: 'DEX' },
@@ -171,14 +174,18 @@ export async function generateEntity(
   edition: RuleEdition = '5e',
   context?: any,
   language?: string
-): Promise<{ entity: any; entityType: EntityType }> {
+): Promise<{ entity: any; entityType: EntityType; isProceduralFallback?: boolean }> {
   const customApiKey = getStoredUserApiKey();
   const activeLang = language || getStoredLanguage();
-  let res: Response;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 14000);
+
   try {
-    res = await fetch('/api/ai/generate-entity', {
+    const res = await fetch('/api/ai/generate-entity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         entityType,
         prompt,
@@ -188,26 +195,47 @@ export async function generateEntity(
         language: activeLang,
       }),
     });
-  } catch (networkErr: any) {
-    throw new Error(`Network error connecting to AI service: ${networkErr.message || 'Connection failed'}`);
-  }
+    clearTimeout(timeoutId);
 
-  const rawText = await res.text();
-  let data: any = {};
-  try {
-    data = JSON.parse(rawText);
-  } catch {
-    if (!res.ok) {
-      throw new Error(`Server returned HTTP ${res.status} (${res.statusText || 'Service Error'}). Please retry shortly.`);
+    const rawText = await res.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      if (!res.ok) {
+        console.warn(`[AI Engine] API returned ${res.status}, generating via procedural tables...`);
+        return {
+          ...generateProceduralEntity(entityType, prompt, edition, context),
+          isProceduralFallback: true,
+        };
+      }
+      throw new Error('Received unexpected response format from AI generator.');
     }
-    throw new Error('Received unexpected response format from AI generator.');
-  }
 
-  if (!res.ok) {
-    throw new Error(data.error || data.message || `Failed to generate entity (${res.status})`);
-  }
+    if (!res.ok) {
+      console.warn(`[AI Engine] Server responded with error (${res.status}), falling back to procedural table:`, data.error);
+      return {
+        ...generateProceduralEntity(entityType, prompt, edition, context),
+        isProceduralFallback: true,
+      };
+    }
 
-  return data;
+    if (!data.entity || (typeof data.entity === 'object' && Object.keys(data.entity).length === 0)) {
+      return {
+        ...generateProceduralEntity(entityType, prompt, edition, context),
+        isProceduralFallback: true,
+      };
+    }
+
+    return data;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    console.warn('[AI Engine] AI call failed or timed out, generating via offline procedural tables:', err?.message || err);
+    return {
+      ...generateProceduralEntity(entityType, prompt, edition, context),
+      isProceduralFallback: true,
+    };
+  }
 }
 
 /**

@@ -71,10 +71,16 @@ async function generateContentWithRetry(ai: GoogleGenAI, params: any) {
 
     for (let attempt = 1; attempt <= maxAttemptsForModel; attempt++) {
       try {
-        const response = await ai.models.generateContent({
+        const timeoutMs = 12000;
+        const callPromise = ai.models.generateContent({
           ...params,
           model,
         });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`AI generation timed out after ${timeoutMs}ms on model ${model}`)), timeoutMs)
+        );
+
+        const response = await Promise.race([callPromise, timeoutPromise]);
         return response;
       } catch (err: any) {
         lastError = err;
@@ -90,7 +96,7 @@ async function generateContentWithRetry(ai: GoogleGenAI, params: any) {
           throw err;
         }
 
-        // Transient / capacity errors (503, 429, 500, UNAVAILABLE, high demand, overloaded)
+        // Transient / capacity / timeout errors (503, 429, 500, UNAVAILABLE, high demand, overloaded, timed out)
         const isTransient =
           errMsg.includes("503") ||
           errMsg.includes("high demand") ||
@@ -99,17 +105,18 @@ async function generateContentWithRetry(ai: GoogleGenAI, params: any) {
           errMsg.includes("RESOURCE_EXHAUSTED") ||
           errMsg.includes("Overloaded") ||
           errMsg.includes("500") ||
-          errMsg.includes("fetch failed");
+          errMsg.includes("fetch failed") ||
+          errMsg.includes("timed out");
 
         if (isTransient) {
           if (attempt < maxAttemptsForModel) {
-            const delay = attempt * 800 + Math.random() * 400;
+            const delay = attempt * 600 + Math.random() * 300;
             console.log(`[AI Engine] Retrying ${model} after ${Math.round(delay)}ms...`);
             await sleep(delay);
             continue;
           }
           console.log(`[AI Engine] Cascading from ${model} to fallback models...`);
-          await sleep(250);
+          await sleep(200);
           break;
         } else {
           break;

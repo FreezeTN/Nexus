@@ -54,7 +54,8 @@ service cloud.firestore {
     }
 
     function isValidPresence(data) {
-      return data.characterId is string && data.characterId.size() <= 128;
+      return data.characterId is string && data.characterId.size() <= 128 &&
+             (!('sessionCode' in data) || (data.sessionCode is string && data.sessionCode.size() <= 32));
     }
 
     // Default deny catch-all

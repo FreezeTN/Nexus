@@ -13,7 +13,9 @@ export type EventType =
   | 'WorldChanged'
   | 'SystemPluginToggled'
   | 'DiceRolled'
-  | 'VoiceSpeakerChanged';
+  | 'VoiceSpeakerChanged'
+  | 'ApplyDamageOrHeal'
+  | 'ConcentrationCheckRequested';
 
 export interface EventPayloadMap {
   CharacterCreated: { character: CharacterData };
@@ -27,8 +29,24 @@ export interface EventPayloadMap {
   SessionStarted: { sessionId: string; sessionTitle: string };
   WorldChanged: { worldId: string; worldName: string };
   SystemPluginToggled: { pluginId: RuleEdition | string; enabled: boolean; version?: string; updated?: boolean; uninstalled?: boolean };
-  DiceRolled: { formula: string; total: number; isNat20?: boolean; isNat1?: boolean; rollerName?: string };
+  DiceRolled: { formula: string; total: number; isNat20?: boolean; isNat1?: boolean; rollerName?: string; label?: string };
   VoiceSpeakerChanged: { uid: string; displayName: string; characterName?: string; isSpeaking: boolean };
+  ApplyDamageOrHeal: {
+    targetCombatantId?: string;
+    targetName?: string;
+    amount: number; // positive = heal, negative = damage
+    damageType?: string;
+    sourceLabel?: string;
+    isCrit?: boolean;
+    isHalfDamage?: boolean;
+  };
+  ConcentrationCheckRequested: {
+    combatantId: string;
+    combatantName: string;
+    damageTaken: number;
+    conSaveDc: number;
+    spellName?: string;
+  };
 }
 
 export interface LoggedEvent<K extends EventType = EventType> {

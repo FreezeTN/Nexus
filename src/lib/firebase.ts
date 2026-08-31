@@ -478,6 +478,7 @@ export async function deleteCharacterFromCloud(characterId: string): Promise<voi
  */
 export interface CharacterPresence {
   characterId: string;
+  sessionCode?: string;
   activeUserId?: string;
   activeUserName?: string;
   activeUserRole?: UserRole;
@@ -487,7 +488,7 @@ export interface CharacterPresence {
   updatedAt?: string;
 }
 
-const PRESENCE_STORAGE_KEY = 'dnd_character_presence_v2';
+const PRESENCE_STORAGE_KEY = 'dnd_character_presence_v3';
 const PRESENCE_STALE_MS = 3 * 60 * 1000; // 3 minutes staleness threshold
 
 export function sanitizePresenceMap(map: Record<string, CharacterPresence>): Record<string, CharacterPresence> {
@@ -536,7 +537,7 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
   try {
     const BC = (window as any).BroadcastChannel;
     if (typeof BC === 'function') {
-      presenceBroadcastChannel = new BC('dnd_character_presence_channel');
+      presenceBroadcastChannel = new BC('dnd_character_presence_channel_v3');
     }
   } catch {
     presenceBroadcastChannel = null;
@@ -544,17 +545,27 @@ if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
 }
 
 /**
- * Subscribe to character presence changes (Firestore + Local Tab Channel)
+ * Subscribe to character presence changes (Firestore + Local Tab Channel),
+ * strictly scoped to the active Game Lobby / Session Code.
  */
 export function subscribeToCharacterPresence(
-  onUpdate: (presenceMap: Record<string, CharacterPresence>) => void
+  onUpdate: (presenceMap: Record<string, CharacterPresence>) => void,
+  sessionCode?: string | null
 ): () => void {
+  // If not in an active session lobby, presence is empty (no cross-user presence leakage)
+  if (!sessionCode) {
+    onUpdate({});
+    return () => {};
+  }
+
+  const cleanSessionCode = sessionCode.trim().toUpperCase();
+  const storageKey = `${PRESENCE_STORAGE_KEY}_${cleanSessionCode}`;
   let firestoreUnsub: (() => void) | null = null;
   let currentMap: Record<string, CharacterPresence> = {};
 
   const getLocalMap = (): Record<string, CharacterPresence> => {
     try {
-      const raw = localStorage.getItem(PRESENCE_STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey);
       return raw ? JSON.parse(raw) : {};
     } catch {
       return {};
@@ -564,14 +575,20 @@ export function subscribeToCharacterPresence(
   currentMap = sanitizePresenceMap(getLocalMap());
   onUpdate(currentMap);
 
-  // Firestore Snapshot listener
+  // Firestore Snapshot listener filtered for this session room
   try {
     firestoreUnsub = onSnapshot(
       collection(db, 'presence'),
       (snapshot) => {
         const cloudMap: Record<string, CharacterPresence> = {};
-        snapshot.forEach((doc) => {
-          cloudMap[doc.id] = doc.data() as CharacterPresence;
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data() as CharacterPresence;
+          if (!data) return;
+          const isMatchingSession = data.sessionCode === cleanSessionCode || docSnap.id.endsWith(`_${cleanSessionCode}`);
+          if (isMatchingSession) {
+            const charId = data.characterId || docSnap.id.replace(new RegExp(`_${cleanSessionCode}$`), '');
+            cloudMap[charId] = { ...data, characterId: charId, sessionCode: cleanSessionCode };
+          }
         });
         currentMap = sanitizePresenceMap({ ...currentMap, ...cloudMap });
         onUpdate({ ...currentMap });
@@ -586,7 +603,7 @@ export function subscribeToCharacterPresence(
 
   // Local Broadcast listener
   const handleBroadcast = (event: MessageEvent) => {
-    if (event.data?.type === 'PRESENCE_UPDATE' && event.data?.presenceMap) {
+    if (event.data?.type === 'PRESENCE_UPDATE' && event.data?.sessionCode === cleanSessionCode && event.data?.presenceMap) {
       currentMap = sanitizePresenceMap({ ...currentMap, ...event.data.presenceMap });
       onUpdate({ ...currentMap });
     }
@@ -597,7 +614,7 @@ export function subscribeToCharacterPresence(
   }
 
   const handleStorageEvent = (e: StorageEvent) => {
-    if (e.key === PRESENCE_STORAGE_KEY) {
+    if (e.key === storageKey) {
       currentMap = sanitizePresenceMap(getLocalMap());
       onUpdate({ ...currentMap });
     }
@@ -614,27 +631,31 @@ export function subscribeToCharacterPresence(
 }
 
 /**
- * Update active character presence for a user (Player or DM)
+ * Update active character presence for a user (Player or DM),
+ * strictly scoped to the active Game Lobby / Session Code.
  */
 export async function updateCharacterPresence(
   characterId: string,
   user: { uid: string; displayName: string; role: UserRole },
-  previousCharacterId?: string
+  previousCharacterId?: string,
+  sessionCode?: string | null
 ): Promise<void> {
-  if (!characterId) return;
+  if (!characterId || !sessionCode) return;
 
+  const cleanSessionCode = sessionCode.trim().toUpperCase();
+  const storageKey = `${PRESENCE_STORAGE_KEY}_${cleanSessionCode}`;
   const timestamp = new Date().toISOString();
   let localMap: Record<string, CharacterPresence> = {};
 
   try {
-    const raw = localStorage.getItem(PRESENCE_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (raw) localMap = JSON.parse(raw);
   } catch {}
 
-  // Clear DM or Player presence on all other characters in localMap for this user
+  // Clear DM or Player presence on all other characters in localMap for this user within this session
   Object.keys(localMap).forEach((cId) => {
     if (cId !== characterId) {
-      const entry = { ...(localMap[cId] || { characterId: cId }) };
+      const entry = { ...(localMap[cId] || { characterId: cId, sessionCode: cleanSessionCode }) };
       let changed = false;
 
       if (user.role === 'DM') {
@@ -655,9 +676,11 @@ export async function updateCharacterPresence(
 
       if (changed) {
         entry.updatedAt = timestamp;
+        entry.sessionCode = cleanSessionCode;
         localMap[cId] = entry;
         try {
-          setDoc(doc(db, 'presence', cId), sanitizeForFirestore(entry, true), { merge: true });
+          const docId = `${cId}_${cleanSessionCode}`;
+          setDoc(doc(db, 'presence', docId), sanitizeForFirestore(entry, true), { merge: true });
         } catch {}
       }
     }
@@ -665,7 +688,7 @@ export async function updateCharacterPresence(
 
   // Handle previousCharacterId explicitly if provided
   if (previousCharacterId && previousCharacterId !== characterId) {
-    const prevEntry = { ...(localMap[previousCharacterId] || { characterId: previousCharacterId }) };
+    const prevEntry = { ...(localMap[previousCharacterId] || { characterId: previousCharacterId, sessionCode: cleanSessionCode }) };
     if (user.role === 'DM') {
       prevEntry.dmActive = false;
       prevEntry.dmUserId = undefined;
@@ -678,15 +701,18 @@ export async function updateCharacterPresence(
       }
     }
     prevEntry.updatedAt = timestamp;
+    prevEntry.sessionCode = cleanSessionCode;
     localMap[previousCharacterId] = prevEntry;
 
     try {
-      await setDoc(doc(db, 'presence', previousCharacterId), sanitizeForFirestore(prevEntry, true), { merge: true });
+      const prevDocId = `${previousCharacterId}_${cleanSessionCode}`;
+      await setDoc(doc(db, 'presence', prevDocId), sanitizeForFirestore(prevEntry, true), { merge: true });
     } catch {}
   }
 
   // Update target character entry
-  const newEntry = { ...(localMap[characterId] || { characterId }) };
+  const newEntry = { ...(localMap[characterId] || { characterId, sessionCode: cleanSessionCode }) };
+  newEntry.sessionCode = cleanSessionCode;
   if (user.role === 'DM') {
     newEntry.dmActive = true;
     newEntry.dmUserId = user.uid;
@@ -734,17 +760,18 @@ export async function updateCharacterPresence(
 
   // Persist locally
   try {
-    localStorage.setItem(PRESENCE_STORAGE_KEY, JSON.stringify(localMap));
+    localStorage.setItem(storageKey, JSON.stringify(localMap));
   } catch {}
 
   // Broadcast locally
   if (presenceBroadcastChannel) {
-    presenceBroadcastChannel.postMessage({ type: 'PRESENCE_UPDATE', presenceMap: localMap });
+    presenceBroadcastChannel.postMessage({ type: 'PRESENCE_UPDATE', sessionCode: cleanSessionCode, presenceMap: localMap });
   }
 
   // Sync to Firestore
   try {
-    await setDoc(doc(db, 'presence', characterId), sanitizeForFirestore(newEntry, true), { merge: true });
+    const docId = `${characterId}_${cleanSessionCode}`;
+    await setDoc(doc(db, 'presence', docId), sanitizeForFirestore(newEntry, true), { merge: true });
   } catch (err) {
     console.warn('Could not sync character presence to Firestore:', err);
   }

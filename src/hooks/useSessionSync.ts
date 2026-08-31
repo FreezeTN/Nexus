@@ -4,6 +4,8 @@ import { CharacterData, CampaignSaveFile } from '../types';
 
 interface UseSessionSyncProps {
   currentUser: UserProfile | null;
+  activeSessionCode?: string | null;
+  setActiveSessionCode?: React.Dispatch<React.SetStateAction<string | null>>;
   setCharacters: React.Dispatch<React.SetStateAction<CharacterData[]>>;
   onSelectCharacter?: (id: string) => void;
   onSetPreviewTheme?: (theme: any) => void;
@@ -11,12 +13,14 @@ interface UseSessionSyncProps {
 
 export function useSessionSync({
   currentUser,
+  activeSessionCode: externalSessionCode,
+  setActiveSessionCode: setExternalSessionCode,
   setCharacters,
   onSelectCharacter,
   onSetPreviewTheme
 }: UseSessionSyncProps) {
   // Session Lobby & Room Code State
-  const [activeSessionCode, setActiveSessionCode] = useState<string | null>(() => {
+  const [internalSessionCode, setInternalSessionCode] = useState<string | null>(() => {
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const sessionFromUrl = urlParams.get('session');
@@ -26,6 +30,9 @@ export function useSessionSync({
       return null;
     }
   });
+
+  const activeSessionCode = externalSessionCode !== undefined ? externalSessionCode : internalSessionCode;
+  const setActiveSessionCode = setExternalSessionCode || setInternalSessionCode;
 
   const [activeSession, setActiveSession] = useState<GameSession | null>(null);
 

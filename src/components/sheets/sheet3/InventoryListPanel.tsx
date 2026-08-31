@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { CharacterData, GearItem } from '../../../types';
+import { CharacterData, GearItem, ItemContainer, ContainerType } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { PRESET_DND_ITEMS } from '../../../data/presetItems';
 import { saveCustomCompendiumEntry } from '../../../data/compendiumData';
 import { recalculateCharacterAC, getMaxAttunementSlots, getAttunedItemsCount } from '../../../utils/dndCalculations';
+import { getCharacterContainers, PRESET_CONTAINERS, getContainerWeightSummaries } from '../../../utils/containerUtils';
 import { eventBus } from '../../../events/eventBus';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import {
@@ -31,7 +32,10 @@ import {
   Skull,
   ShieldAlert,
   Sliders,
-  Wand2
+  Wand2,
+  FolderPlus,
+  ArrowRightLeft,
+  Briefcase
 } from 'lucide-react';
 
 interface InventoryListPanelProps {
@@ -47,12 +51,23 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
 }) => {
   const { t } = useLanguage();
   const [showAddItemModal, setShowAddItemModal] = useState(false);
+  const [showContainerModal, setShowContainerModal] = useState(false);
   const [editingItem, setEditingItem] = useState<GearItem | null>(null);
 
   // Search & Category Filter State
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'weapon_melee' | 'weapon_ranged' | 'armor' | 'magic' | 'misc'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'containers' | 'weapon_melee' | 'weapon_ranged' | 'armor' | 'magic' | 'misc'>('all');
+  const [selectedContainerTab, setSelectedContainerTab] = useState<string>('all');
   const [attunementWarning, setAttunementWarning] = useState<string | null>(null);
+  const [openMoveDropdownId, setOpenMoveDropdownId] = useState<string | null>(null);
+
+  // Container modal state
+  const [newContainerName, setNewContainerName] = useState('');
+  const [newContainerType, setNewContainerType] = useState<ContainerType>('backpack');
+  const [newContainerCapacity, setNewContainerCapacity] = useState<number>(30);
+  const [newContainerIsExtradimensional, setNewContainerIsExtradimensional] = useState<boolean>(false);
+  const [newContainerFixedWeight, setNewContainerFixedWeight] = useState<number>(5);
+  const [newContainerNotes, setNewContainerNotes] = useState('');
 
   // Drag-and-Drop state for manual inventory reordering
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -381,6 +396,70 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     });
   };
 
+  const characterContainers = getCharacterContainers(character);
+  const containerSummaries = getContainerWeightSummaries(character);
+
+  const handleMoveItemToContainer = (itemId: string, targetContainerId?: string, isEquipped?: boolean, isStored?: boolean) => {
+    const updatedInventory = character.inventory.map(item => {
+      if (item.id === itemId) {
+        return {
+          ...item,
+          containerId: isEquipped || isStored ? undefined : targetContainerId,
+          equipped: isEquipped ?? (targetContainerId ? false : item.equipped),
+          stored: isStored ?? (targetContainerId ? false : (isEquipped ? false : item.stored))
+        };
+      }
+      return item;
+    });
+
+    onUpdateCharacter(recalculateCharacterAC({
+      ...character,
+      inventory: updatedInventory
+    }));
+    setOpenMoveDropdownId(null);
+  };
+
+  const handleAddContainer = (preset?: Omit<ItemContainer, 'id'>) => {
+    const newCont: ItemContainer = preset ? {
+      ...preset,
+      id: `container-${Date.now()}`
+    } : {
+      id: `container-${Date.now()}`,
+      name: newContainerName || 'Custom Container',
+      type: newContainerType,
+      capacityLbs: newContainerCapacity || 30,
+      isExtradimensional: newContainerIsExtradimensional,
+      fixedWeightLbs: newContainerFixedWeight || 5,
+      notes: newContainerNotes
+    };
+
+    const updatedContainers = [...(character.containers || []), newCont];
+    onUpdateCharacter({
+      ...character,
+      containers: updatedContainers
+    });
+
+    setNewContainerName('');
+    setNewContainerNotes('');
+  };
+
+  const handleDeleteContainer = (containerId: string) => {
+    // Unassign items inside this container
+    const updatedInventory = character.inventory.map(item => {
+      if (item.containerId === containerId) {
+        return { ...item, containerId: undefined };
+      }
+      return item;
+    });
+
+    const updatedContainers = (character.containers || []).filter(c => c.id !== containerId);
+    onUpdateCharacter({
+      ...character,
+      containers: updatedContainers,
+      inventory: updatedInventory
+    });
+  };
+
   // Filtered Inventory List
   const filteredInventoryWithIndices = character.inventory.map((item, originalIndex) => ({
     item,
@@ -394,12 +473,13 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       if (!matchName && !matchNotes && !matchType) return false;
     }
 
-    if (categoryFilter === 'all') return true;
+    if (categoryFilter === 'all' || categoryFilter === 'containers') return true;
     const subtype = getItemSubtype(item);
     return subtype === categoryFilter;
   });
 
   const countAll = character.inventory.length;
+  const countContainers = characterContainers.length;
   const countMelee = character.inventory.filter(i => getItemSubtype(i) === 'weapon_melee').length;
   const countRanged = character.inventory.filter(i => getItemSubtype(i) === 'weapon_ranged').length;
   const countArmor = character.inventory.filter(i => getItemSubtype(i) === 'armor').length;
@@ -412,15 +492,28 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       icon={<Package className="w-5 h-5 text-amber-500" />}
       storageKey="sheet3_equipment"
       headerExtra={
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowAddItemModal(true);
-          }}
-          className="flex items-center gap-1 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md"
-        >
-          <Plus className="w-4 h-4" /> {t('inventory.addItem', '+ Add Item')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowContainerModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 rounded-xl text-xs font-bold transition shadow-sm"
+            title="Manage Backpacks, Bags of Holding, and Stash Chests"
+          >
+            <Briefcase className="w-3.5 h-3.5 text-amber-400" />
+            <span>Bags & Containers ({countContainers})</span>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAddItemModal(true);
+            }}
+            className="flex items-center gap-1 px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition shadow-md"
+          >
+            <Plus className="w-4 h-4" /> {t('inventory.addItem', '+ Add Item')}
+          </button>
+        </div>
       }
     >
       <div className="space-y-4 pt-2">
@@ -462,6 +555,19 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
             >
               <Package className="w-3.5 h-3.5 text-amber-400" />
               <span>{t('common.all', 'All')} ({countAll})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setCategoryFilter('containers')}
+              className={`px-2.5 py-1 rounded-lg font-bold text-[11px] transition flex items-center gap-1.5 ${
+                categoryFilter === 'containers'
+                  ? 'bg-purple-700 text-white shadow'
+                  : 'bg-stone-900 text-purple-400 hover:text-purple-300 border border-stone-800'
+              }`}
+            >
+              <Briefcase className="w-3.5 h-3.5 text-purple-400" />
+              <span>By Bag / Container ({countContainers})</span>
             </button>
 
             <button
@@ -566,7 +672,203 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
         </div>
 
         {/* Inventory Items Grid */}
-        {character.inventory.length === 0 ? (
+        {categoryFilter === 'containers' ? (
+          <div className="space-y-4">
+            {/* Top Bar with Manage Containers button */}
+            <div className="flex items-center justify-between bg-stone-900/60 p-3 rounded-xl border border-stone-800">
+              <div>
+                <h4 className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                  <Briefcase className="w-4 h-4 text-amber-400" />
+                  Bags & Containers Organization
+                </h4>
+                <p className="text-[11px] text-stone-400">
+                  Organize your gear into backpacks, pouches, or extradimensional spaces like Bags of Holding.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowContainerModal(true)}
+                className="px-3 py-1.5 bg-amber-700 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-md shrink-0"
+              >
+                <FolderPlus className="w-4 h-4" />
+                <span>+ Add / Manage Bags</span>
+              </button>
+            </div>
+
+            {/* Container Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {containerSummaries.containers.map(summary => {
+                const isExtradimensional = summary.container.isExtradimensional;
+                const isOverCapacity = summary.isOverCapacity;
+                const percentFull = Math.min(100, Math.round((summary.currentWeightLbs / Math.max(1, summary.container.capacityLbs)) * 100));
+                const remainingCap = summary.container.capacityLbs - summary.currentWeightLbs;
+
+                return (
+                  <div
+                    key={summary.container.id}
+                    className={`p-3.5 rounded-xl border transition-all ${
+                      isExtradimensional
+                        ? 'bg-purple-950/20 border-purple-800/40 hover:border-purple-700/60'
+                        : isOverCapacity
+                          ? 'bg-rose-950/20 border-rose-800/60'
+                          : 'bg-stone-900/50 border-stone-800 hover:border-stone-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-xs text-stone-200">{summary.container.name}</span>
+                          {isExtradimensional && (
+                            <span className="px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-700/60 text-[9px] font-bold">
+                              ✨ Extradimensional (0 lbs load)
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-stone-400">
+                          {summary.items.length} item{summary.items.length === 1 ? '' : 's'} enclosed
+                          {summary.container.notes ? ` • ${summary.container.notes}` : ''}
+                        </p>
+                      </div>
+
+                      <div className="text-right font-mono text-xs">
+                        <span className={`font-bold ${isOverCapacity ? 'text-rose-400' : 'text-amber-300'}`}>
+                          {summary.currentWeightLbs.toFixed(1)} / {summary.container.capacityLbs} lbs
+                        </span>
+                        <div className="text-[9px] text-stone-500">
+                          {remainingCap >= 0 ? `${remainingCap.toFixed(1)} lbs free` : `Over by ${Math.abs(remainingCap).toFixed(1)} lbs!`}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="w-full h-1.5 bg-stone-950 rounded-full overflow-hidden mb-3 border border-stone-800">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          isOverCapacity
+                            ? 'bg-rose-500'
+                            : isExtradimensional
+                              ? 'bg-purple-500'
+                              : percentFull > 85
+                                ? 'bg-amber-500'
+                                : 'bg-emerald-500'
+                        }`}
+                        style={{ width: `${percentFull}%` }}
+                      />
+                    </div>
+
+                    {/* Items List Inside Container */}
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                      {summary.items.length === 0 ? (
+                        <p className="text-[10px] text-stone-500 italic text-center py-2">
+                          Empty bag. Use the location dropdown on any item to place it in here.
+                        </p>
+                      ) : (
+                        summary.items.map(item => (
+                          <div
+                            key={item.id}
+                            className="p-1.5 rounded-lg bg-stone-950/70 border border-stone-800/80 flex items-center justify-between text-xs font-sans gap-2"
+                          >
+                            <div className="min-w-0 flex items-center gap-1.5 truncate">
+                              <span className="text-amber-200 text-xs font-medium truncate">{item.name}</span>
+                              {item.quantity && item.quantity > 1 && (
+                                <span className="text-[10px] text-stone-400 font-mono">({item.quantity}x)</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
+                              <span className="text-stone-400">
+                                {((item.weight || 0) * (item.quantity || 1)).toFixed(1)} lbs
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleMoveItemToContainer(item.id, undefined, false, false)}
+                                className="text-stone-500 hover:text-amber-400 p-0.5"
+                                title="Move out of bag to main load"
+                              >
+                                <ArrowRightLeft className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Items Not In Any Container (Equipped / Main Load / Stored) */}
+              <div className="p-3.5 rounded-xl border bg-stone-900/40 border-stone-800">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h5 className="font-bold text-xs text-amber-200 flex items-center gap-1.5">
+                      <Package className="w-4 h-4 text-amber-400" />
+                      Main Carried Load (Directly on Person)
+                    </h5>
+                    <p className="text-[10px] text-stone-400">Items carried directly on harness, bandolier, or belt</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {character.inventory.filter(i => !i.containerId && !i.stored).length === 0 ? (
+                    <p className="text-[10px] text-stone-500 italic text-center py-2">No unbagged items.</p>
+                  ) : (
+                    character.inventory.filter(i => !i.containerId && !i.stored).map(item => (
+                      <div
+                        key={item.id}
+                        className="p-1.5 rounded-lg bg-stone-950/70 border border-stone-800/80 flex items-center justify-between text-xs font-sans gap-2"
+                      >
+                        <div className="min-w-0 flex items-center gap-1.5 truncate">
+                          {item.equipped && (
+                            <span className="text-[9px] px-1 py-0.2 bg-emerald-950 text-emerald-300 border border-emerald-700/60 rounded">
+                              EQ
+                            </span>
+                          )}
+                          <span className="text-amber-200 text-xs font-medium truncate">{item.name}</span>
+                          {item.quantity && item.quantity > 1 && (
+                            <span className="text-[10px] text-stone-400 font-mono">({item.quantity}x)</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 font-mono text-[11px]">
+                          <span className="text-stone-400">
+                            {((item.weight || 0) * (item.quantity || 1)).toFixed(1)} lbs
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Stash at Camp */}
+              <div className="p-3.5 rounded-xl border bg-blue-950/10 border-blue-900/30">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <h5 className="font-bold text-xs text-blue-300 flex items-center gap-1.5">
+                      <Archive className="w-4 h-4 text-blue-400" />
+                      Camp Vault & Storage (0 lbs carried)
+                    </h5>
+                    <p className="text-[10px] text-stone-400">Items stored in stronghold or vault</p>
+                  </div>
+                </div>
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {character.inventory.filter(i => i.stored).length === 0 ? (
+                    <p className="text-[10px] text-stone-500 italic text-center py-2">No stored items.</p>
+                  ) : (
+                    character.inventory.filter(i => i.stored).map(item => (
+                      <div
+                        key={item.id}
+                        className="p-1.5 rounded-lg bg-stone-950/70 border border-stone-800/80 flex items-center justify-between text-xs font-sans gap-2"
+                      >
+                        <span className="text-blue-200 text-xs font-medium truncate">{item.name}</span>
+                        <span className="text-stone-400 font-mono text-[11px]">
+                          {((item.weight || 0) * (item.quantity || 1)).toFixed(1)} lbs
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : character.inventory.length === 0 ? (
           <p className="text-xs text-stone-500 italic py-4 text-center">
             No gear items in inventory. Click &quot;+ Add Item&quot; to log weapons, potions, armor, or adventuring packs!
           </p>
@@ -741,8 +1043,88 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                     </div>
                   </div>
 
-                  {/* Right: Quantity, Weight, Value, Actions */}
-                  <div className="flex items-center gap-3 shrink-0 font-mono text-xs">
+                  {/* Right: Container Assignment, Quantity, Weight, Value, Actions */}
+                  <div className="flex items-center gap-2.5 shrink-0 font-mono text-xs flex-wrap sm:flex-nowrap">
+                    {/* Quick Container Location Dropdown */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMoveDropdownId(openMoveDropdownId === item.id ? null : item.id);
+                        }}
+                        className={`px-2 py-0.5 rounded border text-[10px] flex items-center gap-1 transition ${
+                          item.containerId
+                            ? 'bg-purple-950/80 text-purple-200 border-purple-700/60 hover:bg-purple-900'
+                            : item.equipped
+                              ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                              : item.stored
+                                ? 'bg-blue-950/60 text-blue-300 border-blue-700/50'
+                                : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+                        }`}
+                        title="Change item bag / location"
+                      >
+                        <span className="truncate max-w-[100px]">
+                          {item.containerId
+                            ? (characterContainers.find(c => c.id === item.containerId)?.name || 'In Bag')
+                            : item.equipped
+                              ? '⚔️ Equipped'
+                              : item.stored
+                                ? '📦 Stored'
+                                : '🎒 Main Bag'}
+                        </span>
+                        <ChevronDown className="w-3 h-3 text-stone-400 shrink-0" />
+                      </button>
+
+                      {openMoveDropdownId === item.id && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 mt-1 z-40 w-52 bg-stone-900 border border-stone-700 rounded-xl shadow-2xl p-1.5 space-y-1 text-[11px] font-sans"
+                        >
+                          <div className="text-[9px] font-bold uppercase text-stone-500 px-2 py-0.5 border-b border-stone-800">
+                            Move Item Location
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveItemToContainer(item.id, undefined, true, false)}
+                            className="w-full text-left px-2 py-1 rounded hover:bg-emerald-950/60 text-emerald-300 flex items-center justify-between"
+                          >
+                            <span>⚔️ Equipped on Body</span>
+                            {item.equipped && <CheckSquare className="w-3 h-3 text-emerald-400" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleMoveItemToContainer(item.id, undefined, false, false)}
+                            className="w-full text-left px-2 py-1 rounded hover:bg-stone-800 text-stone-200 flex items-center justify-between"
+                          >
+                            <span>🎒 Main Inventory Load</span>
+                            {!item.containerId && !item.equipped && !item.stored && <CheckSquare className="w-3 h-3 text-amber-400" />}
+                          </button>
+                          {characterContainers.map(cont => (
+                            <button
+                              key={cont.id}
+                              type="button"
+                              onClick={() => handleMoveItemToContainer(item.id, cont.id, false, false)}
+                              className={`w-full text-left px-2 py-1 rounded hover:bg-stone-800 flex items-center justify-between ${
+                                cont.isExtradimensional ? 'text-purple-300' : 'text-stone-300'
+                              }`}
+                            >
+                              <span className="truncate">{cont.name}</span>
+                              {item.containerId === cont.id && <CheckSquare className="w-3 h-3 text-purple-400" />}
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => handleMoveItemToContainer(item.id, undefined, false, true)}
+                            className="w-full text-left px-2 py-1 rounded hover:bg-blue-950/60 text-blue-300 flex items-center justify-between border-t border-stone-800 pt-1"
+                          >
+                            <span>📦 Stored (Camp / Vault)</span>
+                            {item.stored && <CheckSquare className="w-3 h-3 text-blue-400" />}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded px-1.5 py-0.5">
                       <button
                         onClick={() => handleUpdateQuantity(item.id, -1)}
@@ -1522,6 +1904,207 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                 className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"
               >
                 Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Manage Bags & Item Containers */}
+      {showContainerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-stone-900 border border-stone-700 rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-stone-800 bg-stone-950">
+              <div className="flex items-center gap-2">
+                <Briefcase className="w-5 h-5 text-amber-400" />
+                <h3 className="font-bold text-stone-100 text-sm">
+                  Manage Bags & Adventuring Containers
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowContainerModal(false)}
+                className="text-stone-400 hover:text-stone-200 p-1 rounded-lg transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 space-y-5 overflow-y-auto flex-1 text-xs">
+              {/* Presets Grid */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider block">
+                  Quick Add Standard Container
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {PRESET_CONTAINERS.map((preset, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleAddContainer(preset)}
+                      className="p-2.5 rounded-xl border border-stone-800 bg-stone-950/80 hover:border-amber-600/60 hover:bg-stone-800 text-left transition space-y-1 group"
+                    >
+                      <div className="font-bold text-stone-200 text-xs group-hover:text-amber-300 flex items-center justify-between">
+                        <span>{preset.name}</span>
+                        <Plus className="w-3.5 h-3.5 text-stone-500 group-hover:text-amber-400" />
+                      </div>
+                      <div className="text-[10px] text-stone-400 flex items-center justify-between font-mono">
+                        <span>Cap: {preset.capacityLbs} lbs</span>
+                        {preset.isExtradimensional && (
+                          <span className="text-purple-300 font-sans font-bold">✨ 0 lb Load</span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Container Form */}
+              <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-3">
+                <span className="text-[11px] font-bold text-stone-300 uppercase tracking-wider block">
+                  Create Custom Container / Bag
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-stone-400 mb-1 font-semibold">Container Name</label>
+                    <input
+                      type="text"
+                      value={newContainerName}
+                      onChange={(e) => setNewContainerName(e.target.value)}
+                      placeholder="e.g. Leather Saddlebag, Secret Pouch"
+                      className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100 focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-400 mb-1 font-semibold">Container Type</label>
+                    <select
+                      value={newContainerType}
+                      onChange={(e) => setNewContainerType(e.target.value as ContainerType)}
+                      className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100 focus:border-amber-500 focus:outline-none"
+                    >
+                      <option value="backpack">Backpack</option>
+                      <option value="pouch">Pouch / Belt Pouch</option>
+                      <option value="sack">Sack / Large Bag</option>
+                      <option value="chest">Chest / Stash Box</option>
+                      <option value="quiver">Quiver / Case</option>
+                      <option value="bag_of_holding">Bag of Holding (Extradimensional)</option>
+                      <option value="handy_haversack">Handy Haversack (Extradimensional)</option>
+                      <option value="portable_hole">Portable Hole (Extradimensional)</option>
+                      <option value="custom">Other Custom</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-stone-400 mb-1 font-semibold">Max Capacity (lbs)</label>
+                    <input
+                      type="number"
+                      value={newContainerCapacity}
+                      onChange={(e) => setNewContainerCapacity(Number(e.target.value) || 0)}
+                      className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-amber-300 font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-stone-400 mb-1 font-semibold">Empty Weight (lbs)</label>
+                    <input
+                      type="number"
+                      value={newContainerFixedWeight}
+                      onChange={(e) => setNewContainerFixedWeight(Number(e.target.value) || 0)}
+                      className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-amber-300 font-mono focus:border-amber-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <label className="flex items-center gap-2 text-purple-300 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newContainerIsExtradimensional}
+                      onChange={(e) => setNewContainerIsExtradimensional(e.target.checked)}
+                      className="rounded text-purple-600"
+                    />
+                    <span className="font-semibold">✨ Extradimensional Space</span>
+                    <span className="text-[10px] text-stone-400">(Contents do not add weight to character)</span>
+                  </label>
+                </div>
+
+                <div>
+                  <label className="block text-stone-400 mb-1 font-semibold">Notes / Description</label>
+                  <input
+                    type="text"
+                    value={newContainerNotes}
+                    onChange={(e) => setNewContainerNotes(e.target.value)}
+                    placeholder="e.g. Strapped to horse, locked with dc 15 key"
+                    className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleAddContainer()}
+                  className="w-full py-2 bg-amber-700 hover:bg-amber-600 text-white rounded-xl font-bold transition flex items-center justify-center gap-1.5 shadow"
+                >
+                  <Plus className="w-4 h-4" /> Add Custom Container
+                </button>
+              </div>
+
+              {/* Existing Containers List */}
+              <div className="space-y-2">
+                <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider block">
+                  Current Containers ({characterContainers.length})
+                </span>
+
+                <div className="space-y-2">
+                  {characterContainers.map(container => {
+                    const itemCount = character.inventory.filter(i => i.containerId === container.id).length;
+                    return (
+                      <div
+                        key={container.id}
+                        className="p-3 rounded-xl bg-stone-950 border border-stone-800 flex items-center justify-between gap-3"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-stone-200">{container.name}</span>
+                            {container.isExtradimensional && (
+                              <span className="px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-700/60 text-[9px] font-bold">
+                                ✨ Extradimensional
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-stone-400 font-mono mt-0.5">
+                            Capacity: {container.capacityLbs} lbs • Holds {itemCount} item{itemCount === 1 ? '' : 's'}
+                            {container.notes ? ` • ${container.notes}` : ''}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteContainer(container.id)}
+                          className="p-1.5 text-stone-500 hover:text-rose-400 transition rounded-lg hover:bg-stone-800"
+                          title="Remove Container"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-stone-800 bg-stone-950 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowContainerModal(false)}
+                className="px-5 py-2 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl font-bold transition text-xs"
+              >
+                Done
               </button>
             </div>
           </div>
