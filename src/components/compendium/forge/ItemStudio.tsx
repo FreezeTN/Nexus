@@ -5,6 +5,7 @@ import { SupportedEdition, FANTASY_DAMAGE_TYPES } from './ForgeTypes';
 import { Sword, Save, Shield, Wand2, Package, Sparkles, Plus, Trash2, Backpack } from 'lucide-react';
 import { validateHomebrewItem, ValidationResult } from '../../../utils/homebrewValidator';
 import { recalculateCharacterAC } from '../../../utils/dndCalculations';
+import { eventBus } from '../../../events/eventBus';
 import { ValidationBadgeBanner } from './ValidationBadgeBanner';
 import { ValidationConfirmModal } from './ValidationConfirmModal';
 
@@ -15,6 +16,7 @@ interface ItemStudioProps {
   onClose: () => void;
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (updated: CharacterData) => void;
+  onAddItemToInventory?: (item: GearItem, targetId?: string) => void;
 }
 
 export const ItemStudio: React.FC<ItemStudioProps> = ({
@@ -23,7 +25,8 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
   onSave,
   onClose,
   activeCharacter,
-  onUpdateCharacter
+  onUpdateCharacter,
+  onAddItemToInventory
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -221,13 +224,23 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
         } : undefined
       };
 
-      const currentInv = Array.isArray(activeCharacter.inventory) ? activeCharacter.inventory : [];
-      const updatedChar = recalculateCharacterAC({
-        ...activeCharacter,
-        inventory: [...currentInv, newGearItem]
-      });
+      if (onAddItemToInventory) {
+        onAddItemToInventory(newGearItem, activeCharacter.id);
+      } else if (onUpdateCharacter) {
+        const currentInv = Array.isArray(activeCharacter.inventory) ? activeCharacter.inventory : [];
+        const updatedChar = recalculateCharacterAC({
+          ...activeCharacter,
+          inventory: [newGearItem, ...currentInv]
+        });
 
-      onUpdateCharacter(updatedChar);
+        onUpdateCharacter(updatedChar);
+
+        eventBus.emit('ItemAdded', {
+          characterId: activeCharacter.id,
+          itemName: newGearItem.name,
+          quantity: 1
+        });
+      }
     }
 
     setName('');

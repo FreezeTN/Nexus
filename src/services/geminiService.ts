@@ -181,7 +181,7 @@ export async function generateEntity(
   const activeLang = language || getStoredLanguage();
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 14000);
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
 
   try {
     const res = await fetch('/api/ai/generate-entity', {
@@ -205,7 +205,7 @@ export async function generateEntity(
       data = JSON.parse(rawText);
     } catch {
       if (!res.ok) {
-        console.warn(`[AI Engine] API returned ${res.status}, generating via procedural tables...`);
+        console.info(`[AI Engine] API returned ${res.status}, generating via procedural tables...`);
         return {
           ...generateProceduralEntity(entityType, prompt, edition, context),
           isProceduralFallback: true,
@@ -215,7 +215,7 @@ export async function generateEntity(
     }
 
     if (!res.ok) {
-      console.warn(`[AI Engine] Server responded with error (${res.status}), falling back to procedural table:`, data.error);
+      console.info(`[AI Engine] Server responded (${res.status}), generating via procedural tables:`, data.error || '');
       return {
         ...generateProceduralEntity(entityType, prompt, edition, context),
         isProceduralFallback: true,
@@ -232,7 +232,8 @@ export async function generateEntity(
     return data;
   } catch (err: any) {
     clearTimeout(timeoutId);
-    console.warn('[AI Engine] AI call failed or timed out, generating via offline procedural tables:', err?.message || err);
+    const isAbort = err?.name === 'AbortError' || err?.message?.includes('aborted');
+    console.info(`[AI Engine] ${isAbort ? 'Request timed out' : 'Service offline'}, generating via offline procedural tables.`);
     return {
       ...generateProceduralEntity(entityType, prompt, edition, context),
       isProceduralFallback: true,
@@ -325,30 +326,82 @@ export function hydrateGeneratedMonster(raw: any, edition: RuleEdition = '5e'): 
 /**
  * Hydrates raw AI item JSON into a full GearItem object
  */
-export function hydrateGeneratedItem(raw: any): GearItem {
+export function hydrateGeneratedItem(rawInput: any): GearItem {
   const id = `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  if (!rawInput || typeof rawInput !== 'object') {
+    return {
+      id,
+      name: 'Mysterious Artifact',
+      quantity: 1,
+      weight: 1,
+      equipped: false,
+      stored: false,
+      isMagic: true,
+      costGp: 100,
+      notes: typeof rawInput === 'string' ? rawInput : 'Magical relic forged by arcane powers.',
+      itemType: 'Misc'
+    };
+  }
+
+  // Handle nested wraps like { item: {...} }, { entity: {...} }, { data: {...} }
+  const raw = rawInput.item && typeof rawInput.item === 'object'
+    ? rawInput.item
+    : rawInput.entity && typeof rawInput.entity === 'object'
+    ? rawInput.entity
+    : rawInput.data && typeof rawInput.data === 'object'
+    ? rawInput.data
+    : rawInput;
+
+  const rawTypeStr = String(raw.itemType || raw.type || raw.category || '').toLowerCase();
+  const isWeapon = rawTypeStr.includes('weapon') || !!raw.weaponStats || !!raw.damage || !!raw.damageType;
+  const isArmor = rawTypeStr.includes('armor') || rawTypeStr.includes('shield') || raw.armorAc !== undefined || raw.armorClass !== undefined || !!raw.armorType;
+  const itemType: 'Weapon' | 'Armor' | 'Misc' = isWeapon ? 'Weapon' : isArmor ? 'Armor' : 'Misc';
+
+  const hasWeaponStats = isWeapon || !!raw.weaponStats || !!raw.damage || !!raw.attackBonus;
+  const weaponStats = hasWeaponStats ? {
+    attackBonus: raw.weaponStats?.attackBonus ?? raw.attackBonus ?? '+1',
+    damage: raw.weaponStats?.damage ?? raw.damage ?? '1d8',
+    damageType: raw.weaponStats?.damageType ?? raw.damageType ?? 'Slashing',
+    range: raw.weaponStats?.range ?? raw.range ?? 'Melee 5 ft.',
+    notes: raw.weaponStats?.notes ?? (Array.isArray(raw.properties) ? raw.properties.join(', ') : raw.properties) ?? '',
+  } : undefined;
+
+  const armorAc = raw.armorAc !== undefined
+    ? Number(raw.armorAc)
+    : (raw.armorClass !== undefined ? Number(raw.armorClass) : undefined);
+
+  let parsedCost = 100;
+  if (typeof raw.costGp === 'number') {
+    parsedCost = raw.costGp;
+  } else if (raw.costGp) {
+    parsedCost = parseFloat(String(raw.costGp)) || 100;
+  } else if (raw.cost) {
+    parsedCost = parseFloat(String(raw.cost).replace(/[^\d.]/g, '')) || 100;
+  }
+
   return {
-    id,
-    name: raw.name || 'Mysterious Artifact',
-    quantity: 1,
-    weight: Number(raw.weight) || 1,
-    equipped: false,
-    isMagic: raw.isMagic !== false,
+    id: raw.id || id,
+    name: raw.name || raw.title || 'Mysterious Artifact',
+    quantity: Math.max(1, Number(raw.quantity) || 1),
+    weight: typeof raw.weight === 'number' ? raw.weight : (parseFloat(String(raw.weight || '1')) || 1),
+    equipped: !!raw.equipped,
+    stored: !!raw.stored,
+    isMagic: raw.isMagic !== false && (raw.isMagic === true || !!raw.rarity || rawTypeStr.includes('magic') || raw.attuned !== undefined || raw.requiresAttunement !== undefined),
     attuned: !!raw.attuned,
-    costGp: Number(raw.costGp) || 100,
-    notes: raw.notes || raw.description || '',
-    itemType: raw.itemType || 'Misc',
-    armorAc: raw.armorAc ? Number(raw.armorAc) : undefined,
-    armorType: raw.armorType || undefined,
-    weaponStats: raw.weaponStats
-      ? {
-          attackBonus: raw.weaponStats.attackBonus ?? '+1',
-          damage: raw.weaponStats.damage || '1d8',
-          damageType: raw.weaponStats.damageType || 'Slashing',
-          range: raw.weaponStats.range || 'Melee 5 ft.',
-          notes: raw.weaponStats.notes || '',
-        }
-      : undefined,
+    requiresAttunement: raw.requiresAttunement !== undefined ? Boolean(raw.requiresAttunement) : (raw.attunement !== undefined ? Boolean(raw.attunement) : !!raw.attuned),
+    costGp: parsedCost,
+    notes: raw.notes || raw.description || raw.summary || raw.flavor || '',
+    itemType,
+    armorAc,
+    armorType: raw.armorType || (isArmor ? 'Light' : undefined),
+    acBonus: raw.acBonus ? Number(raw.acBonus) : undefined,
+    damageReduction: raw.damageReduction ? Number(raw.damageReduction) : undefined,
+    resistance: raw.resistance || undefined,
+    immunity: raw.immunity || undefined,
+    hpMaxBonus: raw.hpMaxBonus ? Number(raw.hpMaxBonus) : undefined,
+    initiativeBonus: raw.initiativeBonus ? Number(raw.initiativeBonus) : undefined,
+    spellDcBonus: raw.spellDcBonus ? Number(raw.spellDcBonus) : undefined,
+    weaponStats,
   };
 }
 
@@ -763,24 +816,38 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
       });
     }
     // Check if it's an item
-    else if (itemObj.costGp !== undefined || itemObj.itemType || itemObj.weaponStats || itemObj.armorAc) {
+    else if (
+      itemObj.costGp !== undefined ||
+      itemObj.itemType ||
+      itemObj.weaponStats ||
+      itemObj.armorAc ||
+      itemObj.armorClass !== undefined ||
+      itemObj.damage ||
+      itemObj.rarity ||
+      itemObj.attunement !== undefined ||
+      itemObj.requiresAttunement !== undefined ||
+      itemObj.type === 'weapon' ||
+      itemObj.type === 'armor' ||
+      itemObj.type === 'item' ||
+      itemObj.category === 'items'
+    ) {
       detected.push({
         id: `det_item_${Date.now()}_${detected.length}`,
         type: 'item',
-        name: itemObj.name || 'Magic Item',
-        subtitle: `${itemObj.itemType || 'Gear'} • ${itemObj.costGp ? `${itemObj.costGp} GP` : 'Valuable'}`,
-        summary: itemObj.notes || itemObj.description,
+        name: itemObj.name || itemObj.title || 'Magic Item',
+        subtitle: `${itemObj.itemType || itemObj.rarity || 'Gear'} • ${itemObj.costGp ? `${itemObj.costGp} GP` : 'Valuable'}`,
+        summary: itemObj.notes || itemObj.description || itemObj.summary,
         rawJson: itemObj,
       });
     }
     // Check if it's a spell
-    else if (itemObj.school || itemObj.castingTime || itemObj.components || itemObj.level !== undefined) {
+    else if (itemObj.school || itemObj.castingTime || itemObj.components || itemObj.level !== undefined || itemObj.type === 'spell') {
       detected.push({
         id: `det_spell_${Date.now()}_${detected.length}`,
         type: 'spell',
-        name: itemObj.name || 'Arcane Spell',
+        name: itemObj.name || itemObj.title || 'Arcane Spell',
         subtitle: `Level ${itemObj.level ?? 1} ${itemObj.school || 'Evocation'}`,
-        summary: itemObj.description,
+        summary: itemObj.description || itemObj.summary,
         rawJson: itemObj,
       });
     }
@@ -814,7 +881,23 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
     }
   }
 
-  // 2. Fallback heuristic: If no JSON block found, look for structured markdown statblocks
+  // 2. Look for raw JSON object { ... } in text if no code blocks yielded results
+  if (detected.length === 0) {
+    const rawJsonRegex = /\{(?:[^{}]|(\{[^{}]*\}))*\}/g;
+    let rawMatch: RegExpExecArray | null;
+    while ((rawMatch = rawJsonRegex.exec(text)) !== null) {
+      try {
+        const parsed = JSON.parse(rawMatch[0].trim());
+        if (parsed && typeof parsed === 'object') {
+          processEntityObject(parsed);
+        }
+      } catch {
+        // ignore non-json
+      }
+    }
+  }
+
+  // 3. Fallback heuristic: If no JSON parsed, look for structured markdown statblocks
   if (detected.length === 0) {
     // Check if monster statblock with Armor Class and Hit Points
     const nameMatch = text.match(/###?\s*(?:Monster|Creature|Boss|Statblock)?:\s*([^\n\r]+)/i) || text.match(/\*\*([A-Z][a-zA-Z\s'-]+)\*\*\s*\n\s*\*?(?:Small|Medium|Large|Huge|Gargantuan)/i);
@@ -838,6 +921,33 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
           backstory: text.substring(0, 300)
         }
       });
+    }
+
+    // Check if item heuristic e.g. **Flaming Longsword** (Weapon, Rare) or Item: Frost Brand
+    const itemMatch = text.match(/(?:###?\s*(?:Item|Weapon|Armor|Artifact|Gear):\s*([^\n\r]+))|(?:\*\*([A-Z][a-zA-Z0-9\s'-]+)\*\*\s*(?:\n|\s*-\s*)(?:Weapon|Armor|Wondrous [iI]tem|Potion|Scroll|Ring|Rod|Staff|Wand))/i);
+    if (itemMatch) {
+      const itemName = (itemMatch[1] || itemMatch[2] || '').replace(/[*#]/g, '').trim();
+      if (itemName) {
+        const isWeapon = /weapon|sword|blade|dagger|bow|axe|hammer|mace|spear/i.test(text);
+        const isArmor = /armor|shield|plate|mail|leather/i.test(text);
+        const rarityMatch = text.match(/\b(Common|Uncommon|Rare|Very Rare|Legendary|Artifact)\b/i);
+        const rarity = rarityMatch ? rarityMatch[1] : 'Rare';
+        
+        detected.push({
+          id: `det_heur_item_${Date.now()}`,
+          type: 'item',
+          name: itemName,
+          subtitle: `${isWeapon ? 'Weapon' : isArmor ? 'Armor' : 'Magic Item'} • ${rarity}`,
+          summary: text.substring(0, 300),
+          rawJson: {
+            name: itemName,
+            itemType: isWeapon ? 'Weapon' : isArmor ? 'Armor' : 'Misc',
+            rarity,
+            isMagic: true,
+            notes: text.substring(0, 500)
+          }
+        });
+      }
     }
   }
 

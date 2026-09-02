@@ -9,6 +9,9 @@
  */
 
 import { AbilityName, CharacterData } from '../types';
+import { DomainModifier, ModifierCategory as ModifierType } from './modifierEngine';
+
+export type { DomainModifier, ModifierType };
 
 // ==========================================
 // 1. DICE EXPRESSION AST & EVALUATION MODEL
@@ -51,32 +54,6 @@ export interface EvaluatedDiceResult {
 // ==========================================
 // 2. TYPED MODIFIER STACKING SYSTEM
 // ==========================================
-
-export type ModifierType =
-  | 'ability'
-  | 'proficiency'
-  | 'item'
-  | 'spell_buff'
-  | 'condition_penalty'
-  | 'circumstance'
-  | 'custom';
-
-export type StackingRule =
-  | 'additive'     // Standard: all values sum together (e.g. D&D 5e)
-  | 'highest_only' // Only the highest of this type applies (e.g. Pathfinder 2e status bonuses)
-  | 'lowest_only'; // Only the lowest penalty applies
-
-export interface DomainModifier {
-  readonly id: string;
-  readonly label: string;
-  readonly target: 'ac' | 'attack' | 'damage' | 'saving_throw' | 'skill_check' | 'initiative' | 'speed';
-  readonly type: ModifierType;
-  readonly value: number;
-  readonly stackingRule: StackingRule;
-  readonly isTemporary?: boolean;
-  readonly durationRounds?: number;
-  readonly conditionTag?: string;
-}
 
 // ==========================================
 // 3. SKILL CHECK & SAVING THROW CONTEXTS
@@ -124,9 +101,10 @@ export function calculateStackedModifier(modifiers: ReadonlyArray<DomainModifier
   const groupedByType = new Map<ModifierType, DomainModifier[]>();
 
   for (const mod of modifiers) {
-    const list = groupedByType.get(mod.type) || [];
+    const cat = (mod.category || (mod as any).type || 'custom') as ModifierType;
+    const list = groupedByType.get(cat) || [];
     list.push(mod);
-    groupedByType.set(mod.type, list);
+    groupedByType.set(cat, list);
   }
 
   let total = 0;

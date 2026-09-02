@@ -51,6 +51,7 @@ import { PhysicalDiceModal } from './components/modals/PhysicalDiceModal';
 import { UpgradeModal } from './components/modals/UpgradeModal';
 import { GlobalUpgradeModal } from './components/modals/GlobalUpgradeModal';
 import { GlobalDiceOverlay } from './components/dice/GlobalDiceOverlay';
+import { UniversalImporterStudioModal } from './components/modals/UniversalImporterStudioModal';
 import { ThemeProvider } from './context/ThemeContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import { TableModeHud } from './components/tableMode/TableModeHud';
@@ -67,31 +68,38 @@ import {
 
 const normalizeTabId = (tab: string): TabId => {
   switch (tab) {
+    case '1':
     case 'stats':
     case 'sheet1':
       return 'sheet1';
+    case '2':
     case 'combat':
     case 'turn_order':
     case 'turnorder':
     case 'encounter':
     case 'sheet2':
       return 'sheet2';
+    case '3':
     case 'gear':
     case 'inventory':
     case 'sheet3':
       return 'sheet3';
+    case '4':
     case 'spells':
     case 'magic':
     case 'sheet4':
       return 'sheet4';
+    case '5':
     case 'notes':
     case 'description':
     case 'sheet5':
       return 'sheet5';
+    case '6':
     case 'guide':
     case 'userguide':
     case 'sheet6':
       return 'sheet6';
+    case '7':
     case 'compendium':
     case 'sheet7':
       return 'sheet7';
@@ -242,6 +250,8 @@ export default function App() {
     setShowNewCharacterModal,
     showPartyModal,
     setShowPartyModal,
+    showUniversalImporterStudio,
+    setShowUniversalImporterStudio,
     newCharCategory,
     showUpgradeModal,
     setShowUpgradeModal,
@@ -650,6 +660,7 @@ export default function App() {
             <Sheet3GearWealth
               character={activeCharacter}
               onUpdateCharacter={handleUpdateCharacter}
+              onAddItemToInventory={handleAddItemToActiveCharacter}
               onRollDamage={handleRollDamage}
             />
           )}
@@ -686,6 +697,7 @@ export default function App() {
             <Sheet7Compendium
               activeCharacter={activeCharacter}
               onUpdateCharacter={handleUpdateCharacter}
+              onAddItemToInventory={handleAddItemToActiveCharacter}
               onAddMonsterToRoster={(monster) => {
                 setCharacters(prev => [...prev, monster]);
               }}
@@ -748,6 +760,7 @@ export default function App() {
         enabledSystems={enabledSystems}
         onOpenSystemSelector={() => setShowTRPGSelectorModal(true)}
         onOpenAudioModal={() => setShowAudioModal(true)}
+        onOpenUniversalImporterStudio={() => setShowUniversalImporterStudio(true)}
         onOpenCommandPalette={() => setShowCommandPalette(true)}
         onOpenExtensionManager={() => setShowExtensionManager(true)}
         onOpenVoiceModal={() => setShowVoiceModal(true)}
@@ -899,6 +912,7 @@ export default function App() {
                 <Sheet3GearWealth
                   character={activeCharacter}
                   onUpdateCharacter={handleUpdateCharacter}
+                  onAddItemToInventory={handleAddItemToActiveCharacter}
                   onRollDamage={handleRollDamage}
                   onOpenGenerators={handleOpenGenerators}
                 />
@@ -946,6 +960,7 @@ export default function App() {
                 <Sheet7Compendium
                   activeCharacter={activeCharacter}
                   onUpdateCharacter={handleUpdateCharacter}
+                  onAddItemToInventory={handleAddItemToActiveCharacter}
                   onAddMonsterToRoster={(monster) => {
                     setCharacters(prev => [...prev, monster]);
                   }}
@@ -1035,6 +1050,7 @@ export default function App() {
         onOpenGenerators={handleOpenGenerators}
         onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
         onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
+        onOpenUniversalImporterStudio={() => setShowUniversalImporterStudio(true)}
         onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
         onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
       />
@@ -1111,6 +1127,35 @@ export default function App() {
             onExportJson={handleExportJson}
             onImportJson={handleImportJson}
             onOpenAuthModal={() => setShowAuthModal(true)}
+            onOpenUniversalImporterStudio={() => setShowUniversalImporterStudio(true)}
+          />
+        )}
+
+        {/* Universal Importer & Pipeline Studio Modal (Option 2) */}
+        {showUniversalImporterStudio && (
+          <UniversalImporterStudioModal
+            isOpen={showUniversalImporterStudio}
+            onClose={() => setShowUniversalImporterStudio(false)}
+            activeCharacter={activeCharacter}
+            characters={characters}
+            edition={currentSystemTheme}
+            onImportCharacter={(char, mode) => {
+              if (mode === 'overwrite' && activeCharacter) {
+                handleUpdateCharacter({ ...char, id: activeCharacter.id });
+              } else {
+                handleCreateNewCharacter(char);
+              }
+            }}
+            onImportMultipleCharacters={(chars) => {
+              const newChars = chars.map(c => ({
+                ...c,
+                id: c.id || `imported-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+              }));
+              setCharacters(prev => [...newChars, ...prev]);
+              if (newChars.length > 0) {
+                handleSelectCharacter(newChars[0].id);
+              }
+            }}
           />
         )}
 
@@ -1174,18 +1219,22 @@ export default function App() {
             isOpen={showAiAssistantModal}
             onClose={() => setShowAiAssistantModal(false)}
             activeCharacter={activeCharacter}
+            characters={characters}
             ruleEdition={currentSystemTheme}
             onAddCharacter={(monsterOrChar) => {
               handleCreateNewCharacter(monsterOrChar);
             }}
-            onAddItemToInventory={(item) => {
-              handleAddItemToActiveCharacter(item);
+            onAddItemToInventory={(item, targetId) => {
+              handleAddItemToActiveCharacter(item, targetId);
             }}
-            onAddSpellToSpellbook={(spell) => {
-              handleAddSpellToActiveCharacter(spell);
+            onAddSpellToSpellbook={(spell, targetId) => {
+              handleAddSpellToActiveCharacter(spell, targetId);
             }}
             onNavigateTab={(tab) => {
               setActiveTab(normalizeTabId(tab));
+            }}
+            onSelectCharacter={(id) => {
+              handleSelectCharacter(id, false);
             }}
           />
         )}

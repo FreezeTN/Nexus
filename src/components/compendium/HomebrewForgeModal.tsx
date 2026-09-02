@@ -27,6 +27,7 @@ interface HomebrewForgeModalProps {
   onImportCustomItems?: (imported: CompendiumItem[]) => void;
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (updated: CharacterData) => void;
+  onAddItemToInventory?: (item: any, targetId?: string) => void;
 }
 
 export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
@@ -36,7 +37,8 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
   allCustomItems = [],
   onImportCustomItems,
   activeCharacter,
-  onUpdateCharacter
+  onUpdateCharacter,
+  onAddItemToInventory
 }) => {
   const [systemEdition, setSystemEdition] = useState<SupportedEdition>(() => {
     if (['5e', '3.5e', 'pathfinder', 'shadowrun', 'cthulhu'].includes(initialSystem)) {
@@ -353,6 +355,8 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               sourceAuthor={sourceAuthor}
               onSave={handleSavedItem}
               onClose={onClose}
+              activeCharacter={activeCharacter}
+              onUpdateCharacter={onUpdateCharacter}
             />
           )}
 
@@ -385,6 +389,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               onClose={onClose}
               activeCharacter={activeCharacter}
               onUpdateCharacter={onUpdateCharacter}
+              onAddItemToInventory={onAddItemToInventory}
             />
           )}
 

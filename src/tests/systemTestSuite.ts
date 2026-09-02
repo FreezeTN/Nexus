@@ -8,6 +8,7 @@ import { runInitiativeTests } from './unit/initiative.test';
 import { runEventBusTests } from './unit/eventBus.test';
 import { runPluginRegistryTests } from './unit/pluginRegistry.test';
 import { runSearchIndexerTests } from './unit/searchIndexer.test';
+import { runModifierEngineTests } from './unit/modifierEngine.test';
 
 // Layer 2: Integration Tests
 import { runCombatFlowIntegrationTest } from './integration/combatFlow.test';
@@ -373,6 +374,7 @@ export async function runArchitectureTests(): Promise<TestResult[]> {
   results.push(...runEventBusTests());
   results.push(...runPluginRegistryTests());
   results.push(...runSearchIndexerTests());
+  results.push(...runModifierEngineTests());
 
   // Layer 2 Integration Tests (/src/tests/integration/*)
   results.push(...(await runCombatFlowIntegrationTest()));

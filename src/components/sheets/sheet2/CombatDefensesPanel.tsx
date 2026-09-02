@@ -36,7 +36,8 @@ import {
   XCircle,
   HelpCircle,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  Layers
 } from 'lucide-react';
 
 interface CombatDefensesPanelProps {
@@ -47,6 +48,7 @@ interface CombatDefensesPanelProps {
   setShowTransformationModal: (val: boolean) => void;
   setShowCompanionModal?: (val: boolean) => void;
   setShowRestModal: (val: boolean) => void;
+  setShowModifierInspector?: (target?: any) => void;
 }
 
 export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
@@ -56,7 +58,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   setShowMaxHpInspector,
   setShowTransformationModal,
   setShowCompanionModal,
-  setShowRestModal
+  setShowRestModal,
+  setShowModifierInspector
 }) => {
   const { t } = useLanguage();
   const effectiveMaxHp = getEffectiveMaxHp(character);
@@ -226,9 +229,21 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
                   <Shield className="w-4 h-4 text-amber-500" /> {t('defenses.armorClass', 'Defense Stats')}
                 </span>
-                <span className="text-xs text-stone-400 font-mono">
-                  {character.edition === '3.5e' ? '3.5e Rules' : '5e Rules'}
-                </span>
+                <div className="flex items-center gap-2">
+                  {setShowModifierInspector && (
+                    <button
+                      onClick={() => setShowModifierInspector('ac')}
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-600/40 hover:border-amber-500 transition flex items-center gap-1"
+                      title="Inspect Universal Stacking Modifier Engine"
+                    >
+                      <Layers className="w-3 h-3 text-amber-400" />
+                      <span>Modifier Engine</span>
+                    </button>
+                  )}
+                  <span className="text-xs text-stone-400 font-mono">
+                    {character.edition === '3.5e' ? '3.5e Rules' : '5e Rules'}
+                  </span>
+                </div>
               </div>
 
               {/* Primary Defense Metrics Grid: AC, Initiative, Speed */}

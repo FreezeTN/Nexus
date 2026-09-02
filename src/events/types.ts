@@ -16,9 +16,11 @@ export type EventType =
   | 'DiceRolled'
   | 'VoiceSpeakerChanged'
   | 'ApplyDamageOrHeal'
-  | 'ConcentrationCheckRequested';
+  | 'ConcentrationCheckRequested'
+  | 'CompendiumUpdated';
 
 export interface EventPayloadMap {
+  CompendiumUpdated: { id?: string; name?: string };
   CharacterCreated: { character: CharacterData };
   CharacterUpdated: { character: CharacterData };
   CharacterLevelUp: { characterId: string; characterName: string; oldLevel: number; newLevel: number };

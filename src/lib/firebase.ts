@@ -400,21 +400,33 @@ export async function logoutUser(): Promise<void> {
  */
 export async function saveCharacterToCloud(userId: string, character: CharacterData): Promise<void> {
   if (!character || !character.id) return;
+  // If user is guest or not signed into Firebase Auth, preserve locally without generating permission alerts
+  if (!auth.currentUser || !userId || userId.startsWith('guest_') || userId === 'session_user') {
+    return;
+  }
   try {
+    const authUid = auth.currentUser.uid;
     const charDocRef = doc(db, 'characters', character.id);
+    const nowIso = character.updatedAt || new Date().toISOString();
+    const characterPayload: CharacterData = {
+      ...character,
+      updatedAt: nowIso
+    };
     await setDoc(charDocRef, sanitizeForFirestore({
       id: character.id,
-      ownerId: userId || 'session_user',
-      name: character.name,
+      ownerId: authUid,
+      name: character.name || 'Unnamed Character',
       edition: character.edition || '5e',
-      level: character.level || 1,
+      level: Number(character.level) || 1,
       characterClass: character.characterClass || 'Adventurer',
       race: character.race || 'Human',
-      data: character,
-      updatedAt: new Date().toISOString()
+      data: characterPayload,
+      updatedAt: nowIso
     }), { merge: true });
-  } catch (err) {
-    console.warn('Could not save character to cloud:', err);
+  } catch (err: any) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Could not save character to cloud:', err?.message || err);
+    }
   }
 }
 
@@ -422,7 +434,7 @@ export function subscribeToCharacterDoc(
   characterId: string,
   onUpdate: (charData: CharacterData) => void
 ): () => void {
-  if (!characterId) return () => {};
+  if (!characterId || !auth.currentUser) return () => {};
   try {
     const docRef = doc(db, 'characters', characterId);
     return onSnapshot(
@@ -431,24 +443,32 @@ export function subscribeToCharacterDoc(
         if (snapshot.exists()) {
           const data = snapshot.data();
           if (data && data.data) {
-            onUpdate(data.data as CharacterData);
+            const charData = data.data as CharacterData;
+            if (!charData.updatedAt && data.updatedAt) {
+              charData.updatedAt = data.updatedAt;
+            }
+            onUpdate(charData);
           }
         }
       },
       (err) => {
-        console.info('Character doc listener info:', err?.message || err);
+        if (err?.code !== 'permission-denied') {
+          console.info('Character doc listener info:', err?.message || err);
+        }
       }
     );
-  } catch (err) {
-    console.warn('Error subscribing to character doc:', err);
+  } catch (err: any) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Error subscribing to character doc:', err?.message || err);
+    }
     return () => {};
   }
 }
 
 export async function loadUserCharactersFromCloud(userId: string): Promise<CharacterData[]> {
-  if (!userId || userId.startsWith('guest_')) return [];
+  if (!userId || userId.startsWith('guest_') || !auth.currentUser) return [];
   try {
-    const q = query(collection(db, 'characters'), where('ownerId', '==', userId));
+    const q = query(collection(db, 'characters'), where('ownerId', '==', auth.currentUser.uid));
     const snap = await getDocs(q);
     const characters: CharacterData[] = [];
     snap.forEach((doc) => {
@@ -458,18 +478,22 @@ export async function loadUserCharactersFromCloud(userId: string): Promise<Chara
       }
     });
     return characters;
-  } catch (err) {
-    console.warn('Error fetching user characters from cloud:', err);
+  } catch (err: any) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Error fetching user characters from cloud:', err?.message || err);
+    }
     return [];
   }
 }
 
 export async function deleteCharacterFromCloud(characterId: string): Promise<void> {
-  if (!characterId) return;
+  if (!characterId || !auth.currentUser) return;
   try {
     await deleteDoc(doc(db, 'characters', characterId));
-  } catch (err) {
-    console.warn('Error deleting character from cloud:', err);
+  } catch (err: any) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Error deleting character from cloud:', err?.message || err);
+    }
   }
 }
 

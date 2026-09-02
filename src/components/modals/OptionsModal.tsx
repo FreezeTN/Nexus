@@ -42,7 +42,8 @@ import {
   Globe,
   Keyboard,
   Palette,
-  Eye
+  Eye,
+  FileText
 } from 'lucide-react';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '../../i18n/languages';
@@ -89,6 +90,7 @@ interface OptionsModalProps {
   onImportJson?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenUpgradeModal?: (reason?: string) => void;
   onOpenAuthModal?: () => void;
+  onOpenUniversalImporterStudio?: () => void;
 }
 
 export const OptionsModal: React.FC<OptionsModalProps> = ({
@@ -103,7 +105,8 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onExportJson,
   onImportJson,
   onOpenUpgradeModal,
-  onOpenAuthModal
+  onOpenAuthModal,
+  onOpenUniversalImporterStudio
 }) => {
   const { language, setLanguage, t } = useLanguage();
   const {
@@ -766,6 +769,33 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                 </div>
               ) : (
                 <>
+                  {/* UNIVERSAL IMPORTER & EXPORTER STUDIO (OPTION 2) */}
+                  <div className="bg-stone-950 p-4 rounded-xl border border-amber-600/40 space-y-3 shadow-lg">
+                    <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5">
+                      <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-sm">
+                        <FileText className="w-4 h-4 text-amber-400" />
+                        <span>Universal Importer & Pipeline Studio</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40 font-bold">
+                        5eTools • Foundry • D&D Beyond • MD
+                      </span>
+                    </div>
+                    <p className="text-xs text-stone-300 leading-relaxed">
+                      Convert and import characters or monster statblocks from <strong>5eTools</strong>, <strong>Foundry VTT (v10-12)</strong>, <strong>D&D Beyond</strong>, or standard <strong>Markdown / Plaintext Statblocks</strong> with real-time schema inspection.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        if (onOpenUniversalImporterStudio) onOpenUniversalImporterStudio();
+                      }}
+                      className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl font-black text-xs transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Launch Universal Importer & Pipeline Studio</span>
+                    </button>
+                  </div>
+
                   {/* CHARACTER IMPORT (Available when logged in) */}
                   <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-3">
                     <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5">

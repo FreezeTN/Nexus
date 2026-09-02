@@ -16,6 +16,7 @@ interface AudioOptionsModalProps {
   onImportJson?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenUpgradeModal?: () => void;
   onOpenAuthModal?: () => void;
+  onOpenUniversalImporterStudio?: () => void;
 }
 
 export const AudioOptionsModal: React.FC<AudioOptionsModalProps> = (props) => {

@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData, Spell, Feat, ClassFeature, GearItem, RuleEdition } from '../../types';
 import { getAbilityModifier, formatModifier, recalculateCharacterAC } from '../../utils/dndCalculations';
+import { eventBus } from '../../events/eventBus';
 import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { systemRegistry } from '../../systems';
@@ -44,6 +45,7 @@ import {
 interface Sheet7CompendiumProps {
   activeCharacter?: CharacterData;
   onUpdateCharacter?: (updated: CharacterData) => void;
+  onAddItemToInventory?: (item: GearItem, targetId?: string) => void;
   onAddMonsterToRoster?: (monster: CharacterData) => void;
   enabledSystems?: RuleEdition[];
 }
@@ -51,6 +53,7 @@ interface Sheet7CompendiumProps {
 export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
   activeCharacter,
   onUpdateCharacter,
+  onAddItemToInventory,
   onAddMonsterToRoster,
   enabledSystems
 }) => {
@@ -60,10 +63,21 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [selectedDetailItem, setSelectedDetailItem] = useState<CompendiumItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<CompendiumItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Custom entries stored in localStorage
   const [customEntries, setCustomEntries] = useState<CompendiumItem[]>(() => loadCustomCompendiumEntries());
+
+  useEffect(() => {
+    const handleCompendiumUpdate = () => {
+      setCustomEntries(loadCustomCompendiumEntries());
+    };
+    eventBus.on('CompendiumUpdated', handleCompendiumUpdate);
+    return () => {
+      eventBus.off('CompendiumUpdated', handleCompendiumUpdate);
+    };
+  }, []);
 
   // Base SRD entries memoized once
   const baseEntries = useMemo(() => getInitialBaseCompendium(), []);
@@ -148,16 +162,21 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
   }, [allCompendiumItems]);
 
   // Delete Custom Entry
-  const handleDeleteCustom = (id: string, e: React.MouseEvent) => {
+  const handleDeleteCustom = (item: CompendiumItem, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (window.confirm('Delete this custom compendium entry?')) {
-      const updated = deleteCustomCompendiumEntry(id);
-      setCustomEntries(updated);
-      showToast('Custom compendium entry deleted');
-      if (selectedDetailItem?.id === id) {
-        setSelectedDetailItem(null);
-      }
+    setItemToDelete(item);
+  };
+
+  const confirmDeleteCustom = () => {
+    if (!itemToDelete) return;
+    const updated = deleteCustomCompendiumEntry(itemToDelete.id, itemToDelete.name, itemToDelete.category);
+    setCustomEntries(updated);
+    eventBus.emit('CompendiumUpdated', { id: itemToDelete.id, name: itemToDelete.name });
+    showToast(`Deleted "${itemToDelete.name}" from Compendium`);
+    if (selectedDetailItem?.id === itemToDelete.id) {
+      setSelectedDetailItem(null);
     }
+    setItemToDelete(null);
   };
 
   // Add Item/Spell/Feat/Feature/Class/Race to Active Character
@@ -206,11 +225,20 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         } : undefined)
       };
 
-      const currentInventory = Array.isArray(activeCharacter.inventory) ? activeCharacter.inventory : [];
-      onUpdateCharacter(recalculateCharacterAC({
-        ...activeCharacter,
-        inventory: [...currentInventory, newItem]
-      }));
+      if (onAddItemToInventory) {
+        onAddItemToInventory(newItem, activeCharacter.id);
+      } else if (onUpdateCharacter) {
+        const currentInventory = Array.isArray(activeCharacter.inventory) ? activeCharacter.inventory : [];
+        onUpdateCharacter(recalculateCharacterAC({
+          ...activeCharacter,
+          inventory: [newItem, ...currentInventory]
+        }));
+        eventBus.emit('ItemAdded', {
+          characterId: activeCharacter.id,
+          itemName: newItem.name,
+          quantity: newItem.quantity || 1
+        });
+      }
       showToast(`🎒 Added "${item.name}" to ${activeCharacter.name}'s inventory!`);
     } else if (item.category === 'classes' && item.classData) {
       const newFeatures: ClassFeature[] = (item.classData.featuresByLevel || [])
@@ -550,9 +578,10 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       {isCustom && (
                         <button
-                          onClick={(e) => handleDeleteCustom(item.id, e)}
+                          type="button"
+                          onClick={(e) => handleDeleteCustom(item, e)}
                           title="Delete Custom Entry"
-                          className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition"
+                          className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition cursor-pointer"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -938,20 +967,35 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
             {/* Action Bar */}
             <div className="pt-4 border-t border-stone-800 flex items-center justify-between gap-3">
-              <button
-                onClick={() => setSelectedDetailItem(null)}
-                className="px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-stone-300 rounded-xl text-xs font-bold transition"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDetailItem(null)}
+                  className="px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-stone-300 rounded-xl text-xs font-bold transition cursor-pointer"
+                >
+                  Close
+                </button>
+                {(selectedDetailItem.isCustom || customEntries.some(c => c.id === selectedDetailItem.id || (c.name.toLowerCase() === selectedDetailItem.name.toLowerCase() && c.category === selectedDetailItem.category))) && (
+                  <button
+                    type="button"
+                    onClick={() => setItemToDelete(selectedDetailItem)}
+                    className="px-3.5 py-2.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-300 border border-rose-800/50 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    title="Delete custom entry"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Entry</span>
+                  </button>
+                )}
+              </div>
 
               {['items', 'spells', 'feats', 'features', 'monsters', 'classes', 'races'].includes(selectedDetailItem.category) && (
                 <button
+                  type="button"
                   onClick={() => {
                     handleAddToCharacter(selectedDetailItem);
                     setSelectedDetailItem(null);
                   }}
-                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-amber-950/30"
+                  className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-amber-950/30 cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
                   <span>
@@ -970,6 +1014,48 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         </div>
       )}
 
+      {/* IN-APP DELETE CONFIRMATION MODAL */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-stone-950 border border-stone-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20 text-rose-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-serif font-bold text-lg text-stone-100">Delete Custom Entry?</h3>
+                <p className="text-xs text-stone-400 font-mono">This will remove the item from your compendium database.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-stone-900/80 rounded-2xl border border-stone-800/80 space-y-1">
+              <div className="text-sm font-bold text-amber-300 font-serif">{itemToDelete.name}</div>
+              <div className="text-xs text-stone-400 font-mono">
+                {itemToDelete.category.toUpperCase()} • {itemToDelete.edition || '5e'} • {itemToDelete.source}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setItemToDelete(null)}
+                className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-stone-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteCustom}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-rose-950/40 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Entry</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HOMEBREW & RULES FORGE STUDIO MODAL */}
       {showCustomModal && (
         <HomebrewForgeModal
@@ -977,6 +1063,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
           onClose={() => setShowCustomModal(false)}
           activeCharacter={activeCharacter}
           onUpdateCharacter={onUpdateCharacter}
+          onAddItemToInventory={onAddItemToInventory}
           onSaved={(newItem) => {
             setCustomEntries(loadCustomCompendiumEntries());
             showToast(`✨ Created custom homebrew entry "${newItem.name}"!`);

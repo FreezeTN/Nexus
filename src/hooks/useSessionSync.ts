@@ -87,15 +87,28 @@ export function useSessionSync({
               return prev;
             }
             // Protect against reverting newer local character edits with older cloud snapshots
-            if (existing && existing.updatedAt && updatedCloudChar.updatedAt) {
-              const localTime = new Date(existing.updatedAt).getTime();
-              const cloudTime = new Date(updatedCloudChar.updatedAt).getTime();
-              if (localTime >= cloudTime) {
+            const localTime = existing?.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+            const cloudTime = updatedCloudChar?.updatedAt ? new Date(updatedCloudChar.updatedAt).getTime() : 0;
+            
+            if (localTime >= cloudTime && localTime > 0) {
+              return prev;
+            }
+
+            // If timestamps are unavailable or cloud snapshot is identical/missing local items, preserve local items
+            if (Array.isArray(existing?.inventory) && Array.isArray(updatedCloudChar?.inventory)) {
+              if (existing.inventory.length > updatedCloudChar.inventory.length && localTime >= cloudTime) {
                 return prev;
               }
             }
+
             const copy = [...prev];
-            copy[index] = updatedCloudChar;
+            copy[index] = {
+              ...updatedCloudChar,
+              // If local character had items added recently, merge any items that are missing in older snapshot
+              inventory: Array.isArray(updatedCloudChar.inventory) && updatedCloudChar.inventory.length >= (existing?.inventory?.length || 0)
+                ? updatedCloudChar.inventory
+                : (existing?.inventory || updatedCloudChar.inventory)
+            };
             return copy;
           } else {
             return [updatedCloudChar, ...prev];

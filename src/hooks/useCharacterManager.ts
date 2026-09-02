@@ -6,6 +6,8 @@ import { useHistoryState } from '../utils/useHistoryState';
 import { recalculateCharacterAC, isCharacterDead } from '../utils/dndCalculations';
 import { broadcastStateUpdate, useDetachedSyncListener } from '../utils/useDetachedSync';
 import { eventBus } from '../events/eventBus';
+import { saveCustomCompendiumEntry } from '../data/compendiumData';
+import { UniversalImporter } from '../services/universalImporter';
 import {
   UserProfile,
   CharacterPresence,
@@ -45,22 +47,29 @@ export function useCharacterManager({
         if (Array.isArray(parsed) && parsed.length > 0) {
           // Ensure default sample characters retain their intended editions if modified in prior sessions
           parsed = parsed.map((c: CharacterData) => {
-            if (c.id === 'char-sr-ghost-zero' && c.shadowrun) {
-              return { ...c, edition: 'shadowrun' as RuleEdition };
+            let item = { ...c };
+            if (!item.updatedAt) {
+              item.updatedAt = new Date().toISOString();
             }
-            if (c.isMonster && !c.challengeRating) {
-              const sampleMatch = SAMPLE_CHARACTERS.find(s => s.id === c.id);
+            if (item.id === 'char-sr-ghost-zero' && item.shadowrun) {
+              return { ...item, edition: 'shadowrun' as RuleEdition };
+            }
+            if (item.isMonster && !item.challengeRating) {
+              const sampleMatch = SAMPLE_CHARACTERS.find(s => s.id === item.id);
               if (sampleMatch?.challengeRating) {
-                return { ...c, challengeRating: sampleMatch.challengeRating };
+                return { ...item, challengeRating: sampleMatch.challengeRating };
               }
-              if (c.subclass) {
-                return { ...c, challengeRating: c.subclass.replace(/^CR\s*/i, '') };
+              if (item.subclass) {
+                return { ...item, challengeRating: item.subclass.replace(/^CR\s*/i, '') };
               }
             }
-            return c;
+            return item;
           });
           const existingIds = new Set(parsed.map((c: CharacterData) => c.id));
-          const missingSamples = SAMPLE_CHARACTERS.filter(sc => !existingIds.has(sc.id));
+          const missingSamples = SAMPLE_CHARACTERS.filter(sc => !existingIds.has(sc.id)).map(sc => ({
+            ...sc,
+            updatedAt: sc.updatedAt || new Date().toISOString()
+          }));
           if (missingSamples.length > 0) {
             return [...parsed, ...missingSamples];
           }
@@ -70,7 +79,10 @@ export function useCharacterManager({
     } catch (e) {
       console.error('Failed to load characters from localStorage', e);
     }
-    return SAMPLE_CHARACTERS;
+    return SAMPLE_CHARACTERS.map(c => ({
+      ...c,
+      updatedAt: c.updatedAt || new Date().toISOString()
+    }));
   })();
 
   const {
@@ -88,11 +100,12 @@ export function useCharacterManager({
     }
     try {
       const savedId = localStorage.getItem(STORAGE_KEY_ACTIVE);
-      if (savedId && characters.some(c => c.id === savedId)) return savedId;
+      if (savedId && initialCharacters.some(c => c.id === savedId)) return savedId;
     } catch (e) {
       console.error('Failed to load active ID from localStorage', e);
     }
-    return '';
+    const fallback = initialCharacters.find(c => !c.isMonster && !c.isVendor) || initialCharacters[0];
+    return fallback?.id || '';
   });
 
   // Party Management State
@@ -279,12 +292,16 @@ export function useCharacterManager({
     });
 
     setCharacters(prev => {
-      const updatedList = prev.map(c => c.id === recalculated.id ? recalculated : c);
+      const exists = prev.some(c => c.id === recalculated.id);
+      const updatedList = exists 
+        ? prev.map(c => c.id === recalculated.id ? recalculated : c)
+        : [recalculated, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updatedList));
+      } catch (e) {}
+      broadcastStateUpdate(updatedList, activeCharacterId, parties);
       return updatedList;
     });
-
-    const updatedList = characters.map(c => c.id === recalculated.id ? recalculated : c);
-    broadcastStateUpdate(updatedList, activeCharacterId, parties);
 
     if (recalculated.id === activeCharacterId && recalculated.edition && onThemeChange) {
       onThemeChange(recalculated.edition);
@@ -292,29 +309,38 @@ export function useCharacterManager({
 
     eventBus.emit('CharacterUpdated', { character: recalculated });
 
-    saveCharacterToCloud(currentUser?.uid || 'guest_user', recalculated);
+    if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
+      saveCharacterToCloud(currentUser.uid, recalculated);
+    }
   };
 
-  const handleSelectCharacter = (id: string) => {
+  const handleSelectCharacter = (id: string, shouldNavigate: boolean = true) => {
     setActiveCharacterId(id);
     if (id) {
-      if (onNavigateToTab) onNavigateToTab('sheet1');
+      if (shouldNavigate && onNavigateToTab) onNavigateToTab('sheet1');
       const target = characters.find(c => c.id === id);
       if (target?.edition && onThemeChange) {
         onThemeChange(target.edition);
       }
     } else {
-      if (onNavigateToTab) onNavigateToTab('menu');
+      if (shouldNavigate && onNavigateToTab) onNavigateToTab('menu');
     }
   };
 
   const handleCreateNewCharacter = (newChar: CharacterData) => {
-    setCharacters(prev => [newChar, ...prev]);
+    setCharacters(prev => {
+      const updatedList = [newChar, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updatedList));
+      } catch (e) {}
+      broadcastStateUpdate(updatedList, newChar.id, parties);
+      return updatedList;
+    });
     setActiveCharacterId(newChar.id);
 
     eventBus.emit('CharacterCreated', { character: newChar });
 
-    if (currentUser?.uid) {
+    if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
       saveCharacterToCloud(currentUser.uid, newChar);
     }
   };
@@ -322,38 +348,176 @@ export function useCharacterManager({
   const handleDeleteCharacter = (idToDelete: string) => {
     setCharacters(prev => {
       const remaining = prev.filter(c => c.id !== idToDelete);
-      if (remaining.length === 0) {
-        setActiveCharacterId(SAMPLE_CHARACTERS[0].id);
-        return SAMPLE_CHARACTERS;
-      }
-      if (activeCharacterId === idToDelete) {
-        setActiveCharacterId(remaining[0].id);
-      }
-      return remaining;
+      const nextActive = remaining.length > 0 ? (activeCharacterId === idToDelete ? remaining[0].id : activeCharacterId) : SAMPLE_CHARACTERS[0].id;
+      const finalList = remaining.length > 0 ? remaining : SAMPLE_CHARACTERS;
+      try {
+        localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(finalList));
+      } catch (e) {}
+      setActiveCharacterId(nextActive);
+      broadcastStateUpdate(finalList, nextActive, parties);
+      return finalList;
     });
 
-    if (currentUser?.uid) {
+    if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
       deleteCharacterFromCloud(idToDelete);
     }
   };
 
-  const handleAddItemToActiveCharacter = (item: GearItem) => {
-    if (!activeCharacter) return;
-    const updatedInventory = [...(activeCharacter.inventory || []), item];
-    handleUpdateCharacter({
-      ...activeCharacter,
-      inventory: updatedInventory
+  const handleAddItemToActiveCharacter = (item: GearItem, targetCharacterId?: string) => {
+    let resolvedTargetId = targetCharacterId || activeCharacterId || activeCharacter?.id;
+    if (!resolvedTargetId && characters.length > 0) {
+      resolvedTargetId = (characters.find(c => !c.isMonster && !c.isVendor) || characters[0]).id;
+    }
+
+    if (!resolvedTargetId) {
+      const defaultChar = { ...SAMPLE_CHARACTERS[0], id: `char_${Date.now()}`, inventory: [item], updatedAt: new Date().toISOString() };
+      handleCreateNewCharacter(defaultChar);
+      return;
+    }
+
+    const itemWithId: GearItem = {
+      ...item,
+      id: item.id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+    };
+
+    const nowIso = new Date().toISOString();
+    const currentTarget = characters.find(c => c.id === resolvedTargetId) || characters[0];
+    const currentInv = Array.isArray(currentTarget?.inventory) ? currentTarget.inventory : [];
+    const updatedInventory = [itemWithId, ...currentInv.filter(i => i.id !== itemWithId.id)];
+    const updatedChar = recalculateCharacterAC({
+      ...currentTarget,
+      inventory: updatedInventory,
+      updatedAt: nowIso
     });
+
+    const exists = characters.some(c => c.id === updatedChar.id);
+    const updatedList = exists 
+      ? characters.map(c => c.id === updatedChar.id ? updatedChar : c)
+      : [updatedChar, ...characters];
+
+    // 1. Update React history state
+    setCharacters(updatedList);
+
+    // 2. Persist to localStorage immediately
+    try {
+      localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updatedList));
+    } catch (e) {
+      console.error('Failed to save characters to localStorage', e);
+    }
+
+    // 3. Ensure active character is focused
+    if (resolvedTargetId !== activeCharacterId) {
+      setActiveCharacterId(resolvedTargetId);
+    }
+
+    // 4. Broadcast detached / multi-window sync
+    broadcastStateUpdate(updatedList, resolvedTargetId, parties);
+
+    // 5. Cloud Firestore backup (if signed in)
+    if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
+      saveCharacterToCloud(currentUser.uid, updatedChar);
+    }
+
+    // 6. Notify domain subscribers and UI toast
+    eventBus.emit('CharacterUpdated', { character: updatedChar });
+    eventBus.emit('ItemAdded', {
+      characterId: resolvedTargetId,
+      itemName: itemWithId.name,
+      quantity: itemWithId.quantity || 1
+    });
+
+    try {
+      saveCustomCompendiumEntry({
+        id: 'comp-gear-' + itemWithId.id,
+        name: itemWithId.name,
+        category: 'items',
+        edition: activeCharacter?.edition || '5e',
+        description: `${itemWithId.itemType || 'General'} item weighing ${itemWithId.weight} lbs. ${itemWithId.notes || ''}`,
+        source: 'AI Forge',
+        isCustom: true,
+        tags: [activeCharacter?.edition || '5e', itemWithId.itemType || 'General'],
+        itemData: itemWithId
+      });
+    } catch (e) {
+      console.warn('Failed to auto-save forged item to compendium:', e);
+    }
   };
 
-  const handleAddSpellToActiveCharacter = (spell: Spell) => {
-    if (!activeCharacter) return;
-    const updatedSpells = [...(activeCharacter.spells || []), spell];
-    handleUpdateCharacter({
-      ...activeCharacter,
+  const handleAddSpellToActiveCharacter = (spell: Spell, targetCharacterId?: string) => {
+    let resolvedTargetId = targetCharacterId || activeCharacterId || activeCharacter?.id;
+    if (!resolvedTargetId && characters.length > 0) {
+      resolvedTargetId = (characters.find(c => !c.isMonster && !c.isVendor) || characters[0]).id;
+    }
+
+    if (!resolvedTargetId) {
+      const defaultChar = { ...SAMPLE_CHARACTERS[0], id: `char_${Date.now()}`, spells: [spell], isSpellcaster: true, updatedAt: new Date().toISOString() };
+      handleCreateNewCharacter(defaultChar);
+      return;
+    }
+
+    const spellWithId: Spell = {
+      ...spell,
+      id: spell.id || `spell_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+    };
+
+    const nowIso = new Date().toISOString();
+    const currentTarget = characters.find(c => c.id === resolvedTargetId) || characters[0];
+    const currentSpells = Array.isArray(currentTarget?.spells) ? currentTarget.spells : [];
+    const updatedSpells = [spellWithId, ...currentSpells.filter(s => s.id !== spellWithId.id)];
+    const updatedChar: CharacterData = {
+      ...currentTarget,
       spells: updatedSpells,
-      isSpellcaster: true
-    });
+      isSpellcaster: true,
+      updatedAt: nowIso
+    };
+
+    const exists = characters.some(c => c.id === updatedChar.id);
+    const updatedList = exists 
+      ? characters.map(c => c.id === updatedChar.id ? updatedChar : c)
+      : [updatedChar, ...characters];
+
+    // 1. Update React history state
+    setCharacters(updatedList);
+
+    // 2. Persist to localStorage immediately
+    try {
+      localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updatedList));
+    } catch (e) {
+      console.error('Failed to save characters to localStorage', e);
+    }
+
+    // 3. Ensure active character is focused
+    if (resolvedTargetId !== activeCharacterId) {
+      setActiveCharacterId(resolvedTargetId);
+    }
+
+    // 4. Broadcast detached / multi-window sync
+    broadcastStateUpdate(updatedList, resolvedTargetId, parties);
+
+    // 5. Cloud Firestore backup (if signed in)
+    if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
+      saveCharacterToCloud(currentUser.uid, updatedChar);
+    }
+
+    // 6. Domain notifications
+    eventBus.emit('CharacterUpdated', { character: updatedChar });
+    eventBus.emit('SpellLearned', { characterId: resolvedTargetId, spellName: spellWithId.name, level: spellWithId.level });
+
+    try {
+      saveCustomCompendiumEntry({
+        id: 'comp-spell-' + spellWithId.id,
+        name: spellWithId.name,
+        category: 'spells',
+        edition: activeCharacter?.edition || '5e',
+        description: spellWithId.description || spellWithId.shortDescription || '',
+        source: 'AI Forge',
+        isCustom: true,
+        tags: [activeCharacter?.edition || '5e', `Level ${spellWithId.level}`, spellWithId.school || 'Magic'],
+        spellData: spellWithId
+      });
+    } catch (e) {
+      console.warn('Failed to auto-save forged spell to compendium:', e);
+    }
   };
 
   const handleExportJson = () => {
@@ -374,17 +538,21 @@ export function useCharacterManager({
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const importedChar = JSON.parse(event.target?.result as string) as CharacterData;
-        if (importedChar && importedChar.name && importedChar.abilities) {
-          importedChar.id = 'imported-' + Date.now();
-          setCharacters(prev => [importedChar, ...prev]);
-          setActiveCharacterId(importedChar.id);
-          alert(`Successfully imported "${importedChar.name}"!`);
+        const rawContent = event.target?.result as string;
+        const result = UniversalImporter.parse(rawContent, 'auto');
+        if (result.success && result.characters.length > 0) {
+          const newChars = result.characters.map(c => ({
+            ...c,
+            id: c.id || `imported-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+          }));
+          setCharacters(prev => [...newChars, ...prev]);
+          setActiveCharacterId(newChars[0].id);
+          alert(`Successfully imported ${newChars.length} character(s) via ${result.metadata.formatLabel}!`);
         } else {
-          alert('Invalid character sheet JSON format.');
+          alert(`Import failed: ${result.error || 'Unrecognized schema or format'}`);
         }
-      } catch (err) {
-        alert('Failed to parse JSON file.');
+      } catch (err: any) {
+        alert(`Failed to parse file: ${err?.message || 'Unknown error'}`);
       }
     };
     reader.readAsText(file);

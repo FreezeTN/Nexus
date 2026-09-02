@@ -1,5 +1,5 @@
 import React from 'react';
-import { CharacterData } from '../../types';
+import { CharacterData, GearItem } from '../../types';
 import { ShadowrunMatrixRiggingPanel } from '../shadowrun/ShadowrunMatrixRiggingPanel';
 import { WealthCurrencyPanel } from './sheet3/WealthCurrencyPanel';
 import { MagicAttunementPanel } from './sheet3/MagicAttunementPanel';
@@ -11,6 +11,7 @@ import { EmptyLayoutState } from '../common/EmptyLayoutState';
 interface Sheet3Props {
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onAddItemToInventory?: (item: GearItem, targetId?: string) => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage?: (label: string, expression: string) => void;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
@@ -19,6 +20,7 @@ interface Sheet3Props {
 export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   character,
   onUpdateCharacter,
+  onAddItemToInventory,
   onRoll,
   onRollDamage,
   onOpenGenerators
@@ -81,6 +83,7 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
         <InventoryListPanel
           character={character}
           onUpdateCharacter={onUpdateCharacter}
+          onAddItemToInventory={onAddItemToInventory}
           onRollDamage={onRollDamage}
         />
       )}

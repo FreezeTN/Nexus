@@ -1,27 +1,34 @@
 import React, { useState, useMemo } from 'react';
 import { CompendiumItem } from '../../../data/compendiumData';
 import { SupportedEdition, FANTASY_MAGIC_SCHOOLS, FANTASY_DAMAGE_TYPES } from './ForgeTypes';
-import { Save, Sparkles, Wand2, Zap, Shield, Flame, Radio, Plus, X } from 'lucide-react';
+import { Save, Sparkles, Wand2, Zap, Shield, Flame, Radio, Plus, X, BookOpen } from 'lucide-react';
 import { validateHomebrewSpell, ValidationResult } from '../../../utils/homebrewValidator';
 import { ValidationBadgeBanner } from './ValidationBadgeBanner';
 import { ValidationConfirmModal } from './ValidationConfirmModal';
+import { CharacterData, Spell } from '../../../types';
+import { eventBus } from '../../../events/eventBus';
 
 interface SpellStudioProps {
   edition: SupportedEdition;
   sourceAuthor: string;
   onSave: (item: CompendiumItem) => void;
   onClose: () => void;
+  activeCharacter?: CharacterData | null;
+  onUpdateCharacter?: (updated: CharacterData) => void;
 }
 
 export const SpellStudio: React.FC<SpellStudioProps> = ({
   edition,
   sourceAuthor,
   onSave,
-  onClose
+  onClose,
+  activeCharacter,
+  onUpdateCharacter
 }) => {
   // Shared Name & Description
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [addToSpellbook, setAddToSpellbook] = useState(true);
 
   // Fantasy Fields (5e / 3.5e / PF2e)
   const [level, setLevel] = useState(1);
@@ -192,6 +199,42 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
     };
 
     onSave(newItem);
+
+    // If opted into adding directly to active character's spellbook
+    if (addToSpellbook && activeCharacter && onUpdateCharacter) {
+      const newSpell: Spell = {
+        id: 'spell-forged-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        name: newItem.name,
+        level: level,
+        school: school,
+        castingTime: castingTime,
+        range: range,
+        duration: duration,
+        components: components,
+        description: description.trim(),
+        prepared: true,
+        damage: damageFormula || undefined,
+        damageType: damageFormula ? damageType : undefined,
+        saveType: saveType === 'None' ? undefined : saveType,
+        higherLevel: higherLevel || undefined
+      };
+
+      const currentSpells = Array.isArray(activeCharacter.spells) ? activeCharacter.spells : [];
+      const updatedChar: CharacterData = {
+        ...activeCharacter,
+        spells: [newSpell, ...currentSpells.filter(s => s.id !== newSpell.id)],
+        updatedAt: new Date().toISOString()
+      };
+
+      onUpdateCharacter(updatedChar);
+
+      eventBus.emit('SpellLearned', {
+        characterId: activeCharacter.id,
+        spellName: newSpell.name,
+        level: newSpell.level
+      });
+    }
+
     setName('');
     setDescription('');
     setShowOverrideModal(false);
@@ -705,6 +748,35 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
       {/* Validation & Balance Guard */}
       <ValidationBadgeBanner validation={validation} categoryLabel="Homebrew Spell" />
 
+      {/* Direct Add to Character Spellbook Option */}
+      {activeCharacter && (
+        <div className="p-3.5 bg-stone-900/90 border border-stone-800 rounded-2xl flex items-center justify-between gap-3 shadow-inner">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 bg-purple-500/10 rounded-xl border border-purple-500/30 text-purple-400 shrink-0">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold font-serif text-stone-200 truncate">
+                Add directly to <span className="text-amber-400 font-bold">{activeCharacter.name || 'Active Character'}</span>'s Spellbook
+              </div>
+              <div className="text-[10px] text-stone-400 font-mono">
+                Spell will be indexed in compendium and placed in prepared spells (Sheet 4)
+              </div>
+            </div>
+          </div>
+
+          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+            <input
+              type="checkbox"
+              checked={addToSpellbook}
+              onChange={(e) => setAddToSpellbook(e.target.checked)}
+              className="sr-only peer"
+            />
+            <div className="w-9 h-5 bg-stone-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
+      )}
+
       {/* Footer Controls */}
       <div className="flex items-center justify-between pt-2 border-t border-stone-800/80">
         <button
@@ -720,7 +792,7 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>Save to Compendium</span>
+          <span>{addToSpellbook && activeCharacter ? 'Forge & Add to Spellbook' : 'Save Spell to Compendium'}</span>
         </button>
       </div>
 

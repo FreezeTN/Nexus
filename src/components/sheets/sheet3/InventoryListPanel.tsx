@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData, GearItem, ItemContainer, ContainerType } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { PRESET_DND_ITEMS } from '../../../data/presetItems';
-import { loadCustomCompendiumEntries, saveCustomCompendiumEntry, CompendiumItem } from '../../../data/compendiumData';
+import { loadCustomCompendiumEntries, saveCustomCompendiumEntry, deleteCustomCompendiumEntry, CompendiumItem } from '../../../data/compendiumData';
 import { recalculateCharacterAC, getMaxAttunementSlots, getAttunedItemsCount } from '../../../utils/dndCalculations';
 import { getCharacterContainers, PRESET_CONTAINERS, getContainerWeightSummaries } from '../../../utils/containerUtils';
 import { eventBus } from '../../../events/eventBus';
@@ -47,12 +47,14 @@ import {
 interface InventoryListPanelProps {
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onAddItemToInventory?: (item: GearItem, targetId?: string) => void;
   onRollDamage?: (label: string, expression: string) => void;
 }
 
 export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   character,
   onUpdateCharacter,
+  onAddItemToInventory,
   onRollDamage
 }) => {
   const { t } = useLanguage();
@@ -87,13 +89,45 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const [customCompendiumList, setCustomCompendiumList] = useState<CompendiumItem[]>([]);
   const [saveToCompendiumAlso, setSaveToCompendiumAlso] = useState(true);
   const [quickAddFeedback, setQuickAddFeedback] = useState<string | null>(null);
+  const [catalogItemToDelete, setCatalogItemToDelete] = useState<UnifiedCatalogItem | null>(null);
 
-  // Sync custom compendium items whenever the add item modal opens
+  // Highlight newly added items from AI Forge / Compendium
+  const [highlightedItemName, setHighlightedItemName] = useState<string | null>(null);
+
+  // Sync custom compendium items whenever the add item modal opens or compendium changes
   useEffect(() => {
     if (showAddItemModal) {
       setCustomCompendiumList(loadCustomCompendiumEntries());
     }
   }, [showAddItemModal]);
+
+  useEffect(() => {
+    const handleCompendiumUpdate = () => {
+      setCustomCompendiumList(loadCustomCompendiumEntries());
+    };
+    eventBus.on('CompendiumUpdated', handleCompendiumUpdate);
+    return () => {
+      eventBus.off('CompendiumUpdated', handleCompendiumUpdate);
+    };
+  }, []);
+
+  // Listen for ItemAdded events for this character
+  useEffect(() => {
+    const unsubscribe = eventBus.on('ItemAdded', (payload: { characterId: string; itemName: string; quantity?: number }) => {
+      const isTarget = !payload.characterId || 
+        payload.characterId === character.id || 
+        (character.name && payload.characterId.toLowerCase() === character.name.trim().toLowerCase());
+      if (isTarget) {
+        setCategoryFilter('all');
+        setSearchQuery('');
+        setHighlightedItemName(payload.itemName);
+        setTimeout(() => {
+          setHighlightedItemName(null);
+        }, 4000);
+      }
+    });
+    return () => unsubscribe();
+  }, [character.id, character.name]);
 
   // New item form state
   const [newItemName, setNewItemName] = useState('');
@@ -465,24 +499,44 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       weaponStats: weaponStats
     };
 
-    const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
-    const updatedInventory = [...currentInventory, newGearItem];
+    if (onAddItemToInventory) {
+      onAddItemToInventory(newGearItem, character.id);
+    } else {
+      const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
+      const updatedInventory = [newGearItem, ...currentInventory];
 
-    const updatedChar = recalculateCharacterAC({
-      ...character,
-      inventory: updatedInventory
-    });
+      const updatedChar = recalculateCharacterAC({
+        ...character,
+        inventory: updatedInventory
+      });
 
-    onUpdateCharacter(updatedChar);
+      onUpdateCharacter(updatedChar);
 
-    eventBus.emit('ItemAdded', {
-      characterId: character.id,
-      itemName: newGearItem.name,
-      quantity: newGearItem.quantity || 1
-    });
+      eventBus.emit('ItemAdded', {
+        characterId: character.id,
+        itemName: newGearItem.name,
+        quantity: newGearItem.quantity || 1
+      });
+    }
 
     setQuickAddFeedback(`Added "${newGearItem.name}" to ${character.name || 'Character'}'s inventory!`);
     setTimeout(() => setQuickAddFeedback(null), 2500);
+  };
+
+  const handleDeleteCustomCatalogItem = (item: UnifiedCatalogItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!item.isCustom) return;
+    setCatalogItemToDelete(item);
+  };
+
+  const confirmDeleteCatalogItem = () => {
+    if (!catalogItemToDelete) return;
+    const updated = deleteCustomCompendiumEntry(catalogItemToDelete.id, catalogItemToDelete.name, 'items');
+    setCustomCompendiumList(updated);
+    eventBus.emit('CompendiumUpdated', { id: catalogItemToDelete.id, name: catalogItemToDelete.name });
+    setQuickAddFeedback(`Deleted "${catalogItemToDelete.name}" from Compendium`);
+    setTimeout(() => setQuickAddFeedback(null), 2500);
+    setCatalogItemToDelete(null);
   };
 
   const handleCustomizeCatalogItem = (item: UnifiedCatalogItem) => {
@@ -549,19 +603,23 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       isCursed: newItemIsCursed || undefined
     };
 
-    const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
-    const updatedChar = recalculateCharacterAC({
-      ...character,
-      inventory: [...currentInventory, newItem]
-    });
+    if (onAddItemToInventory) {
+      onAddItemToInventory(newItem, character.id);
+    } else {
+      const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
+      const updatedChar = recalculateCharacterAC({
+        ...character,
+        inventory: [newItem, ...currentInventory]
+      });
 
-    onUpdateCharacter(updatedChar);
+      onUpdateCharacter(updatedChar);
 
-    eventBus.emit('ItemAdded', {
-      characterId: character.id,
-      itemName: newItem.name,
-      quantity: newItem.quantity || 1
-    });
+      eventBus.emit('ItemAdded', {
+        characterId: character.id,
+        itemName: newItem.name,
+        quantity: newItem.quantity || 1
+      });
+    }
 
     if (saveToCompendiumAlso) {
       try {
@@ -602,17 +660,21 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       weaponStats: preset.weaponStats
     };
 
-    const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
-    onUpdateCharacter(recalculateCharacterAC({
-      ...character,
-      inventory: [...currentInventory, newItem]
-    }));
+    if (onAddItemToInventory) {
+      onAddItemToInventory(newItem, character.id);
+    } else {
+      const currentInventory = Array.isArray(character.inventory) ? character.inventory : [];
+      onUpdateCharacter(recalculateCharacterAC({
+        ...character,
+        inventory: [newItem, ...currentInventory]
+      }));
 
-    eventBus.emit('ItemAdded', {
-      characterId: character.id,
-      itemName: newItem.name,
-      quantity: newItem.quantity || 1
-    });
+      eventBus.emit('ItemAdded', {
+        characterId: character.id,
+        itemName: newItem.name,
+        quantity: newItem.quantity || 1
+      });
+    }
 
     setShowAddItemModal(false);
   };
@@ -1171,7 +1233,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                   onDrop={(e) => handleDrop(e, index)}
                   onDragEnd={handleDragEnd}
                   className={`p-3 rounded-xl border transition-all text-xs flex flex-wrap items-center justify-between gap-3 ${
-                    draggedIndex === index
+                    highlightedItemName === item.name
+                      ? 'bg-emerald-950/60 border-emerald-400 ring-2 ring-emerald-500/80 shadow-lg shadow-emerald-950/50 animate-pulse'
+                      : draggedIndex === index
                       ? 'opacity-40 border-dashed border-amber-500 bg-amber-950/20'
                       : dragOverIndex === index
                       ? 'border-amber-400 bg-amber-950/60 scale-[1.01] shadow-lg ring-2 ring-amber-500/50'
@@ -1752,10 +1816,21 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
 
                         {/* Action Buttons */}
                         <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-800">
+                          {item.isCustom && (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteCustomCatalogItem(item, e)}
+                              className="p-1.5 bg-stone-850 hover:bg-rose-950/50 text-stone-500 hover:text-rose-400 rounded-xl text-xs transition border border-stone-800 hover:border-rose-900/50 flex items-center justify-center cursor-pointer"
+                              title="Delete from custom compendium"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => handleCustomizeCatalogItem(item)}
-                            className="px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-stone-100 rounded-xl text-xs font-semibold transition border border-stone-700 flex items-center gap-1"
+                            className="px-2.5 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-stone-100 rounded-xl text-xs font-semibold transition border border-stone-700 flex items-center gap-1 cursor-pointer"
                             title="Customize this item before adding"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -1765,7 +1840,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                           <button
                             type="button"
                             onClick={() => handleAddCatalogItem(item, 1)}
-                            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-1.5"
+                            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-1.5 cursor-pointer"
                           >
                             <Plus className="w-4 h-4" />
                             <span>Add</span>
@@ -2146,6 +2221,48 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                   </button>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IN-APP CONFIRMATION FOR DELETING CUSTOM CATALOG ITEM */}
+      {catalogItemToDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-stone-950 border border-stone-800 rounded-3xl max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-rose-500/10 rounded-2xl border border-rose-500/20 text-rose-400 shrink-0">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-serif font-bold text-lg text-stone-100">Delete Custom Item?</h3>
+                <p className="text-xs text-stone-400 font-mono">This will remove the item from your compendium catalog.</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-stone-900/80 rounded-2xl border border-stone-800/80 space-y-1">
+              <div className="text-sm font-bold text-amber-300 font-serif">{catalogItemToDelete.name}</div>
+              <div className="text-xs text-stone-400 font-mono">
+                {catalogItemToDelete.category} • {catalogItemToDelete.weight || 0} lbs • {catalogItemToDelete.costGp || 0} GP
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setCatalogItemToDelete(null)}
+                className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-stone-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteCatalogItem}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-rose-950/40 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Item</span>
+              </button>
             </div>
           </div>
         </div>

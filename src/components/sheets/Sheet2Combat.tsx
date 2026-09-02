@@ -7,6 +7,7 @@ import { EncounterTracker } from '../combat/EncounterTracker';
 import { AttackResolver } from '../combat/AttackResolver';
 import { useEncounterState } from '../combat/encounter/useEncounterState';
 import { MaxHpInspectorModal } from '../modals/MaxHpInspectorModal';
+import { ModifierInspectorModal } from '../modals/ModifierInspectorModal';
 import { SpellTargetModal } from '../modals/SpellTargetModal';
 import { TransformationModal } from '../modals/TransformationModal';
 import { CompanionModal } from '../modals/CompanionModal';
@@ -15,6 +16,7 @@ import { CombatDefensesPanel } from './sheet2/CombatDefensesPanel';
 import { AttacksSpellsPanel } from './sheet2/AttacksSpellsPanel';
 import { useLayoutCustomization } from '../../utils/layoutCustomization';
 import { EmptyLayoutState } from '../common/EmptyLayoutState';
+import { ModifierTarget } from '../../domain/modifierEngine';
 
 interface Sheet2Props {
   character: CharacterData;
@@ -45,6 +47,8 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   const [showTransformationModal, setShowTransformationModal] = useState(false);
   const [showCompanionModal, setShowCompanionModal] = useState(false);
   const [showMaxHpInspector, setShowMaxHpInspector] = useState(false);
+  const [showModifierInspector, setShowModifierInspector] = useState(false);
+  const [inspectedTarget, setInspectedTarget] = useState<ModifierTarget>('ac');
   const [targetModalSpell, setTargetModalSpell] = useState<any | null>(null);
 
   const encounter = useEncounterState({
@@ -137,6 +141,10 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
           setShowTransformationModal={setShowTransformationModal}
           setShowCompanionModal={setShowCompanionModal}
           setShowRestModal={setShowRestModal}
+          setShowModifierInspector={(target) => {
+            if (target) setInspectedTarget(target);
+            setShowModifierInspector(true);
+          }}
         />
       )}
 
@@ -198,6 +206,16 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
           character={character}
           onUpdateCharacter={onUpdateCharacter}
           onClose={() => setShowMaxHpInspector(false)}
+        />
+      )}
+
+      {showModifierInspector && (
+        <ModifierInspectorModal
+          isOpen={true}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          initialTarget={inspectedTarget}
+          onClose={() => setShowModifierInspector(false)}
         />
       )}
 

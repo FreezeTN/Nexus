@@ -1015,9 +1015,15 @@ export function saveCustomCompendiumEntry(newItem: CompendiumItem): CompendiumIt
   return updated;
 }
 
-export function deleteCustomCompendiumEntry(id: string): CompendiumItem[] {
+export function deleteCustomCompendiumEntry(id: string, name?: string, category?: string): CompendiumItem[] {
   const current = loadCustomCompendiumEntries();
-  const updated = current.filter(i => i.id !== id);
+  const updated = current.filter(i => {
+    if (i.id === id) return false;
+    if (name && category && i.name.trim().toLowerCase() === name.trim().toLowerCase() && i.category === category) {
+      return false;
+    }
+    return true;
+  });
   try {
     localStorage.setItem(STORAGE_KEY_CUSTOM_COMPENDIUM, JSON.stringify(updated));
   } catch (e) {

@@ -30,6 +30,7 @@ export function useModalCoordinator({
   const [showLevelUpWizard, setShowLevelUpWizard] = useState<boolean>(false);
   const [showNewCharacterModal, setShowNewCharacterModal] = useState<boolean>(false);
   const [showPartyModal, setShowPartyModal] = useState<boolean>(false);
+  const [showUniversalImporterStudio, setShowUniversalImporterStudio] = useState<boolean>(false);
   const [newCharCategory, setNewCharCategory] = useState<'character' | 'monster' | 'vendor'>('character');
 
   // Upgrade / Supporter Modal State
@@ -129,6 +130,8 @@ export function useModalCoordinator({
     setShowNewCharacterModal,
     showPartyModal,
     setShowPartyModal,
+    showUniversalImporterStudio,
+    setShowUniversalImporterStudio,
     newCharCategory,
     setNewCharCategory,
     showUpgradeModal,

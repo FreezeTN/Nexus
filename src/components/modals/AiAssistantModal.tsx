@@ -66,11 +66,13 @@ interface AiAssistantModalProps {
   isOpen: boolean;
   onClose: () => void;
   activeCharacter?: CharacterData | null;
+  characters?: CharacterData[];
   ruleEdition?: RuleEdition;
   onAddCharacter?: (newChar: CharacterData) => void;
-  onAddItemToInventory?: (item: GearItem) => void;
-  onAddSpellToSpellbook?: (spell: Spell) => void;
+  onAddItemToInventory?: (item: GearItem, targetCharacterId?: string) => void;
+  onAddSpellToSpellbook?: (spell: Spell, targetCharacterId?: string) => void;
   onNavigateTab?: (tab: string) => void;
+  onSelectCharacter?: (id: string) => void;
 }
 
 function formatHumanError(err: any): string {
@@ -173,14 +175,42 @@ export function AiAssistantModal({
   isOpen,
   onClose,
   activeCharacter,
+  characters = [],
   ruleEdition = '5e',
   onAddCharacter,
   onAddItemToInventory,
   onAddSpellToSpellbook,
-  onNavigateTab
+  onNavigateTab,
+  onSelectCharacter
 }: AiAssistantModalProps) {
   const { language, currentLanguageObj } = useLanguage();
   const [activeTab, setActiveTab] = useState<'chat' | 'generator' | 'settings'>('chat');
+  const [targetCharId, setTargetCharId] = useState<string>(activeCharacter?.id || (characters[0]?.id || ''));
+
+  useEffect(() => {
+    if (activeCharacter?.id) {
+      setTargetCharId(activeCharacter.id);
+    } else if (characters.length > 0 && !targetCharId) {
+      setTargetCharId(characters[0].id);
+    }
+  }, [activeCharacter?.id, characters]);
+
+  const resolveTargetCharacter = (explicitId?: string, textPrompt?: string): CharacterData | undefined => {
+    if (explicitId) {
+      const match = characters?.find(c => c.id === explicitId);
+      if (match) return match;
+    }
+    if (textPrompt && characters && characters.length > 0) {
+      const lower = textPrompt.toLowerCase();
+      const found = characters.find(c => c.name && lower.includes(c.name.trim().toLowerCase()));
+      if (found) return found;
+    }
+    if (targetCharId) {
+      const match = characters?.find(c => c.id === targetCharId);
+      if (match) return match;
+    }
+    return activeCharacter || characters?.[0];
+  };
   
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
@@ -479,6 +509,16 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
       image: displayAttachment || undefined,
     };
 
+    // If prompt explicitly names a character in the campaign roster, auto-target them
+    if (textToSend) {
+      const lowerText = textToSend.toLowerCase();
+      const matchedChar = characters?.find(c => c.name && lowerText.includes(c.name.trim().toLowerCase()));
+      if (matchedChar) {
+        setTargetCharId(matchedChar.id);
+        if (onSelectCharacter) onSelectCharacter(matchedChar.id);
+      }
+    }
+
     setChatMessages(prev => [...prev, userMsg]);
     if (!customText) setInputMessage('');
     setAttachedAttachment(null);
@@ -605,19 +645,29 @@ INSTRUCTIONS FOR THE ORACLE:
   const handleGenerateEntity = async () => {
     if (!genPrompt.trim() || isGenLoading) return;
 
+    // Check if prompt names a character
+    const lowerPrompt = genPrompt.toLowerCase();
+    const matchedChar = characters?.find(c => c.name && lowerPrompt.includes(c.name.trim().toLowerCase()));
+    if (matchedChar) {
+      setTargetCharId(matchedChar.id);
+      if (onSelectCharacter) onSelectCharacter(matchedChar.id);
+    }
+
     setIsGenLoading(true);
     setGeneratedResult(null);
     setImportedSuccess(null);
 
     try {
+      const activeChar = matchedChar || characters.find(c => c.id === targetCharId) || activeCharacter;
       const context = {
         ruleEdition,
-        activeCharacterName: activeCharacter?.name,
-        activeCharacterLevel: activeCharacter?.level
+        activeCharacterName: activeChar?.name,
+        activeCharacterLevel: activeChar?.level
       };
 
       const res = await generateEntity(entityType, genPrompt, ruleEdition, context, language);
       setGeneratedResult(res.entity);
+      setImportedSuccess(null);
     } catch (err: any) {
       alert(`Generation failed: ${err.message || 'Unknown error'}`);
     } finally {
@@ -635,12 +685,14 @@ INSTRUCTIONS FOR THE ORACLE:
         const pc = hydrateGeneratedCharacter(targetData, ruleEdition);
         if (onAddCharacter) {
           onAddCharacter(pc);
+          if (onSelectCharacter && pc.id) onSelectCharacter(pc.id);
           setImportedSuccess(`Added "${pc.name}" (Level ${pc.level} ${pc.characterClass}) to Hub under Player Characters!`);
         }
       } else if (targetType === 'merchant') {
         const merchant = hydrateGeneratedMerchant(targetData, ruleEdition);
         if (onAddCharacter) {
           onAddCharacter(merchant);
+          if (onSelectCharacter && merchant.id) onSelectCharacter(merchant.id);
           setImportedSuccess(`Added "${merchant.name}" to Hub under Merchants & Shops!`);
         }
       } else if (targetType === 'class') {
@@ -655,19 +707,24 @@ INSTRUCTIONS FOR THE ORACLE:
         const monster = hydrateGeneratedMonster(targetData, ruleEdition);
         if (onAddCharacter) {
           onAddCharacter(monster);
+          if (onSelectCharacter && monster.id) onSelectCharacter(monster.id);
           setImportedSuccess(`Added "${monster.name}" (CR ${monster.challengeRating}) to Hub under Monsters & Creatures!`);
         }
       } else if (targetType === 'item') {
         const item = hydrateGeneratedItem(targetData);
-        if (onAddItemToInventory) {
-          onAddItemToInventory(item);
-          setImportedSuccess(`Added "${item.name}" directly to ${activeCharacter?.name || 'active character'}'s inventory!`);
+        const resolvedTarget = resolveTargetCharacter(targetCharId, genPrompt);
+        if (onAddItemToInventory && resolvedTarget) {
+          onAddItemToInventory(item, resolvedTarget.id);
+          if (onSelectCharacter) onSelectCharacter(resolvedTarget.id);
+          setImportedSuccess(`Added "${item.name}" directly to ${resolvedTarget.name}'s inventory (Sheet 3)!`);
         }
       } else if (targetType === 'spell') {
         const spell = hydrateGeneratedSpell(targetData, ruleEdition);
-        if (onAddSpellToSpellbook) {
-          onAddSpellToSpellbook(spell);
-          setImportedSuccess(`Added "${spell.name}" (Level ${spell.level}) to ${activeCharacter?.name || 'active character'}'s spellbook!`);
+        const resolvedTarget = resolveTargetCharacter(targetCharId, genPrompt);
+        if (onAddSpellToSpellbook && resolvedTarget) {
+          onAddSpellToSpellbook(spell, resolvedTarget.id);
+          if (onSelectCharacter) onSelectCharacter(resolvedTarget.id);
+          setImportedSuccess(`Added "${spell.name}" (Level ${spell.level}) to ${resolvedTarget.name}'s spellbook (Sheet 4)!`);
         }
       } else if (targetType === 'graph_node') {
         const node = hydrateGeneratedGraphNode(targetData);
@@ -691,6 +748,7 @@ INSTRUCTIONS FOR THE ORACLE:
         const pc = hydrateGeneratedCharacter(entity.rawJson, ruleEdition);
         if (onAddCharacter) {
           onAddCharacter(pc);
+          if (onSelectCharacter && pc.id) onSelectCharacter(pc.id);
           setImportedChatIds(prev => ({
             ...prev,
             [entity.id]: `Added "${pc.name}" to Hub as Player Character!`
@@ -714,6 +772,7 @@ INSTRUCTIONS FOR THE ORACLE:
         const merchant = hydrateGeneratedMerchant(entity.rawJson, ruleEdition);
         if (onAddCharacter) {
           onAddCharacter(merchant);
+          if (onSelectCharacter && merchant.id) onSelectCharacter(merchant.id);
           setImportedChatIds(prev => ({
             ...prev,
             [entity.id]: `Added "${merchant.name}" to Hub as Merchant Shopkeeper!`
@@ -723,6 +782,7 @@ INSTRUCTIONS FOR THE ORACLE:
         const monster = hydrateGeneratedMonster(entity.rawJson, ruleEdition);
         if (onAddCharacter) {
           onAddCharacter(monster);
+          if (onSelectCharacter && monster.id) onSelectCharacter(monster.id);
           setImportedChatIds(prev => ({
             ...prev,
             [entity.id]: `Added "${monster.name}" (CR ${monster.challengeRating}) to Hub as Monster & Combatant!`
@@ -730,20 +790,24 @@ INSTRUCTIONS FOR THE ORACLE:
         }
       } else if (entity.type === 'item') {
         const item = hydrateGeneratedItem(entity.rawJson);
-        if (onAddItemToInventory) {
-          onAddItemToInventory(item);
+        const resolvedTarget = resolveTargetCharacter(targetCharId, (entity.name || '') + ' ' + (entity.summary || ''));
+        if (onAddItemToInventory && resolvedTarget) {
+          onAddItemToInventory(item, resolvedTarget.id);
+          if (onSelectCharacter) onSelectCharacter(resolvedTarget.id);
           setImportedChatIds(prev => ({
             ...prev,
-            [entity.id]: `Added "${item.name}" to active inventory!`
+            [entity.id]: `Added "${item.name}" to ${resolvedTarget.name}'s inventory!`
           }));
         }
       } else if (entity.type === 'spell') {
         const spell = hydrateGeneratedSpell(entity.rawJson, ruleEdition);
-        if (onAddSpellToSpellbook) {
-          onAddSpellToSpellbook(spell);
+        const resolvedTarget = resolveTargetCharacter(targetCharId, (entity.name || '') + ' ' + (entity.summary || ''));
+        if (onAddSpellToSpellbook && resolvedTarget) {
+          onAddSpellToSpellbook(spell, resolvedTarget.id);
+          if (onSelectCharacter) onSelectCharacter(resolvedTarget.id);
           setImportedChatIds(prev => ({
             ...prev,
-            [entity.id]: `Added "${spell.name}" to spellbook!`
+            [entity.id]: `Added "${spell.name}" to ${resolvedTarget.name}'s spellbook!`
           }));
         }
       } else if (entity.type === 'graph_node') {
@@ -754,7 +818,7 @@ INSTRUCTIONS FOR THE ORACLE:
         localStorage.setItem('penpaper_campaign_graph_nodes', JSON.stringify(updated));
         setImportedChatIds(prev => ({
           ...prev,
-          [entity.id]: `Added "${node.name}" to Campaign Graph!`
+          [entity.id]: `Added "${node.name}" (${node.type.toUpperCase()}) to Campaign Graph!`
         }));
       }
     } catch (err: any) {
@@ -772,6 +836,7 @@ INSTRUCTIONS FOR THE ORACLE:
         if (entity.type === 'character') {
           const pc = hydrateGeneratedCharacter(entity.rawJson, ruleEdition);
           if (onAddCharacter) onAddCharacter(pc);
+          if (onSelectCharacter && pc.id) onSelectCharacter(pc.id);
           newImportedRecord[entity.id] = `Added "${pc.name}" (Player Character)`;
           successCount++;
         } else if (entity.type === 'class') {
@@ -787,22 +852,28 @@ INSTRUCTIONS FOR THE ORACLE:
         } else if (entity.type === 'merchant') {
           const merchant = hydrateGeneratedMerchant(entity.rawJson, ruleEdition);
           if (onAddCharacter) onAddCharacter(merchant);
+          if (onSelectCharacter && merchant.id) onSelectCharacter(merchant.id);
           newImportedRecord[entity.id] = `Added "${merchant.name}" (Merchant)`;
           successCount++;
         } else if (entity.type === 'monster') {
           const monster = hydrateGeneratedMonster(entity.rawJson, ruleEdition);
           if (onAddCharacter) onAddCharacter(monster);
+          if (onSelectCharacter && monster.id) onSelectCharacter(monster.id);
           newImportedRecord[entity.id] = `Added "${monster.name}" (CR ${monster.challengeRating || '?'})`;
           successCount++;
         } else if (entity.type === 'item') {
           const item = hydrateGeneratedItem(entity.rawJson);
-          if (onAddItemToInventory) onAddItemToInventory(item);
-          newImportedRecord[entity.id] = `Added "${item.name}" (Inventory)`;
+          const resolvedTarget = resolveTargetCharacter(targetCharId, (entity.name || '') + ' ' + (entity.summary || ''));
+          if (onAddItemToInventory && resolvedTarget) onAddItemToInventory(item, resolvedTarget.id);
+          if (onSelectCharacter && resolvedTarget?.id) onSelectCharacter(resolvedTarget.id);
+          newImportedRecord[entity.id] = `Added "${item.name}" (${resolvedTarget?.name || 'Inventory'})`;
           successCount++;
         } else if (entity.type === 'spell') {
           const spell = hydrateGeneratedSpell(entity.rawJson, ruleEdition);
-          if (onAddSpellToSpellbook) onAddSpellToSpellbook(spell);
-          newImportedRecord[entity.id] = `Added "${spell.name}" (Spellbook)`;
+          const resolvedTarget = resolveTargetCharacter(targetCharId, (entity.name || '') + ' ' + (entity.summary || ''));
+          if (onAddSpellToSpellbook && resolvedTarget) onAddSpellToSpellbook(spell, resolvedTarget.id);
+          if (onSelectCharacter && resolvedTarget?.id) onSelectCharacter(resolvedTarget.id);
+          newImportedRecord[entity.id] = `Added "${spell.name}" (${resolvedTarget?.name || 'Spellbook'})`;
           successCount++;
         } else if (entity.type === 'graph_node') {
           const node = hydrateGeneratedGraphNode(entity.rawJson);
@@ -878,8 +949,32 @@ INSTRUCTIONS FOR THE ORACLE:
             </div>
           </div>
 
-          {/* Navigation Mode Tabs & Close */}
+          {/* Navigation Mode Tabs, Destination Selector & Close */}
           <div className="flex items-center gap-2">
+            {/* Target Character Selector for Destination */}
+            {characters && characters.length > 0 && (
+              <div className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-xl text-xs shadow-inner">
+                <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-stone-400 text-[11px] hidden sm:inline">Target:</span>
+                <select
+                  id="ai_target_character_select"
+                  value={targetCharId}
+                  onChange={(e) => {
+                    setTargetCharId(e.target.value);
+                    if (onSelectCharacter) onSelectCharacter(e.target.value);
+                  }}
+                  className="bg-transparent text-amber-300 font-bold text-xs focus:outline-none cursor-pointer"
+                  title="Select target character for AI-generated items and spells"
+                >
+                  {characters.map(c => (
+                    <option key={c.id} value={c.id} className="bg-stone-900 text-stone-200">
+                      {c.name} {c.id === activeCharacter?.id ? '★' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex p-1 bg-stone-900 rounded-xl border border-stone-800">
               <button
                 id="ai_tab_chat_btn"
@@ -1115,6 +1210,8 @@ INSTRUCTIONS FOR THE ORACLE:
                           <div className="space-y-2">
                             {detectedEntities.map(entity => {
                               const isAlreadyImported = importedChatIds[entity.id];
+                              const destinationChar = resolveTargetCharacter(targetCharId, (entity.name || '') + ' ' + (entity.summary || ''));
+                              const destinationName = destinationChar?.name || 'Active Character';
 
                               return (
                                 <div
@@ -1155,11 +1252,43 @@ INSTRUCTIONS FOR THE ORACLE:
                                     </div>
                                   </div>
 
-                                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                                  <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                                     {isAlreadyImported ? (
-                                      <div className="px-3 py-1.5 bg-emerald-950/80 border border-emerald-500/50 rounded-lg text-[11px] text-emerald-300 font-medium flex items-center gap-1.5 w-full sm:w-auto justify-center">
-                                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                                        <span>{isAlreadyImported}</span>
+                                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                        <div className="px-3 py-1.5 bg-emerald-950/80 border border-emerald-500/50 rounded-lg text-[11px] text-emerald-300 font-medium flex items-center gap-1.5 shadow-sm">
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                                          <span>{isAlreadyImported}</span>
+                                        </div>
+                                        {entity.type === 'item' && onNavigateTab && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (destinationChar && onSelectCharacter) onSelectCharacter(destinationChar.id);
+                                              onNavigateTab('sheet3');
+                                              onClose();
+                                            }}
+                                            className="px-2.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold rounded-lg text-xs cursor-pointer transition shadow flex items-center gap-1"
+                                            title={`Open ${destinationName}'s Inventory on Sheet 3`}
+                                          >
+                                            <Shield className="w-3 h-3" />
+                                            <span>Open Sheet 3</span>
+                                          </button>
+                                        )}
+                                        {entity.type === 'spell' && onNavigateTab && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              if (destinationChar && onSelectCharacter) onSelectCharacter(destinationChar.id);
+                                              onNavigateTab('sheet4');
+                                              onClose();
+                                            }}
+                                            className="px-2.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-lg text-xs cursor-pointer transition shadow flex items-center gap-1"
+                                            title={`Open ${destinationName}'s Spellbook on Sheet 4`}
+                                          >
+                                            <Scroll className="w-3 h-3" />
+                                            <span>Open Sheet 4</span>
+                                          </button>
+                                        )}
                                       </div>
                                     ) : (
                                       <button
@@ -1179,9 +1308,9 @@ INSTRUCTIONS FOR THE ORACLE:
                                             : entity.type === 'merchant'
                                             ? 'Import to Hub (Merchant)'
                                             : entity.type === 'item'
-                                            ? 'Add to Inventory'
+                                            ? `+ Add to ${destinationName}'s Inventory`
                                             : entity.type === 'spell'
-                                            ? 'Add to Spellbook'
+                                            ? `+ Add to ${destinationName}'s Spellbook`
                                             : 'Add to Graph'}
                                         </span>
                                       </button>
@@ -1681,40 +1810,117 @@ INSTRUCTIONS FOR THE ORACLE:
 
                   {/* Import confirmation badge */}
                   {importedSuccess && (
-                    <div className="p-3 bg-emerald-950/80 border border-emerald-500/50 rounded-xl text-emerald-200 text-xs flex items-center gap-2">
-                      <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                      <span>{importedSuccess}</span>
+                    <div className="p-3 bg-emerald-950/90 border border-emerald-500/60 rounded-xl text-emerald-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shadow-lg shadow-emerald-950/40">
+                      <div className="flex items-center gap-2">
+                        <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                        <span className="font-medium">{importedSuccess}</span>
+                      </div>
+                      {entityType === 'item' && onNavigateTab && (
+                        <button
+                          onClick={() => {
+                            if (onSelectCharacter && targetCharId) onSelectCharacter(targetCharId);
+                            onNavigateTab('sheet3');
+                            onClose();
+                          }}
+                          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shrink-0 shadow"
+                        >
+                          <span>Open Sheet 3</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {entityType === 'spell' && onNavigateTab && (
+                        <button
+                          onClick={() => {
+                            if (onSelectCharacter && targetCharId) onSelectCharacter(targetCharId);
+                            onNavigateTab('sheet4');
+                            onClose();
+                          }}
+                          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shrink-0 shadow"
+                        >
+                          <span>Open Sheet 4</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Target Character selector for items and spells */}
+                  {(entityType === 'item' || entityType === 'spell') && characters && characters.length > 0 && (
+                    <div className="flex items-center justify-between gap-2 p-2.5 bg-stone-900/90 border border-stone-800 rounded-xl">
+                      <span className="text-xs font-bold text-stone-300 flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-amber-400" /> Destination Character:
+                      </span>
+                      <select
+                        value={targetCharId}
+                        onChange={(e) => setTargetCharId(e.target.value)}
+                        className="bg-stone-950 border border-stone-700 text-amber-200 font-semibold text-xs rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        {characters.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} {c.id === activeCharacter?.id ? '★ (Active)' : ''}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   )}
 
                   {/* Actions to Insert / Import */}
                   <div className="pt-2">
-                    <button
-                      id="ai_forge_import_btn"
-                      onClick={() => handleImportEntity()}
-                      className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>
-                        {entityType === 'character'
-                          ? 'Import to Hub as Player Character'
-                          : entityType === 'class'
-                          ? 'Save to Compendium Classes'
-                          : entityType === 'race'
-                          ? 'Save to Compendium Races'
-                          : entityType === 'merchant'
-                          ? 'Import to Hub as Merchant Shop'
-                          : entityType === 'monster' || entityType === 'npc'
-                          ? 'Import to Hub as Monster & Combatant'
-                          : entityType === 'item'
-                          ? 'Add to Inventory (Sheet 3)'
-                          : entityType === 'spell'
-                          ? 'Add to Spellbook (Sheet 4)'
-                          : entityType === 'graph_node'
-                          ? 'Add to Campaign Graph'
-                          : 'Copy Entity Data'}
-                      </span>
-                    </button>
+                    {importedSuccess && (entityType === 'item' || entityType === 'spell') ? (
+                      <div className="flex gap-2">
+                        <button
+                          id="ai_forge_open_sheet_btn"
+                          onClick={() => {
+                            if (onSelectCharacter && targetCharId) onSelectCharacter(targetCharId);
+                            if (onNavigateTab) onNavigateTab(entityType === 'item' ? 'sheet3' : 'sheet4');
+                            onClose();
+                          }}
+                          className="flex-1 py-2.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 cursor-pointer"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                          <span>
+                            {entityType === 'item'
+                              ? `Open ${(characters?.find(c => c.id === targetCharId) || activeCharacter)?.name || 'Character'}'s Inventory (Sheet 3)`
+                              : `Open ${(characters?.find(c => c.id === targetCharId) || activeCharacter)?.name || 'Character'}'s Spellbook (Sheet 4)`}
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => handleImportEntity()}
+                          className="px-3.5 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                          title="Add another copy"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Add Copy</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        id="ai_forge_import_btn"
+                        onClick={() => handleImportEntity()}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>
+                          {entityType === 'character'
+                            ? 'Import to Hub as Player Character'
+                            : entityType === 'class'
+                            ? 'Save to Compendium Classes'
+                            : entityType === 'race'
+                            ? 'Save to Compendium Races'
+                            : entityType === 'merchant'
+                            ? 'Import to Hub as Merchant Shop'
+                            : entityType === 'monster' || entityType === 'npc'
+                            ? 'Import to Hub as Monster & Combatant'
+                            : entityType === 'item'
+                            ? `Add to ${(characters?.find(c => c.id === targetCharId) || activeCharacter)?.name || 'Character'}'s Inventory (Sheet 3)`
+                            : entityType === 'spell'
+                            ? `Add to ${(characters?.find(c => c.id === targetCharId) || activeCharacter)?.name || 'Character'}'s Spellbook (Sheet 4)`
+                            : entityType === 'graph_node'
+                            ? 'Add to Campaign Graph'
+                            : 'Copy Entity Data'}
+                        </span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (

@@ -12,6 +12,7 @@ import { memoryProfiler, MemoryReport } from '../../utils/memoryProfiler';
 import { regressionDetector, RegressionAuditReport } from '../../utils/regressionDetector';
 import { lighthouseAudit, LighthouseAuditReport } from '../../utils/lighthouseAudit';
 import { workerThreadManager } from '../../workers/workerManager';
+import { PluginScaffoldingStudio } from '../developer/PluginScaffoldingStudio';
 import {
   Code,
   BookOpen,
@@ -55,7 +56,7 @@ interface DeveloperSdkModalProps {
 }
 
 export const DeveloperSdkModal: React.FC<DeveloperSdkModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'sdk' | 'package' | 'contracts' | 'profiler' | 'engineering' | 'events' | 'tests' | 'example'>('engineering');
+  const [activeTab, setActiveTab] = useState<'scaffold' | 'sdk' | 'package' | 'contracts' | 'profiler' | 'engineering' | 'events' | 'tests' | 'example'>('scaffold');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [isTesting, setIsTesting] = useState(false);
@@ -319,6 +320,17 @@ export const myCustomPlugin: GameSystemPlugin = {
         {/* Tab Navigation */}
         <div className="flex items-center gap-1 px-5 border-b border-slate-800 bg-slate-950/30 overflow-x-auto">
           <button
+            onClick={() => setActiveTab('scaffold')}
+            className={`flex items-center gap-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === 'scaffold'
+                ? 'border-amber-500 text-amber-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="w-4 h-4 text-amber-400" />
+            Plugin Scaffolding Studio
+          </button>
+          <button
             onClick={() => setActiveTab('engineering')}
             className={`flex items-center gap-2 px-3.5 py-2.5 text-xs sm:text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
               activeTab === 'engineering'
@@ -326,7 +338,7 @@ export const myCustomPlugin: GameSystemPlugin = {
                 : 'border-transparent text-slate-400 hover:text-slate-200'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-amber-400" />
+            <Gauge className="w-4 h-4 text-amber-400" />
             Engineering Pillars
           </button>
           <button
@@ -410,6 +422,9 @@ export const myCustomPlugin: GameSystemPlugin = {
 
         {/* Tab Content */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {/* TAB: Visual Plugin Scaffolding Studio */}
+          {activeTab === 'scaffold' && <PluginScaffoldingStudio />}
+
           {/* TAB 0: 10/10 Architecture & Performance Pillars */}
           {activeTab === 'engineering' && (
             <div className="space-y-6">

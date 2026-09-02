@@ -60,7 +60,8 @@ import {
   FlaskConical,
   Dices,
   Compass,
-  MapPin
+  MapPin,
+  FileCode2
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
@@ -101,6 +102,7 @@ interface HeaderProps {
   onOpenExtensionManager?: () => void;
   onOpenVoiceModal?: () => void;
   onOpenCampaignLoreVault?: (tab?: any) => void;
+  onOpenUniversalImporterStudio?: () => void;
   onUndo?: () => void;
   onRedo?: () => void;
   canUndo?: boolean;
@@ -136,6 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenExtensionManager,
   onOpenVoiceModal,
   onOpenCampaignLoreVault,
+  onOpenUniversalImporterStudio,
   onUndo,
   onRedo,
   canUndo = false,
@@ -689,6 +692,19 @@ export const Header: React.FC<HeaderProps> = ({
                 >
                   <Compass className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
                   <span className="hidden sm:inline">Atlas & Quests</span>
+                </button>
+              )}
+
+              {/* Universal Importer & Exporter Studio (Option 2) */}
+              {onOpenUniversalImporterStudio && (
+                <button
+                  type="button"
+                  onClick={onOpenUniversalImporterStudio}
+                  className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900/90 text-amber-300 hover:text-amber-100 border border-amber-500/60 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer group"
+                  title="Universal Importer & Pipeline Studio (5eTools, Foundry VTT, D&D Beyond, Markdown)"
+                >
+                  <FileCode2 className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition" />
+                  <span className="hidden sm:inline">Importer Studio</span>
                 </button>
               )}
 
