@@ -17,6 +17,7 @@ interface ItemStudioProps {
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (updated: CharacterData) => void;
   onAddItemToInventory?: (item: GearItem, targetId?: string) => void;
+  editingItem?: CompendiumItem | null;
 }
 
 export const ItemStudio: React.FC<ItemStudioProps> = ({
@@ -26,22 +27,38 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
   onClose,
   activeCharacter,
   onUpdateCharacter,
-  onAddItemToInventory
+  onAddItemToInventory,
+  editingItem
 }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [addToInventory, setAddToInventory] = useState(!!activeCharacter);
+  const itemData = editingItem?.itemData || (editingItem as any)?.customItemData;
+
+  const [name, setName] = useState(editingItem?.name || '');
+  const [description, setDescription] = useState(editingItem?.description || '');
+  const [addToInventory, setAddToInventory] = useState(editingItem ? false : !!activeCharacter);
 
   // Fantasy Item fields
-  const [itemType, setItemType] = useState<'weapon' | 'armor' | 'shield' | 'potion' | 'ring' | 'scroll' | 'wand' | 'gear'>('weapon');
-  const [rarity, setRarity] = useState('Uncommon');
-  const [cost, setCost] = useState('250 gp');
-  const [weight, setWeight] = useState(3);
-  const [requiresAttunement, setRequiresAttunement] = useState(false);
-  const [damageFormula, setDamageFormula] = useState('1d8 + 1');
-  const [damageType, setDamageType] = useState('Slashing');
-  const [acBonus, setAcBonus] = useState(1);
-  const [propertiesText, setPropertiesText] = useState('Finesse, Versatile (1d10)');
+  const [itemType, setItemType] = useState<'weapon' | 'armor' | 'shield' | 'potion' | 'ring' | 'scroll' | 'wand' | 'gear'>(() => {
+    const t = (itemData?.itemType || '').toLowerCase();
+    if (t.includes('weapon')) return 'weapon';
+    if (t.includes('armor')) return 'armor';
+    if (t.includes('shield')) return 'shield';
+    if (t.includes('potion')) return 'potion';
+    if (t.includes('ring')) return 'ring';
+    if (t.includes('scroll')) return 'scroll';
+    if (t.includes('wand')) return 'wand';
+    return 'gear';
+  });
+  const [rarity, setRarity] = useState(itemData?.rarity || 'Uncommon');
+  const [cost, setCost] = useState(itemData?.cost || (itemData?.costGp !== undefined ? `${itemData.costGp} gp` : '250 gp'));
+  const [weight, setWeight] = useState(itemData?.weight ?? 3);
+  const [requiresAttunement, setRequiresAttunement] = useState(!!itemData?.requiresAttunement);
+  const [damageFormula, setDamageFormula] = useState(itemData?.weaponStats?.damage || itemData?.damageFormula || '1d8 + 1');
+  const [damageType, setDamageType] = useState(itemData?.weaponStats?.damageType || itemData?.damageType || 'Slashing');
+  const [acBonus, setAcBonus] = useState(itemData?.acBonus ?? (itemData?.armorAc ?? 1));
+  const [propertiesText, setPropertiesText] = useState(
+    itemData?.weaponStats?.notes || 
+    (Array.isArray(itemData?.properties) ? itemData.properties.join(', ') : 'Finesse, Versatile (1d10)')
+  );
 
   // Shadowrun Gear / Cyberware / Weapons fields
   const [srCategory, setSrCategory] = useState<'Firearm' | 'Melee Weapon' | 'Cyberware' | 'Bioware' | 'Cyberdeck' | 'Drone / Vehicle' | 'Armor' | 'Arcane Focus' | 'Street Gear'>('Firearm');
@@ -182,11 +199,11 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
     }
 
     const newItem: CompendiumItem = {
-      id: `custom-item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: editingItem?.id || `custom-item-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: name.trim(),
       category: 'items',
       edition,
-      source: sourceAuthor.trim() || 'Custom Homebrew',
+      source: sourceAuthor.trim() || editingItem?.source || 'Custom Homebrew',
       description: descSummary,
       isCustom: true,
       tags: itemTags,
@@ -658,17 +675,19 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
               />
             </div>
 
-            <div className="flex items-center pt-5">
-              <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-stone-300">
-                <input
-                  type="checkbox"
-                  checked={requiresAttunement}
-                  onChange={(e) => setRequiresAttunement(e.target.checked)}
-                  className="rounded accent-amber-500 w-4 h-4"
-                />
-                <span>Attunement Required</span>
-              </label>
-            </div>
+            {(edition === '5e' || !edition) && (
+              <div className="flex items-center pt-5">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-mono text-stone-300">
+                  <input
+                    type="checkbox"
+                    checked={requiresAttunement}
+                    onChange={(e) => setRequiresAttunement(e.target.checked)}
+                    className="rounded accent-amber-500 w-4 h-4"
+                  />
+                  <span>Attunement Required</span>
+                </label>
+              </div>
+            )}
           </div>
 
           {itemType === 'weapon' && (
@@ -784,7 +803,7 @@ export const ItemStudio: React.FC<ItemStudioProps> = ({
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>{addToInventory && activeCharacter ? 'Forge & Add to Character' : 'Save Item to Compendium'}</span>
+          <span>{editingItem ? 'Update Item Entry' : (addToInventory && activeCharacter ? 'Forge & Add to Character' : 'Save Item to Compendium')}</span>
         </button>
       </div>
 

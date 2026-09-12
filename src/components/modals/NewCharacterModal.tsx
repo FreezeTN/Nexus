@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData, ClassFeature, RuleEdition, Skill } from '../../types';
 import { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST } from '../../utils/dndCalculations';
-import { UserPlus, Sparkles, X, Store, Layers, Skull, Dices, Shuffle, Settings, Zap, Crosshair, Scale, Swords, Dna } from 'lucide-react';
+import { UserPlus, Sparkles, X, Store, Layers, Skull, Dices, Shuffle, Settings, Zap, Crosshair, Scale, Swords, Dna, Bookmark, Shield, AlertCircle, RefreshCw } from 'lucide-react';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { PARENT_RACE_CATALOG, getHybridName, buildHybridFeature, CLASSIC_SRD_HALF_BREEDS, getClassicSRDHalfBreedsForEdition, buildClassicSRDFeature, ClassicSRDHalfBreed, DRAGON_VARIETIES_35E, DRAGON_VARIETIES_5E } from '../../data/halfBreedData';
 import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
+import {
+  findRaceInCompendiumOrSRD,
+  calculateRaceBonusesAndDefenses,
+  applyRaceToCharacter,
+  CalculatedRaceStats
+} from '../../utils/raceApplication';
 import {
   RACE_OPTIONS_BY_SYSTEM,
   CLASS_OPTIONS_BY_SYSTEM,
@@ -31,6 +37,8 @@ interface NewCharacterModalProps {
   initialIsMonster?: boolean;
   initialIsVendor?: boolean;
   enabledSystems?: RuleEdition[];
+  existingCampaigns?: string[];
+  initialCampaignName?: string;
 }
 
 export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
@@ -39,11 +47,47 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   initialEdition = '5e',
   initialIsMonster = false,
   initialIsVendor = false,
-  enabledSystems
+  enabledSystems,
+  existingCampaigns = [],
+  initialCampaignName = ''
 }) => {
   const edition: RuleEdition = (enabledSystems && enabledSystems.length > 0 && !enabledSystems.includes(initialEdition))
     ? enabledSystems[0]
     : initialEdition;
+
+  // Gather unique campaigns from props and local storage
+  const allCampaignOptions = useMemo(() => {
+    const list = new Set<string>(existingCampaigns.filter(Boolean));
+    try {
+      const savedChars = localStorage.getItem('dnd_app_characters_v5');
+      if (savedChars) {
+        const parsed = JSON.parse(savedChars) as CharacterData[];
+        if (Array.isArray(parsed)) {
+          parsed.forEach(c => {
+            if (c.campaignName && c.campaignName.trim()) {
+              list.add(c.campaignName.trim());
+            }
+          });
+        }
+      }
+      const savedParties = localStorage.getItem('dnd_app_parties_v1');
+      if (savedParties) {
+        const parsedP = JSON.parse(savedParties);
+        if (Array.isArray(parsedP)) {
+          parsedP.forEach((p: any) => {
+            if (p.name && p.name.trim()) {
+              list.add(p.name.trim());
+            }
+          });
+        }
+      }
+    } catch (e) {}
+    return Array.from(list).sort((a, b) => a.localeCompare(b));
+  }, [existingCampaigns]);
+
+  // Campaign assignment state: default selection is neutral / unassigned ('')
+  const [selectedCampaignMode, setSelectedCampaignMode] = useState<string>(initialCampaignName || '');
+  const [customCampaignName, setCustomCampaignName] = useState<string>('');
 
   const initialRaces = getRacesForSystem(edition);
   const initialClasses = getClassesForSystem(edition);
@@ -248,6 +292,173 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     }
   };
 
+  // Option to apply racial ability modifiers to base stats on character creation
+  const [applyRacialBonuses, setApplyRacialBonuses] = useState(true);
+
+  // Draft persistence state to protect user input from accidental loss
+  const DRAFT_STORAGE_KEY = `dnd_new_char_modal_draft_${edition}`;
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
+
+  // Load draft on mount / edition switch
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        const d = JSON.parse(saved);
+        if (d && typeof d === 'object') {
+          if (d.name) setName(d.name);
+          if (d.race) setRace(d.race);
+          if (d.characterClass) setCharacterClass(d.characterClass);
+          if (d.subclass) setSubclass(d.subclass);
+          if (typeof d.level === 'number') setLevel(d.level);
+          if (d.background) setBackground(d.background);
+          if (d.alignment) setAlignment(d.alignment);
+          if (typeof d.str === 'number') setStr(d.str);
+          if (typeof d.dex === 'number') setDex(d.dex);
+          if (typeof d.con === 'number') setCon(d.con);
+          if (typeof d.int === 'number') setInt(d.int);
+          if (typeof d.wis === 'number') setWis(d.wis);
+          if (typeof d.cha === 'number') setCha(d.cha);
+          if (typeof d.useHalfBreedSystem === 'boolean') setUseHalfBreedSystem(d.useHalfBreedSystem);
+          if (d.primaryParent) setPrimaryParent(d.primaryParent);
+          if (d.secondaryParent) setSecondaryParent(d.secondaryParent);
+          if (d.customHybridName) setCustomHybridName(d.customHybridName);
+          if (typeof d.useClassicSRDHalfBreed === 'boolean') setUseClassicSRDHalfBreed(d.useClassicSRDHalfBreed);
+          if (d.selectedClassicSRDId) setSelectedClassicSRDId(d.selectedClassicSRDId);
+          if (d.dragonVariety) setDragonVariety(d.dragonVariety);
+          if (d.selectedCampaignMode) setSelectedCampaignMode(d.selectedCampaignMode);
+          if (d.customCampaignName) setCustomCampaignName(d.customCampaignName);
+          if (d.hpCalcMode) setHpCalcMode(d.hpCalcMode);
+          if (typeof d.applyRacialBonuses === 'boolean') setApplyRacialBonuses(d.applyRacialBonuses);
+          setHasRestoredDraft(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to restore character draft:', e);
+    }
+  }, [edition, DRAFT_STORAGE_KEY]);
+
+  // Debounced auto-save draft
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const draftData = {
+          name,
+          race,
+          characterClass,
+          subclass,
+          level,
+          background,
+          alignment,
+          str,
+          dex,
+          con,
+          int,
+          wis,
+          cha,
+          useHalfBreedSystem,
+          primaryParent,
+          secondaryParent,
+          customHybridName,
+          useClassicSRDHalfBreed,
+          selectedClassicSRDId,
+          dragonVariety,
+          selectedCampaignMode,
+          customCampaignName,
+          hpCalcMode,
+          applyRacialBonuses
+        };
+        localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+      } catch (e) {
+        console.warn('Failed to persist character draft:', e);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [
+    name, race, characterClass, subclass, level, background, alignment,
+    str, dex, con, int, wis, cha,
+    useHalfBreedSystem, primaryParent, secondaryParent, customHybridName,
+    useClassicSRDHalfBreed, selectedClassicSRDId, dragonVariety,
+    selectedCampaignMode, customCampaignName, hpCalcMode, applyRacialBonuses,
+    DRAFT_STORAGE_KEY
+  ]);
+
+  const handleClearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch (e) {}
+    setHasRestoredDraft(false);
+    setName('');
+    setStr(15);
+    setDex(14);
+    setCon(13);
+    setInt(12);
+    setWis(10);
+    setCha(8);
+  };
+
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      if (name.trim()) {
+        if (window.confirm('Close character creation? Your entries are saved as a draft and will be restored when you reopen.')) {
+          onClose();
+        }
+      } else {
+        onClose();
+      }
+    }
+  };
+
+  // Resolved race compendium / SRD data
+  const resolvedRaceItem = useMemo(() => {
+    if (edition !== '5e' && edition !== '3.5e' && edition !== 'pathfinder') {
+      return null;
+    }
+
+    if (useHalfBreedSystem) {
+      const pData = PARENT_RACE_CATALOG.find(p => p.name === primaryParent) || PARENT_RACE_CATALOG[0];
+      const sData = PARENT_RACE_CATALOG.find(s => s.name === secondaryParent) || PARENT_RACE_CATALOG[1];
+      const hybridName = getHybridName(primaryParent, secondaryParent, customHybridName);
+      return {
+        id: `hybrid-${primaryParent}-${secondaryParent}`,
+        name: hybridName,
+        edition,
+        raceData: {
+          name: hybridName,
+          size: pData.size,
+          speed: pData.speed,
+          darkvision: (pData.hasDarkvision || sData.hasDarkvision) ? 60 : false,
+          senses: (pData.hasDarkvision || sData.hasDarkvision) ? 'Darkvision 60 ft.' : 'Normal',
+          traits: [
+            { name: pData.primaryTraitName, description: pData.primaryTraitDesc },
+            { name: sData.secondaryTraitName, description: sData.secondaryTraitDesc }
+          ]
+        }
+      };
+    }
+
+    if (useClassicSRDHalfBreed) {
+      const srdList = getClassicSRDHalfBreedsForEdition(edition);
+      const srdHB = srdList.find(hb => hb.id === selectedClassicSRDId) || srdList[0];
+      if (srdHB) {
+        if (srdHB.id.includes('half-dragon')) {
+          const dragonFullName = edition === '3.5e' ? `Half-${dragonVariety} Dragon (3.5e SRD)` : `Half-${dragonVariety} Dragon (5e SRD)`;
+          return findRaceInCompendiumOrSRD(dragonFullName, edition) || findRaceInCompendiumOrSRD(srdHB.name, edition);
+        }
+        return findRaceInCompendiumOrSRD(srdHB.name, edition);
+      }
+    }
+
+    return findRaceInCompendiumOrSRD(race, edition);
+  }, [useHalfBreedSystem, primaryParent, secondaryParent, customHybridName, useClassicSRDHalfBreed, selectedClassicSRDId, dragonVariety, race, edition]);
+
+  // Calculate live racial stats (bonuses, DR, natural armor, energy resistances, immunities)
+  const calculatedRaceStats = useMemo(() => {
+    if (!resolvedRaceItem) return null;
+    return calculateRaceBonusesAndDefenses(resolvedRaceItem, level);
+  }, [resolvedRaceItem, level]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -262,7 +473,9 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     } else if (edition === 'cthulhu') {
       hpMax = pulpCthulhuMode ? Math.floor((conCoC + sizCoC) / 5) : Math.floor((conCoC + sizCoC) / 10);
     } else {
-      conMod = Math.floor((con - 10) / 2);
+      const racialConBonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.CON || 0) : 0;
+      const effectiveCon = con + racialConBonus;
+      conMod = Math.floor((effectiveCon - 10) / 2);
       hitDieValue = characterClass === 'Barbarian' ? 12 : ['Fighter', 'Paladin', 'Ranger'].includes(characterClass) ? 10 : ['Sorcerer', 'Wizard'].includes(characterClass) ? 6 : 8;
       if (hpCalcMode === 'Max') {
         hpMax = Math.max(1, level * (hitDieValue + conMod));
@@ -344,9 +557,14 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
           CHA: { score: cha },
         };
 
+    const finalCampaignName = selectedCampaignMode === '__custom__'
+      ? customCampaignName.trim()
+      : selectedCampaignMode.trim();
+
     const newChar: CharacterData = {
       id: 'char-' + Date.now(),
       name: name.trim(),
+      campaignName: finalCampaignName || undefined,
       race: finalRaceName,
       characterClass,
       subclass,
@@ -560,12 +778,45 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     };
 
     const syncedChar = syncClassFeaturesForCharacter(newChar, characterClass, level, edition);
-    onCreate(syncedChar);
+    // Apply resolved race traits, defenses, damage reductions, resistances, immunities, and ability bonuses
+    const finalChar = resolvedRaceItem
+      ? applyRaceToCharacter(syncedChar, resolvedRaceItem, {
+          applyAbilities: applyRacialBonuses,
+          isNewCharacterCreation: true
+        })
+      : syncedChar;
+
+    try {
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch (e) {}
+
+    onCreate(finalChar);
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-stone-900 border border-amber-600/50 rounded-2xl p-6 max-w-2xl w-full shadow-2xl text-stone-100 max-h-[90vh] overflow-y-auto space-y-4">
+    <div
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={handleBackdropClick}
+    >
+      <div
+        className="bg-stone-900 border border-amber-600/50 rounded-2xl p-6 max-w-2xl w-full shadow-2xl text-stone-100 max-h-[90vh] overflow-y-auto space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {hasRestoredDraft && (
+          <div className="bg-amber-950/70 border border-amber-500/50 rounded-xl p-2.5 flex items-center justify-between text-xs text-amber-200">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Draft restored from previous session. Your inputs are safely preserved.</span>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearDraft}
+              className="px-2.5 py-1 bg-stone-900 hover:bg-rose-950 border border-stone-700 hover:border-rose-500/60 rounded text-stone-300 hover:text-rose-200 text-[11px] font-mono transition"
+            >
+              Reset Draft
+            </button>
+          </div>
+        )}
         <div className="flex items-center justify-between border-b border-stone-800 pb-3">
           <div className="flex items-center gap-3">
             <h3 className="text-xl font-serif font-bold text-amber-300 flex items-center gap-2">
@@ -587,6 +838,68 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          {/* Campaign Assignment (Optional dropdown, default neutral / unassigned) */}
+          <div className="bg-stone-950/70 border border-stone-800 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="newchar-campaign-select" className="text-amber-300 font-bold flex items-center gap-1.5 text-xs">
+                <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                <span>Campaign Assignment</span>
+              </label>
+              <span className="text-[10px] text-stone-400">
+                {selectedCampaignMode === ''
+                  ? 'Default: Neutral / Unassigned'
+                  : selectedCampaignMode === '__custom__'
+                  ? 'New Campaign'
+                  : 'Assigned to Campaign'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 items-center">
+              <div>
+                <select
+                  id="newchar-campaign-select"
+                  value={selectedCampaignMode}
+                  onChange={(e) => setSelectedCampaignMode(e.target.value)}
+                  className="w-full bg-stone-900 border border-stone-700 focus:border-amber-500 rounded-lg p-2 text-stone-100 text-xs focus:outline-none"
+                >
+                  <option value="">— Neutral / Unassigned (No Campaign) —</option>
+                  {allCampaignOptions.length > 0 && (
+                    <optgroup label="Existing Campaigns">
+                      {allCampaignOptions.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <option value="__custom__">+ Enter / Create New Campaign...</option>
+                </select>
+              </div>
+
+              {selectedCampaignMode === '__custom__' ? (
+                <div>
+                  <input
+                    id="newchar-custom-campaign-input"
+                    type="text"
+                    value={customCampaignName}
+                    onChange={(e) => setCustomCampaignName(e.target.value)}
+                    placeholder="Type new campaign name..."
+                    className="w-full bg-stone-900 border border-amber-500 rounded-lg p-2 text-amber-200 text-xs focus:outline-none"
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <div className="text-[11px] text-stone-400 leading-snug">
+                  {selectedCampaignMode ? (
+                    <span className="text-amber-300">
+                      🏷️ Assigned to campaign: <strong className="text-stone-200">{selectedCampaignMode}</strong>
+                    </span>
+                  ) : (
+                    <span>Character remains unassigned to any campaign (neutral default).</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Basic Info */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -827,6 +1140,87 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                       </div>
                     );
                   })()}
+                </div>
+              )}
+
+              {/* Racial Lineage & Defense Modifiers Card */}
+              {calculatedRaceStats && (
+                <div className="bg-stone-950/90 border border-stone-800 rounded-xl p-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between border-b border-stone-800 pb-1.5">
+                    <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Racial Inherent Modifiers & Defenses ({calculatedRaceStats.raceName})</span>
+                    </span>
+                    <span className="text-[10px] font-mono text-stone-400">
+                      Size: {calculatedRaceStats.sizeCategory} • Speed: {calculatedRaceStats.speed} ft.
+                    </span>
+                  </div>
+
+                  {/* Ability Bonuses Preview */}
+                  {calculatedRaceStats.abilityBonusSummary.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-mono text-stone-400">Ability Adjustments:</span>
+                      {calculatedRaceStats.abilityBonusSummary.map((b, idx) => (
+                        <span key={idx} className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/40 text-amber-300 font-mono font-bold text-[11px]">
+                          {b}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Defenses Preview (DR, Natural AC, SR, Energy Res, Immunities) */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    {calculatedRaceStats.damageReduction.value > 0 && (
+                      <span className="px-2 py-0.5 rounded bg-red-950/80 border border-red-500/50 text-red-300 font-mono text-[10px] font-bold flex items-center gap-1">
+                        <Shield className="w-3 h-3 text-red-400" />
+                        <span>DR {calculatedRaceStats.damageReduction.value}/{calculatedRaceStats.damageReduction.bypass} {calculatedRaceStats.damageReduction.hasScaling ? '(scales)' : ''}</span>
+                      </span>
+                    )}
+                    {calculatedRaceStats.naturalArmor.bonus > 0 && (
+                      <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 font-mono text-[10px] font-bold flex items-center gap-1">
+                        <span>🛡️ +{calculatedRaceStats.naturalArmor.bonus} Natural AC {calculatedRaceStats.naturalArmor.hasScaling ? '(scales)' : ''}</span>
+                      </span>
+                    )}
+                    {calculatedRaceStats.spellResistance.value > 0 && (
+                      <span className="px-2 py-0.5 rounded bg-purple-950/80 border border-purple-500/50 text-purple-300 font-mono text-[10px] font-bold flex items-center gap-1">
+                        <span>✨ SR {calculatedRaceStats.spellResistance.value} {calculatedRaceStats.spellResistance.hasScaling ? '(scales)' : ''}</span>
+                      </span>
+                    )}
+                    {Object.entries(calculatedRaceStats.energyResistances).map(([elem, val]) => (
+                      <span key={elem} className="px-2 py-0.5 rounded bg-orange-950/80 border border-orange-500/50 text-orange-300 font-mono text-[10px] font-bold">
+                        Resist {elem.charAt(0).toUpperCase() + elem.slice(1)} {val}
+                      </span>
+                    ))}
+                    {calculatedRaceStats.damageImmunities.map((imm, idx) => (
+                      <span key={idx} className="px-2 py-0.5 rounded bg-amber-950/80 border border-amber-500/50 text-amber-300 font-mono text-[10px] font-bold">
+                        Immune: {imm}
+                      </span>
+                    ))}
+                    {calculatedRaceStats.senses && calculatedRaceStats.senses !== 'Normal' && (
+                      <span className="px-2 py-0.5 rounded bg-indigo-950/80 border border-indigo-500/50 text-indigo-300 font-mono text-[10px]">
+                        👁️ {calculatedRaceStats.senses}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Natural Weapons */}
+                  {calculatedRaceStats.naturalWeapons.length > 0 && (
+                    <div className="text-[11px] text-stone-300 flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-mono text-stone-400">Natural Weapons:</span>
+                      {calculatedRaceStats.naturalWeapons.map((nw, idx) => (
+                        <span key={idx} className="px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-stone-200 font-mono text-[10px]">
+                          {nw.name} ({nw.damageDice})
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Traits Count */}
+                  {calculatedRaceStats.traits.length > 0 && (
+                    <div className="text-[10px] text-stone-400 italic">
+                      Inherits {calculatedRaceStats.traits.length} racial traits & abilities upon creation.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1398,8 +1792,21 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
           {/* System Attributes Grid */}
           <div className="border-t border-stone-800 pt-3">
-            <div className="text-amber-300 font-serif font-bold text-sm mb-2">
-              {edition === 'shadowrun' ? 'Shadowrun Attributes (Ratings 1-6+)' : edition === 'cthulhu' ? 'Investigator Characteristics (Percentile 1-99%)' : 'Ability Scores'}
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+              <div className="text-amber-300 font-serif font-bold text-sm">
+                {edition === 'shadowrun' ? 'Shadowrun Attributes (Ratings 1-6+)' : edition === 'cthulhu' ? 'Investigator Characteristics (Percentile 1-99%)' : 'Ability Scores'}
+              </div>
+              {calculatedRaceStats && calculatedRaceStats.abilityBonusSummary.length > 0 && edition !== 'shadowrun' && edition !== 'cthulhu' && (
+                <label className="flex items-center gap-1.5 cursor-pointer text-emerald-400 font-mono text-[10px] font-bold bg-emerald-950/60 border border-emerald-500/40 px-2 py-0.5 rounded-lg">
+                  <input
+                    type="checkbox"
+                    checked={applyRacialBonuses}
+                    onChange={(e) => setApplyRacialBonuses(e.target.checked)}
+                    className="accent-emerald-500 w-3.5 h-3.5 rounded"
+                  />
+                  <span>Apply Racial Modifiers ({calculatedRaceStats.abilityBonusSummary.join(', ')})</span>
+                </label>
+              )}
             </div>
 
             {edition === 'shadowrun' ? (
@@ -1653,64 +2060,154 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center font-mono">
+                {/* STR */}
                 <div>
-                  <label className="block text-stone-400 text-[10px] mb-1">STR</label>
+                  <label className="block text-stone-400 text-[10px] mb-1 font-bold">STR</label>
                   <input
                     type="number"
                     value={str}
                     onChange={(e) => setStr(parseInt(e.target.value) || 10)}
                     className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
                   />
+                  {(() => {
+                    const bonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.STR || 0) : 0;
+                    const finalVal = Math.max(1, str + bonus);
+                    const mod = Math.floor((finalVal - 10) / 2);
+                    return bonus !== 0 ? (
+                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
+                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
+                        Mod {mod >= 0 ? `+${mod}` : mod}
+                      </span>
+                    );
+                  })()}
                 </div>
 
+                {/* DEX */}
                 <div>
-                  <label className="block text-stone-400 text-[10px] mb-1">DEX</label>
+                  <label className="block text-stone-400 text-[10px] mb-1 font-bold">DEX</label>
                   <input
                     type="number"
                     value={dex}
                     onChange={(e) => setDex(parseInt(e.target.value) || 10)}
                     className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
                   />
+                  {(() => {
+                    const bonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.DEX || 0) : 0;
+                    const finalVal = Math.max(1, dex + bonus);
+                    const mod = Math.floor((finalVal - 10) / 2);
+                    return bonus !== 0 ? (
+                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
+                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
+                        Mod {mod >= 0 ? `+${mod}` : mod}
+                      </span>
+                    );
+                  })()}
                 </div>
 
+                {/* CON */}
                 <div>
-                  <label className="block text-stone-400 text-[10px] mb-1">CON</label>
+                  <label className="block text-stone-400 text-[10px] mb-1 font-bold">CON</label>
                   <input
                     type="number"
                     value={con}
                     onChange={(e) => setCon(parseInt(e.target.value) || 10)}
                     className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
                   />
+                  {(() => {
+                    const bonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.CON || 0) : 0;
+                    const finalVal = Math.max(1, con + bonus);
+                    const mod = Math.floor((finalVal - 10) / 2);
+                    return bonus !== 0 ? (
+                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
+                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
+                        Mod {mod >= 0 ? `+${mod}` : mod}
+                      </span>
+                    );
+                  })()}
                 </div>
 
+                {/* INT */}
                 <div>
-                  <label className="block text-stone-400 text-[10px] mb-1">INT</label>
+                  <label className="block text-stone-400 text-[10px] mb-1 font-bold">INT</label>
                   <input
                     type="number"
                     value={int}
                     onChange={(e) => setInt(parseInt(e.target.value) || 10)}
                     className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
                   />
+                  {(() => {
+                    const bonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.INT || 0) : 0;
+                    const finalVal = Math.max(1, int + bonus);
+                    const mod = Math.floor((finalVal - 10) / 2);
+                    return bonus !== 0 ? (
+                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
+                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
+                        Mod {mod >= 0 ? `+${mod}` : mod}
+                      </span>
+                    );
+                  })()}
                 </div>
 
+                {/* WIS */}
                 <div>
-                  <label className="block text-stone-400 text-[10px] mb-1">WIS</label>
+                  <label className="block text-stone-400 text-[10px] mb-1 font-bold">WIS</label>
                   <input
                     type="number"
                     value={wis}
                     onChange={(e) => setWis(parseInt(e.target.value) || 10)}
                     className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
                   />
+                  {(() => {
+                    const bonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.WIS || 0) : 0;
+                    const finalVal = Math.max(1, wis + bonus);
+                    const mod = Math.floor((finalVal - 10) / 2);
+                    return bonus !== 0 ? (
+                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
+                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
+                        Mod {mod >= 0 ? `+${mod}` : mod}
+                      </span>
+                    );
+                  })()}
                 </div>
 
+                {/* CHA */}
                 <div>
-                  <label className="block text-stone-400 text-[10px] mb-1">CHA</label>
+                  <label className="block text-stone-400 text-[10px] mb-1 font-bold">CHA</label>
                   <input
                     type="number"
                     value={cha}
                     onChange={(e) => setCha(parseInt(e.target.value) || 10)}
                     className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-center font-bold text-amber-200"
                   />
+                  {(() => {
+                    const bonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.CHA || 0) : 0;
+                    const finalVal = Math.max(1, cha + bonus);
+                    const mod = Math.floor((finalVal - 10) / 2);
+                    return bonus !== 0 ? (
+                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
+                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
+                        Mod {mod >= 0 ? `+${mod}` : mod}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             )}

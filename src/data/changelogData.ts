@@ -14,11 +14,201 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.8',
+    date: 'Today',
+    title: 'Half-Breed Lineage Studio, Scaling Racial Defenses & Modal Draft Persistence',
+    badge: 'Lineage & Race Studio',
+    badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40',
+    highlights: [
+      {
+        category: '🧬 Half-Breed & Hybrid Lineage Studio',
+        detail: 'Comprehensive hybrid creation suite supporting both Classic SRD Half-Breeds (Half-Elf, Half-Orc, Half-Dragon, Half-Celestial, Half-Fiend, Half-Ogre, Half-Giant, Mul) with 1-click Forge application, and a Custom Hybrid Blender allowing users to combine any two parent lineages with configurable dominance and selectable Hybrid Vigor perks.'
+      },
+      {
+        category: '📈 Ruleset-Exclusive Scaling Stats (5e & 3.5e)',
+        detail: 'Full support for edition-specific scaling defenses. 3.5e lineages support level-scaling and formula-based Damage Reduction with bypass materials, Natural Armor progression, Spell Resistance scaling, per-element Energy Resistances with uniform or individual curves (Fire, Cold, Electricity, Acid, Sonic), and tiered Spell-Like Abilities. 5e lineages support Innate Spells with recharge/level thresholds, Damage & Condition Immunities, Natural Armor formulas, and Scaling Racial Dice.'
+      },
+      {
+        category: '🛡️ Persistent Form Drafts & Accidental Modal Close Safety',
+        detail: 'Race Studio and Character Creation form states are automatically persisted to local storage, preventing loss of entries across tab switches or accidental window dismissals. Backdrop clicks now require confirmation when active edits are present.'
+      },
+      {
+        category: '⚔️ End-to-End Racial Stat Injection in Character Creation',
+        detail: 'Creating a character now resolves and applies all racial ability score adjustments, natural armor bonuses, damage reduction values, energy resistances, immunities, vision/senses, and natural weapons directly to the character sheet with an interactive Base + Race breakdown toggle.'
+      },
+      {
+        category: '👁️ Streamlined Vision & Senses Architecture',
+        detail: 'Removed redundant Darkvision checkboxes in favor of an intelligent vision parser that detects Darkvision, Low-Light Vision, Blindsight, and Tremorsense directly from the senses definition.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.7',
+    date: 'Today',
+    title: 'Compendium In-Place Editing, Entity Synchronization & UI Refinement',
+    badge: 'Compendium & DM Tools',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '✏️ In-Place Compendium Entry Editing',
+        detail: 'DMs can now edit any custom homebrew entry directly from the Compendium via both the entry card action buttons and the full Detail Modal view. Clicking Edit re-opens the dedicated Forge Studio pre-populated with all parameters, preserves entity IDs, and supports full updates.'
+      },
+      {
+        category: '🔄 Bi-Directional Entity Synchronization',
+        detail: 'When editing a compendium entry, the Forge dynamically scans active party character sheets and campaign rosters to identify linked instances (monsters, inventory gear, spells, races, classes, feats, and features). DMs can toggle synchronization to automatically propagate updated stats, AC, damage reduction, and descriptions across the campaign.'
+      },
+      {
+        category: '🛡️ Studio Form Pre-Population & State Retention',
+        detail: 'All Homebrew & Rules Forge Studios (Race, Class, Feat, Monster, Spell, and Item) have been updated to cleanly bind existing entity properties into their state controls, with clear "Editing Mode" banners and contextual action buttons.'
+      },
+      {
+        category: '🎨 Polished Forge Studio Header Trigger',
+        detail: 'Streamlined the Compendium header by removing the vector icon from the Homebrew & Rules Forge Studio button for a cleaner, unified typography and visual balance.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.6',
+    date: 'Today',
+    title: 'Homebrew Lineage Forge, Dynamic Ability Score Matrix & Damage Reduction Suite',
+    badge: 'Lineage & Combat Defenses',
+    badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    highlights: [
+      {
+        category: '🧬 Dynamic Ability Score Parser & Auto-Application',
+        detail: 'Smart regex engine parsing complex multi-stat modifiers (e.g. "+4 Strength, -2 Dexterity, +4 Constitution, +4 Wisdom, -2 Charisma" and "+2 All") with live detected badges in the Race Studio. Applying a lineage directly modifies the character\'s ability scores and recalculates all dependent bonuses.'
+      },
+      {
+        category: '🛡️ Advanced Damage Reduction (DR) Engine & Level Scaling',
+        detail: 'Comprehensive Damage Reduction support for 3.5e, monsters, and custom lineages. Parses level-scaling DR ("gain 3 Damage Reduction at 1st level, increases to 6 at 5th level..."), standard slash syntax ("DR 5/magic", "DR 10/adamantine", "DR 3/-"), and word syntax ("Damage Reduction 5/silver"). Includes explicit DR Value & Bypass fields with automatic trait detection.'
+      },
+      {
+        category: '👁️ Darkvision & Senses Display Normalization',
+        detail: 'Cleaned up vision rendering in the Compendium race detail viewer, converting boolean values to readable distance labels (e.g. "60 ft" instead of "true ft") and adding explicit readouts for detected Ability Modifiers and active Damage Reduction.'
+      },
+      {
+        category: '⚔️ Combat Defenses & Armor Class Dynamic Synchronization',
+        detail: 'Applying a race from the Compendium triggers instant recalculation of Armor Class, Touch AC, Flat-Footed AC, and size modifiers, while automatically replacing previous racial traits to prevent trait accumulation.'
+      },
+      {
+        category: '📜 1-Click Lineage Application with Live Toast Diagnostics',
+        detail: 'Enhanced the "Apply Race to Character" flow in the Compendium with descriptive toast notifications displaying applied ability score adjustments, active DR values, and updated speeds.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.5',
+    date: 'September 2026',
+    title: 'Complete D&D 3.5e Rules As Written (RAW) Mechanics & Tactical Engines Suite',
+    badge: 'Official RAW Expansion',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '💀 Negative Levels & Energy Drain Engine (DMG p. 293)',
+        detail: 'Full penalty pipeline applying -1 per negative level to attack rolls, saving throws, skill checks, ability checks, effective caster level, and -5 Max HP per level. Includes a 24-hour Fortitude recovery save resolver against the source DC (Wight, Spectre, Vampire, Enervation) to prevent permanent level loss.'
+      },
+      {
+        category: '⚡ Concentration & Defensive Casting Suite (PHB p. 69-70, 140)',
+        detail: 'Dedicated Concentration DC calculator for Defensive Casting (DC 15 + Spell Level), Taking Damage while casting (DC 10 + damage + spell level), Continuous Damage, Extreme Weather, and Entanglement. Accounts for the Combat Casting feat (+4 bonus) and automatically subtracts Armor Check Penalties when applicable.'
+      },
+      {
+        category: '🤸 Tumble & Acrobatics Movement Suite (PHB p. 84-85)',
+        detail: 'Interactive Tumble check resolver for moving through threatened squares without provoking Attacks of Opportunity (DC 15) and tumbling directly through an occupied enemy space (DC 25), with +2 DC per additional opponent, full-speed (+10 DC) toggles, Armor Check Penalty integration, and Jump synergy bonuses (+2).'
+      },
+      {
+        category: '🐎 Mounted Combat & Ride Maneuvers Suite (PHB p. 80-81, 157-158)',
+        detail: 'Maneuver resolver covering Hit Negation (Ride check vs. incoming attack roll, 1/round with Mounted Combat feat), Guide with Knees (DC 5), Stay in Saddle (DC 5), Cover Behind Mount (DC 15 for +4 AC), Soft Fall (DC 15), Leap (DC 15), Spur Mount (DC 15), and Fast Mount/Dismount (DC 20).'
+      },
+      {
+        category: '🐾 Wild Shape & Alternate Form Engine (PHB p. 37, Rules Compendium p. 24-27)',
+        detail: 'True 3.5e Wild Shape physical stat replacement engine: substitutes Strength, Dexterity, and Constitution scores while preserving mental attributes (INT/WIS/CHA), recalculates HP, AC, Natural Armor, and Speed, overrides natural attack routines, and tracks size modifier changes.'
+      },
+      {
+        category: '🧭 Environmental Hazards & Endurance Engine (DMG p. 301-304)',
+        detail: 'Systemic condition and damage tracker for Forced March (DC 10 + 2/extra hour Fortitude check), Extreme Cold & Heat nonlethal damage, and Suffocation/Drowning rounds, fully factoring the Endurance feat (+4 bonus to physical resilience saves).'
+      },
+      {
+        category: '👑 Prestige Class Prerequisites Validator (DMG p. 176-200)',
+        detail: 'Automated prerequisite validation engine verifying Base Attack Bonus (BAB), Feats, Skill Ranks, Alignment, and Spellcasting requirements for iconic 3.5e Prestige Classes (Assassin, Blackguard, Arcane Archer, Arcane Trickster, Dragon Disciple, Duelist, Eldritch Knight, Loremaster, Shadowdancer).'
+      },
+      {
+        category: '⏱️ Action Economy & Swift/Immediate Round Tracker (PHB p. 138-144)',
+        detail: 'Round-based action tracker enforcing RAW rules for Standard, Move, Swift, and Immediate actions. Accurately simulates the rule that expending an Immediate action consumes the character\'s Swift action on their next turn, and tracks 5-Foot Step restrictions.'
+      },
+      {
+        category: '🛡️ Tactical Cover & Line of Sight Selector (PHB p. 150-152)',
+        detail: 'Interactive battlefield cover picker instantly toggling Standard Cover (+4 AC, +2 Reflex save), Improved Cover (+8 AC, +4 Reflex save, +10 Hide bonus, Improved Evasion vs. reflex bursts), and Total Cover directly onto character defense calculations.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9',
+    date: 'September 2026',
+    title: 'D&D 3.5e Tactical Combat, Combat Reflexes, Dual-Wielding & XP Ledger Suite',
+    badge: 'Latest Release',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '⚔️ Attacks of Opportunity (AoO) & Combat Reflexes Tracker',
+        detail: 'Dynamic budget counter factoring base Dexterity modifiers and the Combat Reflexes feat (1 + DEX mod per round, min 1). Includes a full provocation rules matrix (moving through threatened squares, casting spells without defensive casting, ranged weapons in melee, standing up from prone, unarmed attacks) and 1-click AoO strike launchers.'
+      },
+      {
+        category: '🗡️ Two-Weapon Fighting (TWF) Multi-Attack Engine',
+        detail: 'Comprehensive 3.5e dual-wielding penalty matrix calculating primary and off-hand attack modifiers according to feat tiers (Two-Weapon Fighting, Improved TWF, Greater TWF) and light vs. one-handed off-hand weapons. Generates synchronized iterative main attacks and off-hand attacks with automatic 0.5× Strength damage modifier scaling.'
+      },
+      {
+        category: '🌫️ Target Miss Chance, Concealment & Blind-Fight Integration',
+        detail: 'Integrated miss chance engine into the Full Attack sequence supporting 20% Concealment, 50% Total Concealment, 50% Incorporeal Miss Chance, and Blink (50%/20%). Features automated percentile (d100) evaluation and automatic rerolls for characters with the Blind-Fight feat.'
+      },
+      {
+        category: '🧪 Ability Damage, Permanent Drain & Poison Incubation Tracker',
+        detail: 'Advanced vitality tracker for temporary ability damage and permanent ability drain across all six core ability scores, recalculating effective modifiers for dependent saves and skills. Includes a poison and disease incubation tracker with Fortitude DC checks, stage progression, and restoration healing helpers.'
+      },
+      {
+        category: '📜 XP Crafting & High-Tier Spell Component Ledger',
+        detail: 'Dedicated 3.5e experience point ledger to manage item creation XP costs (1/25th market price) and high-level spell material components (Wish, Limited Wish, Permanency, Miracle, Atonement), featuring 3.5e level-floor safeguards to prevent accidental de-leveling.'
+      },
+      {
+        category: '🛡️ 3.5e Tactical Maneuvers, Spell Resistance & Arcane Spell Failure',
+        detail: 'Interactive calculators for core 3.5e tactical maneuvers (Bull Rush, Disarm, Grapple, Overrun, Sunder, Trip) with size modifiers and opposed checks, Spell Penetration / Spell Resistance (SR) check resolver, Arcane Spell Failure (ASF) d100 roller, and Metamagic spell slot adjustments.'
+      }
+    ]
+  },
+  {
+    version: 'v0.8',
+    date: 'September 2026',
+    title: 'Adaptive Sidebar Dock Architecture, Category Grouping & Table Ergonomics',
+    badge: 'Navigation Suite',
+    badgeColor: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+    highlights: [
+      {
+        category: '🗂️ Categorized & Calibrated Sidebar Navigation',
+        detail: 'Redesigned the primary navigation dock into five distinct semantic functional groups: Campaign & Rules, AI & World Intel, Multiplayer & Table, Developer & Plugins, and Settings & Preferences.'
+      },
+      {
+        category: '🎲 Physical Tabletop Dice & Command Palette Reorganization',
+        detail: 'Relocated Physical Tabletop Dice Mode (manual real-die input) and Global Command Palette (Ctrl+K) into Settings & Preferences for seamless access alongside Undo/Redo, audio settings, and PWA options.'
+      },
+      {
+        category: '↔️ Phase In / Phase Out Collapsible Dock Rail',
+        detail: 'Added synchronized compact icon-rail dock with subtle dividers and hover micro-tooltips matching the 5 categorized sections for maximized viewport space on single monitors and tablets.'
+      },
+      {
+        category: '🛡️ Streamlined Multiplayer & Party Controls',
+        detail: 'Focused the Multiplayer & Table section exclusively on live room session management, active campaign indicators, and integrated WebRTC Party Voice communication.'
+      },
+      {
+        category: '⚡ Enhanced Tabletop Navigation Keybinds',
+        detail: 'Direct fast-key accessibility across all views with Ctrl+K (Command Palette), Ctrl+M (Campaign World Atlas), Ctrl+J (Live Session Co-Pilot), Alt+T (Table Mode), and Ctrl+Z / Ctrl+Y (Atomic Undo/Redo).'
+      }
+    ]
+  },
+  {
     version: 'v0.7',
     date: 'August 2026',
     title: 'Homebrew Entity Studios, AI Forge & Multi-Dice Simulation',
-    badge: 'Latest Release',
-    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    badge: 'Entity Suite',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
     highlights: [
       {
         category: '🛡️ Homebrew Class & Race Creation Studios',

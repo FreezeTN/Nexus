@@ -9,6 +9,12 @@ import { eventBus } from '../events/eventBus';
 import { saveCustomCompendiumEntry } from '../data/compendiumData';
 import { UniversalImporter } from '../services/universalImporter';
 import {
+  syncSessionChangesToBaseCharacter,
+  createCharacterDuplicate,
+  sanitizeBaseCharacterVitals,
+  DuplicateCharacterOptions
+} from '../utils/characterSessionSync';
+import {
   UserProfile,
   CharacterPresence,
   UserRole,
@@ -292,10 +298,23 @@ export function useCharacterManager({
     });
 
     setCharacters(prev => {
+      let updatedBaseChar: CharacterData | null = null;
+      if (recalculated.baseCharacterId) {
+        const baseChar = prev.find(c => c.id === recalculated.baseCharacterId);
+        if (baseChar) {
+          updatedBaseChar = syncSessionChangesToBaseCharacter(recalculated, baseChar);
+        }
+      }
+
       const exists = prev.some(c => c.id === recalculated.id);
-      const updatedList = exists 
+      let updatedList = exists 
         ? prev.map(c => c.id === recalculated.id ? recalculated : c)
         : [recalculated, ...prev];
+
+      if (updatedBaseChar) {
+        updatedList = updatedList.map(c => c.id === updatedBaseChar!.id ? updatedBaseChar! : c);
+      }
+
       try {
         localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updatedList));
       } catch (e) {}
@@ -311,6 +330,13 @@ export function useCharacterManager({
 
     if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
       saveCharacterToCloud(currentUser.uid, recalculated);
+      if (recalculated.baseCharacterId) {
+        const baseChar = characters.find(c => c.id === recalculated.baseCharacterId);
+        if (baseChar) {
+          const syncedBase = syncSessionChangesToBaseCharacter(recalculated, baseChar);
+          saveCharacterToCloud(currentUser.uid, syncedBase);
+        }
+      }
     }
   };
 
@@ -337,6 +363,33 @@ export function useCharacterManager({
       return updatedList;
     });
     setActiveCharacterId(newChar.id);
+
+    if (newChar.campaignName && newChar.campaignName.trim()) {
+      const cName = newChar.campaignName.trim();
+      setParties(prevParties => {
+        const matching = prevParties.find(p => p.name.toLowerCase() === cName.toLowerCase());
+        let updatedParties: Party[];
+        if (matching) {
+          if (!matching.characterIds.includes(newChar.id)) {
+            updatedParties = prevParties.map(p => p.id === matching.id ? { ...p, characterIds: [...p.characterIds, newChar.id] } : p);
+          } else {
+            updatedParties = prevParties;
+          }
+        } else {
+          const newParty: Party = {
+            id: 'party-' + Date.now(),
+            name: cName,
+            characterIds: [newChar.id],
+            createdAt: new Date().toISOString()
+          };
+          updatedParties = [...prevParties, newParty];
+        }
+        try {
+          localStorage.setItem(STORAGE_KEY_PARTIES, JSON.stringify(updatedParties));
+        } catch (e) {}
+        return updatedParties;
+      });
+    }
 
     eventBus.emit('CharacterCreated', { character: newChar });
 
@@ -559,6 +612,62 @@ export function useCharacterManager({
     e.target.value = '';
   };
 
+  const handleSyncToBaseCharacter = (sessionCharId: string, targetBaseId?: string) => {
+    const sessionChar = characters.find(c => c.id === sessionCharId);
+    if (!sessionChar) return null;
+
+    const baseId = targetBaseId || sessionChar.baseCharacterId;
+    if (!baseId) return null;
+
+    const baseChar = characters.find(c => c.id === baseId);
+    if (!baseChar) return null;
+
+    const syncedBase = syncSessionChangesToBaseCharacter(sessionChar, baseChar);
+
+    setCharacters(prev => {
+      const updatedList = prev.map(c => c.id === syncedBase.id ? syncedBase : c);
+      try {
+        localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updatedList));
+      } catch (e) {}
+      broadcastStateUpdate(updatedList, activeCharacterId, parties);
+      return updatedList;
+    });
+
+    eventBus.emit('CharacterUpdated', { character: syncedBase });
+
+    if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
+      saveCharacterToCloud(currentUser.uid, syncedBase);
+    }
+
+    return syncedBase;
+  };
+
+  const handleDuplicateCharacter = (originalCharId: string, options: DuplicateCharacterOptions = {}) => {
+    const original = characters.find(c => c.id === originalCharId);
+    if (!original) return null;
+
+    const duplicate = createCharacterDuplicate(original, options);
+
+    setCharacters(prev => {
+      const updatedList = [duplicate, ...prev];
+      try {
+        localStorage.setItem(STORAGE_KEY_CHARACTERS, JSON.stringify(updatedList));
+      } catch (e) {}
+      broadcastStateUpdate(updatedList, duplicate.id, parties);
+      return updatedList;
+    });
+
+    setActiveCharacterId(duplicate.id);
+
+    eventBus.emit('CharacterCreated', { character: duplicate });
+
+    if (currentUser?.uid && !currentUser.uid.startsWith('guest_')) {
+      saveCharacterToCloud(currentUser.uid, duplicate);
+    }
+
+    return duplicate;
+  };
+
   return {
     characters,
     setCharacters,
@@ -577,6 +686,8 @@ export function useCharacterManager({
     handleSelectCharacter,
     handleCreateNewCharacter,
     handleDeleteCharacter,
+    handleSyncToBaseCharacter,
+    handleDuplicateCharacter,
     handleAddItemToActiveCharacter,
     handleAddSpellToActiveCharacter,
     handleExportJson,

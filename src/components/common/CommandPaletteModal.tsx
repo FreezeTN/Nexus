@@ -285,17 +285,6 @@ export function CommandPaletteModal({
         }
       },
       {
-        id: 'action-soundscapes',
-        title: 'Procedural Soundscape Synthesizer (Web Audio API)',
-        category: 'Actions',
-        description: 'Campfires, rainstorms, dungeons, astral drones & tactile tabletop sound effects',
-        icon: <Radio className="w-4 h-4 text-cyan-400" />,
-        action: () => {
-          onClose();
-          if (onOpenCopilot) onOpenCopilot();
-        }
-      },
-      {
         id: 'action-campaign-lore-vault',
         title: 'Open Campaign World Atlas & Lore Vault',
         category: 'Actions',

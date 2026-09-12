@@ -1,22 +1,44 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CharacterData } from '../../../types';
 import {
   formatModifier,
   getAbilityModifier,
+  getEffectiveAbilities,
   get35eTouchAC,
   get35eFlatFootedAC,
   get35eGrapple,
+  get35eArmorClass,
   getEffectiveSpeed,
   getArmorClassBreakdown,
   getEffectiveMaxHp,
   calculateCharacterTotalDR,
   getCharacterResistances,
   getCharacterImmunities,
-  calculateInitiativeBonus
+  calculateInitiativeBonus,
+  getCharacterBab,
+  format35eBabProgression,
+  calculate35eTotalArmorCheckPenalty,
+  calculate35eDamageReduction,
+  calculate35eAoOPool,
+  calculate35eAbilityDamageDrainSummary,
+  get35eSkillBonus,
+  getProficiencyBonus
 } from '../../../utils/dndCalculations';
 
-import { HpOrb } from '../../HpOrb';
+import { HpOrb, getHpColorClass } from '../../HpOrb';
 import { ConditionsPanel } from '../../combat/ConditionsPanel';
+import { Edit35eAcModal } from '../../modals/Edit35eAcModal';
+import { Edit35eBabModal } from '../../modals/Edit35eBabModal';
+import { Edit35eDrResistanceModal } from '../../modals/Edit35eDrResistanceModal';
+import { CombatManeuvers35eModal } from '../../modals/CombatManeuvers35eModal';
+import { AoOTrackerModal } from '../../modals/AoOTrackerModal';
+import { AbilityDamageDrainModal } from '../../modals/AbilityDamageDrainModal';
+import { NegativeLevelsModal } from '../../modals/NegativeLevelsModal';
+import { ConcentrationCheckModal } from '../../modals/ConcentrationCheckModal';
+import { TumbleAcrobaticsModal } from '../../modals/TumbleAcrobaticsModal';
+import { MountedCombatModal } from '../../modals/MountedCombatModal';
+import { WildShape35eModal } from '../../modals/WildShape35eModal';
+import { EnvironmentalHazardsModal } from '../../modals/EnvironmentalHazardsModal';
 import { getEnvironmentalTraitStatus } from '../../../utils/environmentRules';
 import { useLayoutCustomization } from '../../../utils/layoutCustomization';
 import { useLanguage } from '../../../i18n/LanguageContext';
@@ -26,6 +48,7 @@ import {
   Zap,
   Footprints,
   Plus,
+  Minus,
   Dices,
   Skull,
   Flame,
@@ -37,7 +60,14 @@ import {
   HelpCircle,
   ChevronUp,
   ChevronDown,
-  Layers
+  Layers,
+  Swords,
+  PawPrint,
+  Compass,
+  RefreshCw,
+  AlertTriangle,
+  Eye,
+  Activity
 } from 'lucide-react';
 
 interface CombatDefensesPanelProps {
@@ -62,8 +92,24 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   setShowModifierInspector
 }) => {
   const { t } = useLanguage();
+  const [show35eAcModal, setShow35eAcModal] = useState(false);
+  const [show35eBabModal, setShow35eBabModal] = useState(false);
+  const [show35eDrModal, setShow35eDrModal] = useState(false);
+  const [show35eManeuversModal, setShow35eManeuversModal] = useState(false);
+  const [show35eAoOModal, setShow35eAoOModal] = useState(false);
+  const [show35eAbilityDamageModal, setShow35eAbilityDamageModal] = useState(false);
+  const [show35eNegativeLevelsModal, setShow35eNegativeLevelsModal] = useState(false);
+  const [show35eConcentrationModal, setShow35eConcentrationModal] = useState(false);
+  const [show35eTumbleModal, setShow35eTumbleModal] = useState(false);
+  const [show35eMountedModal, setShow35eMountedModal] = useState(false);
+  const [show35eWildShapeModal, setShow35eWildShapeModal] = useState(false);
+  const [show35eEnvironmentalModal, setShow35eEnvironmentalModal] = useState(false);
   const effectiveMaxHp = getEffectiveMaxHp(character);
   const speedInfo = getEffectiveSpeed(character);
+  const ac35 = get35eArmorClass(character);
+  const acp35 = calculate35eTotalArmorCheckPenalty(character);
+  const aooInfo = calculate35eAoOPool(character);
+  const abilityDamageSummary = calculate35eAbilityDamageDrainSummary(character);
 
   const handleToggleDeathSuccess = (index: number) => {
     const current = character.deathSavesSuccesses;
@@ -156,6 +202,88 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
     onRoll(label, 20, 1, 0, 'normal');
   };
 
+  const handleRoll35eStabilization = () => {
+    const d100 = Math.floor(Math.random() * 100) + 1;
+    const isSuccess = d100 <= 10;
+    const conds = character.conditions || [];
+    if (isSuccess) {
+      const updatedConds = Array.from(new Set([...conds, 'Unconscious'])).filter((c) => c !== 'Dead');
+      onUpdateCharacter({
+        ...character,
+        isStabilized35e: true,
+        conditions: updatedConds
+      });
+      onRoll(`3.5e Stabilization Roll (d100=${d100} ≤ 10%): Stabilized!`, 100, 1, 0, 'normal');
+    } else {
+      const newHp = (character.hpCurrent ?? 0) - 1;
+      const isDead = newHp <= -10;
+      let updatedConds = [...conds];
+      if (isDead) {
+        updatedConds = Array.from(new Set([...updatedConds, 'Dead']));
+      }
+      onUpdateCharacter({
+        ...character,
+        hpCurrent: newHp,
+        isStabilized35e: false,
+        conditions: updatedConds
+      });
+      onRoll(
+        `3.5e Stabilization Roll (d100=${d100} > 10%): Failed! Lost 1 HP (Now ${newHp} HP)${isDead ? ' 💀 DEAD (HP ≤ -10)' : ''}`,
+        100,
+        1,
+        0,
+        'normal'
+      );
+    }
+  };
+
+  const handleRoll35eHealCheck = () => {
+    const abilities = getEffectiveAbilities(character);
+    const wisMod = getAbilityModifier(abilities.WIS?.score || 10);
+    const healSkill = character.skills?.find((s) => s.name.toLowerCase() === 'heal');
+    const healMod = healSkill ? get35eSkillBonus(healSkill, abilities, character.skills) : wisMod;
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const total = d20 + healMod;
+    const success = total >= 15;
+    const conds = character.conditions || [];
+
+    if (success) {
+      const updatedConds = Array.from(new Set([...conds, 'Unconscious'])).filter((c) => c !== 'Dead');
+      onUpdateCharacter({
+        ...character,
+        isStabilized35e: true,
+        conditions: updatedConds
+      });
+      onRoll(`First Aid Heal Check (DC 15: d20[${d20}] + ${healMod} = ${total}): Success! Stabilized.`, 20, 1, healMod, 'normal');
+    } else {
+      onRoll(`First Aid Heal Check (DC 15: d20[${d20}] + ${healMod} = ${total}): Failed.`, 20, 1, healMod, 'normal');
+    }
+  };
+
+  const handleToggle35eStabilized = () => {
+    onUpdateCharacter({
+      ...character,
+      isStabilized35e: !character.isStabilized35e
+    });
+  };
+
+  const handleHpDelta = (delta: number) => {
+    const current = character.hpCurrent ?? effectiveMaxHp;
+    const minAllowed = character.edition === '3.5e' ? -10 : 0;
+    const newHp = Math.max(minAllowed, Math.min(effectiveMaxHp, current + delta));
+    let conds = character.conditions || [];
+    if (newHp <= 0 && !conds.includes('Unconscious')) {
+      conds = [...conds, 'Unconscious'];
+    } else if (newHp > 0 && conds.includes('Unconscious')) {
+      conds = conds.filter((c) => c !== 'Unconscious');
+    }
+    onUpdateCharacter({
+      ...character,
+      hpCurrent: newHp,
+      conditions: conds,
+    });
+  };
+
   const { isVisible } = useLayoutCustomization();
 
   const showHpOrb = isVisible('s2_vitalityHpOrb');
@@ -175,52 +303,425 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
       {/* Primary Defense & HP Summary Cards */}
       {visibleTopCount > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          {/* Left 4 cols: HP Orb & Health Controls */}
+          {/* Left 4 cols: HP Orb, Health Controls & Integrated Action Economy */}
           {showHpOrb && (
-            <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col items-center justify-between shadow-xl`}>
-          <div className="w-full flex items-center justify-between border-b border-stone-800 pb-2 mb-2">
-            <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
-              <Heart className="w-4 h-4 text-rose-500" /> Vitality & HP
-            </span>
+            <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-3.5 flex flex-col gap-2.5 shadow-xl`}>
+              <div className="w-full flex items-center justify-between border-b border-stone-800 pb-2">
+                <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
+                  <Heart className="w-4 h-4 text-rose-500" /> Vitality & HP
+                </span>
 
-            <button
-              onClick={() => setShowMaxHpInspector(true)}
-              className="text-[10px] text-amber-400 hover:text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-600/40 hover:border-amber-500 transition"
-              title="Inspect Max HP Formula and Level-by-Level Breakdown"
-            >
-              Max HP Inspector 🔍
-            </button>
-          </div>
-
-          <HpOrb
-            hpCurrent={character.hpCurrent}
-            hpMax={effectiveMaxHp}
-          />
-
-          <div className="w-full grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-stone-800 text-xs font-mono">
-            <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 text-center">
-              <div className="text-[10px] text-stone-400 font-sans uppercase">Temp HP</div>
-              <div className="flex items-center justify-center gap-1 mt-1">
-                <input
-                  type="number"
-                  min="0"
-                  value={character.hpTemp || 0}
-                  onChange={(e) => onUpdateCharacter({ ...character, hpTemp: parseInt(e.target.value) || 0 })}
-                  className="w-12 bg-stone-900 border border-stone-700 rounded text-center text-sky-300 font-bold p-0.5"
-                />
+                <button
+                  onClick={() => setShowMaxHpInspector(true)}
+                  className="text-[10px] text-amber-400 hover:text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-600/40 hover:border-amber-500 transition cursor-pointer"
+                  title="Inspect Max HP Formula and Level-by-Level Breakdown"
+                >
+                  Max HP Inspector 🔍
+                </button>
               </div>
-            </div>
 
-            <button
-              onClick={() => setShowRestModal(true)}
-              className="bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 p-2 rounded-xl text-amber-200 font-sans font-bold flex flex-col items-center justify-center gap-1 transition shadow-md"
-            >
-              <Moon className="w-4 h-4 text-amber-400" />
-              <span>{t('rest.title', 'Rest & Hit Dice')}</span>
-            </button>
-          </div>
-        </div>
-      )}
+              {/* Enhanced Health Orb + Health Progress Bar & Quick Adjusters */}
+              {(() => {
+                const safeMax = Math.max(1, effectiveMaxHp);
+                const currentHp = character.hpCurrent ?? effectiveMaxHp;
+                const hpPct = Math.max(0, Math.min(100, Math.round((currentHp / safeMax) * 100)));
+
+                let barGradient = 'from-emerald-600 via-emerald-500 to-emerald-400';
+                if (hpPct < 25) {
+                  barGradient = 'from-rose-700 via-rose-600 to-rose-500';
+                } else if (hpPct < 50) {
+                  barGradient = 'from-orange-600 via-orange-500 to-orange-400';
+                } else if (hpPct < 75) {
+                  barGradient = 'from-amber-600 via-amber-500 to-amber-400';
+                }
+
+                return (
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800/80 space-y-2">
+                    <div className="flex items-center gap-3">
+                      <HpOrb
+                        hpCurrent={currentHp}
+                        hpMax={effectiveMaxHp}
+                        size="md"
+                        showLabel={false}
+                      />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline justify-between font-mono">
+                          <span className="text-[10px] uppercase font-bold text-stone-400">
+                            Hit Points
+                          </span>
+                          <span className={`font-mono font-extrabold text-sm ${getHpColorClass(hpPct)}`}>
+                            {currentHp} <span className="text-stone-500 font-normal">/</span> {effectiveMaxHp}
+                          </span>
+                        </div>
+
+                        {/* Liquid-style Animated Progress Bar */}
+                        <div className="w-full bg-stone-900 border border-stone-800 rounded-full h-2 overflow-hidden my-1">
+                          <div
+                            className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-500`}
+                            style={{ width: `${hpPct}%` }}
+                          />
+                        </div>
+
+                        {/* Quick Adjust Steppers */}
+                        <div className="flex items-center justify-between gap-1 pt-0.5">
+                          <span className="text-[9px] font-mono text-stone-500 uppercase">Quick HP:</span>
+                          <div className="flex items-center gap-1 font-mono text-[10px]">
+                            <button
+                              type="button"
+                              onClick={() => handleHpDelta(-5)}
+                              className="px-1.5 py-0.5 rounded bg-stone-900 hover:bg-rose-950 text-rose-300 hover:text-rose-200 border border-stone-800 hover:border-rose-700/60 font-bold transition cursor-pointer"
+                              title="Take 5 Damage"
+                            >
+                              -5
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleHpDelta(-1)}
+                              className="px-1.5 py-0.5 rounded bg-stone-900 hover:bg-rose-950 text-rose-300 hover:text-rose-200 border border-stone-800 hover:border-rose-700/60 font-bold transition cursor-pointer"
+                              title="Take 1 Damage"
+                            >
+                              -1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleHpDelta(1)}
+                              className="px-1.5 py-0.5 rounded bg-stone-900 hover:bg-emerald-950 text-emerald-300 hover:text-emerald-200 border border-stone-800 hover:border-emerald-700/60 font-bold transition cursor-pointer"
+                              title="Heal 1 HP"
+                            >
+                              +1
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleHpDelta(5)}
+                              className="px-1.5 py-0.5 rounded bg-stone-900 hover:bg-emerald-950 text-emerald-300 hover:text-emerald-200 border border-stone-800 hover:border-emerald-700/60 font-bold transition cursor-pointer"
+                              title="Heal 5 HP"
+                            >
+                              +5
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sub-row: Temp HP, Nonlethal (3.5e), and Rest & Hit Dice */}
+                    <div className={`grid ${character.edition === '3.5e' ? 'grid-cols-3' : 'grid-cols-2'} gap-2 pt-1 text-xs font-mono`}>
+                      <div className="bg-stone-900/90 p-1.5 rounded-lg border border-stone-800 text-center">
+                        <div className="text-[9px] text-stone-400 font-sans uppercase font-bold">Temp HP</div>
+                        <div className="flex items-center justify-center gap-1 mt-0.5">
+                          <input
+                            type="number"
+                            min="0"
+                            value={character.hpTemp || 0}
+                            onChange={(e) => onUpdateCharacter({ ...character, hpTemp: parseInt(e.target.value) || 0 })}
+                            className="w-12 bg-stone-950 border border-stone-700 rounded text-center text-sky-300 font-bold p-0.5 text-xs"
+                          />
+                        </div>
+                      </div>
+
+                      {character.edition === '3.5e' && (
+                        <div className="bg-stone-900/90 p-1.5 rounded-lg border border-stone-800 text-center">
+                          <div className="text-[9px] text-amber-400/90 font-sans uppercase font-bold">Nonlethal</div>
+                          <div className="flex items-center justify-center gap-1 mt-0.5">
+                            <input
+                              type="number"
+                              min="0"
+                              value={character.nonlethalDamage || 0}
+                              onChange={(e) => onUpdateCharacter({ ...character, nonlethalDamage: Math.max(0, parseInt(e.target.value) || 0) })}
+                              className="w-12 bg-stone-950 border border-stone-700 rounded text-center text-amber-300 font-bold p-0.5 text-xs"
+                              title="3.5e Nonlethal Damage. If Nonlethal >= Current HP, character becomes Staggered or Unconscious."
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setShowRestModal(true)}
+                        className="bg-amber-950/70 hover:bg-amber-900 border border-amber-600/50 p-1.5 rounded-lg text-amber-200 font-sans font-bold flex flex-col items-center justify-center gap-0.5 transition shadow-sm cursor-pointer"
+                      >
+                        <Moon className="w-3.5 h-3.5 text-amber-400" />
+                        <span className="text-[10px] leading-tight">{t('rest.title', 'Rest & Hit Dice')}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* INTEGRATED ACTION ECONOMY FOR 5E & 3.5E */}
+              {character.edition === '3.5e' ? (
+                /* 3.5e Action Economy Tracker */
+                <div className="bg-stone-950 px-2.5 py-2 rounded-xl border border-stone-800 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 text-sky-400" />
+                      <span>Action Economy (Round Tracker)</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            standardActionUsed: false,
+                            moveActionUsed: false,
+                            swiftActionUsed: false,
+                            immediateActionUsed: false,
+                            fiveFootStepTaken: false,
+                          },
+                        })
+                      }
+                      className="text-[9px] font-mono font-bold text-sky-400 hover:text-sky-300 underline cursor-pointer"
+                    >
+                      Reset Turn Actions
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5 text-[10px] font-mono">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            standardActionUsed: !character.actionEconomy?.standardActionUsed,
+                          },
+                        })
+                      }
+                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
+                        character.actionEconomy?.standardActionUsed
+                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
+                          : 'bg-amber-950/60 text-amber-200 border-amber-700/60 font-bold'
+                      }`}
+                      title="Click to toggle Standard Action used"
+                    >
+                      Standard
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            moveActionUsed: !character.actionEconomy?.moveActionUsed,
+                          },
+                        })
+                      }
+                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
+                        character.actionEconomy?.moveActionUsed
+                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
+                          : 'bg-indigo-950/60 text-indigo-200 border-indigo-700/60 font-bold'
+                      }`}
+                      title="Click to toggle Move Action used"
+                    >
+                      Move
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            swiftActionUsed: !character.actionEconomy?.swiftActionUsed,
+                          },
+                        })
+                      }
+                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
+                        character.actionEconomy?.swiftActionUsed
+                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
+                          : 'bg-sky-950/60 text-sky-200 border-sky-700/60 font-bold'
+                      }`}
+                      title="Click to toggle Swift / Immediate Action used"
+                    >
+                      Swift/Imm.
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            fiveFootStepTaken: !character.actionEconomy?.fiveFootStepTaken,
+                          },
+                        })
+                      }
+                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
+                        character.actionEconomy?.fiveFootStepTaken
+                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
+                          : 'bg-emerald-950/60 text-emerald-200 border-emerald-700/60 font-bold'
+                      }`}
+                      title="Click to toggle 5-ft Step taken (prevents AoO)"
+                    >
+                      5-ft Step
+                    </button>
+                  </div>
+
+                  {/* 3.5e Mounted Combat & Nonlethal Status Footer */}
+                  {(() => {
+                    const currentHp = character.hpCurrent ?? effectiveMaxHp;
+                    const nonlethal = character.nonlethalDamage || 0;
+                    const isStaggered = nonlethal > 0 && nonlethal === currentHp && currentHp > 0;
+                    const isUnconsciousNL = nonlethal > 0 && nonlethal > currentHp && currentHp > 0;
+
+                    return (
+                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-800/60 text-[10px] font-mono">
+                        {isUnconsciousNL ? (
+                          <span className="text-rose-400 font-bold flex items-center gap-1 animate-pulse">
+                            ⚠️ Unconscious (Nonlethal &gt; Current HP)
+                          </span>
+                        ) : isStaggered ? (
+                          <span className="text-amber-400 font-bold flex items-center gap-1">
+                            ⚠️ Staggered (Nonlethal = HP: 1 Action/turn)
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setShow35eMountedModal(true)}
+                            className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                              character.isMounted
+                                ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600'
+                                : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                            }`}
+                            title="Open 3.5e Mounted Combat (PHB p. 157): Ride check, mount cover, spur mount"
+                          >
+                            <Shield className="w-3 h-3 text-amber-400" />
+                            <span>{character.isMounted ? `Mounted: ${character.mountInfo?.name || 'Steed'}` : 'Mount & Ride (3.5e)'}</span>
+                          </button>
+                        )}
+
+                        {character.isMounted && (
+                          <span className="text-[10px] text-emerald-400 font-mono">
+                            Steed: {character.mountInfo?.speed || '60 ft.'}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : (
+                /* 5e Action Economy Tracker - Integrated into Vitality & HP */
+                <div className="bg-stone-950 px-2.5 py-2 rounded-xl border border-stone-800 space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 text-sky-400" />
+                      <span>Action Economy (5e Round)</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            actionUsed5e: false,
+                            bonusActionUsed5e: false,
+                            reactionUsed5e: false,
+                          },
+                        })
+                      }
+                      className="text-[9px] font-mono font-bold text-sky-400 hover:text-sky-300 underline cursor-pointer"
+                    >
+                      Reset Turn Actions
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            actionUsed5e: !character.actionEconomy?.actionUsed5e,
+                          },
+                        })
+                      }
+                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer ${
+                        character.actionEconomy?.actionUsed5e
+                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
+                          : 'bg-amber-950/60 text-amber-200 border-amber-700/60 font-bold'
+                      }`}
+                      title="Click to toggle Action used"
+                    >
+                      Action
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            bonusActionUsed5e: !character.actionEconomy?.bonusActionUsed5e,
+                          },
+                        })
+                      }
+                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer ${
+                        character.actionEconomy?.bonusActionUsed5e
+                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
+                          : 'bg-indigo-950/60 text-indigo-200 border-indigo-700/60 font-bold'
+                      }`}
+                      title="Click to toggle Bonus Action used"
+                    >
+                      Bonus Action
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateCharacter({
+                          ...character,
+                          actionEconomy: {
+                            ...character.actionEconomy,
+                            reactionUsed5e: !character.actionEconomy?.reactionUsed5e,
+                          },
+                        })
+                      }
+                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer ${
+                        character.actionEconomy?.reactionUsed5e
+                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
+                          : 'bg-rose-950/60 text-rose-200 border-rose-700/60 font-bold'
+                      }`}
+                      title="Click to toggle Reaction used (Opportunity Attack, Shield, Counterspell)"
+                    >
+                      Reaction
+                    </button>
+                  </div>
+
+                  {/* 5e Mounted Combat Controls */}
+                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-800/60">
+                    <button
+                      type="button"
+                      onClick={() => setShow35eMountedModal(true)}
+                      className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                        character.isMounted
+                          ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600'
+                          : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                      }`}
+                      title="Open 5e Mounted Combat (PHB p. 198): Movement cost, Controlled vs Independent mount, DC 10 Dex saves"
+                    >
+                      <Shield className="w-3 h-3 text-amber-400" />
+                      <span>{character.isMounted ? `Mounted: ${character.mountInfo?.name || 'Steed'}` : 'Mounted Combat (5e)'}</span>
+                    </button>
+                    {character.isMounted && (
+                      <span className="text-[10px] text-emerald-400 font-mono">
+                        Steed: {character.mountInfo?.speed || '60 ft.'}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
       {/* Middle 4 cols: Armor Class, Initiative, Speed & Damage Mitigation */}
           {showDefStats && (
@@ -247,126 +748,484 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
               </div>
 
               {/* Primary Defense Metrics Grid: AC, Initiative, Speed */}
-              <div className="grid grid-cols-3 gap-2 text-center font-mono">
-                {/* AC */}
-                <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-500/30 flex flex-col items-center justify-center relative group">
-                  <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('defenses.armorClass', 'Armor Class')}</span>
-                  <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{character.armorClass}</span>
-                  <span className="text-[9px] text-stone-500 truncate max-w-full">
-                    {getArmorClassBreakdown(character).explanation || `Base ${getArmorClassBreakdown(character).baseAc}`}
-                  </span>
-                </div>
+              {character.edition === '3.5e' ? (
+                <div className="space-y-2.5">
+                  {/* Top quick stats: Initiative, BAB, Grapple/SR, Speed, AoO */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center font-mono">
+                    {/* Initiative */}
+                    {(() => {
+                      const initBonus = calculateInitiativeBonus(character);
+                      return (
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                          <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">{t('stats.initiative', 'Initiative')}</span>
+                          <button
+                            onClick={() => onRoll('Initiative Roll', 20, 1, initBonus, 'normal')}
+                            className="text-xl font-serif font-extrabold text-emerald-300 hover:text-emerald-200 transition my-0.5"
+                            title={`Roll Initiative (${formatModifier(initBonus)})`}
+                          >
+                            {formatModifier(initBonus)}
+                          </button>
+                          <span className="text-[8px] text-stone-500">Init Mod</span>
+                        </div>
+                      );
+                    })()}
 
-                {/* Initiative */}
-                {(() => {
-                  const initBonus = calculateInitiativeBonus(character);
-                  return (
-                    <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                      <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.initiative', 'Initiative')}</span>
-                      <button
-                        onClick={() => onRoll('Initiative Roll', 20, 1, initBonus, 'normal')}
-                        className="text-2xl font-serif font-extrabold text-emerald-300 hover:text-emerald-200 transition my-0.5"
-                        title={`Roll Initiative (${formatModifier(initBonus)})`}
-                      >
-                        {formatModifier(initBonus)}
-                      </button>
-                      <span className="text-[9px] text-stone-500">Total Init Mod</span>
+                    {/* Base Attack Bonus (BAB) */}
+                    {(() => {
+                      const bab = getCharacterBab(character);
+                      return (
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center relative group">
+                          <div className="flex items-center justify-between w-full px-1">
+                            <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">Base Atk (BAB)</span>
+                            <button
+                              type="button"
+                              onClick={() => setShow35eBabModal(true)}
+                              className="text-stone-500 hover:text-amber-400 transition"
+                              title="Edit Base Attack Bonus (BAB) & Iterative Attacks"
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShow35eBabModal(true)}
+                            className="text-lg font-serif font-extrabold text-amber-300 hover:text-amber-200 transition my-0.5"
+                            title="Base Attack Bonus. Click to customize."
+                          >
+                            {formatModifier(bab)}
+                          </button>
+                          <span className="text-[8px] text-amber-400/80 font-mono truncate max-w-full" title={`Full Attack: ${format35eBabProgression(bab)}`}>
+                            {format35eBabProgression(bab)}
+                          </span>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Grapple / SR */}
+                    {(() => {
+                      const grappleMod = get35eGrapple(character);
+                      return (
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                          <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">Grapple / SR</span>
+                          <button
+                            type="button"
+                            onClick={() => onRoll('Grapple Check', 20, 1, grappleMod, 'normal')}
+                            className="text-base font-serif font-extrabold text-amber-300 hover:text-amber-200 transition my-0.5"
+                            title={`Click to roll Grapple Check: d20 + ${grappleMod}`}
+                          >
+                            {formatModifier(grappleMod)}
+                            {character.spellResist ? <span className="text-xs text-cyan-300 font-normal font-mono ml-1">SR {character.spellResist}</span> : null}
+                          </button>
+                          <span className="text-[8px] text-stone-500 truncate">BAB + STR + Size</span>
+                        </div>
+                      );
+                    })()}
+
+                    {/* Speed */}
+                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                      <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">{t('stats.speed', 'Speed')}</span>
+                      <span className="text-lg font-serif font-extrabold text-sky-300 my-0.5 flex items-center gap-1">
+                        <Footprints className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                        {speedInfo.effectiveSpeed} <span className="text-[10px] font-normal">ft</span>
+                      </span>
+                      <span className="text-[8px] text-stone-500 truncate max-w-full" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
+                        {speedInfo.reasons?.join('; ') || speedInfo.status || 'Base speed'}
+                      </span>
                     </div>
-                  );
-                })()}
 
+                    {/* 3.5e Attacks of Opportunity (AoO) Pool */}
+                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                      <div className="flex items-center justify-between w-full px-1">
+                        <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">AoO Pool</span>
+                        <button
+                          type="button"
+                          onClick={() => setShow35eAoOModal(true)}
+                          className="text-stone-500 hover:text-red-400 transition"
+                          title="Open 3.5e Attack of Opportunity Tracker"
+                        >
+                          <Pencil className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShow35eAoOModal(true)}
+                        className="text-lg font-serif font-extrabold text-red-400 hover:text-red-300 transition my-0.5 flex items-baseline gap-1"
+                        title="Remaining AoOs this combat round. Click to manage."
+                      >
+                        {aooInfo.currentAoO}
+                        <span className="text-[10px] font-mono text-stone-500">/{aooInfo.maxAoO}</span>
+                      </button>
+                      <span className="text-[8px] text-red-400/80 truncate font-mono">
+                        {aooInfo.threatReachFt}ft {aooInfo.hasCombatReflexes ? 'Reflexes' : 'Threat'}
+                      </span>
+                    </div>
+                  </div>
 
-                {/* Speed */}
-                <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                  <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.speed', 'Speed')}</span>
-                  <span className="text-xl font-serif font-extrabold text-sky-300 my-0.5 flex items-center gap-1">
-                    <Footprints className="w-4 h-4 text-sky-400 shrink-0" />
-                    {speedInfo.effectiveSpeed} <span className="text-xs font-normal">ft</span>
-                  </span>
-                  <span className="text-[9px] text-stone-500 truncate max-w-full" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
-                    {speedInfo.reasons?.join('; ') || speedInfo.status || 'Base speed'}
-                  </span>
+                  {/* 3.5e Official AC Equation Breakdown */}
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-600/40 text-stone-200 shadow-md">
+                    <div className="flex items-center justify-between border-b border-stone-800/80 pb-1.5 mb-2">
+                      <div className="flex items-center gap-1.5">
+                        <div className="bg-stone-900 border border-stone-700 px-2 py-0.5 rounded text-[10px] font-black tracking-wider text-amber-300 font-sans uppercase flex items-center gap-1">
+                          <Shield className="w-3 h-3 text-amber-400" />
+                          <span>AC</span>
+                          <span className="text-stone-400 font-normal text-[8.5px]">ARMOR CLASS</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setShow35eAcModal(true)}
+                        className="text-[9.5px] text-amber-400 hover:text-amber-300 font-mono bg-stone-900 px-2 py-0.5 rounded border border-amber-700/50 flex items-center gap-1 transition shadow-sm hover:bg-stone-800"
+                        title="Customize 3.5e AC Modifiers (Natural Armor, Deflection, Size, Dodge, Misc)"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        <span>Edit Modifiers</span>
+                      </button>
+                    </div>
+
+                    {/* Equation Row */}
+                    <div className="overflow-x-auto pb-1">
+                      <div className="flex items-center justify-between gap-1 text-center font-mono text-xs">
+                        {/* TOTAL AC */}
+                        <div className="flex flex-col items-center bg-stone-900 border border-amber-500 rounded p-1 min-w-[48px] shadow-sm">
+                          <span className="text-base font-extrabold text-amber-300 font-serif leading-none">{ac35.totalAc}</span>
+                          <span className="text-[7.5px] text-stone-400 font-sans uppercase font-bold mt-1">TOTAL</span>
+                        </div>
+
+                        <span className="text-stone-400 font-bold text-xs">=</span>
+
+                        {/* BASE 10 */}
+                        <div className="flex flex-col items-center px-0.5">
+                          <span className="text-xs font-extrabold text-stone-300">10</span>
+                          <span className="text-[7.5px] text-stone-500 font-sans uppercase mt-0.5">BASE</span>
+                        </div>
+
+                        <span className="text-stone-500 font-bold text-[10px]">+</span>
+
+                        {/* ARMOR BONUS */}
+                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.armor.join(', ') || 'Armor Bonus'}>
+                          <span className="text-xs font-bold text-sky-300 leading-none">{ac35.armorBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">ARMOR</span>
+                        </div>
+
+                        <span className="text-stone-500 font-bold text-[10px]">+</span>
+
+                        {/* SHIELD BONUS */}
+                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.shield.join(', ') || 'Shield Bonus'}>
+                          <span className="text-xs font-bold text-indigo-300 leading-none">{ac35.shieldBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">SHIELD</span>
+                        </div>
+
+                        <span className="text-stone-500 font-bold text-[10px]">+</span>
+
+                        {/* DEX MODIFIER */}
+                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.dex.join(', ') || 'Dexterity Modifier'}>
+                          <span className="text-xs font-bold text-emerald-300 leading-none">{ac35.dexBonus >= 0 ? `+${ac35.dexBonus}` : ac35.dexBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">DEX</span>
+                        </div>
+
+                        <span className="text-stone-500 font-bold text-[10px]">+</span>
+
+                        {/* SIZE MODIFIER */}
+                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.size.join(', ') || 'Size Modifier'}>
+                          <span className="text-xs font-bold text-yellow-300 leading-none">{ac35.sizeModifier >= 0 ? `+${ac35.sizeModifier}` : ac35.sizeModifier}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">SIZE</span>
+                        </div>
+
+                        <span className="text-stone-500 font-bold text-[10px]">+</span>
+
+                        {/* NATURAL ARMOR */}
+                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.natural.join(', ') || 'Natural Armor'}>
+                          <span className="text-xs font-bold text-amber-300 leading-none">{ac35.naturalArmorBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">NATURAL</span>
+                        </div>
+
+                        <span className="text-stone-500 font-bold text-[10px]">+</span>
+
+                        {/* DEFLECTION MODIFIER */}
+                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.deflection.join(', ') || 'Deflection Modifier'}>
+                          <span className="text-xs font-bold text-cyan-300 leading-none">{ac35.deflectionBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">DEFLECT</span>
+                        </div>
+
+                        <span className="text-stone-500 font-bold text-[10px]">+</span>
+
+                        {/* MISC MODIFIER */}
+                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.misc.join(', ') || 'Misc Modifier (Dodge, Insight, etc.)'}>
+                          <span className="text-xs font-bold text-purple-300 leading-none">{ac35.miscBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">MISC</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Touch & Flat-Footed subrow */}
+                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-stone-800/90 text-xs font-mono text-center">
+                      <div className="bg-stone-900/80 p-1.5 rounded border border-stone-800 flex items-center justify-between px-2.5">
+                        <div className="text-left">
+                          <div className="text-[8.5px] text-stone-400 font-sans uppercase font-semibold">Touch AC</div>
+                          <div className="text-[7.5px] text-stone-500">Ignores Armor/Shield/Nat</div>
+                        </div>
+                        <div className="font-bold text-amber-300 text-base">{ac35.touchAc}</div>
+                      </div>
+                      <div className="bg-stone-900/80 p-1.5 rounded border border-stone-800 flex items-center justify-between px-2.5">
+                        <div className="text-left">
+                          <div className="text-[8.5px] text-stone-400 font-sans uppercase font-semibold">Flat-Footed AC</div>
+                          <div className="text-[7.5px] text-stone-500">Ignores DEX / Dodge</div>
+                        </div>
+                        <div className="font-bold text-amber-300 text-base">{ac35.flatFootedAc}</div>
+                      </div>
+                    </div>
+
+                    {/* 3.5e Armor Check Penalty (ACP) Breakdown */}
+                    <div className="bg-stone-900/80 p-1.5 rounded border border-stone-800 flex items-center justify-between px-2.5 mt-2 text-xs font-mono">
+                      <div className="text-left">
+                        <div className="text-[8.5px] text-stone-400 font-sans uppercase font-semibold">Armor Check Penalty (ACP)</div>
+                        <div className="text-[7.5px] text-stone-500 truncate max-w-[220px]" title={acp35.breakdown.join('; ')}>
+                          {acp35.breakdown.length > 0 ? acp35.breakdown.join(' • ') : 'No check penalty active'}
+                        </div>
+                      </div>
+                      <div className={`font-bold text-sm ${acp35.totalAcp < 0 ? 'text-amber-400' : 'text-stone-400'}`}>
+                        {acp35.totalAcp}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3.5e Tactical Cover & Line of Sight Selector */}
+                  <div className="bg-stone-950 px-3 py-2 rounded-xl border border-stone-800 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
+                        <Shield className="w-3 h-3 text-amber-400" />
+                        <span>Tactical Cover & Line of Sight (PHB p. 150)</span>
+                      </span>
+                      <span className="font-mono text-stone-400">
+                        {character.activeCover === 'standard' && '+4 AC, +2 Reflex Save'}
+                        {character.activeCover === 'improved' && '+8 AC, +4 Ref, +10 Hide, Improved Evasion'}
+                        {character.activeCover === 'total' && 'Cannot be targeted by direct attacks/spells'}
+                        {(!character.activeCover || character.activeCover === 'none') && 'No active cover'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {(['none', 'standard', 'improved', 'total'] as const).map((cov) => {
+                        const isActive = (character.activeCover || 'none') === cov;
+                        const label = cov === 'none' ? 'No Cover' : cov === 'standard' ? 'Standard (+4)' : cov === 'improved' ? 'Improved (+8)' : 'Total Cover';
+                        return (
+                          <button
+                            key={cov}
+                            type="button"
+                            onClick={() => onUpdateCharacter({ ...character, activeCover: cov })}
+                            className={`py-1 px-1.5 rounded-lg text-[10px] font-bold font-mono transition text-center truncate cursor-pointer ${
+                              isActive
+                                ? 'bg-amber-950 text-amber-200 border border-amber-500 shadow'
+                                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                  {/* AC */}
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-500/30 flex flex-col items-center justify-center relative group">
+                    <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('defenses.armorClass', 'Armor Class')}</span>
+                    <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{character.armorClass}</span>
+                    <span className="text-[9px] text-stone-500 truncate max-w-full">
+                      {getArmorClassBreakdown(character).explanation || `Base ${getArmorClassBreakdown(character).baseAc}`}
+                    </span>
+                  </div>
 
-              {/* 3.5e Specific Defenses (Touch AC, Flat-Footed, Grapple) */}
-              {character.edition === '3.5e' && (
-                <div className="grid grid-cols-3 gap-2 text-center font-mono text-xs bg-stone-950 p-2 rounded-xl border border-amber-600/30">
-                  <div>
-                    <div className="text-[9px] text-stone-400">Touch AC</div>
-                    <div className="font-bold text-amber-300">{get35eTouchAC(character)}</div>
+                  {/* Initiative */}
+                  {(() => {
+                    const initBonus = calculateInitiativeBonus(character);
+                    return (
+                      <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                        <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.initiative', 'Initiative')}</span>
+                        <button
+                          onClick={() => onRoll('Initiative Roll', 20, 1, initBonus, 'normal')}
+                          className="text-2xl font-serif font-extrabold text-emerald-300 hover:text-emerald-200 transition my-0.5"
+                          title={`Roll Initiative (${formatModifier(initBonus)})`}
+                        >
+                          {formatModifier(initBonus)}
+                        </button>
+                        <span className="text-[9px] text-stone-500">Total Init Mod</span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Speed */}
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                    <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.speed', 'Speed')}</span>
+                    <span className="text-xl font-serif font-extrabold text-sky-300 my-0.5 flex items-center gap-1">
+                      <Footprints className="w-4 h-4 text-sky-400 shrink-0" />
+                      {speedInfo.effectiveSpeed} <span className="text-xs font-normal">ft</span>
+                    </span>
+                    <span className="text-[9px] text-stone-500 truncate max-w-full" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
+                      {speedInfo.reasons?.join('; ') || speedInfo.status || 'Base speed'}
+                    </span>
                   </div>
-                  <div>
-                    <div className="text-[9px] text-stone-400">Flat-Footed</div>
-                    <div className="font-bold text-amber-300">{get35eFlatFootedAC(character)}</div>
+
+                  {/* 5e Tactical Cover & Line of Sight Selector (PHB p. 196) */}
+                  <div className="bg-stone-950 px-2.5 py-2 rounded-xl border border-stone-800 space-y-1.5 col-span-3">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
+                        <Shield className="w-3 h-3 text-amber-400" />
+                        <span>Tactical Cover (5e PHB p. 196)</span>
+                      </span>
+                      <span className="font-mono text-stone-400">
+                        {character.activeCover === 'standard' && '+2 AC & Dex Saves (Half Cover)'}
+                        {character.activeCover === 'improved' && '+5 AC & Dex Saves (Three-Quarters Cover)'}
+                        {character.activeCover === 'total' && 'Cannot be targeted directly (Total Cover)'}
+                        {(!character.activeCover || character.activeCover === 'none') && 'No active cover'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {(['none', 'standard', 'improved', 'total'] as const).map((cov) => {
+                        const isActive = (character.activeCover || 'none') === cov;
+                        const label = cov === 'none' ? 'No Cover' : cov === 'standard' ? 'Half (+2)' : cov === 'improved' ? '3/4 (+5)' : 'Total Cover';
+                        return (
+                          <button
+                            key={cov}
+                            type="button"
+                            onClick={() => onUpdateCharacter({ ...character, activeCover: cov })}
+                            className={`py-1 px-1.5 rounded-lg text-[10px] font-bold font-mono transition text-center truncate cursor-pointer ${
+                              isActive
+                                ? 'bg-amber-950 text-amber-200 border border-amber-500 shadow'
+                                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-[9px] text-stone-400">Grapple Mod</div>
-                    <div className="font-bold text-emerald-300">{formatModifier(get35eGrapple(character))}</div>
-                  </div>
+
+                  {/* 5e Passive Senses & Defenses */}
+                  {(() => {
+                    const effWis = getEffectiveAbilities(character).WIS?.score ?? 10;
+                    const effectiveWisMod = getAbilityModifier(effWis);
+                    const profBonus = getProficiencyBonus(character.level || 1);
+
+                    const perceptionSkill = character.skills?.find((s) => s.name.toLowerCase() === 'perception');
+                    const perceptionBonus = effectiveWisMod + (perceptionSkill?.expertise ? profBonus * 2 : perceptionSkill?.proficient ? profBonus : 0);
+                    const passivePerception = 10 + perceptionBonus;
+
+                    const insightSkill = character.skills?.find((s) => s.name.toLowerCase() === 'insight');
+                    const insightBonus = effectiveWisMod + (insightSkill?.expertise ? profBonus * 2 : insightSkill?.proficient ? profBonus : 0);
+                    const passiveInsight = 10 + insightBonus;
+
+                    const raceLower = (character.race || '').toLowerCase();
+                    const racialDarkvision = ['elf', 'dwarf', 'gnome', 'tiefling', 'orc', 'half-orc', 'half-elf', 'drow'].some((r) => raceLower.includes(r));
+                    const darkvisionFt = racialDarkvision ? '60 ft.' : 'None';
+
+                    return (
+                      <div className="col-span-3 grid grid-cols-3 gap-2 text-center font-mono">
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                          <div className="text-[9px] text-stone-400 font-sans uppercase font-bold flex items-center justify-center gap-1">
+                            <Eye className="w-2.5 h-2.5 text-amber-400" /> Passive Percep.
+                          </div>
+                          <div className="text-sm font-bold text-amber-300 mt-0.5">{passivePerception}</div>
+                        </div>
+
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                          <div className="text-[9px] text-stone-400 font-sans uppercase font-bold flex items-center justify-center gap-1">
+                            <Compass className="w-2.5 h-2.5 text-sky-400" /> Passive Insight
+                          </div>
+                          <div className="text-sm font-bold text-sky-300 mt-0.5">{passiveInsight}</div>
+                        </div>
+
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
+                          <div className="text-[9px] text-stone-400 font-sans uppercase font-bold flex items-center justify-center gap-1">
+                            <Moon className="w-2.5 h-2.5 text-indigo-400" /> Darkvision
+                          </div>
+                          <div className="text-xs font-bold text-indigo-300 mt-0.5">{darkvisionFt}</div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
               {/* Damage Mitigation: Resistances, Immunities & Damage Reduction (DR) */}
-              <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/80">
-                <div className="grid grid-cols-3 gap-2 text-center font-mono">
-                  {/* Resistances (50% damage) */}
-                  <div className="bg-stone-900/90 p-1.5 rounded-lg border border-amber-900/40 flex flex-col justify-between min-h-[46px]">
-                    <span className="text-[9px] font-sans uppercase font-bold text-amber-400/90 tracking-wider">
-                      Resist (½)
-                    </span>
-                    <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
-                      {resistances.length > 0 ? (
-                        resistances.map((r, idx) => (
-                          <span
-                            key={`${r.type}-${idx}`}
-                            className="bg-amber-950/80 text-amber-200 border border-amber-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono leading-none truncate max-w-full"
-                            title={r.source ? `${r.type} (Source: ${r.source})` : r.type}
-                          >
-                            {r.type}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-stone-500 italic text-[10px]">None</span>
-                      )}
-                    </div>
+              <div className="grid grid-cols-3 gap-2 text-center font-mono">
+                {/* Resistances (50% damage) */}
+                <div className="bg-stone-950 p-1.5 rounded-xl border border-amber-900/40 flex flex-col justify-between min-h-[46px]">
+                  <span className="text-[9px] font-sans uppercase font-bold text-amber-400/90 tracking-wider">
+                    Resist (½)
+                  </span>
+                  <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
+                    {resistances.length > 0 ? (
+                      resistances.map((r, idx) => (
+                        <span
+                          key={`${r.type}-${idx}`}
+                          className="bg-amber-950/80 text-amber-200 border border-amber-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono leading-none truncate max-w-full"
+                          title={r.source ? `${r.type} (Source: ${r.source})` : r.type}
+                        >
+                          {r.type}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-stone-500 italic text-[10px]">None</span>
+                    )}
                   </div>
+                </div>
 
-                  {/* Immunities (0 damage) */}
-                  <div className="bg-stone-900/90 p-1.5 rounded-lg border border-emerald-900/40 flex flex-col justify-between min-h-[46px]">
-                    <span className="text-[9px] font-sans uppercase font-bold text-emerald-400/90 tracking-wider">
-                      Immune (0)
-                    </span>
-                    <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
-                      {immunities.length > 0 ? (
-                        immunities.map((i, idx) => (
-                          <span
-                            key={`${i.type}-${idx}`}
-                            className="bg-emerald-950/80 text-emerald-200 border border-emerald-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono leading-none truncate max-w-full"
-                            title={i.source ? `${i.type} (Source: ${i.source})` : i.type}
-                          >
-                            {i.type}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-stone-500 italic text-[10px]">None</span>
-                      )}
-                    </div>
+                {/* Immunities (0 damage) */}
+                <div className="bg-stone-950 p-1.5 rounded-xl border border-emerald-900/40 flex flex-col justify-between min-h-[46px]">
+                  <span className="text-[9px] font-sans uppercase font-bold text-emerald-400/90 tracking-wider">
+                    Immune (0)
+                  </span>
+                  <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
+                    {immunities.length > 0 ? (
+                      immunities.map((i, idx) => (
+                        <span
+                          key={`${i.type}-${idx}`}
+                          className="bg-emerald-950/80 text-emerald-200 border border-emerald-700/50 px-1.5 py-0.5 rounded text-[10px] font-mono leading-none truncate max-w-full"
+                          title={i.source ? `${i.type} (Source: ${i.source})` : i.type}
+                        >
+                          {i.type}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-stone-500 italic text-[10px]">None</span>
+                    )}
                   </div>
+                </div>
 
-                  {/* Damage Reduction (DR) */}
-                  <div className="bg-stone-900/90 p-1.5 rounded-lg border border-sky-900/40 flex flex-col justify-between min-h-[46px]">
+                {/* Damage Reduction (DR) */}
+                {character.edition === '3.5e' ? (
+                  <button
+                    type="button"
+                    onClick={() => setShow35eDrModal(true)}
+                    className="bg-stone-950 p-1.5 rounded-xl border border-sky-900/40 hover:border-sky-500/70 transition flex flex-col justify-between min-h-[46px] group cursor-pointer text-center"
+                    title="Click to configure 3.5e DR, Energy Resistances, and test Damage Mitigation"
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
+                        Damage Red.
+                      </span>
+                      <Pencil className="w-2.5 h-2.5 text-stone-500 group-hover:text-sky-300 transition" />
+                    </div>
+                    <div className="my-auto flex items-center justify-center gap-1 pt-0.5">
+                      <span className="text-xs font-serif font-extrabold text-sky-300">
+                        DR {character.damageReductionValue || 0}/{character.damageReductionBypass || '-'}
+                      </span>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="bg-stone-950 p-1.5 rounded-xl border border-sky-900/40 flex flex-col justify-between min-h-[46px]">
                     <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
                       Damage Red.
                     </span>
                     <div className="my-auto flex items-center justify-center gap-1 pt-0.5">
                       <span className="text-sm font-serif font-extrabold text-sky-300">
-                        {drInfo.totalDR > 0 ? `-${drInfo.totalDR}` : '0'}
+                        {drInfo.totalDR !== 0 ? Math.abs(drInfo.totalDR) : '0'}
                       </span>
                       <span className="text-[9px] text-stone-500 font-sans">DR</span>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -376,7 +1235,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
             <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-xl space-y-3`}>
               <div className="flex items-center justify-between border-b border-stone-800 pb-2">
                 <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
-                  <Skull className="w-4 h-4 text-rose-400" /> Death Saves & Form
+                  <Skull className="w-4 h-4 text-rose-400" />
+                  {character.edition === '3.5e' ? 'Combat Status & Tactical Suite' : 'Death Saves & Form'}
                 </span>
                 {character.activeTransformation && (
                   <span className="text-[10px] bg-purple-950 text-purple-300 border border-purple-500/50 px-2 py-0.5 rounded-full font-mono font-bold">
@@ -385,53 +1245,437 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 )}
               </div>
 
-              {/* Death Saves Control Panel */}
-              <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-2">
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-emerald-400 font-bold">Successes:</span>
-                  <div className="flex items-center gap-1.5">
-                    {[0, 1, 2].map((i) => (
-                      <button
-                        key={'succ-' + i}
-                        onClick={() => handleToggleDeathSuccess(i)}
-                        className="p-1 text-stone-600 hover:text-emerald-400 transition"
+              {/* 3.5e Dying, Stabilization & Tactical Engines Suite VS 5e Death Saves Panel */}
+              {character.edition === '3.5e' ? (
+                <div className="space-y-2.5">
+                  {/* Status & Stabilization Panel */}
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
+                    {/* Status Banner */}
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-stone-400">Vitality Status:</span>
+                      <span
+                        className={`font-bold px-2 py-0.5 rounded text-[11px] ${
+                          (character.hpCurrent ?? 0) <= -10
+                            ? 'bg-red-950 text-red-300 border border-red-700'
+                            : (character.hpCurrent ?? 0) < 0
+                              ? character.isStabilized35e
+                                ? 'bg-amber-950 text-amber-300 border border-amber-600'
+                                : 'bg-red-950/80 text-rose-300 border border-rose-600 animate-pulse'
+                              : (character.hpCurrent ?? 0) === 0
+                                ? 'bg-yellow-950 text-yellow-300 border border-yellow-600'
+                                : 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                        }`}
                       >
-                        {character.deathSavesSuccesses > i ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-950" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-stone-700" />
-                        )}
+                        {(character.hpCurrent ?? 0) <= -10
+                          ? 'Dead (≤ -10 HP)'
+                          : (character.hpCurrent ?? 0) < 0
+                            ? character.isStabilized35e
+                              ? 'Stable (Unconscious)'
+                              : 'Dying (Unconscious)'
+                            : (character.hpCurrent ?? 0) === 0
+                              ? 'Disabled (0 HP)'
+                              : 'Conscious & Active'}
+                      </span>
+                    </div>
+
+                    {/* Dying & Stabilization Controls (Only visible when HP <= 0) */}
+                    {(character.hpCurrent ?? 0) <= 0 ? (
+                      <div className="space-y-1.5 pt-1.5 border-t border-stone-800/60">
+                        <div className="text-[10px] text-stone-400 leading-tight">
+                          {(character.hpCurrent ?? 0) <= -10 && 'Character has reached -10 HP and is deceased under D&D 3.5e RAW.'}
+                          {(character.hpCurrent ?? 0) < 0 && (character.hpCurrent ?? 0) > -10 && (
+                            character.isStabilized35e
+                              ? 'Character is stable at negative HP. Rolls 10% each hour to regain consciousness.'
+                              : 'Character is dying. At end of each round, roll 10% (d100 ≤ 10) to stabilize, or lose 1 HP.'
+                          )}
+                          {(character.hpCurrent ?? 0) === 0 && 'Disabled: Can take only 1 move or standard action per turn. Strenuous activity deals 1 damage.'}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleRoll35eStabilization}
+                            disabled={(character.hpCurrent ?? 0) >= 0 || (character.hpCurrent ?? 0) <= -10}
+                            className="py-1.5 px-2 bg-stone-800 hover:bg-rose-950 disabled:opacity-40 disabled:hover:bg-stone-800 border border-stone-700 hover:border-rose-600 text-stone-200 hover:text-rose-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 shadow cursor-pointer"
+                            title="Roll d100: 1-10% stabilizes; 11-100% loses 1 HP"
+                          >
+                            <Dices className="w-3 h-3 text-rose-400" /> Roll 10% Save
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={handleRoll35eHealCheck}
+                            disabled={(character.hpCurrent ?? 0) >= 0 || (character.hpCurrent ?? 0) <= -10}
+                            className="py-1.5 px-2 bg-stone-800 hover:bg-emerald-950 disabled:opacity-40 disabled:hover:bg-stone-800 border border-stone-700 hover:border-emerald-600 text-stone-200 hover:text-emerald-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 shadow cursor-pointer"
+                            title="First Aid: Heal check DC 15 to stabilize a dying character"
+                          >
+                            <Heart className="w-3 h-3 text-emerald-400" /> First Aid (DC 15)
+                          </button>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleToggle35eStabilized}
+                          className={`w-full py-1 rounded-lg border text-[10px] font-mono font-bold transition cursor-pointer ${
+                            character.isStabilized35e
+                              ? 'bg-amber-950/80 text-amber-200 border-amber-600'
+                              : 'bg-stone-900 hover:bg-stone-800 text-stone-400 border-stone-700'
+                          }`}
+                        >
+                          {character.isStabilized35e ? '✓ Status: Stabilized (Click to toggle)' : 'Mark as Stabilized'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between text-[10px] text-stone-400 pt-1 border-t border-stone-800/60">
+                        <span>Normal round action economy active</span>
+                        <span className="text-emerald-400 font-mono font-bold">Standard Turn RAW</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3.5e Tactical Engines & Advanced Mechanics Suite Grid */}
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
+                    <div className="text-[10px] font-bold text-stone-300 uppercase tracking-wider px-0.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Layers className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Tactical Engines & Mechanics</span>
+                      </span>
+                      <span className="text-[9px] text-amber-500 font-mono font-bold">3.5e RAW</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5 font-mono">
+                      {/* Combat Maneuvers */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eManeuversModal(true)}
+                        className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-600/50 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-amber-300 flex items-center gap-1 group-hover:text-amber-200">
+                            <Swords className="w-3 h-3 text-amber-400" /> Maneuvers
+                          </span>
+                          <span className="text-[8px] text-stone-500">6 rules</span>
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">Trip • Disarm • Grapple</span>
                       </button>
-                    ))}
+
+                      {/* AoO & Threat Reach */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eAoOModal(true)}
+                        className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-red-600/50 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-red-300 flex items-center gap-1 group-hover:text-red-200">
+                            <Zap className="w-3 h-3 text-red-400" /> AoO Pool
+                          </span>
+                          <span className="text-[9px] text-red-400 font-bold">{aooInfo.currentAoO}/{aooInfo.maxAoO}</span>
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">{aooInfo.threatReachFt}ft {aooInfo.hasCombatReflexes ? 'Reflexes' : 'Threat'}</span>
+                      </button>
+
+                      {/* Negative Levels / Energy Drain */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eNegativeLevelsModal(true)}
+                        className={`p-1.5 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group border ${
+                          (character.negativeLevels || 0) > 0
+                            ? 'bg-red-950 hover:bg-red-900 text-red-200 border-red-500 animate-pulse'
+                            : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 hover:border-red-800/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold flex items-center gap-1">
+                            <Skull className="w-3 h-3 text-red-400" /> Energy Drain
+                          </span>
+                          {(character.negativeLevels || 0) > 0 && (
+                            <span className="text-[9px] text-red-300 font-bold">-{character.negativeLevels}</span>
+                          )}
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">
+                          {(character.negativeLevels || 0) > 0 ? `Active: -${character.negativeLevels} penalty` : 'Negative Levels'}
+                        </span>
+                      </button>
+
+                      {/* Concentration Check */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eConcentrationModal(true)}
+                        className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-sky-600/50 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-sky-300 flex items-center gap-1 group-hover:text-sky-200">
+                            <Zap className="w-3 h-3 text-sky-400" /> Concentration
+                          </span>
+                          <span className="text-[8px] text-stone-500">DC calc</span>
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">Defensive casting</span>
+                      </button>
+
+                      {/* Tumble & Acrobatics */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eTumbleModal(true)}
+                        className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-600/50 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-amber-300 flex items-center gap-1 group-hover:text-amber-200">
+                            <Footprints className="w-3 h-3 text-amber-400" /> Tumble
+                          </span>
+                          <span className="text-[8px] text-stone-500">DC 15/25</span>
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">Avoid AoO movement</span>
+                      </button>
+
+                      {/* Mounted Combat */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eMountedModal(true)}
+                        className={`p-1.5 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group border ${
+                          character.isMounted
+                            ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border-emerald-600'
+                            : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 hover:border-emerald-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold flex items-center gap-1">
+                            <Shield className="w-3 h-3 text-amber-400" /> Mount / Ride
+                          </span>
+                          {character.isMounted && <span className="text-[8px] text-emerald-400 font-bold">Active</span>}
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">
+                          {character.isMounted ? `Steed: ${character.mountInfo?.speed || '60ft'}` : 'Ride checks & cover'}
+                        </span>
+                      </button>
+
+                      {/* Wild Shape / Alternate Form */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eWildShapeModal(true)}
+                        className={`p-1.5 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group border ${
+                          character.wildShapeActive
+                            ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500'
+                            : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 hover:border-emerald-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold flex items-center gap-1">
+                            <PawPrint className="w-3 h-3 text-emerald-400" /> Wild Shape
+                          </span>
+                          {character.wildShapeActive && <span className="text-[8px] text-emerald-300 font-bold">Active</span>}
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">
+                          {character.wildShapeActive ? character.wildShapeForm?.name || 'Wild Form' : 'Alternate forms'}
+                        </span>
+                      </button>
+
+                      {/* Environmental Hazards */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eEnvironmentalModal(true)}
+                        className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-600/50 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-stone-300 flex items-center gap-1 group-hover:text-stone-200">
+                            <Compass className="w-3 h-3 text-amber-400" /> Environment
+                          </span>
+                          <span className="text-[8px] text-stone-500">Hazards</span>
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">Cold • Heat • Air</span>
+                      </button>
+
+                      {/* Ability Damage / Poisons */}
+                      <button
+                        type="button"
+                        onClick={() => setShow35eAbilityDamageModal(true)}
+                        className={`p-1.5 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group col-span-2 border ${
+                          abilityDamageSummary.totalDamage + abilityDamageSummary.totalDrain > 0 ||
+                          (character.activePoisonsDiseases && character.activePoisonsDiseases.length > 0)
+                            ? 'bg-red-950/90 hover:bg-red-900 text-red-300 border-red-600/70 animate-pulse'
+                            : 'bg-stone-900 hover:bg-stone-800 text-stone-400 border border-stone-800 hover:border-emerald-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-bold flex items-center gap-1 text-emerald-300">
+                            <Skull className="w-3 h-3 text-emerald-400" /> Ability Damage & Drain
+                          </span>
+                          {abilityDamageSummary.totalDamage + abilityDamageSummary.totalDrain > 0 && (
+                            <span className="text-[9px] text-red-300 font-bold">
+                              –{abilityDamageSummary.totalDamage + abilityDamageSummary.totalDrain} Total
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[8px] text-stone-400 truncate">
+                          {abilityDamageSummary.totalDamage + abilityDamageSummary.totalDrain > 0
+                            ? `Active: ${abilityDamageSummary.totalDamage} dmg, ${abilityDamageSummary.totalDrain} drain`
+                            : 'Poisons, diseases, ability penalties'}
+                        </span>
+                      </button>
+                    </div>
                   </div>
                 </div>
+              ) : (
+                /* 5e Death Saves & Exhaustion Control Panel */
+                <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
+                  {/* Combat Vitality Status Banner */}
+                  {(() => {
+                    const hp = character.hpCurrent ?? effectiveMaxHp;
+                    const isDead = character.deathSavesFailures >= 3;
+                    const isStable = hp === 0 && (character.deathSavesSuccesses >= 3 || character.isStabilized35e);
+                    const isDying = hp <= 0 && !isDead && !isStable;
 
-                <div className="flex items-center justify-between text-xs font-mono">
-                  <span className="text-rose-400 font-bold">Failures:</span>
-                  <div className="flex items-center gap-1.5">
-                    {[0, 1, 2].map((i) => (
-                      <button
-                        key={'fail-' + i}
-                        onClick={() => handleToggleDeathFailure(i)}
-                        className="p-1 text-stone-600 hover:text-rose-400 transition"
-                      >
-                        {character.deathSavesFailures > i ? (
-                          <XCircle className="w-4 h-4 text-rose-500 fill-rose-950" />
-                        ) : (
-                          <XCircle className="w-4 h-4 text-stone-700" />
-                        )}
-                      </button>
-                    ))}
+                    if (isDead) {
+                      return (
+                        <div className="bg-rose-950/80 border border-rose-600/70 p-1 rounded-lg text-center font-mono text-[10px] text-rose-200 font-bold flex items-center justify-center gap-1">
+                          <Skull className="w-3 h-3 text-rose-400" />
+                          <span>Status: Dead (3 Death Save Failures)</span>
+                        </div>
+                      );
+                    }
+                    if (isDying) {
+                      return (
+                        <div className="bg-rose-950/40 border border-rose-600/50 p-1 rounded-lg text-center font-mono text-[10px] text-rose-300 font-bold animate-pulse flex items-center justify-center gap-1">
+                          <Activity className="w-3 h-3 text-rose-400" />
+                          <span>Status: Dying (Unconscious) • Roll Saves</span>
+                        </div>
+                      );
+                    }
+                    if (isStable) {
+                      return (
+                        <div className="bg-amber-950/50 border border-amber-600/60 p-1 rounded-lg text-center font-mono text-[10px] text-amber-300 font-bold flex items-center justify-center gap-1">
+                          <Shield className="w-3 h-3 text-amber-400" />
+                          <span>Status: Stable (Unconscious at 0 HP)</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className="bg-emerald-950/40 border border-emerald-700/50 p-1 rounded-lg text-center font-mono text-[10px] text-emerald-300 font-bold flex items-center justify-center gap-1">
+                        <Heart className="w-3 h-3 text-emerald-400" />
+                        <span>Status: Conscious & Active</span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Death Saving Throws Successes & Failures */}
+                  <div className="space-y-2 px-1 pt-1">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-emerald-400 font-bold text-[11px] flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Successes:
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {[0, 1, 2].map((i) => (
+                          <button
+                            key={'succ-' + i}
+                            onClick={() => handleToggleDeathSuccess(i)}
+                            className="p-0.5 text-stone-600 hover:text-emerald-400 transition cursor-pointer"
+                            title={`Toggle Success ${i + 1}`}
+                          >
+                            {character.deathSavesSuccesses > i ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-400 fill-emerald-950" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-stone-700" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-rose-400 font-bold text-[11px] flex items-center gap-1">
+                        <Skull className="w-3.5 h-3.5" /> Failures:
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {[0, 1, 2].map((i) => (
+                          <button
+                            key={'fail-' + i}
+                            onClick={() => handleToggleDeathFailure(i)}
+                            className="p-0.5 text-stone-600 hover:text-rose-400 transition cursor-pointer"
+                            title={`Toggle Failure ${i + 1}`}
+                          >
+                            {character.deathSavesFailures > i ? (
+                              <XCircle className="w-4 h-4 text-rose-500 fill-rose-950" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-stone-700" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleRollDeathSave}
+                      className="w-full py-1.5 bg-stone-900 hover:bg-rose-950 border border-stone-800 hover:border-rose-600 text-stone-200 hover:text-rose-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Dices className="w-3.5 h-3.5 text-rose-400" /> Roll Death Saving Throw
+                    </button>
                   </div>
-                </div>
 
-                <button
-                  onClick={handleRollDeathSave}
-                  className="w-full py-1.5 bg-stone-800 hover:bg-rose-950 border border-stone-700 hover:border-rose-600 text-stone-200 hover:text-rose-200 text-xs font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow"
-                >
-                  <Dices className="w-3.5 h-3.5 text-rose-400" /> Roll Death Saving Throw
-                </button>
-              </div>
+                  {/* 5e Exhaustion Tracker (PHB p. 291) */}
+                  {(() => {
+                    const exhaustLvl = character.exhaustionLevel || 0;
+                    const exhaustionEffects = [
+                      'Normal (No exhaustion)',
+                      'Disadvantage on ability checks',
+                      'Speed halved',
+                      'Disadvantage on attacks & saves',
+                      'Hit point maximum halved',
+                      'Speed reduced to 0',
+                      'Death',
+                    ];
+
+                    const handleExhaustionChange = (delta: number) => {
+                      const next = Math.max(0, Math.min(6, exhaustLvl + delta));
+                      onUpdateCharacter({
+                        ...character,
+                        exhaustionLevel: next,
+                      });
+                    };
+
+                    return (
+                      <div className="space-y-1.5 px-1 pt-2 border-t border-stone-800/60">
+                        <div className="flex items-center justify-between text-xs font-mono">
+                          <span className="text-[11px] text-stone-300 font-bold flex items-center gap-1">
+                            <Activity className="w-3 h-3 text-amber-400" /> Exhaustion:
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleExhaustionChange(-1)}
+                              disabled={exhaustLvl <= 0}
+                              className="px-1.5 py-0.5 rounded bg-stone-900 disabled:opacity-30 border border-stone-700 text-stone-300 hover:text-white text-[10px] font-bold cursor-pointer"
+                              title="Decrease Exhaustion by 1 (e.g. Long Rest with food/drink)"
+                            >
+                              -
+                            </button>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono border ${
+                              exhaustLvl === 0
+                                ? 'bg-stone-900 text-stone-400 border-stone-800'
+                                : exhaustLvl >= 5
+                                ? 'bg-rose-950 text-rose-300 border-rose-600'
+                                : 'bg-amber-950 text-amber-300 border-amber-600'
+                            }`}>
+                              Level {exhaustLvl}/6
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleExhaustionChange(1)}
+                              disabled={exhaustLvl >= 6}
+                              className="px-1.5 py-0.5 rounded bg-stone-900 disabled:opacity-30 border border-stone-700 text-stone-300 hover:text-white text-[10px] font-bold cursor-pointer"
+                              title="Increase Exhaustion by 1"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-[9.5px] font-mono text-stone-400 truncate" title={exhaustionEffects[exhaustLvl]}>
+                          Effect: <span className="text-amber-300">{exhaustionEffects[exhaustLvl]}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Active Transformation / Wild Shape Quick Bar */}
               <div className="grid grid-cols-2 gap-2">
@@ -470,6 +1714,130 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
         <ConditionsPanel
           character={character}
           onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* 3.5e Armor Class Modifiers Modal */}
+      {character.edition === '3.5e' && (
+        <Edit35eAcModal
+          isOpen={show35eAcModal}
+          onClose={() => setShow35eAcModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* 3.5e Base Attack Bonus (BAB) & Iterative Attacks Modal */}
+      {character.edition === '3.5e' && (
+        <Edit35eBabModal
+          isOpen={show35eBabModal}
+          onClose={() => setShow35eBabModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* 3.5e Damage Reduction & Energy Resistances Modal */}
+      {character.edition === '3.5e' && (
+        <Edit35eDrResistanceModal
+          isOpen={show35eDrModal}
+          onClose={() => setShow35eDrModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+        />
+      )}
+
+      {/* 3.5e Tactical Combat Maneuvers Suite Modal */}
+      {character.edition === '3.5e' && (
+        <CombatManeuvers35eModal
+          isOpen={show35eManeuversModal}
+          onClose={() => setShow35eManeuversModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+        />
+      )}
+
+      {/* 3.5e Attacks of Opportunity (AoO) & Combat Reflexes Tracker Modal */}
+      {character.edition === '3.5e' && (
+        <AoOTrackerModal
+          isOpen={show35eAoOModal}
+          onClose={() => setShow35eAoOModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRollAttack={(label, bonus) => onRoll(label, 20, 1, bonus, 'normal')}
+        />
+      )}
+
+      {/* 3.5e Ability Damage, Drain & Poison Tracker Modal */}
+      {character.edition === '3.5e' && (
+        <AbilityDamageDrainModal
+          isOpen={show35eAbilityDamageModal}
+          onClose={() => setShow35eAbilityDamageModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* 3.5e Negative Levels & Energy Drain Modal */}
+      {character.edition === '3.5e' && (
+        <NegativeLevelsModal
+          isOpen={show35eNegativeLevelsModal}
+          onClose={() => setShow35eNegativeLevelsModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+        />
+      )}
+
+      {/* 3.5e Concentration & Defensive Casting Modal */}
+      {character.edition === '3.5e' && (
+        <ConcentrationCheckModal
+          isOpen={show35eConcentrationModal}
+          onClose={() => setShow35eConcentrationModal(false)}
+          character={character}
+          onRoll={onRoll}
+        />
+      )}
+
+      {/* 3.5e Tumble & Acrobatics Modal */}
+      {character.edition === '3.5e' && (
+        <TumbleAcrobaticsModal
+          isOpen={show35eTumbleModal}
+          onClose={() => setShow35eTumbleModal(false)}
+          character={character}
+          onRoll={onRoll}
+        />
+      )}
+
+      {/* Mounted Combat & Ride Modal (5e & 3.5e) */}
+      <MountedCombatModal
+        isOpen={show35eMountedModal}
+        onClose={() => setShow35eMountedModal(false)}
+        character={character}
+        onUpdateCharacter={onUpdateCharacter}
+        onRoll={onRoll}
+      />
+
+      {/* 3.5e Wild Shape & Polymorph Modal */}
+      {character.edition === '3.5e' && (
+        <WildShape35eModal
+          isOpen={show35eWildShapeModal}
+          onClose={() => setShow35eWildShapeModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* 3.5e Environmental Hazards & Endurance Modal */}
+      {character.edition === '3.5e' && (
+        <EnvironmentalHazardsModal
+          isOpen={show35eEnvironmentalModal}
+          onClose={() => setShow35eEnvironmentalModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
         />
       )}
     </div>

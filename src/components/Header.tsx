@@ -51,17 +51,12 @@ import {
   SlidersHorizontal,
   Volume2,
   VolumeX,
-  Settings,
   Command,
   Undo2,
   Redo2,
   Network,
   Radio,
-  FlaskConical,
-  Dices,
-  Compass,
-  MapPin,
-  FileCode2
+  FlaskConical
 } from 'lucide-react';
 import { isSoundEnabled } from '../utils/soundEffects';
 import { UserProfile, CharacterPresence, GameSession } from '../lib/firebase';
@@ -146,7 +141,7 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab
 }) => {
   const { t } = useLanguage();
-  const { uiMode, toggleUiMode, startTour, isTableMode, toggleTableMode } = useUiMode();
+  const { startTour } = useUiMode();
   const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
@@ -566,6 +561,16 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               )}
 
+              {showCharacterHeader && (
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="p-1.5 bg-stone-800/90 hover:bg-rose-950/80 hover:border-rose-600 active:scale-95 text-stone-400 hover:text-rose-300 border border-stone-700 rounded-lg transition cursor-pointer shrink-0"
+                  title={`Delete ${activeCharacter?.name}`}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+
               {currentUser && activeCharacter && onOpenPartyManager && (
                 <button
                   onClick={onOpenPartyManager}
@@ -653,94 +658,16 @@ export const Header: React.FC<HeaderProps> = ({
                 })()
               )}
 
-              {/* UI Density Mode Toggle */}
-              <button
-                type="button"
-                onClick={toggleUiMode}
-                className={`px-2.5 py-1.5 rounded-lg font-mono text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
-                  uiMode === 'focus'
-                    ? 'bg-amber-950/90 hover:bg-amber-900 text-amber-300 border-amber-500/80'
-                    : 'bg-purple-950/90 hover:bg-purple-900 text-purple-200 border-purple-500/80'
-                }`}
-                title="Toggle between Focus Mode (clean, fast tabletop action) and Master Mode (advanced overrides & DM tools)"
-              >
-                <span>{uiMode === 'focus' ? '⚡ Focus' : '⚙️ Master'}</span>
-              </button>
-
-              {/* Table / Play Mode HUD Launcher */}
-              <button
-                type="button"
-                onClick={toggleTableMode}
-                className={`px-2.5 py-1.5 rounded-lg font-sans text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer border ${
-                  isTableMode
-                    ? 'bg-amber-500 text-stone-950 border-amber-400 font-black shadow-amber-500/30'
-                    : 'bg-stone-900 hover:bg-amber-950 text-amber-300 hover:text-amber-200 border-amber-500/60'
-                }`}
-                title="Toggle Distraction-Free Table Mode HUD (Alt+T)"
-              >
-                <Dices className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Table Mode</span>
-              </button>
-
-              {/* Campaign World Atlas & Questline Hub (Phase D) */}
-              {onOpenCampaignLoreVault && (
-                <button
-                  type="button"
-                  onClick={() => onOpenCampaignLoreVault('atlas')}
-                  className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900/90 text-amber-200 hover:text-amber-100 border border-amber-500/60 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer group"
-                  title="Open Campaign World Atlas, Questline Tracker & Factions (Ctrl+M)"
-                >
-                  <Compass className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
-                  <span className="hidden sm:inline">Atlas & Quests</span>
-                </button>
-              )}
-
-              {/* Universal Importer & Exporter Studio (Option 2) */}
-              {onOpenUniversalImporterStudio && (
-                <button
-                  type="button"
-                  onClick={onOpenUniversalImporterStudio}
-                  className="px-2.5 py-1.5 bg-amber-950/80 hover:bg-amber-900/90 text-amber-300 hover:text-amber-100 border border-amber-500/60 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer group"
-                  title="Universal Importer & Pipeline Studio (5eTools, Foundry VTT, D&D Beyond, Markdown)"
-                >
-                  <FileCode2 className="w-3.5 h-3.5 text-amber-400 group-hover:scale-110 transition" />
-                  <span className="hidden sm:inline">Importer Studio</span>
-                </button>
-              )}
-
-              {/* Options & Themes Button */}
-              {onOpenAudioModal && (
-                <button
-                  type="button"
-                  onClick={onOpenAudioModal}
-                  className="px-2.5 py-1.5 bg-stone-800/90 hover:bg-stone-700 text-amber-300 hover:text-amber-100 border border-stone-700 hover:border-amber-500/50 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer group"
-                  title="Open Options, Visual Themes, Layout & Sound Settings"
-                >
-                  <Settings className="w-3.5 h-3.5 text-amber-400 group-hover:rotate-45 transition-transform duration-300" />
-                  <span className="hidden sm:inline">Options</span>
-                </button>
-              )}
-
               {/* 60-Second Guided Tour Launcher */}
               <button
                 type="button"
                 onClick={startTour}
-                className="px-2 py-1.5 bg-stone-800/90 hover:bg-stone-700 text-amber-400 hover:text-amber-200 border border-stone-700 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow cursor-pointer"
+                className="px-2.5 py-1.5 bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-amber-200 border border-stone-700 hover:border-amber-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer whitespace-nowrap"
                 title="Launch 60-Second Guided Tour"
               >
-                <Sparkles className="w-3.5 h-3.5" />
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span className="hidden lg:inline">Tour</span>
               </button>
-
-              {showCharacterHeader && (
-                <button
-                  onClick={() => setShowDeleteModal(true)}
-                  className="p-1.5 bg-stone-800 hover:bg-rose-950/80 hover:border-rose-600 active:scale-95 text-stone-400 hover:text-rose-300 border border-stone-700 rounded-lg transition cursor-pointer"
-                  title={`Delete ${activeCharacter?.name}`}
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              )}
             </div>
           </div>
         </div>

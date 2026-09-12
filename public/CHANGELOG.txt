@@ -174,7 +174,7 @@ MILESTONE 12: ELEMENTAL & COMBAT DAMAGE IMMUNITIES
 
 * Combat Damage Resolution:
   - Updated `applyResistanceAndDRToDamage` to apply Immunity **FIRST** (per D&D 5e rules), reducing incoming damage to 0 HP before Resistance or Damage Reduction (DR) calculations occur.
-  - Generates clear combat combat logs: `🚫 Immunity (Source) completely negated all X damage (0 HP taken)`.
+  - Generates clear combat logs: `🚫 Immunity (Source) completely negated all X damage (0 HP taken)`.
 
 * Sheet 3 (Gear & Wealth) & Sheet 2 (Combat) UI Integration:
   - Added "Immunity Granted" input fields to the Add Inventory Item and Edit Inventory Item modals in Sheet 3.
@@ -182,22 +182,147 @@ MILESTONE 12: ELEMENTAL & COMBAT DAMAGE IMMUNITIES
   - Added an "Active Defenses & Mitigations" summary bar to Sheet 2 (Combat) displaying all active DR, Resistances, and Immunities currently equipped or active.
 
 --------------------------------------------------------------------------------
+MILESTONE 13: PROCEDURAL WEB AUDIO SYNTHESIZER & MASTER SOUND CONTROL
+--------------------------------------------------------------------------------
+* Pure Web Audio Synthesizer:
+  - Built pure Web Audio API oscillator synthesis engine delivering 12 dynamic sound effects: Dice Rolls, Weapon Hit, Critical Hit Chime, Miss/Parry Whoosh, Fire Roar, Cold Shimmer, Lightning Thunder, Acid Sizzle, Healing Arpeggio, Spell Cast, Level Up Fanfare, and Death Bell.
+
+* Audio Control Interface (`AudioOptionsModal.tsx`):
+  - Master Volume Slider (0% to 100%) and 1-click volume presets (Mute, 25%, 50%, 75%, Max 100%).
+  - Audio preferences are saved automatically to browser local storage and applied across all combat events, attacks, and dice rolls.
+
+--------------------------------------------------------------------------------
+MILESTONE 14: DM ACTIVE PRESENCE UNLOCKING & CONCURRENT CHARACTER ACCESS
+--------------------------------------------------------------------------------
+* Non-Locking Dungeon Master Presence:
+  - Refactored active character slot locking behavior so Dungeon Master active presence on a sheet displays a prominent `👑 DM Active` badge without preventing player selection or editing.
+  - Players and DMs can select, view, and modify character sheets concurrently. Slot selection is locked strictly when another active Player occupies the character slot.
+
+--------------------------------------------------------------------------------
+MILESTONE 15: UNIFIED OPTIONS MODAL & CHARACTER MANAGEMENT
+--------------------------------------------------------------------------------
+* Consolidated Configuration Dialog:
+  - Migrated JSON Character Import (`.json`), Character Export (`.json`), and Multi-Ruleset TRPG System Conversion into the unified Options modal (`OptionsModal.tsx`) under a dedicated "Character" tab.
+  - Streamlined header UI layout and consolidated controls for logged-in users.
+
+--------------------------------------------------------------------------------
+MILESTONE 16: SPELL MANAGEMENT, SORTING & STRICT UNIQUE PROTECTION
+--------------------------------------------------------------------------------
+* Spellbook Sorting & Uniqueness Enforcement:
+  - Implemented ascending and descending spell sorting options across Daily Spells and Spellbook views (Cantrips → Level 9, Level 9 → Cantrips, A-Z / Z-A by Name, Magic School).
+  - Enforced strict spellbook uniqueness by Name and Effect to prevent duplicate spell entries when adding custom spells, selecting official 5e presets, or importing from the Compendium.
+  - Standardized all UI spell management labels and section headings to pure English expressions.
+
+--------------------------------------------------------------------------------
+MILESTONE 17: HYBRID HERITAGE GENERATOR & SUPERNATURAL TRANSFORMATIONS
+--------------------------------------------------------------------------------
+* Hybrid Ancestry & Transformation Mechanics:
+  - Created `HybridHeritageModal.tsx`: Custom ancestry generator combining two distinct species (e.g. Half-Elf, Half-Orc, Tiefling-Human, Aasimar-Dwarf) with custom trait selection and stat blends.
+  - Created `TransformationModal.tsx`: Species transformation engine applying supernatural transformations (Vampire, Lycanthrope, Lich, Fiend, Dragonborn, Aberration) with stat modifiers, temporary HP multipliers, special senses, and vulnerability/immunity traits.
+
+--------------------------------------------------------------------------------
+MILESTONE 18: INTEGRATED USER MANUAL & VERSION CHANGELOG TIMELINE
+--------------------------------------------------------------------------------
+* Complete In-App Version History & Guide (`Sheet6UserGuide.tsx`):
+  - Integrated interactive version changelog timeline with release badges, dates, and keyword filtering.
+  - Added dedicated user guide sections for Audio & Sound Engine, DM Non-Locking Presence, Hybrid Heritages, Transformations, and Spellbook Management.
+  - Fully synchronized `CHANGELOG.txt` and `Sheet6UserGuide.tsx` version histories.
+
+--------------------------------------------------------------------------------
+MILESTONE 19: EXTENSION MARKETPLACE, GUEST MODE & UI DECLUTTERING
+--------------------------------------------------------------------------------
+* Versioned Extension Marketplace & plugin/manifest.json Spec:
+  - Implemented full support for `plugin/manifest.json` metadata schema containing `name`, `version`, `author`, `dependencies`, `requiresAppVersion`, and `permissions`.
+  - Added semantic version compatibility checker (`satisfiesAppVersion`) validating extensions against host platform (`v3.3.1`).
+  - Added curated extension marketplace catalog (Pathfinder 2e Tactical Engine, Cyberpunk Netrunner Suite, Shadowrun Matrix, Call of Cthulhu Sanity, 3D Dice Physics, Soundscape Synthesizer, Homebrew Creator).
+  - Integrated interactive `manifest.json` inspector, version update detection (`v1.4.2` -> `v2.0.0`), permission security warnings, and custom JSON manifest uploader.
+
+* Decluttered Navigation & Ultra-Sleek Scrollbars:
+  - Added `.no-scrollbar` / `.scrollbar-none` CSS utility rules to hide unsightly horizontal overflow scrollbars on tab headers.
+  - Streamlined tab labels across modal navigation bars to fit comfortably without clipping or horizontal overflow clutter.
+  - Styled global scrollbars with an ultra-sleek 5px transparent track and subtle dark thumb for high contrast readability.
+
+* Guest Adventurer Mode & Unlocked Local Navigation:
+  - Enabled unauthenticated guest users to view, create, and edit character sheets locally without login restrictions.
+  - Added a non-intrusive Guest Adventurer banner on the Main Menu with sign-in prompts while keeping full local interactivity available.
+
+* Workspace Customizer Dashboard Widget Navigation:
+  - Fixed navigation routing for the "Open Turn Order" widget in the Pinned Workspace Customizer, seamlessly navigating to Sheet 2 (Combat & Turn Order).
+  - Added global navigation event handling to support external and custom dashboard widget tab routing.
+
+* Developer SDK & Command Palette Integrations:
+  - Integrated Developer SDK & Architecture Center into the Command Palette (Ctrl+K) for instant access to system registry tests, event logs, and test harness execution.
+  - Updated event bus history hooks and resolved automated architecture test assertions across all 5 TRPG rulesets.
+
+--------------------------------------------------------------------------------
+MILESTONE 20: COMPLETE APPLICATION USER MANUAL, SCROLL ENGINE & BUILD FIXES
+--------------------------------------------------------------------------------
+* Complete In-App User Manual (`UserManualModal.tsx` & `Sheet6UserGuide.tsx`):
+  - Built a comprehensive, searchable User Manual modal and embedded tab view covering all feature domains:
+    1. Getting Started, Guest Adventurer Mode & Cloud Persistence.
+    2. Multi-System TRPG Engines (D&D 5e, D&D 3.5e, Shadowrun 5e, Pathfinder 2e, Call of Cthulhu 7e, Custom Systems).
+    3. Character Sheets 1–7 & DM Campaign Overview.
+    4. Multiplayer Live Sessions, 6-Character Room Codes & Party Manager.
+    5. Extension Marketplace, plugin/manifest.json, Event Bus & Developer SDK.
+    6. Companion Manager, Animal Familiars, Wild Shape & 0 HP Form Reversion.
+    7. Polyhedral Floating Dice Bar, Custom Formulas & 12 Web Audio Sound FX.
+    8. Command Palette (Ctrl+K), Workspace Customizer & Theme Engines.
+
+* Horizontal Tab Overflow Engine:
+  - Re-engineered all navigation tab headers across Sheet 6, User Manual, and Options modals with touch-friendly horizontal scrolling (`overflow-x-auto`), `shrink-0` non-wrapping labels, and `.scrollbar-none` CSS rules.
+  - Resolved tab clipping and text cutoff issues on narrow viewports and high-density screens.
+
+* Production Build Output Optimization:
+  - Fixed Vite build configuration in `vite.config.ts` (`outDir: 'dist'`, `emptyOutDir: true`) ensuring application artifacts compile cleanly into the `dist/` directory for Cloud Run container hosting and sharing.
+
+--------------------------------------------------------------------------------
+MILESTONE 21: OBSIDIAN RPG CAMPAIGN GRAPH, UNIFIED SEARCH & PERFORMANCE VIRTUALIZATION
+--------------------------------------------------------------------------------
+* Obsidian-Style Interactive TTRPG Knowledge Graph (`CampaignGraphModal.tsx`):
+  - Engineered an interactive canvas/SVG network graph visualizer with force physics physics simulation and draggable nodes.
+  - Interconnects campaign entities across 9 domains: PCs, Monsters, NPCs, Locations, Factions, Quests, Items, Sessions, and Spells.
+  - Includes hover connection highlights, entity relationship labels, side inspector drawer, category filter chips, and custom node/link creator.
+
+* Unified Omnipresent Search & Cached Search Indexer (`searchIndexer.ts`):
+  - Upgraded Command Palette (`CommandPaletteModal.tsx`) with a high-performance cached inverted term indexer.
+  - Aggregates instant results across Monsters (CR/AC/HP), Spells (Level/School), Equipment, Quests, Locations, Factions, NPCs, Notes, and System Actions.
+  - Features real-time category filter buttons (`All`, `Monsters`, `Spells`, `Items`, `Quests`, `Locations`, `Factions`, `NPCs`, `Actions`, `Characters`).
+
+* Performance Optimization & Code Splitting (`VirtualList.tsx`):
+  - Implemented React lazy loading (`React.lazy`) and `<Suspense>` boundary code-splitting for heavy modals (`CampaignGraphModal`, `DeveloperSdkModal`, `UserManualModal`, `ExtensionManagerModal`, `AudioOptionsModal`, `SessionLobbyModal`, `PartyManagerModal`, `TRPGSystemSelectorModal`).
+  - Added a reusable `VirtualList` viewport windowing component for fast 60fps rendering of large lists and compendium catalogs.
+
+--------------------------------------------------------------------------------
 MILESTONE 22: ENTERPRISE ARCHITECTURE REFACTORING, DOMAIN SERVICES & REPOSITORIES
 --------------------------------------------------------------------------------
-* Left Vertical Hub & Controls Dock Sidebar (`src/components/SidebarDock.tsx`):
-  - Moved top action controls (Undo/Redo, Command Palette, Campaign Graph, SDK/Plugins, Session Lobby, Voice, Options, PWA Install) into a left vertical sidebar dock, and relocated the "Main Menu" sheet into the dock as "Hub".
 * Domain Decomposition & Rules System Layout (`src/systems/dnd5e/`):
-  - Decomposed monolithic calculations into isolated, single-responsibility rules modules (`abilities.ts`, `classes.ts`, `spellcasting.ts`, `combat.ts`).
+  - Decomposed monolithic `dndCalculations.ts` into isolated, single-responsibility rules modules (`abilities.ts`, `classes.ts`, `spellcasting.ts`, `combat.ts`).
+  - Standardized domain calculation boundaries and established clear export pipelines.
+
 * Storage Strategy Abstraction & Repository Pattern (`src/repositories/`):
-  - Abstracted persistence with `ICharacterRepository`, `LocalCharacterRepository`, `FirebaseCharacterRepository`, and `CharacterRepositoryProvider`.
+  - Formulated `ICharacterRepository` contract alongside `LocalCharacterRepository`, `FirebaseCharacterRepository`, and `CharacterRepositoryProvider`.
+  - Abstracted persistence mechanisms so UI components interact with storage via clean, swappable interfaces.
+
+* Left Vertical Hub & Controls Dock Sidebar (`src/components/SidebarDock.tsx`):
+  - Relocated global header action tools (Undo/Redo, Command Palette, Campaign Graph, SDK/Plugins, Session Lobby, Voice, Options, PWA Install) to a dedicated vertical left sidebar dock.
+  - Integrated the former "Main Menu" sheet button into the top of the left dock as the primary "Hub" navigation trigger.
+
 * Domain Services & Event-Driven Engine (`src/services/`):
-  - Created `CharacterService` and `CombatService` encapsulating business workflows with automatic `EventBus` notifications.
+  - Built `CharacterService` and `CombatService` to encapsulate domain workflows (level progression, inventory modifications, HP updates, encounter initialization).
+  - Integrated automatic `EventBus` event emission (`ItemAdded`, `CharacterUpdated`, `CharacterLevelUp`, `CombatStarted`).
+
 * Branded Nominal Types & Enhanced Plugin Architecture (`src/types.ts` & `src/systems/types.ts`):
-  - Introduced branded nominal IDs (`CharacterId`, `CampaignId`, `QuestId`, etc.) and expanded plugin contracts with permissions and config validation.
-* Plugin Contract Verification Suite (`src/systems/pluginContractVerifier.ts`):
-  - Added automated contract tests verifying registration, metadata exposure, capabilities implementation, and version compatibility across all plugins.
+  - Introduced nominal brand types (`CharacterId`, `CampaignId`, `QuestId`, `ItemId`, `SpellId`, `UserId`) to prevent ID mixing bugs.
+  - Expanded `GameSystemPlugin` interfaces with capabilities, permissions, version compatibility checks, and configuration validators.
+
+* Plugin Contract Verification Matrix (`src/systems/pluginContractVerifier.ts`):
+  - Automated verification verifying that every plugin registers correctly, exposes metadata, implements required capabilities, and passes compatibility checks.
+
 * Subsystem Performance Profiler (`src/utils/performanceProfiler.ts`):
-  - Built data-driven latency profiler and benchmark suite covering campaign loading, search indexing, graph rendering, plugin initialization, and voice startup.
+  - Data-driven performance profiler and benchmark suite measuring campaign loading, search indexing, graph rendering, plugin initialization, and voice startup latency.
+
+* Asynchronous Automated Architecture Test Harness (`src/tests/systemTestSuite.ts`):
+  - Extended the architecture test suite with asynchronous unit checks for repository strategy resolution, domain service event dispatching, plugin contract verification, and subsystem performance benchmarks.
 
 --------------------------------------------------------------------------------
 MILESTONE 23: FOUR-TIER STATE ARCHITECTURE, SEMANTIC PLUGINS & DOMAIN MODELS
@@ -217,6 +342,10 @@ MILESTONE 23: FOUR-TIER STATE ARCHITECTURE, SEMANTIC PLUGINS & DOMAIN MODELS
 
 * Centralized Error Strategy & Telemetry Taxonomy (ADR-0008):
   - Built unified error classifier (`src/utils/errorStrategy.ts`) routing runtime exceptions to four distinct resolution channels: `show_toast`, `open_dialog`, `retry_silent` (with backoff), and `log_silent`.
+
+* Single-Responsibility Component Refactoring:
+  - Extracted audio broadcasting, URL validation, and subscription tier checks into `useAmbienceBroadcast.ts`.
+  - Reduced `DmAmbienceBroadcastStudio.tsx` to a clean presentation component adhering to the < 400 line heuristic.
 
 --------------------------------------------------------------------------------
 MILESTONE 24: PHOTOREALISTIC 3D DICE ENGINE & DEBOSSED TABLETOP FOIL
@@ -253,7 +382,12 @@ MILESTONE 25: PRODUCTION SECURITY HARDENING & ZERO-TRUST FIRESTORE RULES
 MILESTONE 26: PHASE 1 - OBSERVABILITY, STRUCTURED TRACING & DIAGNOSTIC HUD
 --------------------------------------------------------------------------------
 * Real-Time Structured Tracing & Execution Spans (`src/utils/structuredLogger.ts`):
-  - Created high-performance, zero-overhead tracing engine measuring execution latencies across Server, Domain, UI, and Transient state tiers.
+  - Created high-performance, zero-overhead tracing engine measuring execution latencies down to the millisecond.
+  - Formally categorized all tracing and logging events into the application's Four-Tier State Architecture:
+    1. Tier 1: Server State (Firestore reads/writes, auth tokens, real-time presence)
+    2. Tier 2: Domain State (Rules calculations, combat rounds, dice AST, modifier math)
+    3. Tier 3: UI State (Modals, navigation tabs, search queries, theme styling)
+    4. Tier 4: Transient State (3D dice physics ticks, WebRTC voice decibels, popup toasts)
   - Added global uncaught error and unhandled promise rejection listeners with automatic breadcrumb history capture.
 
 * Real-User Interaction Telemetry (`src/utils/userTelemetry.ts`):
@@ -263,12 +397,82 @@ MILESTONE 26: PHASE 1 - OBSERVABILITY, STRUCTURED TRACING & DIAGNOSTIC HUD
     - Compendium searches and spell lookups.
 
 * Interactive Observability & Diagnostic HUD (`src/components/diagnostics/DiagnosticConsoleModal.tsx`):
-  - Designed an accessible, production-grade diagnostic console triggered via `Ctrl+Shift+D` / `Cmd+Shift+D` or top menu.
+  - Designed an accessible, production-grade diagnostic console triggered via `Ctrl+Shift+D` / `Cmd+Shift+D` or the top menu.
   - Live Trace Waterfall: Real-time span visualizer with duration bars, tier tags, and expandable payload inspector.
   - Structured Logs Terminal: Live multi-tier filtering (by log level and state tier), search indexing, and stack trace view.
   - Telemetry Dashboard: Visual frequency histograms for tabletop dice rolling and feature adoption.
   - System & Memory Health Monitor: V8 heap memory tracking, DOM node counts, and network status.
   - 1-Click Diagnostic Bundle Export: Copy or download complete JSON diagnostic reports for troubleshooting.
+
+--------------------------------------------------------------------------------
+MILESTONE 27: D&D 3.5e TACTICAL COMBAT SUITE, COMBAT REFLEXES, DUAL-WIELDING & XP LEDGER
+--------------------------------------------------------------------------------
+* Attacks of Opportunity (AoO) & Combat Reflexes Tracker (`src/components/modals/AoOTrackerModal.tsx`):
+  - Dynamic AoO budget counter calculating maximum attacks per round based on base Dexterity modifier and the Combat Reflexes feat (1 + DEX modifier, minimum 1).
+  - Provocation triggers reference matrix for movement through threatened squares, spellcasting without defensive casting, ranged attacks in melee, standing up from prone, and unarmed attacks.
+  - 1-click AoO attack and damage launchers with integrated threat roll confirmation.
+  - Embedded into both Sheet 2 Attacks panel and Combat Defenses panel.
+
+* Two-Weapon Fighting (TWF) Multi-Attack Engine (`src/components/modals/TwoWeaponFightingModal.tsx`):
+  - Built full 3.5e dual-wielding penalty calculator factoring feat tiers (Two-Weapon Fighting, Improved TWF, Greater TWF) and light vs. one-handed off-hand weapons.
+  - Generated synchronized sequence of iterative main-hand attacks alongside off-hand attacks.
+  - Automatic 0.5× Strength modifier applied to off-hand damage rolls.
+  - Flanking (+2) attack modifier toggle with live calculations and sequence re-rolls.
+
+* Target Concealment, Miss Chance & Blind-Fight (`src/components/modals/FullAttackModal.tsx`, `src/utils/dndCalculations.ts`):
+  - Integrated 3.5e target concealment presets: 20% Concealment, 50% Total Concealment, 50% Incorporeal Miss Chance, and Blink (50%/20%).
+  - Real-time d100 percentile evaluations integrated into Full Attack sequences and iterative steps.
+  - Automatic detection and re-roll execution for characters with the Blind-Fight feat.
+
+* Ability Score Damage, Permanent Drain & Poison Tracker (`src/components/modals/AbilityDamageDrainModal.tsx`):
+  - Vitality tracker managing temporary ability damage and permanent ability drain across all six core stats (STR, DEX, CON, INT, WIS, CHA).
+  - Dynamic derivation of effective ability scores and modified ability bonuses with live updates to dependent saves and skills.
+  - Poison and disease progression tracking with primary and secondary incubation stages, Fortitude DC checks, and restoration spell helpers.
+
+* XP Crafting & High-Tier Spell Component Ledger (`src/components/modals/XpCraftAndSpellLedgerModal.tsx`):
+  - Dedicated experience point expenditure ledger for magic item creation (1/25th base market gold value in XP) and high-level spell material components (Wish, Limited Wish, Permanency, Miracle, Atonement).
+  - 3.5e level-floor safeguards enforcing minimum XP buffers to prevent accidental de-leveling.
+  - Instant access directly from the Sheet 1 Character Header Summary.
+
+* Specialized 3.5e Tactical Maneuvers & Defense Overlays (`src/components/modals/`):
+  - Combat Maneuvers 3.5e Modal (Bull Rush, Disarm, Grapple, Overrun, Sunder, Trip) with size modifiers and opposed checks.
+  - Spell Resistance (SR) check calculator (1d20 + Caster Level vs SR with Spell Penetration feats) and Arcane Spell Failure (ASF) d100 roller.
+  - Metamagic Spell Modal for spontaneous and prepared spellcasters.
+  - Turn Undead calculator supporting Turning Checks and Turning Damage hit dice rolls.
+
+--------------------------------------------------------------------------------
+MILESTONE 28: HALF-BREED LINEAGE STUDIO, SCALING RACIAL DEFENSES, DRAFT RESILIENCE & STAT PERSISTENCE
+--------------------------------------------------------------------------------
+* Half-Breed & Hybrid Lineage Studio (`src/components/compendium/forge/RaceStudio.tsx`, `src/data/halfBreedData.ts`):
+  - Integrated Classic SRD Half-Breed browser with official archetypes for both 5e and 3.5e:
+    - 5e: Half-Elf, Half-Orc, Half-Dragon, Halfling.
+    - 3.5e: Half-Elf, Half-Orc, Half-Dragon, Half-Celestial, Half-Fiend, Half-Ogre, Half-Giant, Mul.
+  - Detailed preview cards displaying sizes, speeds, flight, vision/senses, stat adjustments, natural armor, damage reduction, energy resistances, immunities, and racial traits with 1-click application into the Forge.
+  - Custom Hybrid Lineage Blender supporting dual parent pairing (Human, Elf, Dwarf, Orc, Tiefling, Dragonborn, Halfling, Gnome, Goliath, Aasimar) with configurable dominance (Balanced 50/50, Parent 1 Dominant, Parent 2 Dominant), blended speeds, inherited vision, and selectable Hybrid Vigor perks (Bonus Stat, Enduring Vitality +1 HP/lvl, Cultural Mastery skills, or Lineage Feats).
+
+* Ruleset-Exclusive Scaling Defenses & Mechanics (`src/components/compendium/forge/RaceStudio.tsx`):
+  - 3.5e Defenses:
+    - Damage Reduction (DR) supporting flat values, level-based scaling progressions (e.g. 2/4/6/8/10 at levels 1/5/10/15/20), and formula notation with bypass materials (magic, silver, cold iron, adamantine).
+    - Natural Armor bonus supporting flat and level-scaling curves.
+    - Spell Resistance (SR) with 10 + level formula or scaling tiers.
+    - Per-Element Energy Resistances supporting both uniform progressions and independent individual curves (Fire vs. Cold vs. Electricity vs. Acid vs. Sonic).
+    - Natural Weapons, Skill Affinities, and Level-Tiered Spell-Like Abilities (SLAs).
+    - Tiefling Trueblood 3.5e preset for 1-click loading of complex scaling lineage rules.
+  - 5e Defenses:
+    - Innate Spells with recharge options (At Will, 1/Long Rest) and level thresholds.
+    - Damage Resistances, Damage Immunities, and Condition Immunities.
+    - Natural Armor formulas (e.g. 13 + DEX) and Scaling Racial Dice (e.g. Breath Weapon 2d6 -> 5d6).
+
+* Form Draft Persistence & Modal Safety Interception (`src/components/modals/NewCharacterModal.tsx`, `src/components/compendium/HomebrewForgeModal.tsx`):
+  - LocalStorage persistence for both Race Studio drafts (`forge_draft_race_${edition}`) and Character Creation drafts (`character_modal_draft_${edition}`).
+  - Added backdrop click interception with confirmation guards to prevent accidental window dismissal and loss of user entries.
+
+* End-to-End Racial Stat Injection in Character Creation (`src/utils/raceApplication.ts`, `src/components/modals/NewCharacterModal.tsx`):
+  - Full application of racial ability score adjustments (STR, DEX, CON, INT, WIS, CHA), size categories, speeds, damage reduction, natural armor, energy resistances, immunities, senses, and natural weapons into newly created characters.
+  - Interactive "Apply Racial Modifiers" toggle with live Base + Race = Total ability breakdown and a Racial Lineage & Defense Modifiers preview card.
+
+* Senses Normalization & Vision Parsing:
+  - Removed redundant Darkvision checkboxes in favor of an intelligent vision parser that detects Darkvision, Low-Light Vision, Blindsight, and Tremorsense directly from the senses definition with quick-insertion pills.
 
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG

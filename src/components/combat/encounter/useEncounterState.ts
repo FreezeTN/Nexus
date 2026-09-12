@@ -1,12 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { CharacterData, Party, EncounterEnvironment } from '../../../types';
-import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp } from '../../../utils/dndCalculations';
+import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp, getEffectiveSaves } from '../../../utils/dndCalculations';
 import { getLevelFromTotalXp } from '../../../data/levelProgressionData';
 import { getMonsterPortraitUrl } from '../../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound, playHitSound, playMissSound, playDiceSound } from '../../../utils/diceAudio';
-import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState, ConcentrationPrompt } from './encounterTypes';
+import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState, ConcentrationPrompt, MassiveDamagePrompt } from './encounterTypes';
 import { eventBus } from '../../../events/eventBus';
+import { 
+  UserProfile, 
+  GameSession, 
+  updateSessionEncounter, 
+  advanceSessionTurn, 
+  submitInitiativeToSession, 
+  clearSessionEncounter,
+  SyncedEncounterState,
+  SyncedCombatant
+} from '../../../lib/firebase';
 
 export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
   const defaultPlayer: Combatant = {
@@ -83,6 +93,9 @@ export interface UseEncounterStateProps {
   character: CharacterData;
   allCharacters?: CharacterData[];
   parties?: Party[];
+  currentUser?: UserProfile | null;
+  activeSession?: GameSession | null;
+  activeSessionCode?: string | null;
   onUpdateCharacter?: (updated: CharacterData) => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
 }
@@ -91,6 +104,9 @@ export function useEncounterState({
   character,
   allCharacters = [],
   parties = [],
+  currentUser,
+  activeSession,
+  activeSessionCode,
   onUpdateCharacter,
   onRoll
 }: UseEncounterStateProps) {
@@ -102,6 +118,123 @@ export function useEncounterState({
   const [encounterMode, setEncounterMode] = useState<EncounterMode>(() => loadSavedEncounter(character).encounterMode || 'combat');
   const [activeMerchant, setActiveMerchant] = useState<MerchantEncounterState | null>(() => loadSavedEncounter(character).activeMerchant || null);
   const [concentrationPrompt, setConcentrationPrompt] = useState<ConcentrationPrompt | null>(null);
+  const [massiveDamagePrompt, setMassiveDamagePrompt] = useState<MassiveDamagePrompt | null>(null);
+
+  const isDm = Boolean(currentUser && activeSession && activeSession.dmUid === currentUser.uid);
+
+  // Sync state from remote Firestore Session Encounter
+  useEffect(() => {
+    if (!activeSession || !activeSession.activeEncounter) return;
+    const remoteEnc = activeSession.activeEncounter;
+    if (!remoteEnc.isActive) return;
+
+    if (remoteEnc.combatants && Array.isArray(remoteEnc.combatants) && remoteEnc.combatants.length > 0) {
+      const mappedCombatants: Combatant[] = remoteEnc.combatants.map((sc) => {
+        let combatantType: 'player' | 'enemy' | 'ally' = 'player';
+        if (sc.type === 'enemy' || sc.type === 'monster') combatantType = 'enemy';
+        else if (sc.type === 'ally' || sc.type === 'companion' || sc.type === 'npc') combatantType = 'ally';
+        else combatantType = 'player';
+
+        return {
+          id: sc.id,
+          name: sc.name,
+          initiative: sc.initiative || 0,
+          armorClass: sc.armorClass || 10,
+          hpCurrent: sc.hpCurrent ?? 10,
+          hpMax: sc.hpMax ?? 10,
+          tempHp: sc.tempHp || sc.hpTemp || 0,
+          type: combatantType,
+          isPlayerChar: sc.isPlayerChar,
+          conditions: sc.conditions || [],
+          isConcentrating: sc.isConcentrating,
+          concentratingSpell: sc.concentratingSpell ? { spellName: sc.concentratingSpell, castRound: 1 } : undefined,
+          isDefeated: sc.isDefeated,
+          portraitUrl: sc.portraitUrl,
+          controlledBy: sc.controlledBy
+        };
+      });
+
+      setCombatants(mappedCombatants);
+      setActiveTurnIndex(remoteEnc.activeTurnIndex || 0);
+      setRoundNumber(remoteEnc.roundNumber || 1);
+      if (remoteEnc.environment) {
+        setEncounterEnvironment(remoteEnc.environment);
+      }
+
+      // Check if current active turn belongs to current player's character
+      const currentActiveCombatant = mappedCombatants[remoteEnc.activeTurnIndex || 0];
+      if (currentActiveCombatant && (currentActiveCombatant.name === character.name || currentActiveCombatant.controlledBy === currentUser?.uid)) {
+        playInitiativeTurnSound();
+      }
+    }
+  }, [
+    activeSession?.activeEncounter?.updatedAt, 
+    activeSession?.activeEncounter?.activeTurnIndex, 
+    activeSession?.activeEncounter?.roundNumber,
+    activeSession?.activeEncounter?.isActive,
+    character.name,
+    currentUser?.uid
+  ]);
+
+  // Helper to push encounter updates to active session
+  const syncEncounterToSession = useCallback((
+    updatedCombatants: Combatant[], 
+    turnIdx: number, 
+    roundNum: number, 
+    env?: EncounterEnvironment
+  ) => {
+    if (!activeSessionCode || !isDm) return;
+
+    const syncedCombatants: SyncedCombatant[] = updatedCombatants.map((c) => ({
+      id: c.id,
+      name: c.name,
+      initiative: c.initiative,
+      armorClass: c.armorClass,
+      hpCurrent: c.hpCurrent,
+      hpMax: c.hpMax,
+      tempHp: c.tempHp,
+      type: c.type,
+      isPlayerChar: c.isPlayerChar,
+      conditions: c.conditions || [],
+      isConcentrating: c.isConcentrating,
+      concentratingSpell: c.concentratingSpell?.spellName,
+      isDefeated: c.isDefeated,
+      portraitUrl: c.portraitUrl,
+      controlledBy: c.controlledBy
+    }));
+
+    const encounterPayload: SyncedEncounterState = {
+      isActive: true,
+      roundNumber: roundNum,
+      activeTurnIndex: turnIdx,
+      environment: env || encounterEnvironment,
+      combatants: syncedCombatants,
+      updatedAt: new Date().toISOString()
+    };
+
+    updateSessionEncounter(activeSessionCode, encounterPayload).catch((err) => {
+      console.warn('Failed to sync encounter to session:', err);
+    });
+  }, [activeSessionCode, isDm, encounterEnvironment]);
+
+  // Player helper to submit their own initiative to the session
+  const handlePlayerSubmitInitiative = useCallback((initRoll: number) => {
+    if (!activeSessionCode) return;
+    const myCombatantId = 'player-' + character.id;
+    submitInitiativeToSession(activeSessionCode, {
+      id: myCombatantId,
+      name: character.name,
+      initiative: initRoll,
+      type: 'player',
+      portraitUrl: character.portraitUrl,
+      armorClass: character.armorClass || 10,
+      hpCurrent: character.hpCurrent || 10,
+      hpMax: getEffectiveMaxHp(character),
+      controlledBy: currentUser?.uid
+    }).catch((err) => {
+      console.warn('Failed to submit initiative to session:', err);
+    });
+  }, [activeSessionCode, character, currentUser?.uid]);
 
   const [xpAlert, setXpAlert] = useState<{
     monsterName: string;
@@ -397,13 +530,14 @@ export function useEncounterState({
     );
 
     if (delta < 0) {
+      const damageTaken = Math.abs(delta);
       if (nextHp === 0) playDeathSound();
       else playDamageAppliedSound();
 
       if (wasAtZero) {
         addLogEntry('damage', `💀 ${target.name} took damage at 0 HP! Automatic Death Save Failure added.`, target.name);
       } else {
-        addLogEntry('damage', `${target.name} took ${Math.abs(delta)} damage (${nextHp}/${target.hpMax} HP)`, target.name);
+        addLogEntry('damage', `${target.name} took ${damageTaken} damage (${nextHp}/${target.hpMax} HP)`, target.name);
       }
 
       // Concentration Watchdog: Check if target is actively concentrating
@@ -414,7 +548,6 @@ export function useEncounterState({
       );
 
       if (isTargetConcentrating && nextHp > 0) {
-        const damageTaken = Math.abs(delta);
         const conSaveDc = Math.max(10, Math.floor(damageTaken / 2));
 
         // Calculate CON saving throw modifier
@@ -473,6 +606,42 @@ export function useEncounterState({
           });
         }
         addLogEntry('condition', `💥 ${target.name} dropped to 0 HP and lost concentration on ${spellName}!`, target.name);
+      }
+
+      // 3.5e Massive Damage Instant Death Rule (3.5e PHB p. 145):
+      // Taking 50+ damage in a single hit prompts a DC 15 Fortitude save to avoid dying on the spot.
+      if (damageTaken >= 50 && nextHp > -10 && !target.isDefeated) {
+        let fortMod = 0;
+        if (target.isPlayerChar) {
+          const saves = getEffectiveSaves(character);
+          fortMod = saves?.FORT?.total ?? getAbilityModifier(character.abilities?.CON?.score || 10);
+        } else {
+          const targetChar = allCharacters.find(ch => ch.id === target.id || ch.name.toLowerCase() === target.name.toLowerCase());
+          if (targetChar) {
+            const saves = getEffectiveSaves(targetChar);
+            fortMod = saves?.FORT?.total ?? getAbilityModifier(targetChar.abilities?.CON?.score || 10);
+          } else {
+            fortMod = Math.max(0, Math.floor((target.armorClass - 10) / 2));
+          }
+        }
+
+        setMassiveDamagePrompt({
+          combatantId: target.id,
+          combatantName: target.name,
+          damageTaken,
+          fortSaveDc: 15,
+          fortMod
+        });
+
+        eventBus.emit('MassiveDamageCheckRequested', {
+          combatantId: target.id,
+          combatantName: target.name,
+          damageTaken,
+          fortSaveDc: 15,
+          fortMod
+        });
+
+        addLogEntry('condition', `💀 ${target.name} suffered MASSIVE DAMAGE (${damageTaken} HP in a single hit)! DC 15 Fortitude save required to avoid Instant Death (3.5e PHB p. 145)!`, target.name);
       }
     } else if (delta > 0) {
       playHealSound();
@@ -559,6 +728,56 @@ export function useEncounterState({
     handleResolveConcentration(passed, total);
   }, [concentrationPrompt, onRoll, handleResolveConcentration]);
 
+  const handleResolveMassiveDamage = useCallback((passed: boolean, customRollTotal?: number) => {
+    if (!massiveDamagePrompt) return;
+    const { combatantId, combatantName, damageTaken, fortSaveDc } = massiveDamagePrompt;
+
+    if (passed) {
+      playHitSound(false);
+      const rollStr = customRollTotal !== undefined ? ` (Rolled ${customRollTotal} vs DC ${fortSaveDc})` : '';
+      addLogEntry('condition', `🛡️ ${combatantName} PASSED Massive Damage Fortitude Save${rollStr} — Withstood trauma from ${damageTaken} damage! (3.5e PHB p. 145)`, combatantName);
+    } else {
+      playDeathSound();
+      const rollStr = customRollTotal !== undefined ? ` (Rolled ${customRollTotal} vs DC ${fortSaveDc})` : '';
+      addLogEntry('damage', `💀 ${combatantName} FAILED Massive Damage Fortitude Save${rollStr} — SUFFERED INSTANT DEATH on the spot! (Drops to -10 HP / Dead) (3.5e PHB p. 145)`, combatantName);
+
+      setCombatants(prev => prev.map(c => c.id === combatantId ? {
+        ...c,
+        hpCurrent: -10,
+        isDefeated: true,
+        conditions: Array.from(new Set([...(c.conditions || []), 'Dead']))
+      } : c));
+
+      const promptTarget = combatants.find(c => c.id === combatantId);
+      if (promptTarget?.isPlayerChar && onUpdateCharacter) {
+        onUpdateCharacter({
+          ...character,
+          hpCurrent: -10,
+          deathSavesFailures: 3,
+          conditions: Array.from(new Set([...(character.conditions || []), 'Dead']))
+        });
+      }
+    }
+
+    setMassiveDamagePrompt(null);
+  }, [massiveDamagePrompt, combatants, character, onUpdateCharacter, addLogEntry]);
+
+  const handleRollMassiveDamageSave = useCallback(() => {
+    if (!massiveDamagePrompt) return;
+    const { fortSaveDc, fortMod } = massiveDamagePrompt;
+    playDiceSound();
+
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const total = d20 + fortMod;
+    const passed = (d20 === 20) || (d20 !== 1 && total >= fortSaveDc);
+
+    if (onRoll) {
+      onRoll(`Fortitude Save (Massive Damage vs DC ${fortSaveDc})`, 20, 1, fortMod, 'normal');
+    }
+
+    handleResolveMassiveDamage(passed, total);
+  }, [massiveDamagePrompt, onRoll, handleResolveMassiveDamage]);
+
   const handleNextTurn = useCallback(() => {
     if (combatants.length === 0) return;
     let nextIndex = activeTurnIndex + 1;
@@ -628,7 +847,11 @@ export function useEncounterState({
       playInitiativeTurnSound();
       addLogEntry('turn', `Turn started for ${nextCombatant.name} (Round ${nextRound})`, nextCombatant.name);
     }
-  }, [combatants, activeTurnIndex, roundNumber, character, onUpdateCharacter, addLogEntry]);
+
+    if (activeSessionCode && isDm) {
+      syncEncounterToSession(combatants, nextIndex, nextRound);
+    }
+  }, [combatants, activeTurnIndex, roundNumber, character, onUpdateCharacter, addLogEntry, activeSessionCode, isDm, syncEncounterToSession]);
 
   // Condition Management Helpers
   const handleApplyCondition = useCallback((combatantId: string, conditionName: string, durationRounds?: number) => {
@@ -1023,6 +1246,10 @@ export function useEncounterState({
     setConcentrationPrompt,
     handleResolveConcentration,
     handleRollConcentrationCheck,
+    massiveDamagePrompt,
+    setMassiveDamagePrompt,
+    handleResolveMassiveDamage,
+    handleRollMassiveDamageSave,
     handleApplyCondition,
     handleRemoveCondition,
     handleToggleConcentration,
@@ -1038,7 +1265,11 @@ export function useEncounterState({
     addLogEntry,
     awardDefeatedMonsterXp,
     applyManualXp,
-    toggleAutoXpGain
+    toggleAutoXpGain,
+    handlePlayerSubmitInitiative,
+    syncEncounterToSession,
+    isDm,
+    hasActiveSession: Boolean(activeSessionCode)
   };
 }
 

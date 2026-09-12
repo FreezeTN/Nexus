@@ -20,7 +20,9 @@ import {
   getEffectiveSpeed,
   getProficiencyBonus,
   getPassivePerception,
-  formatModifier
+  formatModifier,
+  getCharacterBab,
+  format35eBabProgression
 } from '../utils/dndCalculations';
 
 interface QuickStatsBarProps {
@@ -200,27 +202,51 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           </div>
         </div>
 
-        {/* Proficiency Bonus */}
-        <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
-          <Award className="w-4 h-4 text-purple-400" />
-          <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.profBonus', 'Prof. Bonus')}</div>
-            <div className="font-mono text-sm font-bold text-purple-300">
-              +{profBonus}
+        {/* Proficiency Bonus (5e) or Base Attack Bonus (3.5e) */}
+        {currentEdition === '3.5e' ? (
+          (() => {
+            const bab = getCharacterBab(activeCharacter);
+            return (
+              <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
+                <Award className="w-4 h-4 text-amber-400" />
+                <div>
+                  <div className="text-[10px] uppercase font-bold text-stone-400">Base Attack (BAB)</div>
+                  <div className="font-mono text-sm font-bold text-amber-300 flex items-center gap-1.5">
+                    <span>{formatModifier(bab)}</span>
+                    {bab >= 6 && (
+                      <span className="text-[11px] text-amber-400/80 font-normal">
+                        ({format35eBabProgression(bab)})
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()
+        ) : (currentEdition === '5e' || !currentEdition) ? (
+          <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
+            <Award className="w-4 h-4 text-purple-400" />
+            <div>
+              <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.profBonus', 'Prof. Bonus')}</div>
+              <div className="font-mono text-sm font-bold text-purple-300">
+                +{profBonus}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
 
-        {/* Passive Perception */}
-        <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
-          <Eye className="w-4 h-4 text-teal-400" />
-          <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.passiveWis', 'Passive Wis')}</div>
-            <div className="font-mono text-sm font-bold text-teal-200">
-              {passivePerception}
+        {/* Passive Perception (5e only) */}
+        {(currentEdition === '5e' || !currentEdition) && (
+          <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
+            <Eye className="w-4 h-4 text-teal-400" />
+            <div>
+              <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.passiveWis', 'Passive Wis')}</div>
+              <div className="font-mono text-sm font-bold text-teal-200">
+                {passivePerception}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Sanity Quick Status (Call of Cthulhu) */}
         {currentEdition === 'cthulhu' && (
@@ -273,8 +299,8 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           </div>
         )}
 
-        {/* Level & Level-Up Wizard Button */}
-        {onOpenLevelUp && (
+        {/* Level & Level-Up Wizard Button (D&D / Class-based TRPGs only) */}
+        {onOpenLevelUp && currentEdition !== 'cthulhu' && currentEdition !== 'shadowrun' && (
           <button
             onClick={onOpenLevelUp}
             className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-stone-950 px-3 py-1.5 rounded-xl font-bold transition shadow-md cursor-pointer border border-amber-400/40"
@@ -288,21 +314,23 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           </button>
         )}
 
-        {/* Inspiration Toggle */}
-        <button
-          onClick={() => onUpdateCharacter({ ...activeCharacter, inspiration: !activeCharacter.inspiration })}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition ${
-            activeCharacter.inspiration
-              ? 'bg-amber-900/60 border-amber-500 text-amber-200 shadow-md'
-              : 'bg-stone-900 border-stone-800 text-stone-500 hover:text-stone-300'
-          }`}
-        >
-          <UserCheck className="w-4 h-4" />
-          <div className="text-left">
-            <div className="text-[10px] uppercase font-bold">{t('stats.inspiration', 'Inspiration')}</div>
-            <div className="font-bold text-xs">{activeCharacter.inspiration ? t('common.active', 'ACTIVE') : t('common.none', 'NONE')}</div>
-          </div>
-        </button>
+        {/* Inspiration Toggle (5e only) */}
+        {(currentEdition === '5e' || !currentEdition) && (
+          <button
+            onClick={() => onUpdateCharacter({ ...activeCharacter, inspiration: !activeCharacter.inspiration })}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition ${
+              activeCharacter.inspiration
+                ? 'bg-amber-900/60 border-amber-500 text-amber-200 shadow-md'
+                : 'bg-stone-900 border-stone-800 text-stone-500 hover:text-stone-300'
+            }`}
+          >
+            <UserCheck className="w-4 h-4" />
+            <div className="text-left">
+              <div className="text-[10px] uppercase font-bold">{t('stats.inspiration', 'Inspiration')}</div>
+              <div className="font-bold text-xs">{activeCharacter.inspiration ? t('common.active', 'ACTIVE') : t('common.none', 'NONE')}</div>
+            </div>
+          </button>
+        )}
       </div>
 
       {/* Max HP Inspector Modal */}

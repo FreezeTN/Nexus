@@ -9,6 +9,7 @@ import { isCompanionSummonAbility } from '../../../data/companionData';
 import { checkSpellEligibility, SpellEligibilityResult } from '../../../utils/spellClassUtils';
 import { eventBus } from '../../../events/eventBus';
 import { useLanguage } from '../../../i18n/LanguageContext';
+import { MetamagicSpellModal } from '../../modals/MetamagicSpellModal';
 import {
   Sparkles,
   Plus,
@@ -54,6 +55,7 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
   const [levelFilter, setLevelFilter] = useState<number | 'all'>('all');
   const [prepFilter, setPrepFilter] = useState<'all' | 'prepared' | 'unprepared'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [metamagicModalSpell, setMetamagicModalSpell] = useState<Spell | null>(null);
 
   // Custom Spell Creation State
   const [spellName, setSpellName] = useState('');
@@ -411,6 +413,17 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
                       </button>
                     )}
 
+                    {character.edition === '3.5e' && (
+                      <button
+                        type="button"
+                        onClick={() => setMetamagicModalSpell(spell)}
+                        className="px-2.5 py-1.5 bg-purple-950/80 hover:bg-purple-900 text-purple-200 rounded-lg font-bold border border-purple-600/50 transition flex items-center gap-1 shadow text-xs"
+                        title="Apply 3.5e Metamagic Feats (Empower, Maximize, Quicken, Extend, Enlarge, Widen, Silent, Still)"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Metamagic
+                      </button>
+                    )}
+
                     <button
                       onClick={() => setTargetModalSpell(spell)}
                       className="px-3 py-1.5 bg-amber-950 hover:bg-amber-900 text-amber-200 rounded-lg font-bold border border-amber-600/50 transition flex items-center gap-1"
@@ -708,6 +721,18 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 3.5e Metamagic Spell Enhancer Modal */}
+      {metamagicModalSpell && (
+        <MetamagicSpellModal
+          isOpen={Boolean(metamagicModalSpell)}
+          onClose={() => setMetamagicModalSpell(null)}
+          spell={metamagicModalSpell}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRollDamage={onRollDamage}
+        />
       )}
     </CollapsibleBox>
   );

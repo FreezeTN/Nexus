@@ -232,6 +232,13 @@ export interface Skill {
   isClassSkill?: boolean; // Used for 3.5e
 }
 
+export interface WeaponDamageRow {
+  id?: string;
+  damage: string; // e.g. "1d8+1", "2d6", "1d4"
+  damageType: string; // e.g. "Fire", "Slashing", "Radiant", "Necrotic"
+  label?: string; // Optional label/condition e.g. "vs Fiends", "On Hit", "Crit Bonus"
+}
+
 export interface Attack {
   id: string;
   name: string;
@@ -242,6 +249,14 @@ export interface Attack {
   notes?: string;
   abilityUsed?: AbilityName;
   isProficient?: boolean;
+  isTwoHanded?: boolean;
+  isOffhand?: boolean;
+  additionalDamageRows?: WeaponDamageRow[];
+  threatRange?: number; // Minimum d20 roll for critical threat (e.g. 18, 19, 20). Default 20.
+  critMultiplier?: number; // Critical damage multiplier (e.g. 2, 3, 4). Default 2 (x2).
+  isKeen?: boolean; // Keen / Improved Critical (doubles threat range: 20 -> 19-20, 19-20 -> 17-20, 18-20 -> 15-20)
+  bypassMaterial?: 'normal' | 'magic' | 'silver' | 'cold_iron' | 'adamantine'; // Material for 3.5e DR bypass
+  alignmentBypass?: 'none' | 'good' | 'evil' | 'lawful' | 'chaotic'; // Alignment bypass for 3.5e DR
 }
 
 export interface ClassFeature {
@@ -320,20 +335,44 @@ export interface GearItem {
   isMagic?: boolean;
   costGp?: number; // item price / value in Gold Pieces
   notes?: string;
-  itemType?: 'Armor' | 'Weapon' | 'Misc';
+  rarity?: 'Common' | 'Uncommon' | 'Rare' | 'Very Rare' | 'Legendary' | 'Artifact' | 'Unique' | string;
+  slot?: 'Ring' | 'Amulet' | 'Cloak' | 'Boots' | 'Headwear' | 'Gloves' | 'Belt' | 'Armor' | 'Shield' | 'Main Hand' | 'Off Hand' | 'Two-Handed' | 'Wondrous' | 'Inventory' | string;
+  itemType?: 'Armor' | 'Weapon' | 'Ring' | 'Amulet' | 'Cloak' | 'Boots' | 'Headwear' | 'Gloves' | 'Belt' | 'Wondrous Item' | 'Potion' | 'Scroll' | 'Wand' | 'Misc' | string;
+  subCategory?: string;
   armorAc?: number;
   acBonus?: number;
   initiativeBonus?: number;
   armorType?: 'Heavy' | 'Medium' | 'Light' | 'Shield' | 'Bonus';
   strengthRequirement?: number; // Minimum STR required to wear without -10ft speed penalty (e.g. 13 for Chain Mail, 15 for Plate)
+  maxDexBonus?: number; // Optional maximum DEX modifier cap (e.g. 2 for Medium, 3 for Medium Armor Master, or custom)
+  naturalArmorBonus?: number; // Natural armor bonus granted by item (e.g. Amulet of Natural Armor +1..+5)
+  deflectionBonus?: number; // Deflection bonus to AC (e.g. Ring of Protection +1..+5)
+  dodgeBonus?: number; // Dodge bonus to AC (e.g. Boots of Speed)
+  armorCheckPenalty?: number; // 3.5e Armor Check Penalty (e.g. -6 for Full Plate)
+  arcaneSpellFailure?: number; // 3.5e Arcane Spell Failure % (e.g. 35% for Full Plate)
   damageReduction?: number; // Damage Reduction (DR) granted by item (e.g., 2, 5)
   resistance?: string; // Damage type resistance granted by item (e.g. Fire, Cold, Slashing, All)
   immunity?: string; // Damage type immunity granted by item (e.g. Poison, Fire, Acid, All)
+  conditionImmunities?: string; // Condition immunities granted (e.g. Charmed, Frightened, Paralyzed, Poisoned)
   stealthDisadvantage?: boolean;
   hpMaxBonus?: number; // Max HP bonus or penalty granted when equipped
   isCursed?: boolean; // Cursed artifact marker with active drawbacks or attunement restrictions
   spellDcBonus?: number; // Spell Save DC bonus (e.g. +1, +2 from Robe of the Archmagi or Rod of the Pact Keeper)
   spellAttackBonus?: number; // Spell Attack bonus (e.g. +1, +2 from Wand of the War Mage)
+  attackBonus?: number; // General attack roll bonus granted by item (e.g. +1 to all attack rolls)
+  damageBonus?: number; // General damage roll bonus granted by item (e.g. +2 from Bracers of Archery or Ring of Might)
+  savingThrowBonus?: number; // Flat bonus to ALL saving throws (e.g. +1 from Ring of Protection, Cloak of Protection, Luckstone)
+  savingThrowSpecificBonuses?: Partial<Record<AbilityName, number>>; // Individual saving throw bonuses (e.g. { DEX: 1, CON: 2 })
+  checkBonus?: number; // Flat bonus to ALL ability checks / skill checks (e.g. +1 from Stone of Good Luck / Luckstone)
+  skillBonuses?: Record<string, number>; // Specific skill bonuses (e.g. { 'Stealth': 5, 'Perception': 5, 'Athletics': 2 })
+  passivePerceptionBonus?: number; // Bonus to Passive Perception (e.g. +5 from Sentinel Shield or Eyes of the Eagle)
+  darkvision?: number; // Darkvision range in feet (e.g. 60 from Goggles of Night)
+  speedBonus?: number; // Walking speed bonus in feet (e.g. +10 from Boots of Striding & Springing)
+  flySpeed?: number; // Fly speed in feet (e.g. 60 from Winged Boots or Cloak of the Bat)
+  swimSpeed?: number; // Swim speed in feet (e.g. 40 from Ring of Swimming)
+  climbSpeed?: number; // Climb speed in feet (e.g. 30 from Slippers of Spider Climbing)
+  charges?: { current: number; max: number; recharge?: string }; // Item charge tracker (e.g. Staff of Power, Ring of the Ram)
+  spellsGranted?: string; // Spells or activated abilities granted by item (e.g. "Misty Step (2/day), Shield (1/day)")
   abilitySetters?: Partial<Record<AbilityName, number>>; // Sets ability score to fixed value (e.g. { STR: 19 } for Gauntlets of Ogre Power, { INT: 19 } for Headband of Intellect)
   abilityBonuses?: Partial<Record<AbilityName, number>>; // Adds bonus to ability score (e.g. { WIS: 2 })
   attunementSlotsGranted?: number; // Increases max attunement slots
@@ -355,6 +394,7 @@ export interface GearItem {
     abilityOverride?: AbilityName;
     attackBonusModifier?: number;
     damageBonusModifier?: number;
+    additionalDamageRows?: WeaponDamageRow[];
   };
 }
 
@@ -387,6 +427,17 @@ export interface Spell {
   edition?: '5e' | '3.5e' | 'both';
   classLevels?: Record<string, number>; // e.g. { 'Bard': 2, 'Sor/Wiz': 3, 'Cleric': 3 }
   classLevelsStr?: string; // e.g. "Brd 2, Sor/Wiz 3, Clr 3"
+  metamagicAdjustments?: {
+    empower?: boolean; // +2 levels (+50% variable damage/effect)
+    maximize?: boolean; // +3 levels (maximized variable damage/effect)
+    quicken?: boolean; // +4 levels (cast as swift action)
+    extend?: boolean; // +1 level (doubled duration)
+    enlarge?: boolean; // +1 level (doubled range)
+    widen?: boolean; // +3 levels (doubled area)
+    silent?: boolean; // +1 level (no verbal component)
+    still?: boolean; // +1 level (no somatic component, ignores ASF)
+  };
+  originalLevel?: number; // Base spell level prior to metamagic adjustment
 }
 
 export interface SpellSlots {
@@ -401,6 +452,31 @@ export interface ActiveConcentration {
   castLevel?: number;
   duration?: string;
   castTimestamp?: number;
+}
+
+export interface OwnedMount {
+  id: string;
+  name: string;
+  type: string; // e.g. "Heavy Warhorse", "Riding Horse", "Warpony", "Camel", "Riding Dog", "Griffon"
+  costGp: number;
+  size: 'Small' | 'Medium' | 'Large' | 'Huge';
+  speed: string; // e.g. "50 ft."
+  ac: number;
+  hp: number;
+  hpMax: number;
+  carryingCapacityLbs: {
+    light: number;
+    medium: number;
+    heavy: number;
+  };
+  saddle?: 'none' | 'pack' | 'riding' | 'military' | 'exotic_riding' | 'exotic_military';
+  barding?: 'none' | 'padded' | 'leather' | 'studded_leather' | 'chain_shirt' | 'scale_mail' | 'chainmail' | 'banded_mail' | 'full_plate';
+  hasBitAndBridle?: boolean;
+  hasSaddlebags?: boolean;
+  saddlebagItems?: string[];
+  isWarTrained?: boolean;
+  attacks?: Array<{ name: string; bonus: number; damage: string; type: string }>;
+  notes?: string;
 }
 
 export interface CharacterData {
@@ -425,16 +501,181 @@ export interface CharacterData {
 
   // 3.5e Specific Combat & Saving Throw Parameters
   bab?: number; // Base Attack Bonus for 3.5e
+  baseAttackBonus?: number; // Alias for Base Attack Bonus (BAB) in 3.5e
+  isStabilized35e?: boolean; // 3.5e Dying & Stabilization state
+  nonlethalDamage?: number; // 3.5e Nonlethal Damage accumulation
   classBaseSkillPoints?: number; // Base Skill Points per level (e.g. 2, 4, 6, 8 for 3.5e)
   fortSaveBase?: number; // Base Fortitude Save for 3.5e
   refSaveBase?: number; // Base Reflex Save for 3.5e
   willSaveBase?: number; // Base Will Save for 3.5e
+  fortSaveMagic?: number; // Magic/Resistance bonus to Fortitude (e.g. Cloak of Resistance)
+  refSaveMagic?: number; // Magic/Resistance bonus to Reflex
+  willSaveMagic?: number; // Magic/Resistance bonus to Will
+  fortSaveMisc?: number; // Feats/Misc bonus to Fortitude (e.g. Great Fortitude)
+  refSaveMisc?: number; // Feats/Misc bonus to Reflex (e.g. Lightning Reflexes)
+  willSaveMisc?: number; // Feats/Misc bonus to Will (e.g. Iron Will)
+  divineGraceActive?: boolean; // Paladin Divine Grace: Add Charisma modifier to all saving throws
+  saveConditionalModifiers?: string; // Situational save notes (e.g. "+2 vs enchantments, +4 vs poison")
   touchAcOverride?: number; // Touch AC adjustment for 3.5e
   acOverride?: number;
   initiativeOverride?: number;
   flatFootedAcOverride?: number; // Flat-Footed AC adjustment for 3.5e
   spellResist?: number; // Spell Resistance (SR) for 3.5e
   sizeCategory?: 'Fine' | 'Diminutive' | 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan' | 'Colossal';
+  sizeAcBonus?: number; // Size bonus/penalty to AC override
+  senses?: string; // Senses e.g. "Darkvision 60 ft., Low-Light Vision"
+  naturalArmorBonus?: number; // 3.5e Natural Armor bonus to AC (e.g. from race, monstrous features, spells)
+  deflectionBonus?: number; // 3.5e Deflection bonus to AC
+  dodgeBonus?: number; // 3.5e Dodge bonus to AC (lost when flat-footed, stacks)
+  miscAcBonus?: number; // 3.5e Misc bonus to AC (Insight, Sacred, Morale, Luck, etc.)
+  maxDexBonusOverride?: number; // Manual override for max DEX bonus to AC
+  armorCheckPenaltyOverride?: number; // Manual override for total Armor Check Penalty (ACP)
+
+  // 3.5e Damage Reduction (DR) & Energy Resistances
+  damageReductionValue?: number; // Value of DR (e.g. 5, 10, 15)
+  damageReductionBypass?: string; // Bypass material/type (e.g. 'magic', 'silver', 'cold iron', 'adamantine', 'bludgeoning', 'piercing', 'slashing', 'good', 'evil', '-')
+  energyResistances?: Record<string, number>; // e.g. { fire: 10, cold: 5, electricity: 0, acid: 0, sonic: 0 }
+  customAttacks?: Array<{ id: string; name: string; attackBonus: number; damageDice: string; damageType: string; range: string; notes?: string; }>;
+  damageResistances?: string[];
+  damageImmunities?: string[];
+  conditionImmunities?: string[];
+
+  // 3.5e Special Combat Maneuvers & Stability
+  isQuadruped?: boolean; // 4+ legs (stability +4 vs trip/bull rush, higher carrying capacity)
+  stabilityBonus?: number; // Stability bonus to resist Trip/Bull Rush (e.g. +4 for Dwarves)
+  improvedManeuvers?: {
+    improvedGrapple?: boolean; // +4 to grapple checks, no AoO
+    improvedTrip?: boolean; // +4 to trip checks, no AoO, immediate free melee attack on trip
+    improvedDisarm?: boolean; // +4 to disarm checks, no AoO
+    improvedSunder?: boolean; // +4 to sunder checks, no AoO
+    improvedBullRush?: boolean; // +4 to bull rush checks, no AoO
+    improvedOverrun?: boolean; // +4 to overrun checks, no AoO
+  };
+
+  // 3.5e Spellcasting & Turn Undead Parameters
+  casterLevelOverride?: number; // 3.5e Caster Level override
+  spellPenetration?: 'none' | 'spell_penetration' | 'greater'; // Spell Penetration feat (+2) / Greater Spell Penetration (+4)
+  arcaneSpellFailureOverride?: number; // Override for total Arcane Spell Failure %
+  turnUndeadUsesMax?: number; // Max Turn/Rebuke Undead uses per day (defaults to 3 + CHA mod)
+  turnUndeadUsesRemaining?: number; // Remaining Turn/Rebuke Undead uses
+  turnUndeadVariant?: 'turn' | 'rebuke'; // Good/Neutral cleric: Turn; Evil cleric: Rebuke
+  turnUndeadLevelOverride?: number; // Override effective Turning level (default Cleric lvl, Paladin lvl - 3)
+  hasExtraTurning?: boolean; // Extra Turning feat (+4 uses/day)
+
+  // 3.5e Attacks of Opportunity (AoO) & Combat Reflexes
+  aooRemaining?: number; // Current remaining AoO pool this combat round
+  hasCombatReflexes?: boolean; // Combat Reflexes feat (1 + DEX mod AoOs, make AoOs while flat-footed)
+  aooMaxOverride?: number; // Override max AoOs per round
+  threatReachFt?: number; // Threatened reach in feet (default 5ft, or 10ft for reach weapons / large creatures)
+
+  // 3.5e Two-Weapon Fighting (TWF) Feats
+  hasTwoWeaponFighting?: boolean; // Two-Weapon Fighting feat (reduces penalties to -2/-2 with light offhand)
+  hasImprovedTwoWeaponFighting?: boolean; // Improved TWF (grants 2nd offhand attack at -5 when BAB >= 6)
+  hasGreaterTwoWeaponFighting?: boolean; // Greater TWF (grants 3rd offhand attack at -10 when BAB >= 11)
+  hasTwoWeaponDefense?: boolean; // Two-Weapon Defense feat (+1 shield bonus to AC while dual wielding)
+
+  // 3.5e Ability Damage vs. Ability Drain
+  abilityDamage?: Partial<Record<AbilityName, number>>; // Temporary ability damage (1/day heal or Lesser Restoration)
+  abilityDrain?: Partial<Record<AbilityName, number>>; // Permanent ability drain (requires Restoration)
+  activePoisonsDiseases?: Array<{
+    id: string;
+    name: string;
+    type: 'poison' | 'disease';
+    source?: string;
+    dc: number;
+    saveType: 'Fortitude' | 'Reflex' | 'Will';
+    primaryEffect: string; // e.g. "1d4 CON damage"
+    secondaryEffect: string; // e.g. "1d6 CON damage"
+    incubationRoundsRemaining: number; // e.g. 10 rounds for 1 minute poison incubation
+    roundsElapsed: number;
+    primarySavePassed?: boolean;
+    secondarySavePassed?: boolean;
+    isResolved?: boolean;
+    notes?: string;
+  }>;
+
+  // 3.5e XP-to-Craft & Spell XP Ledger
+  craftingPoolXp?: number; // Craft reserve XP (Artificer or bonus pool)
+  totalXpSpentOnSpells?: number; // Running total of XP consumed by spells
+  totalXpSpentOnCrafting?: number; // Running total of XP consumed by item creation
+  xpLedger?: Array<{
+    id: string;
+    date: string;
+    type: 'spell' | 'craft' | 'award' | 'loss';
+    description: string;
+    xpAmount: number; // negative when spent, positive when awarded
+    goldCost?: number;
+  }>;
+
+  // 3.5e Negative Levels & Energy Drain
+  negativeLevels?: number; // Active negative levels (each gives -1 to attacks/saves/checks/CL, -5 Max HP, loss of highest spell slot)
+  negativeLevelsHistory?: Array<{
+    id: string;
+    source: string; // e.g. "Wight", "Enervation", "Spectre", "Vampire"
+    dc: number; // Fortitude save DC after 24 hours
+    timestamp: string;
+    notes?: string;
+  }>;
+
+  // 3.5e Action Economy: Swift & Immediate Actions
+  swiftActionUsed?: boolean; // Swift action consumed this turn
+  immediateActionUsed?: boolean; // Immediate action consumed, which locks swift action next turn
+  actionEconomy?: {
+    standardActionUsed?: boolean;
+    moveActionUsed?: boolean;
+    swiftActionUsed?: boolean;
+    immediateActionUsed?: boolean;
+    fiveFootStepTaken?: boolean;
+    actionUsed5e?: boolean;
+    bonusActionUsed5e?: boolean;
+    reactionUsed5e?: boolean;
+  };
+
+  // 3.5e Tactical Battlefield Positioning & Cover
+  activeCover?: 'none' | 'soft' | 'standard' | 'improved' | 'total'; // Soft (+4 AC vs ranged), Standard (+4 AC, +2 Reflex), Improved (+8 AC, +4 Reflex), Total Cover
+  hasHigherGround?: boolean; // +1 melee attack bonus when elevated
+
+  // 3.5e & 5e Mounted Combat & Stables System
+  isMounted?: boolean;
+  hasMountedCombatFeat?: boolean; // Feat: Negate hit on mount once per round with opposed Ride check
+  hasRideByAttackFeat?: boolean;
+  hasSpiritedChargeFeat?: boolean; // Double damage with melee weapon on mounted charge, or triple with a lance
+  mountInfo?: {
+    name: string;
+    ac: number;
+    hp: number;
+    hpMax: number;
+    speed: string;
+    saddle?: string;
+    barding?: string;
+    notes?: string;
+  };
+  ownedMounts?: OwnedMount[]; // Stabled and owned steeds/mounts
+  activeMountId?: string; // Currently mounted or selected steed ID
+
+  // 3.5e Wild Shape & Polymorph (Physical Ability Overrides)
+  wildShapeActive?: boolean;
+  wildShapeForm?: {
+    name: string;
+    size: 'Fine' | 'Diminutive' | 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan' | 'Colossal';
+    str: number;
+    dex: number;
+    con: number;
+    naturalArmorBonus: number;
+    speed: string; // e.g. "40 ft., fly 60 ft. (average)"
+    naturalAttacks: Array<{ name: string; damage: string; attackBonus: number; type: string }>;
+    specialAbilities?: string[];
+  };
+
+  // 3.5e Environmental & Endurance Hazards
+  environmentalHazards?: {
+    forcedMarchHours?: number; // Hours marched beyond 8 in current day
+    extremeTempType?: 'none' | 'cold' | 'extreme_cold' | 'heat' | 'extreme_heat';
+    roundsHoldingBreath?: number; // Rounds spent holding breath
+    isSuffocating?: boolean;
+    daysWithoutWater?: number;
+    daysWithoutFood?: number;
+  };
 
   // Merchant / Vendor status
   isVendor?: boolean;
@@ -461,6 +702,21 @@ export interface CharacterData {
 
   // Shadowrun System Data
   shadowrun?: ShadowrunData;
+
+  // Call of Cthulhu System Data
+  cthulhu?: {
+    occupation?: string;
+    archetype?: string;
+    luck?: number;
+    magicPointsCurrent?: number;
+    magicPointsMax?: number;
+    majorWound?: boolean;
+    dying?: boolean;
+    cashOnHand?: number;
+    spendingLevel?: number;
+    assets?: number;
+    assetNotes?: string;
+  };
 
   // Active Transformation Engine (Wild Shape, Polymorph, Shapechange, Lycanthropy)
   activeTransformation?: ActiveTransformation;
@@ -539,6 +795,27 @@ export interface CharacterData {
   alliesAndOrganizations: string;
   additionalNotes: string;
   partyId?: string;
+
+  // Versioning, Campaign Affiliation & Session Sync (Base vs Session Characters)
+  baseCharacterId?: string; // Links this character to its base character (for versions/duplicates)
+  isBaseCharacter?: boolean; // Marks whether this character is the root base character template
+  campaignName?: string; // Campaign affiliation or session tag (e.g. "Curse of Strahd")
+  versionTag?: string; // Version label (e.g. "v1.0", "Main", "One-Shot Level 5")
+  lastSyncedFromSessionAt?: string; // Timestamp of the last sync of permanent traits from session to base
+  sessionState?: {
+    sessionCode?: string;
+    hpCurrent?: number;
+    hpTemp?: number;
+    conditions?: string[];
+    conditionDurations?: Record<string, number>;
+    deathSavesSuccesses?: number;
+    deathSavesFailures?: number;
+    spellSlotsCurrent?: Array<{ level: number; current: number }>;
+  };
+
+  // Lost Limbs & Lingering Permanent Injuries
+  handsCountOverride?: number; // Override available hand slots (e.g. 1 hand for amputated/lost arm)
+  lingeringInjuries?: string[]; // Permanent injuries (e.g. "Lost Left Arm", "Lost Eye", "Severed Leg")
 }
 
 export interface Party {
@@ -572,6 +849,12 @@ export interface DiceRollResult {
   mode?: 'normal' | 'advantage' | 'disadvantage';
   isNat20?: boolean;
   isNat1?: boolean;
+  isSecret?: boolean;
+  isWhisperToDm?: boolean;
+  rollerUid?: string;
+  rollerName?: string;
+  characterName?: string;
+  targetUid?: string;
 }
 
 export type EncounterEnvironment =

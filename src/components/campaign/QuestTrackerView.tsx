@@ -19,7 +19,15 @@ import {
   MapPin,
   Users,
   Flame,
-  Bot
+  Bot,
+  Gift,
+  CheckSquare,
+  Square,
+  Package,
+  ArrowRight,
+  Zap,
+  HelpCircle,
+  UserCheck
 } from 'lucide-react';
 import {
   CampaignQuest,
@@ -27,6 +35,8 @@ import {
   QuestStatus,
   QuestStage
 } from '../../types/campaign';
+import { CharacterData, Party } from '../../types';
+import { UserProfile } from '../../lib/firebase';
 import {
   loadCampaignQuests,
   saveCampaignQuests,
@@ -34,8 +44,16 @@ import {
 } from '../../services/campaignService';
 
 interface QuestTrackerViewProps {
+  activeCharacter?: CharacterData | null;
+  characters?: CharacterData[];
+  parties?: Party[];
+  currentUser?: UserProfile | null;
+  onUpdateCharacter?: (char: CharacterData) => void;
+  onAddItemToInventory?: (item: any, targetId?: string) => void;
   onOpenKnowledgeGraph?: (entityName: string) => void;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  onNavigateToAtlasLocation?: (locationName: string) => void;
+  onNavigateToFaction?: (factionName: string) => void;
 }
 
 const CATEGORY_CONFIG: Record<QuestCategory, { label: string; badge: string }> = {
@@ -48,8 +66,16 @@ const CATEGORY_CONFIG: Record<QuestCategory, { label: string; badge: string }> =
 };
 
 export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
+  activeCharacter,
+  characters = [],
+  parties = [],
+  currentUser,
+  onUpdateCharacter,
+  onAddItemToInventory,
   onOpenKnowledgeGraph,
-  onOpenGenerators
+  onOpenGenerators,
+  onNavigateToAtlasLocation,
+  onNavigateToFaction
 }) => {
   const [quests, setQuests] = useState<CampaignQuest[]>(() => loadCampaignQuests());
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,6 +84,12 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
   const [expandedQuestId, setExpandedQuestId] = useState<string | null>(quests[0]?.id || null);
   const [showNewQuestForm, setShowNewQuestForm] = useState(false);
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [distributionNotification, setDistributionNotification] = useState<string | null>(null);
+
+  // New Milestone input state per quest
+  const [newStageText, setNewStageText] = useState('');
+  const [newStageOptional, setNewStageOptional] = useState(false);
+  const [newStageXp, setNewStageXp] = useState('');
 
   // New Quest Form State
   const [newTitle, setNewTitle] = useState('');
@@ -65,10 +97,19 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
   const [newSummary, setNewSummary] = useState('');
   const [newGiver, setNewGiver] = useState('');
   const [newLocation, setNewLocation] = useState('');
+  const [newFaction, setNewFaction] = useState('');
   const [newLevel, setNewLevel] = useState('Level 3 - 5');
   const [newXp, setNewXp] = useState('1500');
   const [newGold, setNewGold] = useState('500');
   const [newItems, setNewItems] = useState('');
+
+  // Item allocation target state
+  const [selectedTargetCharId, setSelectedTargetCharId] = useState<string>(activeCharacter?.id || characters[0]?.id || '');
+
+  const showToast = (msg: string) => {
+    setDistributionNotification(msg);
+    setTimeout(() => setDistributionNotification(null), 4000);
+  };
 
   const handleSaveQuests = (newQuests: CampaignQuest[]) => {
     setQuests(newQuests);
@@ -81,10 +122,47 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
       const newStages = q.stages.map(s => s.id === stageId ? { ...s, completed: !s.completed } : s);
       // If all non-optional stages are completed, auto-mark completed
       const allRequiredCompleted = newStages.filter(s => !s.optional).every(s => s.completed);
+      const newStatus = allRequiredCompleted ? ('completed' as QuestStatus) : q.status === 'completed' ? 'active' : q.status;
       return {
         ...q,
         stages: newStages,
-        status: allRequiredCompleted ? ('completed' as QuestStatus) : q.status === 'completed' ? 'active' : q.status
+        status: newStatus
+      };
+    });
+    handleSaveQuests(updated);
+  };
+
+  const handleAddStage = (questId: string) => {
+    if (!newStageText.trim()) return;
+    const stageXpNum = parseInt(newStageXp, 10) || 0;
+    const newStage: QuestStage = {
+      id: `stage-${Date.now()}`,
+      text: newStageText.trim(),
+      completed: false,
+      optional: newStageOptional,
+      xpReward: stageXpNum > 0 ? stageXpNum : undefined
+    };
+
+    const updated = quests.map(q => {
+      if (q.id !== questId) return q;
+      return {
+        ...q,
+        stages: [...q.stages, newStage]
+      };
+    });
+
+    handleSaveQuests(updated);
+    setNewStageText('');
+    setNewStageOptional(false);
+    setNewStageXp('');
+  };
+
+  const handleDeleteStage = (questId: string, stageId: string) => {
+    const updated = quests.map(q => {
+      if (q.id !== questId) return q;
+      return {
+        ...q,
+        stages: q.stages.filter(s => s.id !== stageId)
       };
     });
     handleSaveQuests(updated);
@@ -98,7 +176,7 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
   const handleDeleteQuest = (questId: string) => {
     const updated = quests.filter(q => q.id !== questId);
     handleSaveQuests(updated);
-    if (expandedQuestId === questId) setExpandedQuestId(null);
+    if (expandedQuestId === questId) setExpandedQuestId(updated[0]?.id || null);
   };
 
   const handleAddCustomQuest = (e: React.FormEvent) => {
@@ -110,13 +188,15 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
       title: newTitle.trim(),
       category: newCategory,
       status: 'active',
-      summary: newSummary.trim() || 'A new quest has been accepted by the party.',
-      giverName: newGiver.trim() || 'Guildmaster',
-      giverLocationName: newLocation.trim() || 'City Hub',
+      summary: newSummary.trim() || 'A new adventure quest accepted by the party.',
+      giverName: newGiver.trim() || 'Guild Patron',
+      giverLocationName: newLocation.trim() || 'Regional Hub',
+      giverFactionId: newFaction.trim() ? `fac-${newFaction.toLowerCase().replace(/\s+/g, '-')}` : undefined,
       recommendedLevel: newLevel,
       stages: [
         { id: `st-${Date.now()}-1`, text: 'Investigate the initial lead or rumor', completed: false },
-        { id: `st-${Date.now()}-2`, text: 'Confront the challenge and secure the objective', completed: false }
+        { id: `st-${Date.now()}-2`, text: 'Overcome the primary encounter / challenge', completed: false },
+        { id: `st-${Date.now()}-3`, text: 'Claim the objective and return for reward payout', completed: false }
       ],
       rewards: {
         xp: parseInt(newXp, 10) || 1000,
@@ -132,15 +212,17 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
     setShowNewQuestForm(false);
     setNewTitle('');
     setNewSummary('');
+    setNewGiver('');
+    setNewLocation('');
   };
 
   const handleGenerateAi = async () => {
     setIsGeneratingAi(true);
     try {
       const generated = await generateAiCampaignQuest({
-        theme: 'D&D 5e / High Fantasy',
+        theme: 'D&D 5e / High Fantasy Sword Coast',
         category: categoryFilter !== 'all' ? categoryFilter : 'side',
-        partyLevel: 'Level 4'
+        partyLevel: activeCharacter ? `Level ${activeCharacter.level}` : 'Level 4'
       });
       const updated = [generated, ...quests];
       handleSaveQuests(updated);
@@ -152,184 +234,383 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
     }
   };
 
+  // XP Distribution
+  const handleAwardXpToActiveCharacter = (quest: CampaignQuest) => {
+    const xpAmount = quest.rewards.xp || 0;
+    if (xpAmount <= 0) return;
+
+    if (activeCharacter && onUpdateCharacter) {
+      const updatedChar: CharacterData = {
+        ...activeCharacter,
+        experiencePoints: (activeCharacter.experiencePoints || 0) + xpAmount
+      };
+      onUpdateCharacter(updatedChar);
+      showToast(`⭐ Awarded +${xpAmount.toLocaleString()} XP to ${activeCharacter.name}!`);
+    } else {
+      showToast(`⭐ Gained +${xpAmount.toLocaleString()} XP (No active character selected to receive XP directly).`);
+    }
+  };
+
+  const handleDistributeXpToParty = (quest: CampaignQuest) => {
+    const totalXp = quest.rewards.xp || 0;
+    if (totalXp <= 0) return;
+
+    const targetList = characters.length > 0 ? characters : activeCharacter ? [activeCharacter] : [];
+    if (targetList.length === 0) {
+      showToast(`⭐ Awarded +${totalXp.toLocaleString()} XP to the party.`);
+      return;
+    }
+
+    const share = Math.round(totalXp / targetList.length);
+    targetList.forEach(char => {
+      if (onUpdateCharacter) {
+        const updated: CharacterData = {
+          ...char,
+          experiencePoints: (char.experiencePoints || 0) + share
+        };
+        onUpdateCharacter(updated);
+      }
+    });
+
+    showToast(`⚔️ Distributed +${totalXp.toLocaleString()} XP equally among ${targetList.length} party members (+${share.toLocaleString()} XP each)!`);
+  };
+
+  // Gold Distribution
+  const handleAwardGoldToActiveCharacter = (quest: CampaignQuest) => {
+    const goldAmount = quest.rewards.gold || 0;
+    if (goldAmount <= 0) return;
+
+    if (activeCharacter && onUpdateCharacter) {
+      const currentWealth = activeCharacter.wealth || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
+      const updatedChar: CharacterData = {
+        ...activeCharacter,
+        wealth: {
+          ...currentWealth,
+          gp: (currentWealth.gp || 0) + goldAmount
+        }
+      };
+      onUpdateCharacter(updatedChar);
+      showToast(`💰 Granted +${goldAmount.toLocaleString()} GP to ${activeCharacter.name}!`);
+    } else {
+      showToast(`💰 Claimed +${goldAmount.toLocaleString()} GP.`);
+    }
+  };
+
+  const handleDistributeGoldToParty = (quest: CampaignQuest) => {
+    const totalGold = quest.rewards.gold || 0;
+    if (totalGold <= 0) return;
+
+    const targetList = characters.length > 0 ? characters : activeCharacter ? [activeCharacter] : [];
+    if (targetList.length === 0) {
+      showToast(`💰 Claimed +${totalGold.toLocaleString()} GP for the party treasury.`);
+      return;
+    }
+
+    const share = Math.round(totalGold / targetList.length);
+    targetList.forEach(char => {
+      if (onUpdateCharacter) {
+        const currentWealth = char.wealth || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 };
+        const updated: CharacterData = {
+          ...char,
+          wealth: {
+            ...currentWealth,
+            gp: (currentWealth.gp || 0) + share
+          }
+        };
+        onUpdateCharacter(updated);
+      }
+    });
+
+    showToast(`💰 Split +${totalGold.toLocaleString()} GP across ${targetList.length} party members (+${share.toLocaleString()} GP each)!`);
+  };
+
+  // Item Allocation
+  const handleAllocateItemToCharacter = (itemName: string) => {
+    const targetChar = characters.find(c => c.id === selectedTargetCharId) || activeCharacter;
+    const targetName = targetChar ? targetChar.name : 'Active Character';
+
+    if (onAddItemToInventory) {
+      onAddItemToInventory({
+        id: `item-reward-${Date.now()}`,
+        name: itemName,
+        quantity: 1,
+        weight: 1,
+        description: 'Awarded upon completion of a campaign quest milestone.',
+        equipped: false
+      }, targetChar?.id);
+      showToast(`🎁 Added "${itemName}" directly to ${targetName}'s inventory!`);
+    } else if (targetChar && onUpdateCharacter) {
+      const updatedInv = [
+        ...(targetChar.inventory || []),
+        {
+          id: `item-reward-${Date.now()}`,
+          name: itemName,
+          quantity: 1,
+          weight: 1,
+          description: 'Awarded upon completion of a campaign quest milestone.',
+          equipped: false
+        }
+      ];
+      onUpdateCharacter({ ...targetChar, inventory: updatedInv });
+      showToast(`🎁 Added "${itemName}" to ${targetName}'s inventory!`);
+    } else {
+      showToast(`🎁 Allocated "${itemName}" to the party inventory.`);
+    }
+  };
+
   const filteredQuests = quests.filter(q => {
     const matchSearch = q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       q.summary.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (q.giverName || '').toLowerCase().includes(searchQuery.toLowerCase());
+      (q.giverName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (q.giverLocationName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (q.rewards.items || []).some(i => i.toLowerCase().includes(searchQuery.toLowerCase()));
+
     const matchCategory = categoryFilter === 'all' || q.category === categoryFilter;
     const matchStatus = statusFilter === 'all' || q.status === statusFilter;
+
     return matchSearch && matchCategory && matchStatus;
   });
 
+  const selectedQuest = quests.find(q => q.id === expandedQuestId) || filteredQuests[0] || quests[0];
+
   return (
     <div className="space-y-4">
-      {/* Top Toolbar */}
-      <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-3">
-        {/* Search Bar */}
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search active quests, objectives, quest givers..."
-            className="w-full pl-9 pr-3 py-1.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-200 placeholder-stone-500 focus:border-amber-500 focus:outline-none"
-          />
+      {/* Toast Banner for Distribution Actions */}
+      {distributionNotification && (
+        <div className="bg-amber-950 border border-amber-500/80 text-amber-200 px-4 py-2.5 rounded-2xl text-xs font-bold shadow-2xl flex items-center justify-between animate-fade-in">
+          <span className="flex items-center gap-2">
+            <Gift className="w-4 h-4 text-amber-400 animate-bounce" />
+            <span>{distributionNotification}</span>
+          </span>
+          <button
+            onClick={() => setDistributionNotification(null)}
+            className="text-amber-400 hover:text-white"
+          >
+            ✕
+          </button>
         </div>
+      )}
 
-        {/* Filters */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Category Filter */}
+      {/* Top Search, Category & Action Toolbar */}
+      <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-3">
+        {/* Search & Category Filter */}
+        <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search quest title, objectives, patron, rewards..."
+              className="w-full pl-9 pr-3 py-1.5 bg-stone-950 border border-stone-800 rounded-xl text-xs text-stone-200 placeholder-stone-500 focus:border-amber-500 focus:outline-none"
+            />
+          </div>
+
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
             className="bg-stone-950 border border-stone-800 rounded-xl px-2.5 py-1.5 text-xs text-stone-300 focus:border-amber-500 focus:outline-none"
           >
-            <option value="all">All Quest Types</option>
+            <option value="all">All Quest Lines</option>
             <option value="main">Main Story Arcs</option>
             <option value="side">Side Quests</option>
             <option value="personal">Character Arcs</option>
-            <option value="faction">Faction Missions</option>
-            <option value="bounty">Bounties</option>
-            <option value="rumor">Rumors & Hooks</option>
+            <option value="faction">Faction Assignments</option>
+            <option value="bounty">Monster Bounties</option>
+            <option value="rumor">Rumors & Leads</option>
           </select>
+        </div>
 
-          {/* Status Filter */}
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="bg-stone-950 border border-stone-800 rounded-xl px-2.5 py-1.5 text-xs text-amber-300 font-bold focus:border-amber-500 focus:outline-none"
+        {/* Status Filter Tabs */}
+        <div className="flex items-center gap-1.5 bg-stone-950 p-1 rounded-2xl border border-stone-800 text-xs">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer ${
+              statusFilter === 'all' ? 'bg-amber-500 text-stone-950 shadow' : 'text-stone-400 hover:text-stone-200'
+            }`}
           >
-            <option value="all">All Statuses</option>
-            <option value="active">Active Quests</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed / Abandoned</option>
-          </select>
+            All ({quests.length})
+          </button>
+          <button
+            onClick={() => setStatusFilter('active')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer flex items-center gap-1 ${
+              statusFilter === 'active' ? 'bg-cyan-600 text-white shadow' : 'text-cyan-400 hover:text-cyan-300'
+            }`}
+          >
+            <Clock className="w-3 h-3" />
+            <span>Active</span>
+          </button>
+          <button
+            onClick={() => setStatusFilter('completed')}
+            className={`px-2.5 py-1 rounded-xl font-bold transition cursor-pointer flex items-center gap-1 ${
+              statusFilter === 'completed' ? 'bg-emerald-600 text-white shadow' : 'text-emerald-400 hover:text-emerald-300'
+            }`}
+          >
+            <CheckCircle2 className="w-3 h-3" />
+            <span>Completed</span>
+          </button>
+        </div>
 
-          {/* AI Generator Button */}
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNewQuestForm(!showNewQuestForm)}
+            className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5 text-amber-400" />
+            <span>Add Quest</span>
+          </button>
+
           <button
             onClick={handleGenerateAi}
             disabled={isGeneratingAi}
-            className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
-            title="Generate balanced questline with rewards and plot twists"
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-stone-950 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+            title="Synthesize a new questline with milestones, rewards, and XP distribution"
           >
             <Sparkles className="w-3.5 h-3.5 text-stone-950" />
             <span>{isGeneratingAi ? 'Synthesizing...' : 'AI Quest'}</span>
           </button>
-
-          {/* Add Manual Quest Button */}
-          <button
-            onClick={() => setShowNewQuestForm(!showNewQuestForm)}
-            className="px-3 py-1.5 rounded-xl bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Quest</span>
-          </button>
         </div>
       </div>
 
-      {/* Manual New Quest Modal / Form Drawer */}
+      {/* New Custom Quest Modal / Drawer */}
       {showNewQuestForm && (
-        <form onSubmit={handleAddCustomQuest} className="bg-stone-900 border border-amber-500/50 rounded-2xl p-4 shadow-2xl space-y-3">
+        <form onSubmit={handleAddCustomQuest} className="bg-stone-900 border border-stone-800 rounded-2xl p-5 shadow-2xl space-y-4 animate-fade-in">
           <div className="flex items-center justify-between pb-2 border-b border-stone-800">
             <h4 className="font-serif font-bold text-sm text-amber-300 flex items-center gap-2">
-              <Scroll className="w-4 h-4 text-amber-400" />
-              <span>Draft New Campaign Quest</span>
+              <Scroll className="w-4 h-4" />
+              <span>Create New Campaign Quest</span>
             </h4>
             <button
               type="button"
               onClick={() => setShowNewQuestForm(false)}
               className="text-stone-400 hover:text-stone-200 text-xs"
             >
-              Cancel
+              ✕
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-            <div className="md:col-span-2">
-              <label className="block text-stone-400 mb-1">Quest Title</label>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="sm:col-span-2">
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Quest Title</label>
               <input
                 type="text"
                 required
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="e.g. The Siege of Ironfang Keep"
-                className="w-full bg-stone-950 border border-stone-800 rounded-lg p-2 text-stone-100 focus:border-amber-500 focus:outline-none"
+                placeholder="e.g. Cleansing the Sunken Spire"
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-200 focus:border-amber-500 focus:outline-none"
               />
             </div>
+
             <div>
-              <label className="block text-stone-400 mb-1">Category</label>
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Category</label>
               <select
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value as QuestCategory)}
-                className="w-full bg-stone-950 border border-stone-800 rounded-lg p-2 text-stone-200"
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-200"
               >
                 <option value="main">Main Story Arc</option>
                 <option value="side">Side Quest</option>
                 <option value="personal">Character Arc</option>
-                <option value="faction">Faction Mission</option>
-                <option value="bounty">Bounty</option>
-                <option value="rumor">Rumor / Hook</option>
+                <option value="faction">Faction Assignment</option>
+                <option value="bounty">Monster Bounty</option>
+                <option value="rumor">Rumor Hook</option>
               </select>
             </div>
           </div>
 
-          <div className="text-xs">
-            <label className="block text-stone-400 mb-1">Premise & Narrative Summary</label>
-            <textarea
-              value={newSummary}
-              onChange={(e) => setNewSummary(e.target.value)}
-              rows={2}
-              placeholder="Background, stakes, mystery..."
-              className="w-full bg-stone-950 border border-stone-800 rounded-lg p-2 text-stone-200 focus:border-amber-500 focus:outline-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
             <div>
-              <label className="block text-stone-400 mb-1">Quest Giver</label>
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Quest Giver / Patron</label>
               <input
                 type="text"
                 value={newGiver}
                 onChange={(e) => setNewGiver(e.target.value)}
-                placeholder="e.g. Captain Vance"
-                className="w-full bg-stone-950 border border-stone-800 rounded-lg p-1.5 text-stone-200"
+                placeholder="e.g. Lady Remallia Haventree"
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-200"
               />
             </div>
+
             <div>
-              <label className="block text-stone-400 mb-1">Location</label>
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Location Hub</label>
               <input
                 type="text"
                 value={newLocation}
                 onChange={(e) => setNewLocation(e.target.value)}
-                placeholder="e.g. Waterdeep"
-                className="w-full bg-stone-950 border border-stone-800 rounded-lg p-1.5 text-stone-200"
+                placeholder="e.g. Waterdeep Dock Ward"
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-200"
               />
             </div>
+
             <div>
-              <label className="block text-stone-400 mb-1">Reward XP</label>
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Recommended Level</label>
               <input
-                type="number"
-                value={newXp}
-                onChange={(e) => setNewXp(e.target.value)}
-                className="w-full bg-stone-950 border border-stone-800 rounded-lg p-1.5 text-amber-300 font-bold"
-              />
-            </div>
-            <div>
-              <label className="block text-stone-400 mb-1">Reward Gold</label>
-              <input
-                type="number"
-                value={newGold}
-                onChange={(e) => setNewGold(e.target.value)}
-                className="w-full bg-stone-950 border border-stone-800 rounded-lg p-1.5 text-yellow-300 font-bold"
+                type="text"
+                value={newLevel}
+                onChange={(e) => setNewLevel(e.target.value)}
+                placeholder="e.g. Level 4 - 6"
+                className="w-full bg-stone-950 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-200"
               />
             </div>
           </div>
 
-          <div className="pt-2 flex justify-end gap-2">
+          <div>
+            <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Quest Summary & Stakes</label>
+            <textarea
+              value={newSummary}
+              onChange={(e) => setNewSummary(e.target.value)}
+              rows={2}
+              placeholder="What must the party accomplish, who is imperiled, and what complications exist?"
+              className="w-full bg-stone-950 border border-stone-800 rounded-xl p-2 text-xs text-stone-200"
+            />
+          </div>
+
+          {/* Reward configuration */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-stone-950 p-3 rounded-xl border border-stone-800">
+            <div>
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">XP Reward</label>
+              <input
+                type="number"
+                value={newXp}
+                onChange={(e) => setNewXp(e.target.value)}
+                className="w-full bg-stone-900 border border-stone-800 rounded-lg p-1.5 text-xs text-amber-300 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Gold Reward (GP)</label>
+              <input
+                type="number"
+                value={newGold}
+                onChange={(e) => setNewGold(e.target.value)}
+                className="w-full bg-stone-900 border border-stone-800 rounded-lg p-1.5 text-xs text-yellow-300 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Item Rewards (comma separated)</label>
+              <input
+                type="text"
+                value={newItems}
+                onChange={(e) => setNewItems(e.target.value)}
+                placeholder="e.g. Cloak of Elvenkind, Potion of Healing"
+                className="w-full bg-stone-900 border border-stone-800 rounded-lg p-1.5 text-xs text-stone-200"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setShowNewQuestForm(false)}
+              className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded-xl text-xs"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
-              className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs rounded-xl transition cursor-pointer shadow-md"
+              className="px-4 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-xl text-xs shadow-md"
             >
               Create Quest
             </button>
@@ -337,227 +618,472 @@ export const QuestTrackerView: React.FC<QuestTrackerViewProps> = ({
         </form>
       )}
 
-      {/* Quest Roster List */}
-      <div className="space-y-3">
-        {filteredQuests.length === 0 ? (
-          <div className="py-16 text-center bg-stone-900/60 border border-stone-800 rounded-2xl p-6">
-            <Scroll className="w-12 h-12 mx-auto text-amber-500/40 mb-2" />
-            <div className="text-sm font-serif font-bold text-stone-300">No Quests Found</div>
-            <p className="text-xs text-stone-500 mt-1 max-w-sm mx-auto">
-              No quests match the selected filters. Use the &quot;AI Quest&quot; generator or create a custom quest arc.
-            </p>
-          </div>
-        ) : (
-          filteredQuests.map((quest) => {
-            const isExpanded = expandedQuestId === quest.id;
+      {/* Main Grid: Quest List + Milestone Tracker & Loot Drawer */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        {/* Left Column: Quests List */}
+        <div className="space-y-2.5 lg:col-span-1 max-h-[660px] overflow-y-auto pr-1">
+          {filteredQuests.map((quest) => {
+            const isSelected = selectedQuest?.id === quest.id;
             const catConfig = CATEGORY_CONFIG[quest.category] || CATEGORY_CONFIG.side;
-            const completedCount = quest.stages.filter(s => s.completed).length;
-            const totalStages = quest.stages.length;
-            const progressPercent = totalStages > 0 ? Math.round((completedCount / totalStages) * 100) : 0;
+            const completedMilestones = quest.stages.filter(s => s.completed).length;
+            const totalMilestones = quest.stages.length;
+            const progressPercent = totalMilestones > 0 ? Math.round((completedMilestones / totalMilestones) * 100) : 0;
 
             return (
               <div
                 key={quest.id}
-                className={`border rounded-2xl transition-all overflow-hidden ${
-                  quest.status === 'completed'
-                    ? 'bg-emerald-950/20 border-emerald-500/40 opacity-85'
-                    : quest.status === 'failed'
-                    ? 'bg-red-950/20 border-red-500/40 opacity-75'
-                    : 'bg-stone-900/90 border-stone-800 shadow-xl'
+                onClick={() => setExpandedQuestId(quest.id)}
+                className={`p-3.5 rounded-2xl border transition-all cursor-pointer space-y-2.5 ${
+                  isSelected
+                    ? 'bg-stone-900 border-amber-500/80 shadow-xl ring-1 ring-amber-500/50'
+                    : 'bg-stone-950/80 border-stone-800/80 hover:border-stone-700 hover:bg-stone-900/60'
                 }`}
               >
-                {/* Header Banner */}
-                <div
-                  onClick={() => setExpandedQuestId(isExpanded ? null : quest.id)}
-                  className="p-4 flex items-center justify-between gap-3 cursor-pointer hover:bg-stone-800/50 transition select-none"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className={`p-2 rounded-xl border ${catConfig.badge}`}>
-                      <Scroll className="w-4 h-4" />
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-serif font-bold text-sm text-stone-100 truncate">
-                          {quest.title}
-                        </h4>
-                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border ${catConfig.badge}`}>
-                          {catConfig.label}
+                {/* Quest Header */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1">
+                    <h4 className="font-serif font-bold text-sm text-stone-200">
+                      {quest.title}
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md border ${catConfig.badge}`}>
+                        {catConfig.label}
+                      </span>
+                      {quest.recommendedLevel && (
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
+                          {quest.recommendedLevel}
                         </span>
-                        {quest.recommendedLevel && (
-                          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-950 text-stone-400 border border-stone-800">
-                            {quest.recommendedLevel}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Summary Subtitle */}
-                      <p className="text-xs text-stone-400 line-clamp-1 mt-0.5">
-                        {quest.summary}
-                      </p>
+                      )}
                     </div>
                   </div>
 
-                  {/* Right Progress & Status Badges */}
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    {/* Stage Progress Pill */}
-                    <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
-                      <div className="w-20 bg-stone-950 border border-stone-800 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-300 ${
-                            quest.status === 'completed'
-                              ? 'bg-emerald-400'
-                              : 'bg-amber-400'
-                          }`}
-                          style={{ width: `${progressPercent}%` }}
-                        />
-                      </div>
-                      <span className="text-stone-400">{completedCount}/{totalStages}</span>
-                    </div>
+                  {/* Status Indicator */}
+                  <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md uppercase border shrink-0 ${
+                    quest.status === 'completed'
+                      ? 'bg-emerald-950 text-emerald-300 border-emerald-600/50'
+                      : quest.status === 'failed'
+                      ? 'bg-red-950 text-red-400 border-red-800'
+                      : 'bg-cyan-950 text-cyan-300 border-cyan-600/50'
+                  }`}>
+                    {quest.status}
+                  </span>
+                </div>
 
-                    {/* Status Select */}
-                    <select
-                      value={quest.status}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => handleUpdateStatus(quest.id, e.target.value as QuestStatus)}
-                      className={`text-xs font-bold font-mono px-2.5 py-1 rounded-xl border cursor-pointer ${
-                        quest.status === 'completed'
-                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50'
-                          : quest.status === 'failed'
-                          ? 'bg-red-950/80 text-red-300 border-red-500/50'
-                          : 'bg-stone-950 text-amber-300 border-stone-700'
+                {/* Milestone Progress Bar */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px] font-mono text-stone-400">
+                    <span>Milestones: {completedMilestones}/{totalMilestones}</span>
+                    <span className="font-bold text-amber-400">{progressPercent}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-stone-900 rounded-full overflow-hidden border border-stone-800">
+                    <div
+                      style={{ width: `${progressPercent}%` }}
+                      className={`h-full transition-all duration-300 ${
+                        progressPercent === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-600 to-amber-400'
                       }`}
-                    >
-                      <option value="active">Active</option>
-                      <option value="completed">Completed</option>
-                      <option value="failed">Failed</option>
-                    </select>
-
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-stone-400" /> : <ChevronDown className="w-4 h-4 text-stone-400" />}
+                    />
                   </div>
                 </div>
 
-                {/* Expanded Details Body */}
-                {isExpanded && (
-                  <div className="p-4 pt-0 border-t border-stone-800/80 space-y-4 text-xs mt-2">
-                    {/* Full Summary */}
-                    <p className="text-stone-300 leading-relaxed bg-stone-950/60 p-3 rounded-xl border border-stone-800">
-                      {quest.summary}
-                    </p>
+                {/* Rewards Preview */}
+                <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 pt-1 border-t border-stone-800/60">
+                  <span className="text-amber-300">⭐ {quest.rewards.xp || 0} XP</span>
+                  <span className="text-yellow-400">💰 {quest.rewards.gold || 0} GP</span>
+                  <span>🎁 {(quest.rewards.items || []).length} Items</span>
+                </div>
+              </div>
+            );
+          })}
 
-                    {/* Metadata Badges: Giver & Location */}
-                    <div className="flex flex-wrap gap-2 text-stone-400">
-                      {quest.giverName && (
-                        <span className="flex items-center gap-1.5 bg-stone-950 px-2.5 py-1 rounded-lg border border-stone-800">
-                          <Users className="w-3.5 h-3.5 text-cyan-400" />
-                          <span>Giver: <strong className="text-stone-200">{quest.giverName}</strong></span>
-                        </span>
-                      )}
-                      {quest.giverLocationName && (
-                        <span className="flex items-center gap-1.5 bg-stone-950 px-2.5 py-1 rounded-lg border border-stone-800">
-                          <MapPin className="w-3.5 h-3.5 text-amber-400" />
-                          <span>Location: <strong className="text-stone-200">{quest.giverLocationName}</strong></span>
-                        </span>
-                      )}
-                    </div>
+          {filteredQuests.length === 0 && (
+            <div className="p-8 text-center text-xs text-stone-500 border border-dashed border-stone-800 rounded-2xl">
+              No quests match the current filter.
+            </div>
+          )}
+        </div>
 
-                    {/* Objectives Checklist */}
-                    <div className="space-y-2">
-                      <div className="font-serif font-bold text-xs text-stone-200 flex items-center justify-between">
-                        <span>Quest Stages & Objectives</span>
-                        <span className="text-[10px] font-mono text-stone-400">{progressPercent}% complete</span>
-                      </div>
-                      <div className="space-y-1.5 bg-stone-950/80 p-3 rounded-xl border border-stone-800">
-                        {quest.stages.map((stage) => (
-                          <div
-                            key={stage.id}
-                            onClick={() => handleToggleStage(quest.id, stage.id)}
-                            className="flex items-start gap-2.5 p-1.5 rounded-lg hover:bg-stone-900 cursor-pointer transition select-none"
-                          >
-                            {stage.completed ? (
-                              <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-                            ) : (
-                              <Circle className="w-4 h-4 text-stone-600 flex-shrink-0 mt-0.5 hover:text-amber-400" />
-                            )}
-                            <span className={`text-xs ${stage.completed ? 'line-through text-stone-500' : 'text-stone-200'}`}>
-                              {stage.text} {stage.optional && <span className="text-[10px] text-amber-400 font-mono italic">(Bonus)</span>}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+        {/* Right Column: Active Quest Milestone Log, Loot Allocation & XP Distribution */}
+        <div className="lg:col-span-2 bg-stone-900/90 border border-stone-800 rounded-2xl p-5 shadow-2xl space-y-5">
+          {selectedQuest ? (
+            <div className="space-y-5">
+              {/* Top Banner: Title, Status toggle, Giver, Location, Level */}
+              <div className="flex items-start justify-between pb-4 border-b border-stone-800 flex-wrap gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-serif font-bold text-xl text-amber-200">
+                      {selectedQuest.title}
+                    </h3>
+                    <span className={`text-xs font-mono px-2.5 py-0.5 rounded-lg border ${CATEGORY_CONFIG[selectedQuest.category]?.badge}`}>
+                      {CATEGORY_CONFIG[selectedQuest.category]?.label}
+                    </span>
+                  </div>
 
-                    {/* Rewards Vault */}
-                    <div className="bg-amber-950/20 border border-amber-500/30 rounded-xl p-3 space-y-2">
-                      <div className="font-serif font-bold text-xs text-amber-300 flex items-center gap-1.5">
-                        <Award className="w-4 h-4 text-amber-400" />
-                        <span>Rewards Vault & Standing</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        {quest.rewards.xp && (
-                          <span className="text-amber-200 font-bold flex items-center gap-1 bg-amber-950/60 px-2 py-1 rounded border border-amber-500/30">
-                            ✨ +{quest.rewards.xp.toLocaleString()} XP
-                          </span>
-                        )}
-                        {quest.rewards.gold && (
-                          <span className="text-yellow-300 font-bold flex items-center gap-1 bg-amber-950/60 px-2 py-1 rounded border border-yellow-500/30">
-                            🪙 {quest.rewards.gold.toLocaleString()} gp
-                          </span>
-                        )}
-                        {(quest.rewards.items || []).map((item, idx) => (
-                          <span key={idx} className="text-purple-300 font-mono bg-purple-950/60 px-2 py-1 rounded border border-purple-500/30">
-                            🎁 {item}
-                          </span>
-                        ))}
-                      </div>
-                      {quest.rewards.notes && (
-                        <p className="text-[11px] text-stone-400 italic">
-                          {quest.rewards.notes}
-                        </p>
-                      )}
-                    </div>
+                  <p className="text-xs text-stone-300 leading-relaxed mt-2">
+                    {selectedQuest.summary}
+                  </p>
+                </div>
 
-                    {/* Secret DM Notes */}
-                    {quest.secretDmNotes && (
-                      <div className="bg-red-950/30 border border-red-500/30 rounded-xl p-3 text-xs space-y-1">
-                        <div className="font-bold text-red-300 flex items-center gap-1.5">
-                          <Shield className="w-3.5 h-3.5 text-red-400" />
-                          <span>Secret DM Plot Twists</span>
-                        </div>
-                        <p className="text-red-200/90 leading-relaxed font-mono text-[11px]">
-                          {quest.secretDmNotes}
-                        </p>
-                      </div>
+                {/* Status Switcher Button */}
+                <div className="flex items-center gap-1.5 bg-stone-950 p-1.5 rounded-2xl border border-stone-800">
+                  <button
+                    onClick={() => handleUpdateStatus(selectedQuest.id, 'active')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      selectedQuest.status === 'active' ? 'bg-cyan-600 text-white' : 'text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Active
+                  </button>
+                  <button
+                    onClick={() => handleUpdateStatus(selectedQuest.id, 'completed')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      selectedQuest.status === 'completed' ? 'bg-emerald-600 text-white' : 'text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Completed
+                  </button>
+                  <button
+                    onClick={() => handleUpdateStatus(selectedQuest.id, 'failed')}
+                    className={`px-2.5 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      selectedQuest.status === 'failed' ? 'bg-red-600 text-white' : 'text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Failed
+                  </button>
+                </div>
+              </div>
+
+              {/* Quest Patron, Location & Faction Links */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                <div className="bg-stone-950 border border-stone-800 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-mono uppercase text-stone-400 block">Quest Patron / Giver</span>
+                  <strong className="text-stone-200 block truncate">{selectedQuest.giverName || 'Unknown'}</strong>
+                </div>
+
+                <div className="bg-stone-950 border border-stone-800 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-mono uppercase text-stone-400 flex items-center justify-between">
+                    <span>Location Hub</span>
+                    {selectedQuest.giverLocationName && onNavigateToAtlasLocation && (
+                      <button
+                        onClick={() => onNavigateToAtlasLocation(selectedQuest.giverLocationName || '')}
+                        className="text-amber-400 hover:text-amber-300 flex items-center gap-0.5 cursor-pointer"
+                        title="View on World Atlas"
+                      >
+                        <MapPin className="w-2.5 h-2.5" />
+                        <span>Map</span>
+                      </button>
                     )}
+                  </span>
+                  <strong className="text-stone-200 block truncate">{selectedQuest.giverLocationName || 'Unknown'}</strong>
+                </div>
 
-                    {/* Actions Bar */}
-                    <div className="flex items-center justify-between pt-2 border-t border-stone-800">
-                      <div className="flex items-center gap-2">
-                        {onOpenKnowledgeGraph && (
-                          <button
-                            onClick={() => onOpenKnowledgeGraph(quest.title)}
-                            className="px-2.5 py-1 rounded-lg bg-indigo-950 hover:bg-indigo-900 border border-indigo-500/40 text-indigo-300 font-bold text-xs transition flex items-center gap-1 cursor-pointer"
-                          >
-                            <Sparkles className="w-3 h-3 text-indigo-400" />
-                            <span>Knowledge Graph</span>
-                          </button>
-                        )}
+                <div className="bg-stone-950 border border-stone-800 rounded-xl p-3 space-y-1">
+                  <span className="text-[10px] font-mono uppercase text-stone-400 flex items-center justify-between">
+                    <span>Associated Faction</span>
+                    {selectedQuest.giverFactionId && onNavigateToFaction && (
+                      <button
+                        onClick={() => onNavigateToFaction(selectedQuest.giverFactionId?.replace('fac-', '') || '')}
+                        className="text-amber-400 hover:text-amber-300 flex items-center gap-0.5 cursor-pointer"
+                        title="View in Faction Matrix"
+                      >
+                        <ExternalLink className="w-2.5 h-2.5" />
+                        <span>Matrix</span>
+                      </button>
+                    )}
+                  </span>
+                  <strong className="text-stone-200 block truncate">{selectedQuest.giverFactionId || 'None'}</strong>
+                </div>
+              </div>
+
+              {/* STEP-BY-STEP QUEST MILESTONES SECTION */}
+              <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                  <span className="flex items-center gap-1.5">
+                    <CheckSquare className="w-4 h-4 text-amber-400" />
+                    <span>Step-by-Step Quest Milestones ({selectedQuest.stages.filter(s => s.completed).length}/{selectedQuest.stages.length})</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-stone-400">
+                    Check off objectives as the party advances
+                  </span>
+                </div>
+
+                {/* Milestone Progress Bar */}
+                <div className="w-full h-2 bg-stone-900 rounded-full overflow-hidden border border-stone-800">
+                  <div
+                    style={{
+                      width: `${selectedQuest.stages.length > 0 ? (selectedQuest.stages.filter(s => s.completed).length / selectedQuest.stages.length) * 100 : 0}%`
+                    }}
+                    className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-300"
+                  />
+                </div>
+
+                {/* Milestones Checklist */}
+                <div className="space-y-2">
+                  {selectedQuest.stages.map((stage, idx) => (
+                    <div
+                      key={stage.id}
+                      className={`p-3 rounded-xl border transition-all flex items-start justify-between gap-3 text-xs ${
+                        stage.completed
+                          ? 'bg-emerald-950/40 border-emerald-500/50 text-emerald-200'
+                          : 'bg-stone-900/70 border-stone-800 text-stone-200'
+                      }`}
+                    >
+                      <div className="flex items-start gap-2.5 flex-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleStage(selectedQuest.id, stage.id)}
+                          className="mt-0.5 cursor-pointer shrink-0"
+                          title="Toggle Milestone Completion"
+                        >
+                          {stage.completed ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Circle className="w-4 h-4 text-stone-500 hover:text-stone-300" />
+                          )}
+                        </button>
+
+                        <div className="space-y-0.5 flex-1">
+                          <div className={`leading-relaxed ${stage.completed ? 'line-through text-stone-400' : 'text-stone-200'}`}>
+                            <span className="font-mono text-[10px] text-amber-400/80 mr-1.5 font-bold">#{idx + 1}</span>
+                            {stage.text}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] font-mono text-stone-400">
+                            {stage.optional && (
+                              <span className="text-amber-400 italic">(Optional Bonus Milestone)</span>
+                            )}
+                            {stage.xpReward && (
+                              <span className="text-amber-300 font-bold">+{stage.xpReward} XP</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       <button
-                        onClick={() => handleDeleteQuest(quest.id)}
-                        className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-300 text-xs transition flex items-center gap-1 cursor-pointer"
+                        type="button"
+                        onClick={() => handleDeleteStage(selectedQuest.id, stage.id)}
+                        className="text-stone-600 hover:text-red-400 p-1 cursor-pointer"
+                        title="Delete Milestone"
                       >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Delete</span>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add Milestone Sub-form */}
+                <div className="pt-2 border-t border-stone-800/80 flex items-center gap-2 flex-wrap text-xs">
+                  <input
+                    type="text"
+                    value={newStageText}
+                    onChange={(e) => setNewStageText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddStage(selectedQuest.id); } }}
+                    placeholder="Add step-by-step milestone objective..."
+                    className="flex-1 min-w-[200px] bg-stone-900 border border-stone-800 rounded-xl px-3 py-1.5 text-xs text-stone-200 focus:border-amber-500 focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    value={newStageXp}
+                    onChange={(e) => setNewStageXp(e.target.value)}
+                    placeholder="XP (Opt)"
+                    className="w-20 bg-stone-900 border border-stone-800 rounded-xl px-2 py-1.5 text-xs text-amber-300 font-mono"
+                  />
+                  <label className="flex items-center gap-1.5 text-[11px] text-stone-400 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={newStageOptional}
+                      onChange={(e) => setNewStageOptional(e.target.checked)}
+                      className="rounded bg-stone-900 border-stone-700 text-amber-500"
+                    />
+                    <span>Optional</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => handleAddStage(selectedQuest.id)}
+                    className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl font-bold cursor-pointer"
+                  >
+                    + Add Step
+                  </button>
+                </div>
+              </div>
+
+              {/* LOOT ALLOCATION & XP AUTO-DISTRIBUTION SECTION */}
+              <div className="bg-stone-950 border border-stone-800 rounded-2xl p-4 space-y-4">
+                <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                  <span className="flex items-center gap-1.5">
+                    <Award className="w-4 h-4 text-amber-400" />
+                    <span>Quest Loot Allocation & Party Distribution</span>
+                  </span>
+                  <span className="text-[10px] font-mono text-stone-400">
+                    Auto-distribute XP & Gold to character sheets
+                  </span>
+                </div>
+
+                {/* Target Character / Party Member Selector for Loot Assignment */}
+                {characters.length > 0 && (
+                  <div className="bg-stone-900 border border-stone-800 rounded-xl p-2.5 flex items-center justify-between text-xs flex-wrap gap-2">
+                    <span className="text-[11px] text-stone-400 font-mono flex items-center gap-1.5">
+                      <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Target Receiver for Loot:</span>
+                    </span>
+                    <select
+                      value={selectedTargetCharId}
+                      onChange={(e) => setSelectedTargetCharId(e.target.value)}
+                      className="bg-stone-950 border border-stone-700 rounded-lg px-2.5 py-1 text-xs text-amber-200 font-bold"
+                    >
+                      {characters.map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} (Lvl {c.level} {c.characterClass})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Rewards Grid: XP & Gold Allocation Actions */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  {/* XP Distribution Box */}
+                  <div className="bg-stone-900 border border-amber-500/30 rounded-xl p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                        <Zap className="w-4 h-4 text-amber-400" />
+                        <span>Experience Points: +{selectedQuest.rewards.xp?.toLocaleString() || 0} XP</span>
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleAwardXpToActiveCharacter(selectedQuest)}
+                        className="w-full px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg transition text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        <span>Award All XP to {activeCharacter ? activeCharacter.name : 'Active Character'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDistributeXpToParty(selectedQuest)}
+                        className="w-full px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold rounded-lg transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-stone-700"
+                        title="Divides XP equally among all party members"
+                      >
+                        <Users className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Split XP Evenly Across Party</span>
                       </button>
                     </div>
                   </div>
-                )}
+
+                  {/* Gold & Coinage Box */}
+                  <div className="bg-stone-900 border border-yellow-500/30 rounded-xl p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-yellow-300 flex items-center gap-1.5">
+                        <Coins className="w-4 h-4 text-yellow-400" />
+                        <span>Gold Reward: +{selectedQuest.rewards.gold?.toLocaleString() || 0} GP</span>
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => handleAwardGoldToActiveCharacter(selectedQuest)}
+                        className="w-full px-3 py-1.5 bg-yellow-500 hover:bg-yellow-400 text-stone-950 font-bold rounded-lg transition text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow"
+                      >
+                        <Coins className="w-3.5 h-3.5" />
+                        <span>Award GP to {activeCharacter ? activeCharacter.name : 'Active Character'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDistributeGoldToParty(selectedQuest)}
+                        className="w-full px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold rounded-lg transition text-xs flex items-center justify-center gap-1.5 cursor-pointer border border-stone-700"
+                        title="Splits gold equally across party sheets"
+                      >
+                        <Users className="w-3.5 h-3.5 text-yellow-400" />
+                        <span>Split GP Evenly Across Party</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Item Rewards & Inventory Allocation */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-mono uppercase text-stone-400 block">
+                    Magic Items & Quest Loot Rewards ({(selectedQuest.rewards.items || []).length})
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(selectedQuest.rewards.items || []).map((item) => (
+                      <div
+                        key={item}
+                        className="bg-stone-900 border border-stone-800 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs"
+                      >
+                        <span className="font-serif font-bold text-stone-200 flex items-center gap-1.5 truncate">
+                          <Package className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span className="truncate">{item}</span>
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAllocateItemToCharacter(item)}
+                          className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold rounded-lg text-[11px] shrink-0 cursor-pointer shadow flex items-center gap-1"
+                          title="Add directly to character's inventory"
+                        >
+                          <Gift className="w-3 h-3" />
+                          <span>Send to Bag</span>
+                        </button>
+                      </div>
+                    ))}
+
+                    {(selectedQuest.rewards.items || []).length === 0 && (
+                      <div className="p-3 text-center text-xs text-stone-500 bg-stone-900/50 rounded-xl border border-dashed border-stone-800 col-span-2">
+                        No custom item rewards specified for this quest.
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            );
-          })
-        )}
+
+              {/* Secret DM Notes (DM Confidential) */}
+              {selectedQuest.secretDmNotes && (
+                <div className="bg-amber-950/30 border border-amber-500/30 rounded-xl p-3 space-y-1">
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                    <span className="flex items-center gap-1.5">
+                      <Shield className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Secret DM Lore & Plot Twists</span>
+                    </span>
+                    <span className="text-[10px] font-mono uppercase text-amber-400/80">DM Only</span>
+                  </div>
+                  <p className="text-xs text-amber-100/90 leading-relaxed">
+                    {selectedQuest.secretDmNotes}
+                  </p>
+                </div>
+              )}
+
+              {/* Bottom Actions Bar */}
+              <div className="pt-3 border-t border-stone-800 flex items-center justify-between flex-wrap gap-2">
+                {onOpenKnowledgeGraph && (
+                  <button
+                    onClick={() => onOpenKnowledgeGraph(selectedQuest.title)}
+                    className="px-3 py-1.5 rounded-xl bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-500/50 text-indigo-300 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    <span>Knowledge Graph</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => handleDeleteQuest(selectedQuest.id)}
+                  className="p-1.5 rounded-xl bg-red-950/60 hover:bg-red-900 border border-red-500/40 text-red-300 text-xs transition cursor-pointer"
+                  title="Delete Quest"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="py-20 text-center text-stone-500 text-xs">
+              Select a quest to view step-by-step milestone tracking, loot allocation, and XP auto-distribution.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

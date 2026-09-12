@@ -20,6 +20,8 @@ import { QuestTrackerView } from '../campaign/QuestTrackerView';
 import { FactionMatrixView } from '../campaign/FactionMatrixView';
 import { CampaignTravelCalculator } from '../campaign/CampaignTravelCalculator';
 import { WorldLocation } from '../../types/campaign';
+import { CharacterData, Party } from '../../types';
+import { UserProfile } from '../../lib/firebase';
 import {
   loadCampaignLocations,
   loadCampaignQuests,
@@ -32,6 +34,12 @@ interface CampaignLoreVaultModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTab?: CampaignTabId;
+  activeCharacter?: CharacterData | null;
+  characters?: CharacterData[];
+  parties?: Party[];
+  currentUser?: UserProfile | null;
+  onUpdateCharacter?: (char: CharacterData) => void;
+  onAddItemToInventory?: (item: any, targetId?: string) => void;
   onOpenKnowledgeGraph?: (entityName: string) => void;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
 }
@@ -40,11 +48,18 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
   isOpen,
   onClose,
   initialTab = 'atlas',
+  activeCharacter,
+  characters = [],
+  parties = [],
+  currentUser,
+  onUpdateCharacter,
+  onAddItemToInventory,
   onOpenKnowledgeGraph,
   onOpenGenerators
 }) => {
   const [activeTab, setActiveTab] = useState<CampaignTabId>(initialTab);
   const [selectedLocationForTravel, setSelectedLocationForTravel] = useState<WorldLocation | null>(null);
+  const [highlightedEntity, setHighlightedEntity] = useState<string | null>(null);
   const [copiedExport, setCopiedExport] = useState(false);
 
   if (!isOpen) return null;
@@ -52,6 +67,16 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
   const handleSelectLocationForTravel = (loc: WorldLocation) => {
     setSelectedLocationForTravel(loc);
     setActiveTab('travel');
+  };
+
+  const handleNavigateToAtlasLocation = (locationName: string) => {
+    setHighlightedEntity(locationName);
+    setActiveTab('atlas');
+  };
+
+  const handleNavigateToFaction = (factionName: string) => {
+    setHighlightedEntity(factionName);
+    setActiveTab('factions');
   };
 
   const handleGenerateExportMarkdown = (): string => {
@@ -242,22 +267,34 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
           {activeTab === 'atlas' && (
             <WorldAtlasView
+              initialSelectedName={highlightedEntity || undefined}
               onSelectLocationForTravel={handleSelectLocationForTravel}
               onOpenKnowledgeGraph={onOpenKnowledgeGraph}
               onOpenGenerators={onOpenGenerators}
+              onNavigateToFaction={handleNavigateToFaction}
             />
           )}
 
           {activeTab === 'quests' && (
             <QuestTrackerView
+              activeCharacter={activeCharacter}
+              characters={characters}
+              parties={parties}
+              currentUser={currentUser}
+              onUpdateCharacter={onUpdateCharacter}
+              onAddItemToInventory={onAddItemToInventory}
               onOpenKnowledgeGraph={onOpenKnowledgeGraph}
               onOpenGenerators={onOpenGenerators}
+              onNavigateToAtlasLocation={handleNavigateToAtlasLocation}
+              onNavigateToFaction={handleNavigateToFaction}
             />
           )}
 
           {activeTab === 'factions' && (
             <FactionMatrixView
+              initialSelectedName={highlightedEntity || undefined}
               onOpenKnowledgeGraph={onOpenKnowledgeGraph}
+              onNavigateToAtlasLocation={handleNavigateToAtlasLocation}
             />
           )}
 

@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { DiceRollResult, DiePoolItem } from '../types';
-import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX, Palette, Lock, Plus, Minus, RotateCcw } from 'lucide-react';
+import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX, Palette, Lock, Plus, Minus, RotateCcw, EyeOff, MessageSquareLock, Globe } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playDiceSound, isDiceSoundEnabled, setDiceSoundEnabled } from '../utils/diceAudio';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useSubscription } from '../context/SubscriptionContext';
 import { DiceSkin, DICE_SKINS } from './dice/diceSkins';
 import { PolyhedralDie } from './dice/PolyhedralDie';
+import { RollExtraOptions } from '../hooks/useDiceEngine';
 
 interface DiceRollerProps {
   rollLogs: DiceRollResult[];
@@ -15,7 +16,8 @@ interface DiceRollerProps {
     diceTypeOrPool: number | DiePoolItem[],
     diceCount?: number,
     modifier?: number,
-    mode?: 'normal' | 'advantage' | 'disadvantage'
+    mode?: 'normal' | 'advantage' | 'disadvantage',
+    options?: RollExtraOptions
   ) => void;
   onClearLogs: () => void;
   activeRollResult?: DiceRollResult | null;
@@ -23,6 +25,8 @@ interface DiceRollerProps {
   isPhysicalDiceMode?: boolean;
   onTogglePhysicalDiceMode?: () => void;
   onOpenUpgradeModal?: (reason?: string, requiredTier?: 'hero' | 'guild') => void;
+  isDm?: boolean;
+  hasActiveSession?: boolean;
 }
 
 export const DiceRoller: React.FC<DiceRollerProps> = ({
@@ -33,11 +37,16 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   onOpenAudioModal,
   isPhysicalDiceMode = false,
   onTogglePhysicalDiceMode,
-  onOpenUpgradeModal
+  onOpenUpgradeModal,
+  isDm = false,
+  hasActiveSession = false
 }) => {
   const { t } = useLanguage();
   const { isHero, isGuild, isDeveloper, openUpgradeModal } = useSubscription();
   const [isOpen, setIsOpen] = useState(false);
+
+  // Roll visibility / secret options
+  const [rollVisibility, setRollVisibility] = useState<'public' | 'whisper' | 'secret'>('public');
 
   // Multi-Dice Pool State: tracks quantity for each die type
   const [dicePool, setDicePool] = useState<{ [die: number]: number }>({
@@ -184,7 +193,17 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
     setIsRollingAnimation(true);
 
     const rollLabel = customLabel || `${poolFormula} ${t('dice.roll', 'Roll')}`;
-    onRoll(rollLabel, activePool, 1, customModifier, hasD20 ? rollMode : 'normal');
+    const isSecret = rollVisibility === 'secret';
+    const isWhisperToDm = rollVisibility === 'whisper';
+
+    onRoll(
+      rollLabel, 
+      activePool, 
+      1, 
+      customModifier, 
+      hasD20 ? rollMode : 'normal',
+      { isSecret, isWhisperToDm }
+    );
   };
 
   return (
@@ -196,11 +215,29 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
             initial={{ opacity: 0, y: 20, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.9 }}
-            className="bg-amber-950/90 text-amber-100 border-2 border-amber-500/80 rounded-xl p-4 shadow-2xl backdrop-blur-md max-w-sm w-full"
+            className={`text-amber-100 border-2 rounded-xl p-4 shadow-2xl backdrop-blur-md max-w-sm w-full ${
+              activeRollResult.isWhisperToDm 
+                ? 'bg-purple-950/95 border-purple-500/90 shadow-purple-950/80' 
+                : activeRollResult.isSecret
+                ? 'bg-stone-950/95 border-amber-600/90 shadow-amber-950/80'
+                : 'bg-amber-950/90 border-amber-500/80'
+            }`}
           >
             <div className="flex justify-between items-center text-xs font-semibold uppercase tracking-wider text-amber-400/90 mb-1">
-              <span>{activeRollResult.label}</span>
-              <span className="text-[10px] bg-amber-900/60 px-2 py-0.5 rounded text-amber-300 font-mono">
+              <div className="flex items-center gap-1.5 truncate pr-2">
+                <span>{activeRollResult.label}</span>
+                {activeRollResult.isWhisperToDm && (
+                  <span className="px-1.5 py-0.2 rounded bg-purple-900/80 text-purple-200 text-[9px] font-bold border border-purple-600/60 flex items-center gap-0.5 flex-shrink-0">
+                    <MessageSquareLock className="w-2.5 h-2.5" /> Whisper
+                  </span>
+                )}
+                {activeRollResult.isSecret && (
+                  <span className="px-1.5 py-0.2 rounded bg-amber-950/90 text-amber-300 text-[9px] font-bold border border-amber-600/60 flex items-center gap-0.5 flex-shrink-0">
+                    <EyeOff className="w-2.5 h-2.5" /> Secret
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] bg-amber-900/60 px-2 py-0.5 rounded text-amber-300 font-mono flex-shrink-0">
                 {activeRollResult.mode !== 'normal' ? activeRollResult.mode : activeRollResult.expression}
               </span>
             </div>
@@ -519,7 +556,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
               </div>
             )}
 
-            {/* Section 4: Modifier & Label */}
+            {/* Section 4: Modifier, Label & Roll Visibility */}
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
                 <label className="block text-stone-400 mb-1">{t('dice.modifier', 'Modifier (+/-)')}</label>
@@ -558,13 +595,72 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
               </div>
             </div>
 
+            {/* Visibility Mode Selector */}
+            <div className="bg-stone-900/90 rounded-lg p-1.5 border border-stone-800 flex items-center justify-between text-[11px]">
+              <span className="text-stone-400 font-medium pl-1 flex items-center gap-1">
+                {rollVisibility === 'public' && <Globe className="w-3 h-3 text-emerald-400" />}
+                {rollVisibility === 'whisper' && <MessageSquareLock className="w-3 h-3 text-purple-400" />}
+                {rollVisibility === 'secret' && <EyeOff className="w-3 h-3 text-amber-400" />}
+                <span>Target:</span>
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setRollVisibility('public')}
+                  className={`px-2 py-0.5 rounded font-semibold transition ${
+                    rollVisibility === 'public'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-stone-400 hover:text-stone-200 bg-stone-800/80'
+                  }`}
+                  title="Visible to the entire table"
+                >
+                  🌐 Public
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRollVisibility('whisper')}
+                  className={`px-2 py-0.5 rounded font-semibold transition ${
+                    rollVisibility === 'whisper'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-stone-400 hover:text-stone-200 bg-stone-800/80'
+                  }`}
+                  title="Only visible to you and the Dungeon Master"
+                >
+                  🤫 Whisper DM
+                </button>
+                {(isDm || hasActiveSession) && (
+                  <button
+                    type="button"
+                    onClick={() => setRollVisibility('secret')}
+                    className={`px-2 py-0.5 rounded font-semibold transition ${
+                      rollVisibility === 'secret'
+                        ? 'bg-amber-600 text-white shadow-sm'
+                        : 'text-stone-400 hover:text-stone-200 bg-stone-800/80'
+                    }`}
+                    title="Blind / Secret Roll (result hidden from players)"
+                  >
+                    👁️‍🗨️ Secret
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Section 5: Roll Trigger Button */}
             <button
               onClick={handleExecutePoolRoll}
-              className="w-full py-2.5 bg-gradient-to-r from-amber-600 via-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white font-bold rounded-xl shadow-lg border border-amber-400/40 flex items-center justify-center gap-2 text-sm transition transform active:scale-98 cursor-pointer"
+              className={`w-full py-2.5 font-bold rounded-xl shadow-lg border flex items-center justify-center gap-2 text-sm transition transform active:scale-98 cursor-pointer ${
+                rollVisibility === 'whisper'
+                  ? 'bg-gradient-to-r from-purple-700 via-purple-600 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white border-purple-400/40 shadow-purple-950/80'
+                  : rollVisibility === 'secret'
+                  ? 'bg-gradient-to-r from-stone-800 via-amber-800 to-stone-900 hover:from-stone-700 hover:to-amber-700 text-amber-200 border-amber-500/40 shadow-stone-950/80'
+                  : 'bg-gradient-to-r from-amber-600 via-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white border-amber-400/40 shadow-amber-950/80'
+              }`}
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>{t('dice.roll', 'Roll')} {fullFormulaWithMod}</span>
+              <span>
+                {rollVisibility === 'whisper' ? '🤫 Whisper ' : rollVisibility === 'secret' ? '👁️‍🗨️ Secret ' : ''}
+                {t('dice.roll', 'Roll')} {fullFormulaWithMod}
+              </span>
             </button>
 
             {/* Section 6: Roll Logs History */}
@@ -591,16 +687,34 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 rollLogs.slice(0, 8).map((log) => (
                   <div
                     key={log.id}
-                    className="bg-stone-800/60 rounded-lg p-2 text-xs flex justify-between items-center border border-stone-800"
+                    className={`rounded-lg p-2 text-xs flex justify-between items-center border ${
+                      log.isWhisperToDm
+                        ? 'bg-purple-950/40 border-purple-800/50'
+                        : log.isSecret
+                        ? 'bg-stone-950/60 border-amber-900/40'
+                        : 'bg-stone-800/60 border-stone-800'
+                    }`}
                   >
-                    <div>
-                      <div className="font-medium text-amber-300/90">{log.label}</div>
+                    <div className="min-w-0 pr-2">
+                      <div className="font-medium text-amber-300/90 truncate flex items-center gap-1">
+                        <span>{log.label}</span>
+                        {log.isWhisperToDm && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-purple-900/80 text-purple-300 border border-purple-700/60">
+                            Whisper
+                          </span>
+                        )}
+                        {log.isSecret && (
+                          <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                            Secret
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-stone-400 font-mono">
-                        {log.expression} [{log.diceRolls.join(', ')}]
+                        {log.expression} {log.diceRolls.length > 0 ? `[${log.diceRolls.join(', ')}]` : ''}
                       </div>
                     </div>
-                    <div className="text-base font-bold text-amber-200 font-mono pl-2">
-                      {log.total}
+                    <div className="text-base font-bold text-amber-200 font-mono pl-2 flex-shrink-0">
+                      {log.total > 0 || log.diceRolls.length > 0 ? log.total : '???'}
                     </div>
                   </div>
                 ))

@@ -9,6 +9,8 @@ import { LevelProgressionModal } from '../modals/LevelProgressionModal';
 import { TransformationModal } from '../modals/TransformationModal';
 import { CompanionModal } from '../modals/CompanionModal';
 import { HybridHeritageModal } from '../modals/HybridHeritageModal';
+import { TurnUndead35eModal } from '../modals/TurnUndead35eModal';
+import { PrestigeClassValidatorModal } from '../modals/PrestigeClassValidatorModal';
 import { recalculateCharacterAC } from '../../utils/dndCalculations';
 
 import { CharacterHeaderSummary } from './sheet1/CharacterHeaderSummary';
@@ -30,6 +32,8 @@ interface Sheet1Props {
   onUpdateCharacter: (updated: CharacterData) => void;
   onAddMonsterToRoster?: (monster: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
+  onDuplicateCharacter?: (character: CharacterData) => void;
+  onSyncToBaseCharacter?: (sessionCharId: string) => void;
 }
 
 export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
@@ -38,7 +42,9 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   activeSession,
   onUpdateCharacter,
   onAddMonsterToRoster,
-  onRoll
+  onRoll,
+  onDuplicateCharacter,
+  onSyncToBaseCharacter
 }) => {
   const [editingAbilities, setEditingAbilities] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
@@ -46,6 +52,8 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   const [showTransformationModal, setShowTransformationModal] = useState(false);
   const [showCompanionModal, setShowCompanionModal] = useState(false);
   const [showHybridHeritageModal, setShowHybridHeritageModal] = useState(false);
+  const [showTurnUndeadModal, setShowTurnUndeadModal] = useState(false);
+  const [showPrestigeModal, setShowPrestigeModal] = useState(false);
 
   const { isVisible } = useLayoutCustomization();
   const { uiMode } = useUiMode();
@@ -97,6 +105,8 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
             setShowTransformationModal={setShowTransformationModal}
             setShowCompanionModal={setShowCompanionModal}
             setShowLevelProgressionModal={setShowLevelProgressionModal}
+            onDuplicateCharacter={onDuplicateCharacter}
+            onSyncToBaseCharacter={onSyncToBaseCharacter}
           />
 
           {/* Profile Form toggled via Edit Profile */}
@@ -110,6 +120,50 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                   onChange={(e) => onUpdateCharacter({ ...character, name: e.target.value })}
                   className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100 font-serif"
                 />
+              </div>
+
+              {/* Campaign Box & Versioning Fields */}
+              <div className="sm:col-span-2 lg:col-span-4 bg-stone-900/90 border border-amber-600/40 p-3 rounded-xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                    <span className="text-sm">🏷️</span> Campaign & Version Box
+                  </span>
+                  <span className="text-[11px] text-stone-400">
+                    Determines active campaign grouping and Base Character synchronization
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-stone-300 mb-1 font-medium">Active Campaign Name</label>
+                    <input
+                      type="text"
+                      value={character.campaignName || ''}
+                      onChange={(e) => onUpdateCharacter({ ...character, campaignName: e.target.value || undefined })}
+                      placeholder="e.g. Curse of Strahd, Descent into Avernus..."
+                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-amber-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-300 mb-1 font-medium">Version Tag / Branch</label>
+                    <input
+                      type="text"
+                      value={character.versionTag || ''}
+                      onChange={(e) => onUpdateCharacter({ ...character, versionTag: e.target.value || undefined })}
+                      placeholder="e.g. Session 14, Arc 2, Backup..."
+                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-200"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-stone-300 mb-1 font-medium">Base Character ID</label>
+                    <input
+                      type="text"
+                      value={character.baseCharacterId || ''}
+                      onChange={(e) => onUpdateCharacter({ ...character, baseCharacterId: e.target.value || undefined })}
+                      placeholder="Leave blank if this is the Base Character"
+                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-300 font-mono text-[11px]"
+                    />
+                  </div>
+                </div>
               </div>
               <div>
                 <label className="block text-stone-400 mb-1 font-semibold">Race / Species</label>
@@ -376,6 +430,8 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                       onUpdateCharacter={onUpdateCharacter}
                       onOpenShapeshift={() => setShowTransformationModal(true)}
                       onOpenSummonCompanion={() => setShowCompanionModal(true)}
+                      onOpenTurnUndead={() => setShowTurnUndeadModal(true)}
+                      onOpenPrestigeValidator={() => setShowPrestigeModal(true)}
                     />
                   )}
 
@@ -432,6 +488,24 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
           character={character}
           onUpdateCharacter={onUpdateCharacter}
           onClose={() => setShowHybridHeritageModal(false)}
+        />
+      )}
+
+      {showTurnUndeadModal && (
+        <TurnUndead35eModal
+          isOpen={true}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onClose={() => setShowTurnUndeadModal(false)}
+          onRoll={onRoll}
+        />
+      )}
+
+      {showPrestigeModal && (
+        <PrestigeClassValidatorModal
+          isOpen={true}
+          character={character}
+          onClose={() => setShowPrestigeModal(false)}
         />
       )}
     </div>

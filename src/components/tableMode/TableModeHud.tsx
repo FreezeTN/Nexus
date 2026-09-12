@@ -54,7 +54,9 @@ import {
   getEffectiveAbilities,
   isCharacterDead,
   getSpellSaveDC,
-  getSpellAttackBonus
+  getSpellAttackBonus,
+  getCharacterBab,
+  format35eBabProgression
 } from '../../utils/dndCalculations';
 import { DND_CONDITIONS } from '../../data/conditionsData';
 import { RestModal } from '../combat/RestModal';
@@ -445,7 +447,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
                 {character.name.charAt(0)}
               </div>
             )}
-            {character.inspiration && (
+            {(character.edition === '5e' || !character.edition) && character.inspiration && (
               <span
                 className="absolute -top-1.5 -right-1.5 bg-amber-400 text-stone-950 rounded-full p-0.5 shadow-md animate-pulse"
                 title="Inspiration Active!"
@@ -460,9 +462,11 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
               <h1 className="text-base sm:text-lg font-bold text-amber-100 font-sans truncate">
                 {character.name}
               </h1>
-              <span className="bg-stone-900 border border-stone-700 text-amber-300 text-[11px] px-2 py-0.5 rounded-md font-mono font-bold">
-                Level {character.level} {character.characterClass}
-              </span>
+              {character.edition !== 'cthulhu' && character.edition !== 'shadowrun' && (
+                <span className="bg-stone-900 border border-stone-700 text-amber-300 text-[11px] px-2 py-0.5 rounded-md font-mono font-bold">
+                  Level {character.level} {character.characterClass}
+                </span>
+              )}
               {character.race && (
                 <span className="text-stone-400 text-xs hidden md:inline">
                   • {character.race}
@@ -473,7 +477,9 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
             <div className="flex items-center gap-3 text-xs text-stone-400 mt-0.5 flex-wrap">
               <span className="flex items-center gap-1">
                 <Shield className="w-3.5 h-3.5 text-amber-400" />
-                <strong className="text-stone-200">AC {character.armorClass}</strong>
+                <strong className="text-stone-200">
+                  {character.edition === 'cthulhu' ? 'Dodge/AP' : character.edition === 'shadowrun' ? 'Armor' : 'AC'} {character.armorClass}
+                </strong>
               </span>
               <span className="flex items-center gap-1">
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -481,13 +487,30 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
               </span>
               <span className="flex items-center gap-1">
                 <Activity className="w-3.5 h-3.5 text-emerald-400" />
-                <strong className="text-stone-200">{speedInfo.effectiveSpeed} ft</strong>
+                <strong className="text-stone-200">{character.edition === 'cthulhu' ? 'MOV 8' : `${speedInfo.effectiveSpeed} ft`}</strong>
               </span>
-              <span className="flex items-center gap-1">
-                <Award className="w-3.5 h-3.5 text-amber-400" />
-                <span>Prof <strong className="text-stone-200">+{profBonus}</strong></span>
-              </span>
-              {character.isSpellcaster && (
+              {character.edition === '3.5e' ? (
+                (() => {
+                  const bab = getCharacterBab(character);
+                  return (
+                    <span className="flex items-center gap-1" title={`Full Attack: ${format35eBabProgression(bab)}`}>
+                      <Award className="w-3.5 h-3.5 text-amber-400" />
+                      <span>BAB <strong className="text-stone-200">{formatModifier(bab)}</strong></span>
+                      {bab >= 6 && (
+                        <span className="text-[10px] text-amber-400/80 font-normal">
+                          ({format35eBabProgression(bab)})
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()
+              ) : (character.edition === '5e' || !character.edition) ? (
+                <span className="flex items-center gap-1">
+                  <Award className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Prof <strong className="text-stone-200">+{profBonus}</strong></span>
+                </span>
+              ) : null}
+              {character.isSpellcaster && (character.edition === '5e' || !character.edition) && (
                 <span className="flex items-center gap-1 text-purple-300 font-mono text-[11px]">
                   <span>DC <strong className="text-purple-200">{spellSaveDC}</strong></span>
                   <span>/</span>
@@ -500,20 +523,22 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
 
         {/* Right: Table Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Inspiration Toggle */}
-          <button
-            type="button"
-            onClick={handleToggleInspiration}
-            className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
-              character.inspiration
-                ? 'bg-amber-400 text-stone-950 border-amber-300 shadow-amber-500/20 font-black'
-                : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-amber-300 hover:border-stone-700'
-            }`}
-            title="Toggle Heroic Inspiration (Advantage on any roll)"
-          >
-            <Sparkles className={`w-3.5 h-3.5 ${character.inspiration ? 'fill-stone-950' : ''}`} />
-            <span>Inspiration</span>
-          </button>
+          {/* Inspiration Toggle (5e only) */}
+          {(character.edition === '5e' || !character.edition) && (
+            <button
+              type="button"
+              onClick={handleToggleInspiration}
+              className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                character.inspiration
+                  ? 'bg-amber-400 text-stone-950 border-amber-300 shadow-amber-500/20 font-black'
+                  : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-amber-300 hover:border-stone-700'
+              }`}
+              title="Toggle Heroic Inspiration (Advantage on any roll)"
+            >
+              <Sparkles className={`w-3.5 h-3.5 ${character.inspiration ? 'fill-stone-950' : ''}`} />
+              <span>Inspiration</span>
+            </button>
+          )}
 
           {/* Quick Short Rest */}
           <button
@@ -903,7 +928,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
           className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
             activeTab === 'attacks'
               ? 'bg-amber-500 text-stone-950 font-black shadow-md'
-              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-850'
+              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-800'
           }`}
         >
           <Swords className="w-3.5 h-3.5" />
@@ -917,7 +942,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
             className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
               activeTab === 'spells'
                 ? 'bg-purple-500 text-stone-950 font-black shadow-md'
-                : 'bg-stone-900/80 text-stone-400 hover:text-purple-300 hover:bg-stone-850'
+                : 'bg-stone-900/80 text-stone-400 hover:text-purple-300 hover:bg-stone-800'
             }`}
           >
             <Wand2 className="w-3.5 h-3.5" />
@@ -931,7 +956,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
           className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
             activeTab === 'powers'
               ? 'bg-amber-500 text-stone-950 font-black shadow-md'
-              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-850'
+              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-800'
           }`}
         >
           <Zap className="w-3.5 h-3.5" />
@@ -944,7 +969,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
           className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
             activeTab === 'conditions'
               ? 'bg-amber-500 text-stone-950 font-black shadow-md'
-              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-850'
+              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-800'
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
@@ -957,7 +982,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
           className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
             activeTab === 'skills'
               ? 'bg-amber-500 text-stone-950 font-black shadow-md'
-              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-850'
+              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-800'
           }`}
         >
           <Award className="w-3.5 h-3.5" />
@@ -970,7 +995,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
           className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${
             activeTab === 'notes'
               ? 'bg-amber-500 text-stone-950 font-black shadow-md'
-              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-850'
+              : 'bg-stone-900/80 text-stone-400 hover:text-stone-200 hover:bg-stone-800'
           }`}
         >
           <FileText className="w-3.5 h-3.5" />

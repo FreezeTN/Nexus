@@ -4,7 +4,6 @@ import {
   Swords,
   Shield,
   Zap,
-  Radio,
   BookOpen,
   Eye,
   MessageSquare,
@@ -24,8 +23,7 @@ import {
   Award
 } from 'lucide-react';
 import { CharacterData, RuleEdition } from '../../types';
-import { SoundscapePanel } from '../audio/SoundscapePanel';
-import { proceduralAudio } from '../../utils/proceduralAudioSynthesizer';
+import { playDiceSound } from '../../utils/soundEffects';
 import { askAssistant } from '../../services/geminiService';
 
 interface LiveSessionCopilotDrawerProps {
@@ -36,7 +34,7 @@ interface LiveSessionCopilotDrawerProps {
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
 }
 
-export type CopilotTab = 'narration' | 'rules' | 'soundscapes' | 'concentration';
+export type CopilotTab = 'narration' | 'rules' | 'concentration';
 
 export const LiveSessionCopilotDrawer: React.FC<LiveSessionCopilotDrawerProps> = ({
   isOpen,
@@ -108,7 +106,7 @@ Format concisely:
   };
 
   const handleRollConcentration = () => {
-    proceduralAudio.playSfx('dice_roll');
+    playDiceSound();
     if (onRoll) {
       onRoll(`Concentration Save (DC ${concentrationDc})`, 20, 1, totalConSaveBonus, 'normal');
     }
@@ -127,7 +125,7 @@ Format concisely:
               Live Session Co-Pilot
             </h2>
             <p className="text-xs text-stone-400">
-              Live tactical assistant, soundscapes & ambient narration
+              Live tactical assistant, rule rulings & ambient narration
             </p>
           </div>
         </div>
@@ -164,18 +162,6 @@ Format concisely:
         >
           <BookOpen className="w-3.5 h-3.5" />
           <span>Rules & Stunts</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('soundscapes')}
-          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-serif font-bold rounded-t-xl transition cursor-pointer border-t border-x ${
-            activeTab === 'soundscapes'
-              ? 'bg-stone-900 text-amber-300 border-amber-500/50 -mb-px'
-              : 'text-stone-400 hover:text-stone-200 border-transparent'
-          }`}
-        >
-          <Radio className="w-3.5 h-3.5" />
-          <span>Soundscapes</span>
         </button>
 
         <button
@@ -339,14 +325,7 @@ Format concisely:
           </div>
         )}
 
-        {/* TAB 3: SOUNDSCAPES */}
-        {activeTab === 'soundscapes' && (
-          <div className="space-y-3">
-            <SoundscapePanel />
-          </div>
-        )}
-
-        {/* TAB 4: CONCENTRATION */}
+        {/* TAB 3: CONCENTRATION */}
         {activeTab === 'concentration' && (
           <div className="space-y-3.5">
             <div className="p-3.5 rounded-xl bg-stone-900 border border-amber-600/40 space-y-3">

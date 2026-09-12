@@ -103,6 +103,319 @@ export function parseAbilityScoreBonuses(input: string): ParsedStatBonus[] {
 }
 
 /**
+ * Parses slash-progression syntax such as:
+ * - "2/4/6/8/10 at levels 1/5/10/15/20"
+ * - "+1/+2/+3 at levels 1/5/15"
+ * - "3/6/9/12/15 at levels 1/5/10/15/20"
+ * - "10 + 2/+4/+6/+8/+10 at levels 1/5/10/15/20"
+ */
+export function parseSlashProgression(
+  input: string
+): { base: number; scaling: Array<{ level: number; value: number }>; rawProgression: string } | null {
+  if (!input || typeof input !== 'string') return null;
+
+  // Check for base bonus + slash e.g. "10 + 2/+4/+6/+8/+10 at levels 1/5/10/15/20"
+  let baseValue = 0;
+  const basePrefixMatch = input.match(/^(\d+)\s*\+\s*/);
+  let cleanInput = input;
+  if (basePrefixMatch) {
+    baseValue = parseInt(basePrefixMatch[1], 10) || 0;
+    cleanInput = input.substring(basePrefixMatch[0].length);
+  }
+
+  // Match: values string (e.g. "+1/+2/+3" or "2/4/6/8/10") at levels string (e.g. "1/5/15" or "1/5/10/15/20")
+  const slashRegex = /([+\-]?\d+(?:\/[+\-]?\d+)+)\s+at\s+levels?\s+(\d+(?:\/\d+)+)/i;
+  const match = cleanInput.match(slashRegex);
+  if (!match) return null;
+
+  const rawValues = match[1].split('/').map(s => parseInt(s.trim().replace('+', ''), 10));
+  const rawLevels = match[2].split('/').map(s => parseInt(s.trim(), 10));
+
+  if (rawValues.some(isNaN) || rawLevels.some(isNaN)) return null;
+
+  const pairs: Array<{ level: number; value: number }> = [];
+  const count = Math.min(rawValues.length, rawLevels.length);
+  for (let i = 0; i < count; i++) {
+    pairs.push({
+      level: rawLevels[i],
+      value: rawValues[i]
+    });
+  }
+
+  pairs.sort((a, b) => a.level - b.level);
+
+  return {
+    base: baseValue,
+    scaling: pairs,
+    rawProgression: match[0]
+  };
+}
+
+/**
+ * Returns active value of a scaling stat given character level and progression tiers
+ */
+export function getScalingStatAtLevel(
+  scaling: Array<{ level: number; value: number }>,
+  characterLevel: number = 1,
+  fallbackValue: number = 0,
+  baseAddend: number = 0
+): number {
+  if (!scaling || scaling.length === 0) return fallbackValue + baseAddend;
+  let active = scaling[0].value;
+  for (const tier of scaling) {
+    if (characterLevel >= tier.level) {
+      active = tier.value;
+    }
+  }
+  return active + baseAddend;
+}
+
+export interface ParsedDamageReduction {
+  value: number;
+  bypass: string;
+  scaling?: Array<{ level: number; value: number }>;
+  rawProgression?: string;
+  scalingProgression?: string;
+}
+
+/**
+ * Parses Damage Reduction (DR) rules from homebrew descriptions, traits, and notes.
+ * Supports:
+ * - Slash progression (e.g. "DR: 2/4/6/8/10 at levels 1/5/10/15/20" or "DR 2/4/6/8/10 at levels 1/5/10/15/20")
+ * - Level-scaling DR (e.g. "gain 3 Damage Reduction at 1st level, increases to 6 at 5th level, to 9 at 10th level...")
+ * - Slash syntax (e.g. "DR 5/magic", "DR 10/adamantine", "DR 3/-")
+ * - Word syntax (e.g. "Damage Reduction 5/silver", "3 Damage Reduction")
+ */
+export function parseDamageReductionFromText(input: string, characterLevel: number = 1): ParsedDamageReduction | null {
+  if (!input || typeof input !== 'string') return null;
+
+  // 1. Check for slash progression: e.g. "DR: 2/4/6/8/10 at levels 1/5/10/15/20"
+  const drSectionMatch = input.match(/DR:?\s*([+\-]?\d+(?:\/[+\-]?\d+)+\s+at\s+levels?\s+\d+(?:\/\d+)+)/i);
+  if (drSectionMatch) {
+    const parsedProg = parseSlashProgression(drSectionMatch[1]);
+    if (parsedProg && parsedProg.scaling.length > 0) {
+      // Find bypass if specified (e.g. /magic or in text)
+      const slashBypass = input.match(/(?:DR|Damage\s*Reduction)\s*[:\d\/]*\s*\/\s*([a-zA-Z\-]+)/i);
+      const bypass = (slashBypass ? slashBypass[1] : '-').trim().toLowerCase();
+      const activeValue = getScalingStatAtLevel(parsedProg.scaling, characterLevel, parsedProg.scaling[0].value);
+      return {
+        value: activeValue,
+        bypass: bypass || '-',
+        scaling: parsedProg.scaling,
+        rawProgression: parsedProg.rawProgression,
+        scalingProgression: parsedProg.rawProgression
+      };
+    }
+  }
+
+  // 2. Level-scaling Damage Reduction with verbose English sentences
+  const scalingMatches: Array<{ level: number; value: number }> = [];
+
+  // Match e.g. "gain 3 Damage Reduction at 1st level" or "3 Damage Reduction at 1st level" or "DR 3 at 1st level"
+  const baseLvlMatch = input.match(/(?:gain|gains|has)?\s*(\d+)\s*(?:Damage\s*Reduction|DR)(?:(?:\s*\/\s*([a-zA-Z\-]+))?)\s+at\s+(\d+)(?:st|nd|rd|th)?\s+level/i);
+  if (baseLvlMatch) {
+    scalingMatches.push({
+      value: parseInt(baseLvlMatch[1], 10),
+      level: parseInt(baseLvlMatch[3], 10)
+    });
+  }
+
+  // Match subsequent "increases to X at Yth level" or "to X at Yth level" or "increasing to X at Yth level"
+  const incRegex = /(?:increases\s+to|increasing\s+to|to)\s+(\d+)\s+at\s+(\d+)(?:st|nd|rd|th)?\s+level/gi;
+  let incMatch: RegExpExecArray | null;
+  while ((incMatch = incRegex.exec(input)) !== null) {
+    const v = parseInt(incMatch[1], 10);
+    const l = parseInt(incMatch[2], 10);
+    if (!isNaN(v) && !isNaN(l) && !scalingMatches.some(s => s.level === l)) {
+      scalingMatches.push({ value: v, level: l });
+    }
+  }
+
+  if (scalingMatches.length > 0) {
+    scalingMatches.sort((a, b) => a.level - b.level);
+    let activeEntry = scalingMatches[0];
+    for (const entry of scalingMatches) {
+      if (characterLevel >= entry.level) {
+        activeEntry = entry;
+      }
+    }
+
+    // Check if a specific bypass is mentioned in the text
+    const slashBypass = input.match(/(?:DR|Damage\s*Reduction)\s*\d*\s*\/\s*([a-zA-Z\-]+)/i);
+    const wordBypass = input.match(/Damage\s*Reduction\s*(?:except\s*by|bypassed\s*by|overcome\s*by)\s*([a-zA-Z\-]+)/i);
+    const bypass = (slashBypass ? slashBypass[1] : wordBypass ? wordBypass[1] : '-').trim().toLowerCase();
+
+    return {
+      value: activeEntry.value,
+      bypass: bypass || '-',
+      scaling: scalingMatches
+    };
+  }
+
+  // 3. Slash-syntax DR: e.g. "DR 5/magic", "DR 10/adamantine", "DR 3/-"
+  const slashMatch = input.match(/\bDR\s*(\d+)\s*\/\s*([a-zA-Z\-]+)/i);
+  if (slashMatch) {
+    const val = parseInt(slashMatch[1], 10);
+    if (!isNaN(val)) {
+      return { value: val, bypass: slashMatch[2].trim().toLowerCase() };
+    }
+  }
+
+  // 4. Explicit "Damage Reduction X/bypass"
+  const damageRedSlashMatch = input.match(/Damage\s*Reduction\s+(\d+)\s*\/\s*([a-zA-Z\-]+)/i);
+  if (damageRedSlashMatch) {
+    const val = parseInt(damageRedSlashMatch[1], 10);
+    if (!isNaN(val)) {
+      return { value: val, bypass: damageRedSlashMatch[2].trim().toLowerCase() };
+    }
+  }
+
+  // 5. "X Damage Reduction"
+  const simpleDrMatch = input.match(/(\d+)\s+Damage\s*Reduction(?:\s*(?:\/|except|bypassed\s*by)\s*([a-zA-Z\-]+))?/i);
+  if (simpleDrMatch) {
+    const val = parseInt(simpleDrMatch[1], 10);
+    if (!isNaN(val)) {
+      return { value: val, bypass: (simpleDrMatch[2] || '-').trim().toLowerCase() };
+    }
+  }
+
+  // 6. Bare "DR X" (e.g. "DR 3" or "DR 5")
+  const bareDrMatch = input.match(/\bDR\s*(\d+)\b/i);
+  if (bareDrMatch) {
+    const val = parseInt(bareDrMatch[1], 10);
+    if (!isNaN(val)) {
+      return { value: val, bypass: '-' };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Parses Natural Armor rules, including level scaling like "+1/+2/+3 at levels 1/5/15" or flat "+2 Natural Armor"
+ */
+export function parseNaturalArmorFromText(
+  input: string,
+  characterLevel: number = 1
+): { value: number; scaling?: Array<{ level: number; value: number }>; rawProgression?: string; scalingProgression?: string } | null {
+  if (!input || typeof input !== 'string') return null;
+
+  // Level scaling: e.g. "Natural Armour: +1/+2/+3 at levels 1/5/15" or "Natural Armor: 1/2/3 at levels 1/5/15"
+  const natArmRegex = /Natural\s*Armo(?:u)?r:?\s*([+\-]?\d+(?:\/[+\-]?\d+)+\s+at\s+levels?\s+\d+(?:\/\d+)+)/i;
+  const match = input.match(natArmRegex);
+  if (match) {
+    const parsed = parseSlashProgression(match[1]);
+    if (parsed && parsed.scaling.length > 0) {
+      return {
+        value: getScalingStatAtLevel(parsed.scaling, characterLevel, parsed.scaling[0].value),
+        scaling: parsed.scaling,
+        rawProgression: parsed.rawProgression,
+        scalingProgression: parsed.rawProgression
+      };
+    }
+  }
+
+  // Flat Natural Armor: e.g. "+2 Natural Armor" or "Natural Armor +2"
+  const flatMatch1 = input.match(/\+(\d+)\s+Natural\s*Armo(?:u)?r/i);
+  if (flatMatch1) {
+    return { value: parseInt(flatMatch1[1], 10) };
+  }
+  const flatMatch2 = input.match(/Natural\s*Armo(?:u)?r(?:\s*bonus)?\s*[:+]?\s*(\d+)/i);
+  if (flatMatch2) {
+    return { value: parseInt(flatMatch2[1], 10) };
+  }
+
+  return null;
+}
+
+/**
+ * Parses Spell Resistance (SR), including "Spell Resistance: 10 + 2/+4/+6/+8/+10 at levels 1/5/10/15/20"
+ */
+export function parseSpellResistanceFromText(
+  input: string,
+  characterLevel: number = 1
+): { value: number; base?: number; scaling?: Array<{ level: number; value: number }>; rawProgression?: string; scalingProgression?: string } | null {
+  if (!input || typeof input !== 'string') return null;
+
+  // Check for base + scaling e.g. "Spell Resistance: 10 + 2/+4/+6/+8/+10 at levels 1/5/10/15/20"
+  const srProgRegex = /(?:Spell\s*Resistance|SR):?\s*(?:(\d+)\s*\+\s*)?([+\-]?\d+(?:\/[+\-]?\d+)+\s+at\s+levels?\s+\d+(?:\/\d+)+)/i;
+  const match = input.match(srProgRegex);
+  if (match) {
+    const base = match[1] ? parseInt(match[1], 10) : 0;
+    const parsed = parseSlashProgression(match[2]);
+    if (parsed && parsed.scaling.length > 0) {
+      const activeBonus = getScalingStatAtLevel(parsed.scaling, characterLevel, parsed.scaling[0].value);
+      const rawProg = `${base ? base + ' + ' : ''}${parsed.rawProgression}`;
+      return {
+        value: base + activeBonus,
+        base,
+        scaling: parsed.scaling,
+        rawProgression: rawProg,
+        scalingProgression: rawProg
+      };
+    }
+  }
+
+  // 10 + character level or 11 + character level
+  const srFormula = input.match(/(?:Spell\s*Resistance|SR):?\s*(\d+)\s*\+\s*(?:character\s*)?level/i);
+  if (srFormula) {
+    const b = parseInt(srFormula[1], 10) || 10;
+    return { value: b + characterLevel, base: b, rawProgression: `${b} + Level`, scalingProgression: `${b} + Level` };
+  }
+
+  // Flat SR e.g. "Spell Resistance 15" or "SR 20"
+  const flatSr = input.match(/\b(?:Spell\s*Resistance|SR):?\s*(\d+)\b/i);
+  if (flatSr) {
+    return { value: parseInt(flatSr[1], 10) };
+  }
+
+  return null;
+}
+
+/**
+ * Parses Energy Resistances like "Resistance to Acid 3/6/9/12/15 at levels 1/5/10/15/20"
+ */
+export function parseEnergyResistancesFromText(
+  input: string,
+  characterLevel: number = 1
+): Array<{ energyType: string; value: number; scaling?: Array<{ level: number; value: number }>; rawProgression?: string }> {
+  if (!input || typeof input !== 'string') return [];
+  const results: Array<{ energyType: string; value: number; scaling?: Array<{ level: number; value: number }>; rawProgression?: string }> = [];
+
+  const types = ['acid', 'cold', 'electricity', 'fire', 'sonic'];
+  for (const energy of types) {
+    // Check for scaling: e.g. "Resistance to Acid 3/6/9/12/15 at levels 1/5/10/15/20"
+    const regex = new RegExp(`(?:Resistance\\s+to|Resist)\\s+${energy}\\s+([+\\-]?\\d+(?:\\/[+\\-]?\\d+)+\\s+at\\s+levels?\\s+\\d+(?:\\/\\d+)+)`, 'i');
+    const match = input.match(regex);
+    if (match) {
+      const parsed = parseSlashProgression(match[1]);
+      if (parsed && parsed.scaling.length > 0) {
+        results.push({
+          energyType: energy,
+          value: getScalingStatAtLevel(parsed.scaling, characterLevel, parsed.scaling[0].value),
+          scaling: parsed.scaling,
+          rawProgression: parsed.rawProgression
+        });
+        continue;
+      }
+    }
+
+    // Flat energy resistance e.g. "Resistance to Fire 5" or "Fire Resistance 10" or "Resist Cold 5"
+    const flatRegex1 = new RegExp(`(?:Resistance\\s+to|Resist)\\s+${energy}\\s+(\\d+)`, 'i');
+    const flatRegex2 = new RegExp(`${energy}\\s+(?:Resistance|Resist)\\s+(\\d+)`, 'i');
+    const flatMatch = input.match(flatRegex1) || input.match(flatRegex2);
+    if (flatMatch) {
+      results.push({
+        energyType: energy,
+        value: parseInt(flatMatch[1], 10)
+      });
+    }
+  }
+
+  return results;
+}
+
+/**
  * Validate stat bonuses against system bounded accuracy guidelines
  */
 export function validateStatIncrements(

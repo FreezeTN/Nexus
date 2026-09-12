@@ -785,13 +785,14 @@ Return a valid JSON object with:
   }>
 - quickBuild: string`;
       } else if (entityType === "race") {
+        const is35e = edition === "3.5e" || edition === "pathfinder";
         systemPrompt = `You are an expert TTRPG lineage and species designer. Design a rich, balanced Homebrew Race / Lineage / Ancestry for ${edition}.
 ${langNote}
 Return a valid JSON object with:
-- name: string (Race / Lineage name, e.g. "Voidtouched Astralkin", "Clockwork Automaton", "Kitsune Shapeshifter", "Crystal Dragonborn")
+- name: string (Race / Lineage name, e.g. "Tiefling Trueblood", "Voidtouched Astralkin", "Clockwork Automaton", "Kitsune Shapeshifter")
 - description: string (rich lore, physical appearance, origins, and cultural roleplay hooks)
-- creatureType: string (e.g. "Humanoid", "Fey", "Construct", "Monstrosity", "Celestial", "Fiend", "Undead")
-- size: "Medium" | "Small" | "Large"
+- creatureType: string (e.g. "Humanoid (Planetouched)", "Fey", "Construct", "Monstrosity", "Celestial", "Fiend", "Undead")
+- size: "Medium" | "Small" | "Large" | "Tiny"
 - speed: number
 - speedNotes: string
 - abilityBonuses: Array<{ ability: string, bonus: number }>
@@ -811,7 +812,33 @@ Return a valid JSON object with:
     traitBonus: string
   }>
 - ageAndLifespan: string
-- alignmentTendencies: string`;
+- alignmentTendencies: string
+${is35e ? `
+SCALING STATS & MECHANICS FOR 3.5e (Include when fitting the lineage, especially for monstrous, planetouched, fiendish, or heroic ancestries):
+- damageReductionValue: number (e.g. 2)
+- damageReductionBypass: string (e.g. "-", "magic", "silver", "cold iron")
+- damageReductionScalingProgression: string (syntax: "2/4/6/8/10 at levels 1/5/10/15/20")
+- damageReductionScaling: Array<{ level: number, value: number }> (e.g. [{ level: 1, value: 2 }, { level: 5, value: 4 }, { level: 10, value: 6 }, { level: 15, value: 8 }, { level: 20, value: 10 }])
+- naturalArmorBonus: number (e.g. 1)
+- naturalArmorScalingProgression: string (syntax: "+1/+2/+3 at levels 1/5/15")
+- naturalArmorScaling: Array<{ level: number, value: number }>
+- spellResistanceBase: number (e.g. 10)
+- spellResistanceScalingProgression: string (e.g. "10 + 2/4/6/8/10 at levels 1/5/10/15/20" or "10 + Level")
+- spellResistanceScaling: Array<{ level: number, value: number }>
+- energyResistances: Array<{ energyType: string, value: number, scalingProgression?: string, scaling?: Array<{ level: number, value: number }> }> (e.g. for acid, cold, electricity, fire: "3/6/9/12/15 at levels 1/5/10/15/20")
+- immunities: Array<string> (e.g. ["Poison"])
+- naturalWeapons: Array<{ name: string, damage: string, ability: string, notes?: string, isChoice?: boolean }> (e.g. Claws 1d4+STR, Bite 1d6+STR, Gore 1d8+STR)
+- skillAffinities: string (e.g. "+2 Bluff, +2 Perception, +4 Sense Motive, +2 Spellcraft, +2 Tumble")
+- spellLikeAbilities: Array<{ levelRange: string, minLevel: number, spellName: string, usage: string, notes?: string }> (e.g. Level tiers like Levels 1-2 Eldritch Blast at will, Levels 3-4 Scorching Ray 3/day, Levels 5-6 Hold Person 2/day, etc.)
+` : `
+DEFENSES & SCALING STATS FOR 5e:
+- damageResistances5e: Array<string> (e.g. ["Fire", "Poison"])
+- damageImmunities5e: Array<string>
+- conditionImmunities5e: Array<string> (e.g. ["Poisoned", "Charmed"])
+- naturalArmorFormula5e: string (e.g. "13 + DEX" or "+1 AC")
+- scalingRacialDice5e: { name: string, progression: string, damageType: string } (e.g. { name: "Breath Weapon", progression: "2d6 at 1st level, 3d6 at 6th level, 4d6 at 11th level, 5d6 at 16th level", damageType: "Fire" })
+- innateSpells5e: Array<{ level: number, spellName: string, recharge: string, ability: string }> (e.g. cantrip at level 1, 1st-level spell at level 3, 2nd-level spell at level 5)
+`}`;
       } else if (entityType === "quest") {
         systemPrompt = `You are a master storyteller and adventure designer. Create an immersive quest hook with branching objectives for ${edition}.
 Return a valid JSON object with:

@@ -130,12 +130,33 @@
         "createdAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "dmId"]
+    },
+    "CustomCompendiumEntry": {
+      "title": "Custom Homebrew Entry",
+      "description": "User created custom homebrew item, spell, monster, race, class, feat, or rule",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "category": { "type": "string", "maxLength": 64 },
+        "edition": { "type": "string", "maxLength": 32 },
+        "source": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 10000 },
+        "data": { "type": "object" },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "ownerId", "name", "category"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "User profile records with strict owner-only update and auth-verified access"
+    },
+    "/users/{userId}/custom_compendium/{entryId}": {
+      "schema": { "$ref": "#/entities/CustomCompendiumEntry" },
+      "description": "Subscribed user custom homebrew library synced with Firestore"
     },
     "/characters/{characterId}": {
       "schema": { "$ref": "#/entities/Character" },

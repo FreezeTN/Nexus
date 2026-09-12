@@ -99,6 +99,7 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
         <SpellcastingStatsPanel
           character={character}
           onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
         />
       )}
 

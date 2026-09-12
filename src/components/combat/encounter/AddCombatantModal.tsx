@@ -4,6 +4,7 @@ import { Combatant, MerchantEncounterState } from './encounterTypes';
 import { Swords, Users, UserCheck, X, Store, Sparkles, Plus, Coins, Shield } from 'lucide-react';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../../data/monsterPortraits';
 import { getAbilityModifier, isCharacterDead } from '../../../utils/dndCalculations';
+import { createMountMerchantPreset } from '../../../data/mountData';
 
 interface AddCombatantModalProps {
   character: CharacterData;
@@ -372,6 +373,34 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
               <p className="text-stone-300 leading-relaxed">
                 Adding a merchant transforms the Encounter Tracker into an interactive trading bazaar with finite gold budgets, haggling rolls, and automated currency/inventory transfers.
               </p>
+            </div>
+
+            {/* Quick-Spawn Mount Vendor / Stable Master */}
+            <div className="bg-gradient-to-r from-amber-950/40 via-stone-900 to-amber-950/40 border border-amber-600/50 p-3.5 rounded-xl space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="text-2xl">🐎</span>
+                  <div className="min-w-0">
+                    <h4 className="font-serif font-bold text-amber-200 text-xs truncate">
+                      Barnaby Oakshield, Master of Horse
+                    </h4>
+                    <p className="text-[11px] text-stone-400">
+                      Official D&D Mounts & Tack Vendor (Warhorses, Ponies, Saddles, Barding)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const mountMerchant = createMountMerchantPreset();
+                    onSelectMerchantEncounter(mountMerchant);
+                    onClose();
+                  }}
+                  className="px-3 py-1.5 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-stone-950 font-extrabold text-xs rounded-xl shadow transition shrink-0 cursor-pointer"
+                >
+                  Spawn Stable Vendor
+                </button>
+              </div>
             </div>
 
             {/* Select Campaign Merchant */}

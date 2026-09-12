@@ -207,6 +207,38 @@ export const DND_CONDITIONS: ConditionInfo[] = [
     description: 'The creature can see 60 feet into the Ethereal Plane when it is on the Material Plane, and vice versa. It detects phased and ethereal creatures as translucent figures.',
     colorClass: 'border-purple-500/60 bg-purple-950/40 text-purple-300',
     badgeClass: 'bg-purple-900/90 text-purple-200 border-purple-400 font-bold'
+  },
+  {
+    id: 'girallons-blessing',
+    name: "Girallon's Blessing",
+    summary: '🦍 Spell Buff: Subject sprouts an extra pair of arms with claws (+2 arms / 4 hands total).',
+    description: "The subject gains an extra pair of arms. It can wield additional weapons, shields, or held items up to 4 hands capacity while the spell is active.",
+    colorClass: 'border-emerald-500/60 bg-emerald-950/40 text-emerald-200',
+    badgeClass: 'bg-emerald-900/90 text-emerald-200 border-emerald-400 font-bold'
+  },
+  {
+    id: 'astral-arms',
+    name: 'Astral Arms',
+    summary: '✨ Astral Self Buff: Spectral arms manifest (+2 arms / 4 hands total).',
+    description: "Arms of the Astral Self hover from your shoulders, granting you 2 additional functional arms to hold, strike, or manipulate items.",
+    colorClass: 'border-cyan-500/60 bg-cyan-950/40 text-cyan-200',
+    badgeClass: 'bg-cyan-900/90 text-cyan-200 border-cyan-400 font-bold'
+  },
+  {
+    id: 'extra-arms',
+    name: 'Extra Arms',
+    summary: '💪 Physical/Mutational Buff: +2 arms / hands capacity.',
+    description: 'The creature possesses two additional functional limbs, increasing hands capacity for weapons and gear by +2.',
+    colorClass: 'border-teal-500/60 bg-teal-950/40 text-teal-200',
+    badgeClass: 'bg-teal-900/90 text-teal-200 border-teal-400 font-bold'
+  },
+  {
+    id: 'one-armed',
+    name: 'One-Armed',
+    summary: '⚠️ Physical Debuff: 1 arm missing or immobilized (1 hand capacity).',
+    description: 'The character has lost or cannot use one of their arms. Hands capacity is reduced by 1.',
+    colorClass: 'border-rose-500/60 bg-rose-950/40 text-rose-200',
+    badgeClass: 'bg-rose-900/90 text-rose-200 border-rose-400 font-bold'
   }
 ];
 

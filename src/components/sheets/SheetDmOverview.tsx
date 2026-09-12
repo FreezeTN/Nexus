@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CharacterData, AbilityName } from '../../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { CharacterData, AbilityName, RuleEdition, Party } from '../../types';
 import { UserProfile, saveCharacterToCloud, GameSession } from '../../lib/firebase';
 import {
   getAbilityModifier,
@@ -7,7 +7,9 @@ import {
   getProficiencyBonus,
   getPassivePerception,
   getEffectiveMaxHp,
-  isCharacterDead
+  isCharacterDead,
+  getCharacterBab,
+  format35eBabProgression
 } from '../../utils/dndCalculations';
 import {
   Crown,
@@ -43,7 +45,6 @@ import {
 
 import { KnowledgeGraphCard, KnowledgeEntity } from '../common/KnowledgeGraphCard';
 import { DmAmbienceBroadcastStudio } from './DmAmbienceBroadcastStudio';
-import { SoundscapePanel } from '../audio/SoundscapePanel';
 
 interface SheetDmOverviewProps {
   activeSession: GameSession;
@@ -55,6 +56,10 @@ interface SheetDmOverviewProps {
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
   onOpenCopilot?: () => void;
   onOpenCampaignLoreVault?: (tab?: any) => void;
+  ruleEdition?: RuleEdition;
+  parties?: Party[];
+  activePartyId?: string;
+  onSelectPartyId?: (id: string) => void;
 }
 
 const COMMON_CONDITIONS = [
@@ -84,22 +89,97 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
   onOpenUpgradeModal,
   onOpenGenerators,
   onOpenCopilot,
-  onOpenCampaignLoreVault
+  onOpenCampaignLoreVault,
+  ruleEdition,
+  parties = [],
+  activePartyId,
+  onSelectPartyId
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [quickAmountMap, setQuickAmountMap] = useState<Record<string, string>>({});
   const [conditionSelectMap, setConditionSelectMap] = useState<Record<string, string>>({});
 
-  // Gather characters that belong to members of the active session
-  const sessionMembers = activeSession.members || [];
-  const memberCharacterIds = new Set(
-    sessionMembers.map((m) => m.characterId).filter(Boolean) as string[]
-  );
+  // 1. Current TRPG edition
+  const currentEdition: RuleEdition = ruleEdition || '5e';
+  const isMultiplayer = Boolean(activeSession && activeSession.code !== 'LOCAL');
 
-  // Filter characters in the session
-  const sessionCharacters = allCharacters.filter((c) =>
-    memberCharacterIds.has(c.id)
-  );
+  // Parties matching the current TRPG edition
+  const trpgParties = useMemo(() => {
+    if (!parties || parties.length === 0) return [];
+    return parties.filter((p) => {
+      const partyChars = allCharacters.filter((c) => p.characterIds?.includes(c.id));
+      return partyChars.some((c) => (c.edition || '5e') === currentEdition);
+    });
+  }, [parties, allCharacters, currentEdition]);
+
+  const [selectedLocalPartyId, setSelectedLocalPartyId] = useState<string>(() => {
+    if (activePartyId && trpgParties.some(p => p.id === activePartyId)) return activePartyId;
+    return trpgParties[0]?.id || parties[0]?.id || '';
+  });
+
+  useEffect(() => {
+    if (activePartyId && trpgParties.some(p => p.id === activePartyId)) {
+      setSelectedLocalPartyId(activePartyId);
+    } else if (trpgParties.length > 0 && !trpgParties.some(p => p.id === selectedLocalPartyId)) {
+      setSelectedLocalPartyId(trpgParties[0].id);
+    }
+  }, [activePartyId, trpgParties, selectedLocalPartyId]);
+
+  const effectiveParty = useMemo(() => {
+    if (!parties || parties.length === 0) return null;
+    return trpgParties.find((p) => p.id === selectedLocalPartyId) || trpgParties[0] || parties[0];
+  }, [parties, trpgParties, selectedLocalPartyId]);
+
+  // Determine which character IDs belong to the active campaign
+  const campaignCharacterIdSet = useMemo(() => {
+    if (isMultiplayer) {
+      const ids = new Set<string>();
+      (activeSession.members || []).forEach((m) => {
+        if (m.characterId) ids.add(m.characterId);
+      });
+      (activeSession.activeCharacterIds || []).forEach((id) => ids.add(id));
+      return ids;
+    }
+
+    if (effectiveParty && effectiveParty.characterIds?.length > 0) {
+      return new Set(effectiveParty.characterIds);
+    }
+
+    if (activeSession.activeCharacterIds && activeSession.activeCharacterIds.length > 0) {
+      return new Set(activeSession.activeCharacterIds);
+    }
+
+    return new Set<string>();
+  }, [isMultiplayer, activeSession, effectiveParty]);
+
+  const sessionMembers = activeSession.members || [];
+
+  // Filter player characters:
+  // 1. Only player characters (no monsters, no merchants)
+  // 2. Only characters of current TRPG edition
+  // 3. Only characters in the active campaign
+  const sessionCharacters = useMemo(() => {
+    return allCharacters.filter((c) => {
+      // Must not be a monster or merchant/vendor
+      const isPlayer = !c.isMonster && !c.isVendor && c.characterClass?.toLowerCase() !== 'monster';
+      if (!isPlayer) return false;
+
+      // Must match current TRPG edition
+      const charEdition = c.edition || '5e';
+      if (charEdition !== currentEdition) return false;
+
+      // Must belong to active campaign if campaign character IDs are specified
+      if (campaignCharacterIdSet.size > 0 && !campaignCharacterIdSet.has(c.id)) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [allCharacters, currentEdition, campaignCharacterIdSet]);
+
+  const campaignTitle = isMultiplayer
+    ? activeSession.name
+    : effectiveParty?.name || activeSession.name || 'Campaign Party';
 
   const filteredCharacters = sessionCharacters.filter((c) => {
     if (!searchQuery.trim()) return true;
@@ -199,20 +279,26 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
     );
   };
 
+  const has5eCharacters = sessionCharacters.some((c) => (c.edition || '5e') === '5e');
+
   const handleGrantAllInspiration = () => {
-    sessionCharacters.forEach((c) => {
-      if (!c.inspiration) {
-        handleStatChange(c, 'inspiration', true);
-      }
-    });
+    sessionCharacters
+      .filter((c) => (c.edition || '5e') === '5e')
+      .forEach((c) => {
+        if (!c.inspiration) {
+          handleStatChange(c, 'inspiration', true);
+        }
+      });
   };
 
   const handleClearAllInspiration = () => {
-    sessionCharacters.forEach((c) => {
-      if (c.inspiration) {
-        handleStatChange(c, 'inspiration', false);
-      }
-    });
+    sessionCharacters
+      .filter((c) => (c.edition || '5e') === '5e')
+      .forEach((c) => {
+        if (c.inspiration) {
+          handleStatChange(c, 'inspiration', false);
+        }
+      });
   };
 
   const handleHealParty10 = () => {
@@ -229,40 +315,68 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
       <div className="bg-gradient-to-r from-stone-950 via-purple-950/40 to-stone-950 border border-purple-800/50 rounded-2xl p-4 sm:p-5 shadow-lg relative overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Crown className="w-5 h-5 text-amber-400" />
               <h1 className="text-lg sm:text-xl font-serif font-bold text-amber-200 tracking-wide">
                 DM Party Live Dashboard
               </h1>
-              <span className="text-xs font-serif bg-purple-950 text-purple-300 border border-purple-700/60 px-2.5 py-0.5 rounded-full font-bold">
-                Campaign: {activeSession.name}
+              {trpgParties.length > 1 && !isMultiplayer ? (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-stone-400 font-serif">Campaign:</span>
+                  <select
+                    value={effectiveParty?.id}
+                    onChange={(e) => {
+                      setSelectedLocalPartyId(e.target.value);
+                      onSelectPartyId?.(e.target.value);
+                    }}
+                    className="text-xs font-serif bg-purple-950 text-purple-200 border border-purple-700/60 px-2.5 py-1 rounded-full font-bold cursor-pointer hover:border-purple-500 transition focus:outline-none"
+                  >
+                    {trpgParties.map((p) => (
+                      <option key={p.id} value={p.id} className="bg-stone-900 text-stone-200">
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <span className="text-xs font-serif bg-purple-950 text-purple-300 border border-purple-700/60 px-2.5 py-0.5 rounded-full font-bold">
+                  Campaign: {campaignTitle}
+                </span>
+              )}
+              <span className="text-[10px] font-mono uppercase bg-stone-900 text-amber-400/90 border border-stone-700 px-2 py-0.5 rounded-md font-bold">
+                {currentEdition.toUpperCase()}
               </span>
             </div>
             <p className="text-xs text-stone-400 max-w-2xl">
-              Live monitor and instant stat overrides for all characters connected to campaign{' '}
-              <strong className="text-amber-300 font-mono">{activeSession.name}</strong>. Changes made here broadcast live to players in real-time.
+              Live monitor and instant stat overrides for player characters in campaign{' '}
+              <strong className="text-amber-300 font-mono">{campaignTitle}</strong>.
+              {isMultiplayer && ' Changes made here broadcast live to players in real-time.'}
             </p>
           </div>
 
           {/* Quick Party Actions */}
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={handleGrantAllInspiration}
-              className="px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
-              title="Grant Inspiration to all session characters"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Grant All Inspiration</span>
-            </button>
+            {has5eCharacters && (
+              <>
+                <button
+                  onClick={handleGrantAllInspiration}
+                  className="px-3 py-1.5 bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  title="Grant Inspiration to all session characters"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Grant All Inspiration</span>
+                </button>
 
-            <button
-              onClick={handleClearAllInspiration}
-              className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 rounded-xl text-xs font-medium transition flex items-center gap-1.5 cursor-pointer"
-              title="Clear Inspiration from all characters"
-            >
-              <X className="w-3.5 h-3.5 text-stone-400" />
-              <span>Clear Inspiration</span>
-            </button>
+                <button
+                  onClick={handleClearAllInspiration}
+                  className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-300 rounded-xl text-xs font-medium transition flex items-center gap-1.5 cursor-pointer"
+                  title="Clear Inspiration from all characters"
+                >
+                  <X className="w-3.5 h-3.5 text-stone-400" />
+                  <span>Clear Inspiration</span>
+                </button>
+              </>
+            )}
 
             <button
               onClick={handleHealParty10}
@@ -409,9 +523,6 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
         </div>
       )}
 
-      {/* Phase C: Live Session Procedural Audio Synthesizer */}
-      <SoundscapePanel />
-
       {/* Campaign Ambience & Music Broadcast Studio */}
       <DmAmbienceBroadcastStudio
         activeSession={activeSession}
@@ -423,9 +534,10 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
       {sessionCharacters.length === 0 ? (
         <div className="bg-stone-950/80 border border-stone-800 rounded-2xl p-8 text-center space-y-3">
           <Users className="w-10 h-10 text-stone-600 mx-auto" />
-          <h2 className="text-base font-serif font-bold text-amber-200">No Characters Currently in Session</h2>
+          <h2 className="text-base font-serif font-bold text-amber-200">No Player Characters in Campaign</h2>
           <p className="text-xs text-stone-400 max-w-md mx-auto leading-relaxed">
-            Players joining campaign <strong className="text-amber-300 font-serif">{activeSession.name}</strong> will automatically appear here once they assign their characters. You can also pre-add participant characters in the Session Lobby Modal.
+            No player characters found for campaign <strong className="text-amber-300 font-serif">{campaignTitle}</strong> under the <strong className="text-stone-300 font-mono">{currentEdition.toUpperCase()}</strong> ruleset.
+            {isMultiplayer ? ' Players joining this session will automatically appear once assigned.' : ' Add characters to your party or assign them to this campaign.'}
           </p>
         </div>
       ) : filteredCharacters.length === 0 ? (
@@ -470,7 +582,7 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
                           {char.name.charAt(0)}
                         </div>
                       )}
-                      {char.inspiration && (
+                      {(char.edition === '5e' || !char.edition) && char.inspiration && (
                         <span
                           className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-stone-950 rounded-full flex items-center justify-center text-[10px] font-bold shadow animate-pulse"
                           title="Inspiration Active!"
@@ -502,29 +614,34 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
                           </>
                         )}
                       </div>
-                      <div className="text-[11px] text-purple-400 font-mono mt-0.5">
-                        Player: {memberInfo?.displayName || 'Session Participant'}
-                      </div>
+                      {/* Only display remote player tag if this is a live multiplayer room with an assigned non-DM player */}
+                      {isMultiplayer && memberInfo?.displayName && memberInfo.uid !== activeSession.dmUid && memberInfo.displayName !== char.name && (
+                        <div className="text-[11px] text-purple-400 font-mono mt-0.5">
+                          Player: {memberInfo.displayName}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Inspiration Toggle Button */}
-                  <button
-                    onClick={() => handleToggleInspiration(char)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
-                      char.inspiration
-                        ? 'bg-amber-950 text-amber-200 border-amber-500 shadow-sm shadow-amber-500/20'
-                        : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
-                    }`}
-                    title="Toggle Inspiration for this player"
-                  >
-                    <Sparkles
-                      className={`w-3.5 h-3.5 ${
-                        char.inspiration ? 'text-amber-400' : 'text-stone-500'
+                  {/* Inspiration Toggle Button (5e only) */}
+                  {(char.edition === '5e' || !char.edition) && (
+                    <button
+                      onClick={() => handleToggleInspiration(char)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border cursor-pointer ${
+                        char.inspiration
+                          ? 'bg-amber-950 text-amber-200 border-amber-500 shadow-sm shadow-amber-500/20'
+                          : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
                       }`}
-                    />
-                    <span>{char.inspiration ? 'Inspiration ON' : 'Grant Inspiration'}</span>
-                  </button>
+                      title="Toggle Inspiration for this player"
+                    >
+                      <Sparkles
+                        className={`w-3.5 h-3.5 ${
+                          char.inspiration ? 'text-amber-400' : 'text-stone-500'
+                        }`}
+                      />
+                      <span>{char.inspiration ? 'Inspiration ON' : 'Grant Inspiration'}</span>
+                    </button>
+                  )}
                 </div>
 
                 {/* HP Controls Section */}
@@ -775,33 +892,92 @@ export const SheetDmOverview: React.FC<SheetDmOverviewProps> = ({
                     </div>
                   </div>
 
-                  {/* Proficiency Bonus */}
-                  <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl text-center space-y-1">
-                    <span className="text-[10px] text-amber-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
-                      <Award className="w-3 h-3 text-amber-400" /> Prof Bonus
-                    </span>
-                    <div className="flex items-center justify-center gap-1">
-                      <span className="font-mono font-bold text-amber-200 text-sm">
-                        +{profBonus}
+                  {/* Proficiency Bonus (5e) / BAB (3.5e) / Sanity (Cthulhu) / Essence (Shadowrun) */}
+                  {char.edition === '3.5e' ? (
+                    (() => {
+                      const bab = getCharacterBab(char);
+                      return (
+                        <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl text-center space-y-1">
+                          <span className="text-[10px] text-amber-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
+                            <Award className="w-3 h-3 text-amber-400" /> BAB
+                          </span>
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="font-mono font-bold text-amber-200 text-sm">
+                              {formatModifier(bab)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-amber-400/80 font-mono block truncate" title={`Full Attack: ${format35eBabProgression(bab)}`}>
+                            {bab >= 6 ? format35eBabProgression(bab) : 'Base Attack'}
+                          </span>
+                        </div>
+                      );
+                    })()
+                  ) : char.edition === 'cthulhu' ? (
+                    <div className="bg-emerald-950/40 border border-emerald-800/60 p-2 rounded-xl text-center space-y-1">
+                      <span className="text-[10px] text-emerald-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
+                        Sanity
+                      </span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="font-mono font-bold text-emerald-200 text-sm">
+                          {char.sanity?.current ?? 15} / {char.sanity?.max ?? 20}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-emerald-400/70 font-mono block">{char.sanity?.madnessState || 'Sane'}</span>
+                    </div>
+                  ) : char.edition === 'shadowrun' ? (
+                    <div className="bg-cyan-950/40 border border-cyan-800/60 p-2 rounded-xl text-center space-y-1">
+                      <span className="text-[10px] text-cyan-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
+                        Karma
+                      </span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="font-mono font-bold text-cyan-200 text-sm">
+                          {char.shadowrun?.karmaCurrent ?? 10}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-cyan-400/70 font-mono block">Points</span>
+                    </div>
+                  ) : (
+                    <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl text-center space-y-1">
+                      <span className="text-[10px] text-amber-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
+                        <Award className="w-3 h-3 text-amber-400" /> Prof Bonus
+                      </span>
+                      <div className="flex items-center justify-center gap-1">
+                        <span className="font-mono font-bold text-amber-200 text-sm">
+                          +{profBonus}
+                        </span>
+                      </div>
+                      <span className="text-[9px] text-stone-500 font-mono block">
+                        Lvl {char.level}
                       </span>
                     </div>
-                    <span className="text-[9px] text-stone-500 font-mono block">
-                      Lvl {char.level}
-                    </span>
-                  </div>
+                  )}
 
-                  {/* Passive Perception */}
-                  <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl text-center space-y-1 col-span-2 sm:col-span-1">
-                    <span className="text-[10px] text-amber-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
-                      <Eye className="w-3 h-3 text-blue-400" /> Passive WIS
-                    </span>
-                    <div className="font-mono font-bold text-blue-200 text-sm">
-                      {passiveWis}
+                  {/* Passive Perception (5e only) or Luck/Nuyen */}
+                  {(char.edition === '5e' || !char.edition) ? (
+                    <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl text-center space-y-1 col-span-2 sm:col-span-1">
+                      <span className="text-[10px] text-amber-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
+                        <Eye className="w-3 h-3 text-blue-400" /> Passive WIS
+                      </span>
+                      <div className="font-mono font-bold text-blue-200 text-sm">
+                        {passiveWis}
+                      </div>
+                      <span className="text-[9px] text-stone-500 font-mono block">
+                        Perception
+                      </span>
                     </div>
-                    <span className="text-[9px] text-stone-500 font-mono block">
-                      Perception
-                    </span>
-                  </div>
+                  ) : char.edition === 'cthulhu' ? (
+                    <div className="bg-stone-900/60 border border-stone-800 p-2 rounded-xl text-center space-y-1 col-span-2 sm:col-span-1">
+                      <span className="text-[10px] text-amber-400 font-serif font-bold uppercase block flex items-center justify-center gap-1">
+                        Luck
+                      </span>
+                      <div className="font-mono font-bold text-amber-200 text-sm">
+                        {char.cthulhu?.luck ?? 50}
+                      </div>
+                      <span className="text-[9px] text-stone-500 font-mono block">
+                        Pool
+                      </span>
+                    </div>
+                  ) : null}
                 </div>
 
                 {/* Active Conditions Selector */}

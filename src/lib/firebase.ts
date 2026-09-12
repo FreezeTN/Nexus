@@ -29,6 +29,7 @@ import {
   serverTimestamp,
   setLogLevel
 } from 'firebase/firestore';
+import type { EncounterEnvironment } from '../types';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { CharacterData, OptionalRulesConfig, CampaignSaveFile } from '../types';
 
@@ -830,6 +831,62 @@ export interface ActiveAmbienceState {
   updatedAt?: string;
 }
 
+export interface SyncedCombatant {
+  id: string;
+  name: string;
+  initiative: number;
+  armorClass: number;
+  hpCurrent: number;
+  hpMax: number;
+  hpTemp?: number;
+  tempHp?: number;
+  type: 'player' | 'monster' | 'npc' | 'companion' | 'enemy' | 'ally';
+  isPlayerChar?: boolean;
+  conditions?: string[];
+  isConcentrating?: boolean;
+  concentratingSpell?: string;
+  isDefeated?: boolean;
+  portraitUrl?: string;
+  characterId?: string;
+  isDead?: boolean;
+  isHidden?: boolean;
+  controlledBy?: string;
+}
+
+export interface SyncedEncounterState {
+  id?: string;
+  name?: string;
+  roundNumber: number;
+  activeTurnIndex: number;
+  combatants: SyncedCombatant[];
+  environment?: EncounterEnvironment;
+  status?: 'idle' | 'active' | 'completed';
+  isActive?: boolean;
+  updatedAt: string;
+  updatedByUid?: string;
+  updatedByName?: string;
+}
+
+export interface SyncedDiceRoll {
+  id: string;
+  sessionCode: string;
+  rollerUid: string;
+  rollerName: string;
+  characterName?: string;
+  label: string;
+  expression: string;
+  total: number;
+  diceRolls: number[];
+  modifier: number;
+  mode?: 'normal' | 'advantage' | 'disadvantage';
+  isNat20?: boolean;
+  isNat1?: boolean;
+  isSecret?: boolean;
+  isWhisperToDm?: boolean;
+  targetUid?: string;
+  timestamp: string;
+}
+
 export interface GameSession {
   id: string;
   code: string; // 6-digit room code, e.g. "DRAGON" or "7K9M3P"
@@ -841,6 +898,8 @@ export interface GameSession {
   activeCharacterIds: string[];
   optionalRules?: OptionalRulesConfig; // DM-enforced campaign optional rules for all participants
   activeAmbience?: ActiveAmbienceState; // Synced ambient soundscape state across all party members
+  activeEncounter?: SyncedEncounterState; // Real-time shared initiative & combat tracker state
+  recentRolls?: SyncedDiceRoll[]; // Live dice roll feed with secret & whisper support
   createdAt: string;
   updatedAt: string;
 }
@@ -856,6 +915,35 @@ export function generateRoomCode(): string {
 }
 
 /**
+ * Generate a guaranteed unique room code by checking existing active sessions in Firestore.
+ * Performs verification queries and automatically retries if a candidate code is already in use.
+ */
+export async function generateUniqueRoomCode(maxAttempts: number = 10): Promise<string> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const candidate = generateRoomCode();
+    try {
+      const docRef = doc(db, 'sessions', candidate);
+      const docSnap = await getDoc(docRef);
+      if (!docSnap.exists()) {
+        return candidate;
+      }
+      console.warn(`[Multiplayer] Room code collision detected for "${candidate}". Re-rolling candidate code (attempt ${attempt + 1}/${maxAttempts})...`);
+    } catch (err) {
+      // If Firestore read fails (e.g. offline/network glitch), return candidate safely
+      console.warn('[Multiplayer] Firestore verification bypassed:', err);
+      return candidate;
+    }
+  }
+
+  // Fallback in astronomical edge case: generate a 7-character code to guarantee uniqueness
+  let extendedCode = '';
+  for (let i = 0; i < 7; i++) {
+    extendedCode += ROOM_CODE_CHARS.charAt(Math.floor(Math.random() * ROOM_CODE_CHARS.length));
+  }
+  return extendedCode;
+}
+
+/**
  * Create a new multiplayer session lobby with a unique 6-digit room code
  */
 export async function createGameSession(
@@ -864,7 +952,7 @@ export async function createGameSession(
   optionalRules?: OptionalRulesConfig,
   initialParticipantCharacters: { id: string; name: string }[] = []
 ): Promise<GameSession> {
-  const code = generateRoomCode();
+  const code = await generateUniqueRoomCode();
   const timestamp = new Date().toISOString();
 
   const dmMember: SessionMember = {
@@ -940,6 +1028,140 @@ export async function updateSessionAmbience(
   const sessionRef = doc(db, 'sessions', normalizedCode);
   await updateDoc(sessionRef, {
     activeAmbience: sanitizeForFirestore(activeAmbience),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Update real-time shared encounter and initiative order for a session
+ */
+export async function updateSessionEncounter(
+  sessionCode: string,
+  encounter: SyncedEncounterState
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  await updateDoc(sessionRef, {
+    activeEncounter: sanitizeForFirestore(encounter),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Advance or update turn in a synchronized session encounter
+ */
+export async function advanceSessionTurn(
+  sessionCode: string,
+  activeTurnIndex: number,
+  roundNumber: number
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  const snap = await getDoc(sessionRef);
+  if (!snap.exists()) return;
+  const session = snap.data() as GameSession;
+  if (!session.activeEncounter) return;
+
+  await updateDoc(sessionRef, {
+    'activeEncounter.activeTurnIndex': activeTurnIndex,
+    'activeEncounter.roundNumber': roundNumber,
+    'activeEncounter.updatedAt': new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Submit or update a player's initiative roll in the active campaign encounter
+ */
+export async function submitInitiativeToSession(
+  sessionCode: string,
+  combatant: Partial<SyncedCombatant> & { id: string; name: string; initiative: number }
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  const snap = await getDoc(sessionRef);
+  if (!snap.exists()) return;
+  const session = snap.data() as GameSession;
+  
+  const currentEncounter = session.activeEncounter || {
+    id: `enc-${Date.now()}`,
+    name: 'Active Party Encounter',
+    roundNumber: 1,
+    activeTurnIndex: 0,
+    combatants: [],
+    status: 'active' as const,
+    updatedAt: new Date().toISOString()
+  };
+
+  const existingCombatants = [...(currentEncounter.combatants || [])];
+  const index = existingCombatants.findIndex(c => c.id === combatant.id || (combatant.characterId && c.characterId === combatant.characterId));
+
+  const updatedCombatant: SyncedCombatant = {
+    id: combatant.id,
+    name: combatant.name,
+    initiative: combatant.initiative,
+    armorClass: combatant.armorClass || 10,
+    hpCurrent: combatant.hpCurrent || 10,
+    hpMax: combatant.hpMax || 10,
+    hpTemp: combatant.hpTemp,
+    type: combatant.type || 'player',
+    isPlayerChar: combatant.isPlayerChar !== undefined ? combatant.isPlayerChar : true,
+    conditions: combatant.conditions || [],
+    portraitUrl: combatant.portraitUrl,
+    characterId: combatant.characterId,
+    isDead: combatant.isDead || false
+  };
+
+  if (index >= 0) {
+    existingCombatants[index] = { ...existingCombatants[index], ...updatedCombatant };
+  } else {
+    existingCombatants.push(updatedCombatant);
+  }
+
+  // Sort combatants descending by initiative
+  existingCombatants.sort((a, b) => b.initiative - a.initiative);
+
+  await updateDoc(sessionRef, {
+    activeEncounter: sanitizeForFirestore({
+      ...currentEncounter,
+      combatants: existingCombatants,
+      updatedAt: new Date().toISOString()
+    }),
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Clear or conclude the active session encounter
+ */
+export async function clearSessionEncounter(sessionCode: string): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  await updateDoc(sessionRef, {
+    activeEncounter: null,
+    updatedAt: new Date().toISOString()
+  });
+}
+
+/**
+ * Broadcast a live dice roll to the session feed (supports Secret and Whisper to DM)
+ */
+export async function broadcastSessionRoll(
+  sessionCode: string,
+  roll: SyncedDiceRoll
+): Promise<void> {
+  const normalizedCode = sessionCode.trim().toUpperCase();
+  const sessionRef = doc(db, 'sessions', normalizedCode);
+  const snap = await getDoc(sessionRef);
+  if (!snap.exists()) return;
+  const session = snap.data() as GameSession;
+
+  const currentRolls = session.recentRolls || [];
+  // Keep the most recent 20 rolls in the session feed
+  const updatedRolls = [sanitizeForFirestore(roll), ...currentRolls.slice(0, 19)];
+
+  await updateDoc(sessionRef, {
+    recentRolls: updatedRolls,
     updatedAt: new Date().toISOString()
   });
 }
@@ -1351,7 +1573,7 @@ export async function restoreGameSessionFromSave(
   save: CampaignSaveFile,
   user?: { uid: string; displayName: string } | null
 ): Promise<GameSession> {
-  const code = (save.sessionCode || save.session?.code || generateRoomCode()).trim().toUpperCase();
+  const code = (save.sessionCode || save.session?.code || (await generateUniqueRoomCode())).trim().toUpperCase();
   const timestamp = new Date().toISOString();
   const dmUid = user?.uid || save.hostUid || 'dm_local';
   const dmName = user?.displayName || save.hostName || 'Dungeon Master';
@@ -1431,4 +1653,205 @@ export async function restoreGameSessionFromSave(
 
   return restoredSession;
 }
+
+/**
+ * Checks if a user is eligible for cloud database synchronization of custom homebrew.
+ * Subscribed users ('hero', 'guild', 'developer', 'tester') can sync custom homebrew to Firestore.
+ * Free/unsubscribed users and guests store custom homebrew exclusively in local browser cache.
+ */
+export function isUserEligibleForHomebrewSync(user: UserProfile | { uid: string; email?: string | null; displayName?: string; role?: string; tier?: SubscriptionTier } | null | undefined): boolean {
+  if (!user || !user.uid || user.uid.startsWith('guest_') || user.uid === 'session_user') return false;
+  
+  const displayName = (user.displayName || '').toLowerCase().trim();
+  const email = (user.email || '').toLowerCase().trim();
+  const devUsernames = ['chaosdwarf', 'freeze'];
+  const devEmails = ['nik04@hotmail.de', 'tomnik2007@gmail.com'];
+  const testerUsernames = ['karl'];
+  const testerEmails = ['karlbrettmann94@gmail.com'];
+
+  if (devUsernames.includes(displayName) || devEmails.includes(email) || user.tier === 'developer') return true;
+  if (testerUsernames.includes(displayName) || testerEmails.includes(email) || user.tier === 'tester' || user.role === 'Tester') return true;
+  
+  return user.tier === 'hero' || user.tier === 'guild';
+}
+
+/**
+ * Saves a single custom homebrew entry to Firestore for subscribed users.
+ * Unsubscribed users bypass Firestore and remain purely local in cache.
+ */
+export async function saveCustomHomebrewToCloud(
+  userId: string, 
+  entry: any, 
+  userTier?: SubscriptionTier,
+  userProfile?: UserProfile | null
+): Promise<void> {
+  if (!entry || !entry.id || !entry.name || !entry.category) return;
+  if (!auth.currentUser || !userId || userId.startsWith('guest_') || userId === 'session_user') {
+    return;
+  }
+  
+  const effectiveTier = userTier || (userProfile?.tier) || 'free';
+  const effectiveUser = userProfile || { uid: userId, email: auth.currentUser.email, displayName: auth.currentUser.displayName || '', role: 'Player' as UserRole, tier: effectiveTier };
+  
+  if (!isUserEligibleForHomebrewSync(effectiveUser)) {
+    // Unsubscribed: keep strictly in local cache without syncing to database
+    return;
+  }
+
+  try {
+    const authUid = auth.currentUser.uid;
+    const docRef = doc(db, 'users', authUid, 'custom_compendium', entry.id);
+    const nowIso = new Date().toISOString();
+    
+    await setDoc(docRef, sanitizeForFirestore({
+      id: entry.id,
+      ownerId: authUid,
+      name: entry.name,
+      category: entry.category,
+      edition: entry.edition || '5e',
+      source: entry.source || 'Custom DM',
+      description: entry.description || '',
+      data: entry,
+      updatedAt: nowIso
+    }), { merge: true });
+  } catch (err: any) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Could not sync custom homebrew to cloud database:', err?.message || err);
+    }
+  }
+}
+
+/**
+ * Deletes a custom homebrew entry from Firestore for subscribed users.
+ */
+export async function deleteCustomHomebrewFromCloud(
+  userId: string,
+  entryId: string,
+  userTier?: SubscriptionTier,
+  userProfile?: UserProfile | null
+): Promise<void> {
+  if (!entryId || !auth.currentUser || !userId || userId.startsWith('guest_')) return;
+  
+  const effectiveTier = userTier || (userProfile?.tier) || 'free';
+  const effectiveUser = userProfile || { uid: userId, email: auth.currentUser.email, displayName: auth.currentUser.displayName || '', role: 'Player' as UserRole, tier: effectiveTier };
+  
+  if (!isUserEligibleForHomebrewSync(effectiveUser)) return;
+
+  try {
+    const authUid = auth.currentUser.uid;
+    const docRef = doc(db, 'users', authUid, 'custom_compendium', entryId);
+    await deleteDoc(docRef);
+  } catch (err: any) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Could not delete custom homebrew from cloud database:', err?.message || err);
+    }
+  }
+}
+
+/**
+ * Loads all custom homebrew entries from Firestore for subscribed users.
+ */
+export async function loadCustomHomebrewFromCloud(
+  userId: string,
+  userTier?: SubscriptionTier,
+  userProfile?: UserProfile | null
+): Promise<any[]> {
+  if (!auth.currentUser || !userId || userId.startsWith('guest_')) return [];
+  
+  const effectiveTier = userTier || (userProfile?.tier) || 'free';
+  const effectiveUser = userProfile || { uid: userId, email: auth.currentUser.email, displayName: auth.currentUser.displayName || '', role: 'Player' as UserRole, tier: effectiveTier };
+  
+  if (!isUserEligibleForHomebrewSync(effectiveUser)) return [];
+
+  try {
+    const authUid = auth.currentUser.uid;
+    const colRef = collection(db, 'users', authUid, 'custom_compendium');
+    const snapshot = await getDocs(colRef);
+    const items: any[] = [];
+    snapshot.forEach(docSnap => {
+      const data = docSnap.data();
+      if (data && data.data) {
+        items.push({ ...data.data, id: data.id || data.data.id, isCustom: true });
+      } else if (data && data.id && data.name && data.category) {
+        items.push({ ...data, isCustom: true });
+      }
+    });
+    return items;
+  } catch (err: any) {
+    if (err?.code !== 'permission-denied') {
+      console.warn('Could not load custom homebrew from cloud database:', err?.message || err);
+    }
+    return [];
+  }
+}
+
+/**
+ * Attaches a real-time Firestore listener for subscribed users' custom homebrew library.
+ */
+export function subscribeToCustomHomebrew(
+  userId: string,
+  onUpdate: (items: any[]) => void,
+  userTier?: SubscriptionTier,
+  userProfile?: UserProfile | null
+): () => void {
+  if (!auth.currentUser || !userId || userId.startsWith('guest_')) return () => {};
+  
+  const effectiveTier = userTier || (userProfile?.tier) || 'free';
+  const effectiveUser = userProfile || { uid: userId, email: auth.currentUser.email, displayName: auth.currentUser.displayName || '', role: 'Player' as UserRole, tier: effectiveTier };
+  
+  if (!isUserEligibleForHomebrewSync(effectiveUser)) return () => {};
+
+  try {
+    const authUid = auth.currentUser.uid;
+    const colRef = collection(db, 'users', authUid, 'custom_compendium');
+    const unsubscribe = onSnapshot(colRef, (snapshot) => {
+      const items: any[] = [];
+      snapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        if (data && data.data) {
+          items.push({ ...data.data, id: data.id || data.data.id, isCustom: true });
+        } else if (data && data.id && data.name && data.category) {
+          items.push({ ...data, isCustom: true });
+        }
+      });
+      onUpdate(items);
+    }, (err) => {
+      if (err?.code !== 'permission-denied') {
+        console.warn('Homebrew subscription snapshot error:', err);
+      }
+    });
+    return unsubscribe;
+  } catch (err) {
+    console.warn('Could not subscribe to custom homebrew:', err);
+    return () => {};
+  }
+}
+
+/**
+ * Syncs all local cached homebrew entries to the cloud database when an authorized user subscribes.
+ */
+export async function syncAllLocalHomebrewToCloud(
+  userId: string,
+  localItems: any[],
+  userTier?: SubscriptionTier,
+  userProfile?: UserProfile | null
+): Promise<{ synced: number }> {
+  if (!Array.isArray(localItems) || localItems.length === 0) return { synced: 0 };
+  if (!auth.currentUser || !userId || userId.startsWith('guest_')) return { synced: 0 };
+  
+  const effectiveTier = userTier || (userProfile?.tier) || 'free';
+  const effectiveUser = userProfile || { uid: userId, email: auth.currentUser.email, displayName: auth.currentUser.displayName || '', role: 'Player' as UserRole, tier: effectiveTier };
+  
+  if (!isUserEligibleForHomebrewSync(effectiveUser)) return { synced: 0 };
+
+  let count = 0;
+  for (const item of localItems) {
+    if (item && item.id && item.name && item.category) {
+      await saveCustomHomebrewToCloud(userId, item, effectiveTier, userProfile);
+      count++;
+    }
+  }
+  return { synced: count };
+}
+
 

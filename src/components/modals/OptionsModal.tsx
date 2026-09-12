@@ -43,7 +43,9 @@ import {
   Keyboard,
   Palette,
   Eye,
-  FileText
+  FileText,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { SUPPORTED_LANGUAGES } from '../../i18n/languages';
@@ -91,6 +93,10 @@ interface OptionsModalProps {
   onOpenUpgradeModal?: (reason?: string) => void;
   onOpenAuthModal?: () => void;
   onOpenUniversalImporterStudio?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export const OptionsModal: React.FC<OptionsModalProps> = ({
@@ -106,7 +112,11 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
   onImportJson,
   onOpenUpgradeModal,
   onOpenAuthModal,
-  onOpenUniversalImporterStudio
+  onOpenUniversalImporterStudio,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo
 }) => {
   const { language, setLanguage, t } = useLanguage();
   const {
@@ -115,7 +125,9 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     complexityLevel,
     setComplexityLevel,
     showFirstUseLauncher,
-    setShowFirstUseLauncher
+    setShowFirstUseLauncher,
+    isTableMode,
+    toggleTableMode
   } = useUiMode();
   const [activeCategory, setActiveCategory] = useState<'themes' | 'sound' | 'app' | 'layout' | 'a11y' | 'character' | 'hotkeys' | 'subscription' | 'credits'>(initialCategory);
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
@@ -383,19 +395,17 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             <span>{t('options.tabHotkeys', 'Hotkeys')}</span>
           </button>
 
-          {currentUser && (
-            <button
-              onClick={() => setActiveCategory('character')}
-              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
-                activeCategory === 'character'
-                  ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
+          <button
+            onClick={() => setActiveCategory('character')}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold font-serif transition shrink-0 cursor-pointer ${
+              activeCategory === 'character'
+                ? 'bg-stone-900 text-amber-300 border border-amber-500/50 shadow-sm'
                 : 'bg-stone-950/80 text-stone-400 border border-stone-800/60 hover:text-stone-200 hover:bg-stone-900/60'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5 text-amber-400" />
-              <span>{t('options.tabCharacter', 'Character')}</span>
-            </button>
-          )}
+            }`}
+          >
+            <UserCheck className="w-3.5 h-3.5 text-amber-400" />
+            <span>{t('options.tabCharacter', 'Character & Import')}</span>
+          </button>
 
           <button
             onClick={() => setActiveCategory('subscription')}
@@ -445,6 +455,58 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
           {/* CATEGORY 2: APP OPTIONS & CACHE CLEARING */}
           {activeCategory === 'app' && (
             <div className="space-y-5 animate-fadeIn">
+              {/* Undo / Redo & State History Panel (ALWAYS ON TOP / FIRST ENTRY IN SETTINGS) */}
+              <div className="bg-stone-950 p-4 rounded-xl border border-amber-500/40 space-y-3 shadow-md">
+                <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5">
+                  <div className="flex items-center gap-2 text-amber-400 font-serif font-bold text-sm">
+                    <Undo2 className="w-4 h-4 text-amber-400" />
+                    <span>Undo / Redo & State History</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-stone-400 bg-stone-900 px-2 py-0.5 rounded border border-stone-800">
+                    Hotkeys: Ctrl+Z / Ctrl+Y
+                  </span>
+                </div>
+                <p className="text-xs text-stone-400">
+                  Quickly revert or restore changes made across your character sheets, stats, inventory, spells, and notes.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onUndo) onUndo();
+                      else window.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+                    }}
+                    disabled={canUndo === false}
+                    className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-xs font-bold transition cursor-pointer shadow-xs ${
+                      canUndo === false
+                        ? 'bg-stone-900/40 text-stone-600 border-stone-800/50 cursor-not-allowed opacity-50'
+                        : 'bg-stone-900 hover:bg-stone-800 border-stone-700 hover:border-amber-500 text-amber-300'
+                    }`}
+                    title="Undo previous modification (Ctrl+Z)"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                    <span>Undo Last Action</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (onRedo) onRedo();
+                      else window.dispatchEvent(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true }));
+                    }}
+                    disabled={canRedo === false}
+                    className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border text-xs font-bold transition cursor-pointer shadow-xs ${
+                      canRedo === false
+                        ? 'bg-stone-900/40 text-stone-600 border-stone-800/50 cursor-not-allowed opacity-50'
+                        : 'bg-stone-900 hover:bg-stone-800 border-stone-700 hover:border-amber-500 text-amber-300'
+                    }`}
+                    title="Redo previous modification (Ctrl+Y)"
+                  >
+                    <Redo2 className="w-4 h-4" />
+                    <span>Redo Action</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Phase A: Workspace & Progressive Disclosure Personalization */}
               <div className="bg-stone-950 p-4 rounded-xl border border-amber-500/30 space-y-4">
                 <div className="flex items-center justify-between border-b border-stone-800/80 pb-3">
@@ -558,6 +620,25 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                       }`}
                     >
                       {showFirstUseLauncher ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  {/* Table Mode HUD toggle */}
+                  <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-stone-200 block">🎲 Distraction-Free Table Mode HUD (Alt+T)</span>
+                      <span className="text-[10px] text-stone-400">Switches to an immersive, clean tabletop action HUD designed for live physical sessions.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={toggleTableMode}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition cursor-pointer border ${
+                        isTableMode
+                          ? 'bg-amber-500 text-stone-950 border-amber-400'
+                          : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+                      }`}
+                    >
+                      {isTableMode ? 'Active' : 'Launch'}
                     </button>
                   </div>
                 </div>
@@ -756,45 +837,58 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
             />
           )}
 
-          {/* CATEGORY 3: CHARACTER MANAGEMENT (Import & Export Backup) */}
+          {/* CATEGORY 3: CHARACTER MANAGEMENT & DATA IMPORTER */}
           {activeCategory === 'character' && (
             <div className="space-y-5 animate-fadeIn">
+              {/* UNIVERSAL IMPORTER & EXPORTER STUDIO (OPTION 2) */}
+              <div className="bg-stone-950 p-4 rounded-xl border border-amber-600/40 space-y-3 shadow-lg">
+                <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5">
+                  <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-sm">
+                    <FileText className="w-4 h-4 text-amber-400" />
+                    <span>Universal Importer & Pipeline Studio</span>
+                  </div>
+                  <span className="text-[10px] font-mono text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40 font-bold">
+                    5eTools • Foundry • D&D Beyond • MD
+                  </span>
+                </div>
+                <p className="text-xs text-stone-300 leading-relaxed">
+                  Convert and import characters or monster statblocks from <strong>5eTools</strong>, <strong>Foundry VTT (v10-12)</strong>, <strong>D&D Beyond</strong>, or standard <strong>Markdown / Plaintext Statblocks</strong> with real-time schema inspection.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (onOpenUniversalImporterStudio) onOpenUniversalImporterStudio();
+                  }}
+                  className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl font-black text-xs transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Launch Universal Importer & Pipeline Studio</span>
+                </button>
+              </div>
+
               {!currentUser ? (
                 <div className="bg-stone-950 p-6 rounded-xl border border-stone-800 text-center space-y-3">
                   <UserCheck className="w-8 h-8 text-stone-500 mx-auto" />
-                  <div className="text-sm font-serif font-bold text-stone-300">Logged Out</div>
+                  <div className="text-sm font-serif font-bold text-stone-300">Character Cloud Sync</div>
                   <p className="text-xs text-stone-400">
-                    Please log in or select a user profile to access character backup, export, and import tools.
+                    Log in or select a user profile to enable multi-character cloud backups, JSON import, and automated cloud sync.
                   </p>
-                </div>
-              ) : (
-                <>
-                  {/* UNIVERSAL IMPORTER & EXPORTER STUDIO (OPTION 2) */}
-                  <div className="bg-stone-950 p-4 rounded-xl border border-amber-600/40 space-y-3 shadow-lg">
-                    <div className="flex items-center justify-between border-b border-stone-800/80 pb-2.5">
-                      <div className="flex items-center gap-2 text-amber-300 font-serif font-bold text-sm">
-                        <FileText className="w-4 h-4 text-amber-400" />
-                        <span>Universal Importer & Pipeline Studio</span>
-                      </div>
-                      <span className="text-[10px] font-mono text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded border border-amber-500/40 font-bold">
-                        5eTools • Foundry • D&D Beyond • MD
-                      </span>
-                    </div>
-                    <p className="text-xs text-stone-300 leading-relaxed">
-                      Convert and import characters or monster statblocks from <strong>5eTools</strong>, <strong>Foundry VTT (v10-12)</strong>, <strong>D&D Beyond</strong>, or standard <strong>Markdown / Plaintext Statblocks</strong> with real-time schema inspection.
-                    </p>
+                  {onOpenAuthModal && (
                     <button
                       type="button"
                       onClick={() => {
                         onClose();
-                        if (onOpenUniversalImporterStudio) onOpenUniversalImporterStudio();
+                        onOpenAuthModal();
                       }}
-                      className="w-full py-2.5 px-4 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl font-black text-xs transition shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                      className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 rounded-lg text-xs font-bold font-serif transition"
                     >
-                      <Sparkles className="w-4 h-4" />
-                      <span>Launch Universal Importer & Pipeline Studio</span>
+                      Sign In / Select Profile
                     </button>
-                  </div>
+                  )}
+                </div>
+              ) : (
+                <>
 
                   {/* CHARACTER IMPORT (Available when logged in) */}
                   <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-3">

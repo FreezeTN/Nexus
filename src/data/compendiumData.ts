@@ -1,6 +1,14 @@
 import { CharacterData, Spell, Feat, ClassFeature } from '../types';
 import { OFFICIAL_BULK_MONSTERS, OFFICIAL_5E_FEATS, OFFICIAL_35E_FEATS, OFFICIAL_5E_CLASS_FEATURES, OFFICIAL_35E_CLASS_FEATURES } from './srdRulesLibrary';
 import { PRESET_5E_SPELLS, PRESET_35E_SPELLS } from './presetSpells';
+import { 
+  saveCustomHomebrewToCloud, 
+  deleteCustomHomebrewFromCloud, 
+  auth, 
+  SubscriptionTier,
+  UserProfile
+} from '../lib/firebase';
+import { canUserSyncHomebrewToCloud } from '../lib/subscription';
 
 export type CompendiumCategory = 'monsters' | 'spells' | 'items' | 'classes' | 'races' | 'feats' | 'features' | 'skills';
 
@@ -67,8 +75,71 @@ export interface CompendiumItem {
     traits?: Array<{ name: string; description: string; actionType?: string; recharge?: string }>;
     subraces?: Array<{ name: string; description: string; traitBonus?: string }> | string[];
     languages?: string[];
-    darkvision?: boolean;
+    darkvision?: boolean | number | string;
     senses?: string;
+    
+    // 3.5e Scaling Defenses & Mechanics
+    damageReductionValue?: number;
+    damageReductionBypass?: string;
+    damageReductionScalingProgression?: string; // e.g. "2/4/6/8/10 at levels 1/5/10/15/20"
+    damageReductionScaling?: Array<{ level: number; value: number }>;
+    naturalArmorBonus?: number;
+    naturalArmorScalingProgression?: string; // e.g. "+1/+2/+3 at levels 1/5/15"
+    naturalArmorScaling?: Array<{ level: number; value: number }>;
+    spellResistanceBase?: number;
+    spellResistanceScalingProgression?: string; // e.g. "10 + 2/4/6/8/10 at levels 1/5/10/15/20"
+    spellResistanceScaling?: Array<{ level: number; value: number }>;
+    energyResistances?: Array<{
+      energyType: string;
+      value?: number;
+      scalingProgression?: string;
+      scaling?: Array<{ level: number; value: number }>;
+    }>;
+    immunities?: string[];
+    naturalWeapons?: Array<{
+      name: string;
+      damage: string;
+      ability?: string;
+      notes?: string;
+      isChoice?: boolean;
+    }>;
+    skillAffinities?: Array<{ skill: string; bonus: number }> | string;
+    spellLikeAbilities?: Array<{
+      levelRange: string;
+      spellName: string;
+      usage: string;
+      minLevel?: number;
+      notes?: string;
+    }>;
+
+    // 5e Defenses & Racial Progression
+    damageResistances5e?: string[];
+    damageImmunities5e?: string[];
+    conditionImmunities5e?: string[];
+    innateSpells5e?: Array<{
+      level: number;
+      spellName: string;
+      recharge: string;
+      ability?: string;
+    }>;
+    naturalArmorFormula5e?: string; // e.g. "13 + DEX" or "+1 AC"
+    scalingRacialDice5e?: {
+      name: string;
+      progression: string; // e.g. "2d6 at 1st, 3d6 at 6th, 4d6 at 11th, 5d6 at 16th"
+      damageType?: string;
+    };
+    skillProficiencies5e?: string[];
+
+    flySpeed?: number;
+    isHalfBreed?: boolean;
+    halfBreedData?: {
+      isClassicSRD?: boolean;
+      classicSRDId?: string;
+      parent1?: string;
+      parent2?: string;
+      dominance?: string;
+    };
+
     ageAndLifespan?: string;
     alignmentTendencies?: string;
   };
@@ -988,7 +1059,14 @@ export function loadCustomCompendiumEntries(): CompendiumItem[] {
   return [];
 }
 
-export function saveCustomCompendiumEntry(newItem: CompendiumItem): CompendiumItem[] {
+export function saveCustomCompendiumEntry(
+  newItem: CompendiumItem,
+  syncOptions?: {
+    userId?: string;
+    userTier?: SubscriptionTier;
+    userProfile?: UserProfile | null;
+  }
+): CompendiumItem[] {
   if (!newItem || !newItem.name || !newItem.category) return loadCustomCompendiumEntries();
 
   const baseMonsterNames = ['ogre', 'the tarrasque', 'tarrasque', 'minotaur', 'adult red dragon', 'orc', 'kobold spear hunter'];
@@ -999,23 +1077,47 @@ export function saveCustomCompendiumEntry(newItem: CompendiumItem): CompendiumIt
   const current = loadCustomCompendiumEntries();
   const existingIdx = current.findIndex(i => i.id === newItem.id || (i.name.toLowerCase() === newItem.name.toLowerCase() && i.category === newItem.category));
   
+  const finalizedItem: CompendiumItem = { ...newItem, isCustom: true };
+
   let updated: CompendiumItem[];
   if (existingIdx >= 0) {
     updated = [...current];
-    updated[existingIdx] = { ...newItem, isCustom: true };
+    updated[existingIdx] = finalizedItem;
   } else {
-    updated = [ { ...newItem, isCustom: true }, ...current ];
+    updated = [ finalizedItem, ...current ];
   }
 
+  // 1. Always write to local browser cache (guaranteed offline availability)
   try {
     localStorage.setItem(STORAGE_KEY_CUSTOM_COMPENDIUM, JSON.stringify(updated));
   } catch (e) {
-    console.error('Failed to save custom compendium entry', e);
+    console.error('Failed to save custom compendium entry to cache', e);
   }
+
+  // 2. Conditionally sync with Cloud Database ONLY if user is subscribed
+  const targetUserId = syncOptions?.userId || auth.currentUser?.uid;
+  if (targetUserId) {
+    const isSubscribed = canUserSyncHomebrewToCloud(syncOptions?.userProfile);
+    if (isSubscribed || syncOptions?.userTier === 'hero' || syncOptions?.userTier === 'guild' || syncOptions?.userTier === 'developer' || syncOptions?.userTier === 'tester') {
+      saveCustomHomebrewToCloud(targetUserId, finalizedItem, syncOptions?.userTier, syncOptions?.userProfile).catch(err => {
+        console.warn('Background custom homebrew cloud sync notice:', err);
+      });
+    }
+  }
+
   return updated;
 }
 
-export function deleteCustomCompendiumEntry(id: string, name?: string, category?: string): CompendiumItem[] {
+export function deleteCustomCompendiumEntry(
+  id: string, 
+  name?: string, 
+  category?: string,
+  syncOptions?: {
+    userId?: string;
+    userTier?: SubscriptionTier;
+    userProfile?: UserProfile | null;
+  }
+): CompendiumItem[] {
   const current = loadCustomCompendiumEntries();
   const updated = current.filter(i => {
     if (i.id === id) return false;
@@ -1024,10 +1126,61 @@ export function deleteCustomCompendiumEntry(id: string, name?: string, category?
     }
     return true;
   });
+
+  // 1. Remove from local browser cache
   try {
     localStorage.setItem(STORAGE_KEY_CUSTOM_COMPENDIUM, JSON.stringify(updated));
   } catch (e) {
-    console.error('Failed to delete custom compendium entry', e);
+    console.error('Failed to delete custom compendium entry from cache', e);
   }
+
+  // 2. Remove from Cloud Database if subscribed
+  const targetUserId = syncOptions?.userId || auth.currentUser?.uid;
+  if (targetUserId) {
+    const isSubscribed = canUserSyncHomebrewToCloud(syncOptions?.userProfile);
+    if (isSubscribed || syncOptions?.userTier === 'hero' || syncOptions?.userTier === 'guild' || syncOptions?.userTier === 'developer' || syncOptions?.userTier === 'tester') {
+      deleteCustomHomebrewFromCloud(targetUserId, id, syncOptions?.userTier, syncOptions?.userProfile).catch(err => {
+        console.warn('Background custom homebrew cloud deletion notice:', err);
+      });
+    }
+  }
+
   return updated;
 }
+
+/**
+ * Merges cloud-fetched custom homebrew items with local cache.
+ * Updates local cache with the unified set.
+ */
+export function mergeCloudHomebrewIntoLocal(cloudItems: CompendiumItem[]): CompendiumItem[] {
+  if (!Array.isArray(cloudItems) || cloudItems.length === 0) {
+    return loadCustomCompendiumEntries();
+  }
+
+  const localItems = loadCustomCompendiumEntries();
+  const mergedMap = new Map<string, CompendiumItem>();
+
+  // Add local items first
+  for (const item of localItems) {
+    if (item && item.id && item.name && item.category) {
+      mergedMap.set(item.id, { ...item, isCustom: true });
+    }
+  }
+
+  // Cloud items overwrite or add to local cache
+  for (const item of cloudItems) {
+    if (item && item.id && item.name && item.category) {
+      mergedMap.set(item.id, { ...item, isCustom: true });
+    }
+  }
+
+  const merged = Array.from(mergedMap.values());
+  try {
+    localStorage.setItem(STORAGE_KEY_CUSTOM_COMPENDIUM, JSON.stringify(merged));
+  } catch (e) {
+    console.error('Failed to cache merged cloud homebrew items', e);
+  }
+
+  return merged;
+}
+

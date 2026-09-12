@@ -18,6 +18,7 @@ export interface TierPerks {
   hasDmLivePartyHud: boolean;
   hasPriorityAi: boolean;
   hasAmbienceStreaming: boolean;
+  hasHomebrewCloudSync: boolean;
   perks: string[];
 }
 
@@ -48,12 +49,14 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierPerks> = {
     hasDmLivePartyHud: false,
     hasPriorityAi: false,
     hasAmbienceStreaming: false,
+    hasHomebrewCloudSync: false,
     perks: [
       'Full access to 5 TRPG rule engines (5e, 3.5e, SR, PF, CoC)',
       'Up to 5 active character sheets with cloud sync',
       'Standard Obsidian & Metal dice rollers',
       'Complete spellbook, gear & leveling calculators',
       'Local & multiplayer session participation',
+      'Custom homebrew stored securely in local browser cache',
       'Custom hotkeys & 60-second guided onboarding'
     ]
   },
@@ -73,9 +76,11 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierPerks> = {
     hasDmLivePartyHud: false,
     hasPriorityAi: true,
     hasAmbienceStreaming: true,
+    hasHomebrewCloudSync: true,
     perks: [
       'Everything in Adventurer, plus:',
       '✨ Unlimited cloud character slots & archive folders',
+      '☁️ Real-time Homebrew & Custom Compendium Cloud Database Sync across all devices',
       '🎵 External Ambient Audio Streamer (YouTube & Spotify playlists broadcast to party)',
       '🎲 Premium Animated Dice Skins (Astral Nebula, Molten Core, Cyber Glow)',
       '📜 Official Fillable PDF Sheet Exporter & Print Binder formats',
@@ -100,8 +105,10 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierPerks> = {
     hasDmLivePartyHud: true,
     hasPriorityAi: true,
     hasAmbienceStreaming: true,
+    hasHomebrewCloudSync: true,
     perks: [
       'Everything in Hero / Pro Tier, plus:',
+      '☁️ Real-time Homebrew & Custom Compendium Cloud Database Sync across all devices',
       '🎵 Full DM YouTube & Spotify Campaign Live Broadcast Streamer',
       '🗺️ Campaign Knowledge Graph Mind-Mapping with DM Secret Reveal Nodes',
       '👁️ DM Live Multi-Party HUD (monitor health, spell slots & passives live)',
@@ -127,9 +134,11 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierPerks> = {
     hasDmLivePartyHud: true,
     hasPriorityAi: true,
     hasAmbienceStreaming: true,
+    hasHomebrewCloudSync: true,
     perks: [
       'Full QA Tester bypass for Karl and designated testers',
       'Unlimited characters, storage, AI queries & tools',
+      'Full database sync for all homebrew and custom data',
       'Full access to all DM & Player features without paywalls',
       'Permanent bypass for all current and future subscriptions',
       'Access to all premium themes and animated dice'
@@ -151,10 +160,12 @@ export const TIER_CONFIGS: Record<SubscriptionTier, TierPerks> = {
     hasDmLivePartyHud: true,
     hasPriorityAi: true,
     hasAmbienceStreaming: true,
+    hasHomebrewCloudSync: true,
     perks: [
       'Permanent developer bypass for ChaosDwarf and Freeze',
       'All present and future Pro / Guild features permanently unlocked',
       'Unlimited characters, storage, AI queries & tools',
+      'Full database sync for all homebrew and custom data',
       'Developer Architecture & Debugging Console access',
       'Direct PayPal revenue management'
     ]
@@ -231,6 +242,18 @@ export function getEffectiveUserTier(user: UserProfile | null | undefined): Subs
   if (isDeveloperUser(user)) return 'developer';
   if (isTesterUser(user)) return 'tester';
   return user.tier || 'free';
+}
+
+/**
+ * Checks if a user is authorized for cloud database synchronization of custom homebrew.
+ * Only subscribed tiers ('hero', 'guild') or developer/tester accounts can sync custom homebrew to the cloud database.
+ * Free/unsubscribed users store custom homebrew in the local cache.
+ */
+export function canUserSyncHomebrewToCloud(user: UserProfile | null | undefined): boolean {
+  if (!user) return false;
+  if (isSubscriptionBypassed(user)) return true;
+  const tier = getEffectiveUserTier(user);
+  return tier === 'hero' || tier === 'guild' || tier === 'developer' || tier === 'tester';
 }
 
 /**

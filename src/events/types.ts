@@ -17,10 +17,15 @@ export type EventType =
   | 'VoiceSpeakerChanged'
   | 'ApplyDamageOrHeal'
   | 'ConcentrationCheckRequested'
-  | 'CompendiumUpdated';
+  | 'MassiveDamageCheckRequested'
+  | 'CompendiumUpdated'
+  | 'OpenModal'
+  | 'CloseModal';
 
 export interface EventPayloadMap {
   CompendiumUpdated: { id?: string; name?: string };
+  OpenModal: { modalId: string; props?: Record<string, any> };
+  CloseModal: { modalId?: string };
   CharacterCreated: { character: CharacterData };
   CharacterUpdated: { character: CharacterData };
   CharacterLevelUp: { characterId: string; characterName: string; oldLevel: number; newLevel: number };
@@ -50,6 +55,13 @@ export interface EventPayloadMap {
     damageTaken: number;
     conSaveDc: number;
     spellName?: string;
+  };
+  MassiveDamageCheckRequested: {
+    combatantId: string;
+    combatantName: string;
+    damageTaken: number;
+    fortSaveDc: number;
+    fortMod: number;
   };
 }
 

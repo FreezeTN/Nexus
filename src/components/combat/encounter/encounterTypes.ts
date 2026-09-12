@@ -1,5 +1,5 @@
 import { CharacterData, Party, EncounterEnvironment, GearItem } from '../../../types';
-import { UserProfile } from '../../../lib/firebase';
+import { UserProfile, GameSession } from '../../../lib/firebase';
 
 export type EncounterMode = 'combat' | 'merchant';
 
@@ -40,6 +40,14 @@ export interface ConcentrationPrompt {
   conMod: number;
 }
 
+export interface MassiveDamagePrompt {
+  combatantId: string;
+  combatantName: string;
+  damageTaken: number;
+  fortSaveDc: number; // 15
+  fortMod: number;
+}
+
 export interface Combatant {
   id: string;
   name: string;
@@ -76,6 +84,8 @@ export interface EncounterTrackerProps {
   allCharacters?: CharacterData[];
   parties?: Party[];
   currentUser?: UserProfile | null;
+  activeSession?: GameSession | null;
+  activeSessionCode?: string | null;
   onOpenPartyManager?: () => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onUpdateCharacter?: (updated: CharacterData) => void;

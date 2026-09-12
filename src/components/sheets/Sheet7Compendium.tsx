@@ -4,8 +4,18 @@ import { getAbilityModifier, formatModifier, recalculateCharacterAC } from '../.
 import { eventBus } from '../../events/eventBus';
 import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
+import {
+  parseAbilityScoreBonuses,
+  parseDamageReductionFromText,
+  parseNaturalArmorFromText,
+  parseSpellResistanceFromText,
+  parseEnergyResistancesFromText,
+  getScalingStatAtLevel
+} from '../../utils/homebrewValidator';
 import { systemRegistry } from '../../systems';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { useSubscription } from '../../context/SubscriptionContext';
+import { useHomebrewSync } from '../../hooks/useHomebrewSync';
 import { HomebrewForgeModal } from '../compendium/HomebrewForgeModal';
 import {
   CompendiumItem,
@@ -39,12 +49,18 @@ import {
   Crown,
   Tag,
   Download,
-  Upload
+  Upload,
+  Cloud,
+  Database,
+  RefreshCw,
+  Edit3
 } from 'lucide-react';
 
 interface Sheet7CompendiumProps {
   activeCharacter?: CharacterData;
+  allCharacters?: CharacterData[];
   onUpdateCharacter?: (updated: CharacterData) => void;
+  onUpdateAllCharacters?: React.Dispatch<React.SetStateAction<CharacterData[]>>;
   onAddItemToInventory?: (item: GearItem, targetId?: string) => void;
   onAddMonsterToRoster?: (monster: CharacterData) => void;
   enabledSystems?: RuleEdition[];
@@ -52,16 +68,22 @@ interface Sheet7CompendiumProps {
 
 export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
   activeCharacter,
+  allCharacters = [],
   onUpdateCharacter,
+  onUpdateAllCharacters,
   onAddItemToInventory,
   onAddMonsterToRoster,
   enabledSystems
 }) => {
   const { t } = useLanguage();
+  const { currentUser, tier, tierConfig, hasHomebrewCloudSync, openUpgradeModal } = useSubscription();
+  const { syncStatus, isCloudSynced, syncNow } = useHomebrewSync(currentUser, tier);
+
   const [selectedCategory, setSelectedCategory] = useState<CompendiumCategory | 'all'>('all');
   const [selectedSystem, setSelectedSystem] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const [editingItem, setEditingItem] = useState<CompendiumItem | null>(null);
   const [selectedDetailItem, setSelectedDetailItem] = useState<CompendiumItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<CompendiumItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -169,7 +191,16 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
   const confirmDeleteCustom = () => {
     if (!itemToDelete) return;
-    const updated = deleteCustomCompendiumEntry(itemToDelete.id, itemToDelete.name, itemToDelete.category);
+    const updated = deleteCustomCompendiumEntry(
+      itemToDelete.id, 
+      itemToDelete.name, 
+      itemToDelete.category,
+      {
+        userId: currentUser?.uid,
+        userTier: tier,
+        userProfile: currentUser
+      }
+    );
     setCustomEntries(updated);
     eventBus.emit('CompendiumUpdated', { id: itemToDelete.id, name: itemToDelete.name });
     showToast(`Deleted "${itemToDelete.name}" from Compendium`);
@@ -177,6 +208,283 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
       setSelectedDetailItem(null);
     }
     setItemToDelete(null);
+  };
+
+  const handleOpenEditModal = (item: CompendiumItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setEditingItem(item);
+    setShowCustomModal(true);
+  };
+
+  const handleOpenCreateModal = () => {
+    setEditingItem(null);
+    setShowCustomModal(true);
+  };
+
+  const countCorrespondingEntities = (item: CompendiumItem, charList: CharacterData[]): number => {
+    if (!item || !charList || charList.length === 0) return 0;
+    const targetName = (item.name || '').trim().toLowerCase();
+    if (!targetName) return 0;
+
+    if (item.category === 'monsters') {
+      return charList.filter(c =>
+        c.isMonster && (
+          c.id === item.id ||
+          (c.name && c.name.toLowerCase().startsWith(targetName)) ||
+          (c.race && c.race.toLowerCase() === targetName)
+        )
+      ).length;
+    }
+
+    if (item.category === 'items') {
+      return charList.reduce((acc, c) => {
+        const matchingItems = (c.inventory || []).filter(g => g.name && g.name.toLowerCase() === targetName);
+        return acc + matchingItems.length;
+      }, 0);
+    }
+
+    if (item.category === 'spells') {
+      return charList.reduce((acc, c) => {
+        const matchingSpells = (c.spells || []).filter(s => s.name && s.name.toLowerCase() === targetName);
+        return acc + matchingSpells.length;
+      }, 0);
+    }
+
+    if (item.category === 'races') {
+      return charList.filter(c => c.race && c.race.toLowerCase() === targetName).length;
+    }
+
+    if (item.category === 'classes') {
+      return charList.filter(c =>
+        (c.characterClass && c.characterClass.toLowerCase() === targetName) ||
+        ((c as any).class && (c as any).class.toLowerCase() === targetName) ||
+        (c.optionalRules?.secondaryClass && c.optionalRules.secondaryClass.toLowerCase() === targetName)
+      ).length;
+    }
+
+    if (item.category === 'feats') {
+      return charList.reduce((acc, c) => {
+        const matchingFeats = (c.feats || []).filter(f => f.name && f.name.toLowerCase() === targetName);
+        return acc + matchingFeats.length;
+      }, 0);
+    }
+
+    if (item.category === 'features') {
+      return charList.reduce((acc, c) => {
+        const matchingFeatures = (c.classFeatures || []).filter(f => f.name && f.name.toLowerCase() === targetName);
+        return acc + matchingFeatures.length;
+      }, 0);
+    }
+
+    return 0;
+  };
+
+  const handleSaveEditedItem = (updatedItem: CompendiumItem, syncEntities: boolean) => {
+    saveCustomCompendiumEntry(updatedItem, {
+      userId: currentUser?.uid,
+      userTier: tier,
+      userProfile: currentUser
+    });
+
+    const refreshed = loadCustomCompendiumEntries();
+    setCustomEntries(refreshed);
+
+    if (selectedDetailItem && (selectedDetailItem.id === updatedItem.id || selectedDetailItem.name === updatedItem.name)) {
+      setSelectedDetailItem(updatedItem);
+    }
+
+    let affectedCount = 0;
+    if (syncEntities && allCharacters && onUpdateAllCharacters && editingItem) {
+      const origName = (editingItem.name || '').trim().toLowerCase();
+
+      const updatedAll = allCharacters.map(char => {
+        let changed = false;
+        let c = { ...char };
+
+        if (updatedItem.category === 'monsters' && updatedItem.monsterData && c.isMonster) {
+          const isMatch = c.id === editingItem.id ||
+            (c.name && c.name.toLowerCase().startsWith(origName)) ||
+            (c.race && c.race.toLowerCase() === origName);
+
+          if (isMatch) {
+            changed = true;
+            affectedCount++;
+            const md = (updatedItem.monsterData || {}) as any;
+            const newHpMax = md.hpMax ?? c.hpMax;
+            const hpRatio = c.hpMax > 0 ? c.hpCurrent / c.hpMax : 1;
+            const adjustedCurrentHp = Math.min(newHpMax, Math.round(hpRatio * newHpMax));
+
+            let updatedName = updatedItem.name;
+            if (c.name.includes('#')) {
+              const suffix = c.name.split('#')[1];
+              updatedName = `${updatedItem.name} #${suffix}`;
+            }
+
+            c = {
+              ...c,
+              name: updatedName,
+              race: md.race || c.race,
+              armorClass: md.armorClass ?? c.armorClass,
+              hpMax: newHpMax,
+              hpCurrent: adjustedCurrentHp,
+              speed: md.speed ?? c.speed,
+              challengeRating: md.challengeRating ?? c.challengeRating,
+              subclass: md.subclass ?? c.subclass,
+              sizeCategory: md.sizeCategory ?? c.sizeCategory,
+              alignment: md.alignment ?? c.alignment,
+              abilities: md.abilities ? { ...c.abilities, ...md.abilities } : c.abilities,
+              attacks: md.attacks || c.attacks,
+              monsterXpReward: md.monsterXpReward ?? c.monsterXpReward,
+              spellResist: md.spellResistance ?? md.spellResist ?? c.spellResist,
+              touchAcOverride: md.touchArmorClass ?? md.touchAcOverride ?? c.touchAcOverride,
+              flatFootedAcOverride: md.flatFootedArmorClass ?? md.flatFootedAcOverride ?? c.flatFootedAcOverride,
+              baseAttackBonus: md.baseAttackBonus ?? md.bab ?? c.baseAttackBonus,
+              fortSaveBase: md.fortitudeSave ?? md.fortSaveBase ?? c.fortSaveBase,
+              refSaveBase: md.reflexSave ?? md.refSaveBase ?? c.refSaveBase,
+              willSaveBase: md.willSaveBase ?? md.willSave ?? c.willSaveBase,
+              damageReductionValue: md.damageReductionValue ?? md.damageReduction ?? c.damageReductionValue,
+              additionalNotes: md.notes ?? c.additionalNotes
+            };
+          }
+        }
+
+        if (updatedItem.category === 'items' && Array.isArray(c.inventory)) {
+          let invChanged = false;
+          const updatedInv = c.inventory.map(g => {
+            if (g.name && g.name.toLowerCase() === origName) {
+              invChanged = true;
+              changed = true;
+              affectedCount++;
+              const idata = (updatedItem.itemData || {}) as any;
+              return {
+                ...g,
+                name: updatedItem.name,
+                notes: updatedItem.description || g.notes,
+                costGp: typeof idata.costGp === 'number' ? idata.costGp : g.costGp,
+                weight: typeof idata.weight === 'number' ? idata.weight : g.weight,
+                itemType: idata.itemType || g.itemType,
+                armorAc: idata.armorClass ?? idata.armorAc ?? g.armorAc,
+                acBonus: idata.acBonus ?? g.acBonus,
+                requiresAttunement: idata.requiresAttunement ?? g.requiresAttunement,
+                isMagic: !!idata.rarity || g.isMagic,
+                damageReduction: idata.damageReduction ?? g.damageReduction,
+                weaponStats: (idata.weaponStats || idata.damage) ? {
+                  damage: idata.damage || idata.weaponStats?.damage || g.weaponStats?.damage,
+                  damageType: idata.damageType || idata.weaponStats?.damageType || g.weaponStats?.damageType,
+                  range: idata.range || idata.weaponStats?.range || g.weaponStats?.range || 'Melee',
+                  notes: idata.properties?.join(', ') || idata.notes || g.weaponStats?.notes
+                } : g.weaponStats
+              };
+            }
+            return g;
+          });
+
+          if (invChanged) {
+            c = recalculateCharacterAC({ ...c, inventory: updatedInv });
+          }
+        }
+
+        if (updatedItem.category === 'spells' && Array.isArray(c.spells)) {
+          let spellChanged = false;
+          const updatedSpells = c.spells.map(s => {
+            if (s.name && s.name.toLowerCase() === origName) {
+              spellChanged = true;
+              changed = true;
+              affectedCount++;
+              const sd = (updatedItem.spellData || {}) as any;
+              return {
+                ...s,
+                name: updatedItem.name,
+                level: sd.level ?? s.level,
+                school: sd.school || s.school,
+                castingTime: sd.castingTime || s.castingTime,
+                range: sd.range || s.range,
+                duration: sd.duration || s.duration,
+                components: sd.components || s.components,
+                description: updatedItem.description || s.description,
+                damage: sd.damage || s.damage,
+                damageType: sd.damageType || s.damageType,
+                saveType: sd.saveType || s.saveType,
+                higherLevel: sd.higherLevel || s.higherLevel
+              };
+            }
+            return s;
+          });
+
+          if (spellChanged) {
+            c = { ...c, spells: updatedSpells };
+          }
+        }
+
+        if (updatedItem.category === 'races' && c.race && c.race.toLowerCase() === origName) {
+          changed = true;
+          affectedCount++;
+          const rd = (updatedItem.raceData || {}) as any;
+          c = {
+            ...c,
+            race: updatedItem.name,
+            speed: rd.speed ? (typeof rd.speed === 'number' ? rd.speed : parseInt(String(rd.speed), 10) || c.speed) : c.speed,
+            damageReductionValue: rd.damageReductionValue ?? rd.damageReduction ?? c.damageReductionValue
+          };
+          c = recalculateCharacterAC(c);
+        }
+
+        if (updatedItem.category === 'classes') {
+          const isClassMatch = (c.characterClass && c.characterClass.toLowerCase() === origName) ||
+            ((c as any).class && (c as any).class.toLowerCase() === origName);
+          if (isClassMatch) {
+            changed = true;
+            affectedCount++;
+            const cd = (updatedItem.classData || {}) as any;
+            c = {
+              ...c,
+              characterClass: updatedItem.name,
+              hitDiceTotal: cd.hitDie ? `${c.level}${cd.hitDie}` : c.hitDiceTotal
+            };
+          }
+        }
+
+        if (updatedItem.category === 'feats' && Array.isArray(c.feats)) {
+          let featChanged = false;
+          const updatedFeats = c.feats.map(f => {
+            if (f.name && f.name.toLowerCase() === origName) {
+              featChanged = true;
+              changed = true;
+              affectedCount++;
+              return {
+                ...f,
+                name: updatedItem.name,
+                description: updatedItem.description || f.description,
+                prerequisite: updatedItem.featData?.prerequisite || f.prerequisite
+              };
+            }
+            return f;
+          });
+
+          if (featChanged) {
+            c = { ...c, feats: updatedFeats };
+          }
+        }
+
+        return c;
+      });
+
+      onUpdateAllCharacters(updatedAll);
+
+      if (activeCharacter && onUpdateCharacter) {
+        const updatedActive = updatedAll.find(c => c.id === activeCharacter.id);
+        if (updatedActive) {
+          onUpdateCharacter(updatedActive);
+        }
+      }
+    }
+
+    eventBus.emit('CompendiumUpdated', { id: updatedItem.id, name: updatedItem.name });
+    showToast(
+      `✨ Updated "${updatedItem.name}" in compendium${syncEntities && affectedCount > 0 ? ` and synchronized ${affectedCount} linked entity/entities!` : '!'}`
+    );
+    setEditingItem(null);
+    setShowCustomModal(false);
   };
 
   // Add Item/Spell/Feat/Feature/Class/Race to Active Character
@@ -259,6 +567,124 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
       });
       showToast(`🛡️ Applied Class "${item.name}" to ${activeCharacter.name}!`);
     } else if (item.category === 'races' && item.raceData) {
+      // 1. Gather ability score bonuses (structured or parsed from string/description)
+      let bonusesToApply: Array<{ stat: string; value: number }> = [];
+      if (item.raceData.abilityBonuses && item.raceData.abilityBonuses.length > 0) {
+        bonusesToApply = item.raceData.abilityBonuses.map(b => ({ stat: b.ability, value: b.bonus }));
+      } else if (item.raceData.abilityBonusesStr || item.description) {
+        const parsed = parseAbilityScoreBonuses(item.raceData.abilityBonusesStr || item.description);
+        bonusesToApply = parsed.map(p => ({ stat: p.stat, value: p.value }));
+      }
+
+      // Clone abilities and apply bonuses
+      const updatedAbilities: Record<string, any> = { ...(activeCharacter.abilities || {}) };
+      const appliedBonusSummaries: string[] = [];
+      const validStats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+
+      for (const b of bonusesToApply) {
+        if (b.stat === 'ALL') {
+          for (const s of validStats) {
+            const currentScore = updatedAbilities[s]?.score ?? 10;
+            updatedAbilities[s] = {
+              ...(updatedAbilities[s] || {}),
+              score: Math.max(1, currentScore + b.value)
+            };
+          }
+          appliedBonusSummaries.push(`${b.value >= 0 ? '+' : ''}${b.value} All`);
+        } else if (validStats.includes(b.stat)) {
+          const s = b.stat;
+          const currentScore = updatedAbilities[s]?.score ?? 10;
+          updatedAbilities[s] = {
+            ...(updatedAbilities[s] || {}),
+            score: Math.max(1, currentScore + b.value)
+          };
+          appliedBonusSummaries.push(`${b.value >= 0 ? '+' : ''}${b.value} ${s}`);
+        }
+      }
+
+      // 2. Character Level & Scaling Defenses Resolution
+      const charLevel = activeCharacter.level || 1;
+
+      // Damage Reduction (DR)
+      let drValue = item.raceData.damageReductionValue;
+      let drBypass = item.raceData.damageReductionBypass || '-';
+
+      if (item.raceData.damageReductionScaling && item.raceData.damageReductionScaling.length > 0) {
+        drValue = getScalingStatAtLevel(item.raceData.damageReductionScaling, charLevel);
+      } else if (drValue === undefined || drValue === 0) {
+        const fullRaceText = [
+          item.description,
+          ...(item.raceData.traits || []).map(t => `${t.name}: ${t.description}`)
+        ].join(' ');
+
+        const detectedDr = parseDamageReductionFromText(fullRaceText, charLevel);
+        if (detectedDr) {
+          drValue = detectedDr.value;
+          drBypass = detectedDr.bypass || '-';
+        }
+      }
+
+      // Natural Armor Resolution
+      let natArmorBonus: number | undefined = item.raceData.naturalArmorBonus;
+      if (item.raceData.naturalArmorScaling && item.raceData.naturalArmorScaling.length > 0) {
+        natArmorBonus = getScalingStatAtLevel(item.raceData.naturalArmorScaling, charLevel);
+      } else if (natArmorBonus === undefined) {
+        const fullRaceText = [
+          item.description,
+          ...(item.raceData.traits || []).map(t => `${t.name}: ${t.description}`)
+        ].join(' ');
+        const detectedNat = parseNaturalArmorFromText(fullRaceText, charLevel);
+        if (detectedNat) {
+          natArmorBonus = detectedNat.value;
+        }
+      }
+
+      // Spell Resistance Resolution
+      let spellResistVal: number | undefined = item.raceData.spellResistanceBase;
+      if (item.raceData.spellResistanceScaling && item.raceData.spellResistanceScaling.length > 0) {
+        const extraSr = getScalingStatAtLevel(item.raceData.spellResistanceScaling, charLevel);
+        spellResistVal = (item.raceData.spellResistanceBase || 10) + extraSr;
+      } else if (item.raceData.spellResistanceScalingProgression?.includes('Level')) {
+        spellResistVal = 10 + charLevel;
+      } else if (spellResistVal === undefined) {
+        const fullRaceText = [
+          item.description,
+          ...(item.raceData.traits || []).map(t => `${t.name}: ${t.description}`)
+        ].join(' ');
+        const detectedSr = parseSpellResistanceFromText(fullRaceText, charLevel);
+        if (detectedSr) {
+          spellResistVal = detectedSr.value;
+        }
+      }
+
+      // Energy Resistances Resolution
+      const resolvedEnergyRes: Record<string, number> = { ...(activeCharacter.energyResistances || {}) };
+      if (Array.isArray(item.raceData.energyResistances) && item.raceData.energyResistances.length > 0) {
+        for (const er of item.raceData.energyResistances) {
+          const typeKey = (er.energyType || '').toLowerCase();
+          if (!typeKey) continue;
+          let val = er.value || 5;
+          if (Array.isArray(er.scaling) && er.scaling.length > 0) {
+            val = getScalingStatAtLevel(er.scaling, charLevel);
+          }
+          resolvedEnergyRes[typeKey] = Math.max(resolvedEnergyRes[typeKey] || 0, val);
+        }
+      } else {
+        const fullRaceText = [
+          item.description,
+          ...(item.raceData.traits || []).map(t => `${t.name}: ${t.description}`)
+        ].join(' ');
+        const detectedERs = parseEnergyResistancesFromText(fullRaceText, charLevel);
+        for (const er of detectedERs) {
+          const typeKey = (er.energyType || '').toLowerCase();
+          resolvedEnergyRes[typeKey] = Math.max(resolvedEnergyRes[typeKey] || 0, er.value);
+        }
+      }
+
+      // 3. Racial Traits handling (clear existing racial traits to avoid piling duplicates)
+      const currentFeatures = Array.isArray(activeCharacter.classFeatures) ? activeCharacter.classFeatures : [];
+      const existingNonRacialFeatures = currentFeatures.filter(f => !f.source?.includes('Racial Trait') && !f.source?.includes('Spell-Like Ability') && !f.source?.includes('Innate Spellcasting'));
+      
       const racialTraits: ClassFeature[] = (item.raceData.traits || []).map(t => ({
         id: 'rt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
         name: t.name,
@@ -267,13 +693,77 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         recharge: (t.recharge as any) || 'Special'
       }));
 
-      onUpdateCharacter({
+      // Append 3.5e Spell-Like Abilities unlocked at current level
+      if (Array.isArray(item.raceData.spellLikeAbilities) && item.raceData.spellLikeAbilities.length > 0) {
+        const unlockedSLAs: ClassFeature[] = item.raceData.spellLikeAbilities
+          .filter(sla => (sla.minLevel || 1) <= charLevel)
+          .map(sla => ({
+            id: 'sla-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+            name: `SLA: ${sla.spellName} (${sla.usage})`,
+            source: `${item.name} Spell-Like Ability`,
+            description: `Granted at ${sla.levelRange || 'Level ' + sla.minLevel}. Usage: ${sla.usage}. ${sla.notes || ''}`,
+            recharge: (sla.usage.includes('day') ? 'Long Rest' : sla.usage.includes('will') ? 'None' : 'Special') as any
+          }));
+        racialTraits.push(...unlockedSLAs);
+      }
+
+      // Append 5e Innate Spells unlocked at current level
+      if (Array.isArray(item.raceData.innateSpells5e) && item.raceData.innateSpells5e.length > 0) {
+        const unlocked5eSpells: ClassFeature[] = item.raceData.innateSpells5e
+          .filter(s => (s.level || 1) <= charLevel)
+          .map(s => ({
+            id: 'isp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+            name: `Innate: ${s.spellName} (${s.recharge})`,
+            source: `${item.name} Innate Spellcasting`,
+            description: `Cast ${s.spellName} (${s.recharge}) using ${s.ability || 'Charisma'}.`,
+            recharge: (s.recharge.includes('Rest') ? 'Long Rest' : 'None') as any
+          }));
+        racialTraits.push(...unlocked5eSpells);
+      }
+
+      // Add Natural Weapons to customAttacks if present
+      const currentAttacks = Array.isArray(activeCharacter.customAttacks) ? [...activeCharacter.customAttacks] : [];
+      if (Array.isArray(item.raceData.naturalWeapons) && item.raceData.naturalWeapons.length > 0) {
+        for (const nw of item.raceData.naturalWeapons) {
+          const alreadyExists = currentAttacks.some(a => a.name.toLowerCase() === nw.name.toLowerCase());
+          if (!alreadyExists) {
+            currentAttacks.push({
+              id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+              name: `${nw.name} (Natural)`,
+              attackBonus: 0,
+              damageDice: nw.damage || '1d6',
+              damageType: 'Physical',
+              range: 'Melee',
+              notes: nw.notes || `${item.name} Natural Weapon`
+            });
+          }
+        }
+      }
+
+      // 4. Update Character & recalculate combat derived stats
+      const updatedCharacter = recalculateCharacterAC({
         ...activeCharacter,
         race: item.name,
         speed: item.raceData.speed || activeCharacter.speed || 30,
-        classFeatures: [...(activeCharacter.classFeatures || []), ...racialTraits]
+        sizeCategory: (item.raceData.size as any) || activeCharacter.sizeCategory || 'Medium',
+        abilities: updatedAbilities as any,
+        damageReductionValue: drValue !== undefined ? drValue : activeCharacter.damageReductionValue,
+        damageReductionBypass: drValue !== undefined ? drBypass : activeCharacter.damageReductionBypass,
+        naturalArmorBonus: natArmorBonus !== undefined ? natArmorBonus : activeCharacter.naturalArmorBonus,
+        spellResist: spellResistVal !== undefined ? spellResistVal : activeCharacter.spellResist,
+        energyResistances: resolvedEnergyRes,
+        customAttacks: currentAttacks,
+        damageResistances: Array.from(new Set([...(activeCharacter.damageResistances || []), ...(item.raceData.damageResistances5e || [])])),
+        classFeatures: [...existingNonRacialFeatures, ...racialTraits]
       });
-      showToast(`🧬 Applied Race "${item.name}" to ${activeCharacter.name}!`);
+
+      onUpdateCharacter(updatedCharacter);
+
+      const bonusLabel = appliedBonusSummaries.length > 0 ? ` (${appliedBonusSummaries.join(', ')})` : '';
+      const drLabel = drValue ? ` • DR ${drValue}/${drBypass} (Lv.${charLevel})` : '';
+      const acLabel = natArmorBonus ? ` • +${natArmorBonus} Nat AC` : '';
+      const srLabel = spellResistVal ? ` • SR ${spellResistVal}` : '';
+      showToast(`🧬 Applied Race "${item.name}" to ${activeCharacter.name}${bonusLabel}${drLabel}${acLabel}${srLabel}!`);
     } else if (item.category === 'spells' && item.spellData) {
       const spellCandidate = {
         name: item.spellData.name || item.name,
@@ -365,9 +855,32 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
-            <h2 className="text-2xl sm:text-3xl font-serif font-black text-stone-100 flex items-center gap-3">
-              <span>Monsters, Spells, Items & Rules Compendium</span>
-            </h2>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-2xl sm:text-3xl font-serif font-black text-stone-100 flex items-center gap-3">
+                <span>Monsters, Spells, Items & Rules Compendium</span>
+              </h2>
+              {hasHomebrewCloudSync ? (
+                <button
+                  onClick={() => syncNow()}
+                  title="Your custom homebrew items are continuously synced to the Firestore cloud database across all your devices. Click to force sync now."
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 rounded-full text-xs font-mono transition cursor-pointer"
+                >
+                  <Cloud className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                  <span>Cloud Database Sync Active</span>
+                  {syncStatus === 'syncing' && <RefreshCw className="w-3 h-3 animate-spin ml-1 text-amber-400" />}
+                </button>
+              ) : (
+                <button
+                  onClick={() => openUpgradeModal('Upgrade to Hero or Guild Master tier to enable automatic Cloud Database Sync for your custom homebrew items, spells, and monsters!', 'hero')}
+                  title="Free Tier: Homebrew is saved locally in browser cache. Upgrade to sync with cloud database across devices."
+                  className="inline-flex items-center gap-1.5 px-3 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/40 text-stone-400 hover:text-amber-300 rounded-full text-xs font-mono transition cursor-pointer group"
+                >
+                  <Database className="w-3.5 h-3.5 text-stone-400 group-hover:text-amber-400" />
+                  <span>Local Cache Mode</span>
+                  <span className="text-[10px] text-amber-400/90 font-bold ml-1">Unlock Cloud Sync ✨</span>
+                </button>
+              )}
+            </div>
             <p className="text-stone-400 text-sm max-w-2xl leading-relaxed">
               Explore pre-loaded SRD rules library or create custom entries. DM homebrew weapons, spells, monsters, and features automatically save and can be added directly to any character sheet or encounter!
             </p>
@@ -375,10 +888,9 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
           <div className="flex items-center gap-3 flex-wrap">
             <button
-              onClick={() => setShowCustomModal(true)}
+              onClick={handleOpenCreateModal}
               className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 shrink-0 text-sm cursor-pointer"
             >
-              <Sparkles className="w-5 h-5 text-stone-950 animate-pulse" />
               <span>✨ Homebrew & Rules Forge Studio</span>
             </button>
           </div>
@@ -577,14 +1089,24 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
                     <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                       {isCustom && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteCustom(item, e)}
-                          title="Delete Custom Entry"
-                          className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenEditModal(item, e)}
+                            title="Edit Custom Entry"
+                            className="p-1.5 text-stone-400 hover:text-amber-300 hover:bg-amber-500/10 rounded-lg transition cursor-pointer"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteCustom(item, e)}
+                            title="Delete Custom Entry"
+                            className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/30 rounded-lg transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
                       )}
 
                       {['items', 'spells', 'feats', 'features', 'monsters', 'classes', 'races'].includes(item.category) && (
@@ -746,7 +1268,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                                 </div>
                               )}
                               {atk.notes && (
-                                <p className="text-xs text-stone-300 italic bg-stone-950/50 p-1.5 rounded-lg border border-stone-850">
+                                <p className="text-xs text-stone-300 italic bg-stone-950/50 p-1.5 rounded-lg border border-stone-800">
                                   {atk.notes}
                                 </p>
                               )}
@@ -855,7 +1377,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                 {selectedDetailItem.itemData.cost && <div>Value: <strong className="text-amber-300">{selectedDetailItem.itemData.cost}</strong></div>}
                 {selectedDetailItem.itemData.weight && <div>Weight: <strong className="text-stone-300">{selectedDetailItem.itemData.weight} lb</strong></div>}
                 {selectedDetailItem.itemData.rarity && <div>Rarity: <strong className="text-purple-300 capitalize">{selectedDetailItem.itemData.rarity}</strong></div>}
-                {selectedDetailItem.itemData.attunement && <div>Attunement: <strong className="text-rose-400">Required</strong></div>}
+                {(selectedDetailItem.edition === '5e' || !selectedDetailItem.edition) && selectedDetailItem.itemData.attunement && <div>Attunement: <strong className="text-rose-400">Required</strong></div>}
               </div>
             )}
 
@@ -915,29 +1437,292 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               </div>
             )}
 
-            {selectedDetailItem.category === 'races' && selectedDetailItem.raceData && (
-              <div className="space-y-3 bg-stone-900/80 border border-stone-800 p-4 rounded-2xl text-xs text-stone-300">
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
-                  <div>Speed: <strong className="text-amber-400">{selectedDetailItem.raceData.speed || 30} ft</strong></div>
-                  <div>Size: <strong className="text-cyan-300">{selectedDetailItem.raceData.size || 'Medium'}</strong></div>
-                  <div>Darkvision: <strong className="text-purple-300">{selectedDetailItem.raceData.darkvision ? `${selectedDetailItem.raceData.darkvision} ft` : 'None'}</strong></div>
-                  <div>Origin: <strong className="text-emerald-300">Lineage</strong></div>
-                </div>
-                {selectedDetailItem.raceData.traits && selectedDetailItem.raceData.traits.length > 0 && (
-                  <div className="pt-2 border-t border-stone-800/80 space-y-2">
-                    <div className="text-[11px] font-mono text-amber-300 uppercase font-bold">Racial Traits:</div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {selectedDetailItem.raceData.traits.map((trait, idx) => (
-                        <div key={idx} className="bg-stone-950/60 p-2.5 rounded-xl border border-stone-800 space-y-0.5">
-                          <div className="font-bold text-amber-200">{trait.name}</div>
-                          <p className="text-[11px] text-stone-400">{trait.description}</p>
-                        </div>
-                      ))}
-                    </div>
+            {selectedDetailItem.category === 'races' && selectedDetailItem.raceData && (() => {
+              const darkvisionDisplay = (() => {
+                const dv = selectedDetailItem.raceData.darkvision;
+                if (typeof dv === 'number') return `${dv} ft`;
+                if (dv === true) return '60 ft';
+                if (typeof dv === 'string' && dv.trim()) {
+                  return dv.includes('ft') ? dv : `${dv} ft`;
+                }
+                if (selectedDetailItem.raceData.senses?.toLowerCase().includes('darkvision')) {
+                  return selectedDetailItem.raceData.senses;
+                }
+                return 'None';
+              })();
+
+              const fullText = [
+                selectedDetailItem.description,
+                ...(selectedDetailItem.raceData.traits || []).map(t => `${t.name}: ${t.description}`)
+              ].join(' ');
+
+              const currentLvl = activeCharacter?.level || 1;
+
+              const detectedDr = (() => {
+                const rd = selectedDetailItem.raceData;
+                if (rd.damageReductionScaling && rd.damageReductionScaling.length > 0) {
+                  return {
+                    value: getScalingStatAtLevel(rd.damageReductionScaling, currentLvl),
+                    bypass: rd.damageReductionBypass || '-',
+                    progression: rd.damageReductionScalingProgression || rd.damageReductionScaling.map(s => `${s.value}@Lv${s.level}`).join('/')
+                  };
+                }
+                if (rd.damageReductionValue !== undefined) {
+                  return {
+                    value: rd.damageReductionValue,
+                    bypass: rd.damageReductionBypass || '-',
+                    progression: rd.damageReductionScalingProgression
+                  };
+                }
+                const parsed = parseDamageReductionFromText(fullText, currentLvl);
+                if (parsed) {
+                  return {
+                    value: parsed.value,
+                    bypass: parsed.bypass || '-',
+                    progression: parsed.scalingProgression
+                  };
+                }
+                return null;
+              })();
+
+              const detectedNatArmor = (() => {
+                const rd = selectedDetailItem.raceData;
+                if (rd.naturalArmorScaling && rd.naturalArmorScaling.length > 0) {
+                  return {
+                    value: getScalingStatAtLevel(rd.naturalArmorScaling, currentLvl),
+                    progression: rd.naturalArmorScalingProgression || rd.naturalArmorScaling.map(s => `+${s.value}@Lv${s.level}`).join('/')
+                  };
+                }
+                if (rd.naturalArmorBonus !== undefined) {
+                  return {
+                    value: rd.naturalArmorBonus,
+                    progression: rd.naturalArmorScalingProgression
+                  };
+                }
+                const parsed = parseNaturalArmorFromText(fullText, currentLvl);
+                if (parsed) {
+                  return {
+                    value: parsed.value,
+                    progression: parsed.scalingProgression
+                  };
+                }
+                return null;
+              })();
+
+              const detectedSr = (() => {
+                const rd = selectedDetailItem.raceData;
+                if (rd.spellResistanceScaling && rd.spellResistanceScaling.length > 0) {
+                  const extra = getScalingStatAtLevel(rd.spellResistanceScaling, currentLvl);
+                  return {
+                    value: (rd.spellResistanceBase || 10) + extra,
+                    progression: rd.spellResistanceScalingProgression
+                  };
+                }
+                if (rd.spellResistanceBase !== undefined) {
+                  return {
+                    value: rd.spellResistanceBase,
+                    progression: rd.spellResistanceScalingProgression
+                  };
+                }
+                const parsed = parseSpellResistanceFromText(fullText, currentLvl);
+                if (parsed) {
+                  return {
+                    value: parsed.value,
+                    progression: parsed.scalingProgression
+                  };
+                }
+                return null;
+              })();
+
+              const abilityBonusesDisplay = (() => {
+                if (selectedDetailItem.raceData.abilityBonuses && selectedDetailItem.raceData.abilityBonuses.length > 0) {
+                  return selectedDetailItem.raceData.abilityBonuses
+                    .map(b => `${b.bonus >= 0 ? '+' : ''}${b.bonus} ${b.ability}`)
+                    .join(', ');
+                }
+                if (selectedDetailItem.raceData.abilityBonusesStr) {
+                  return selectedDetailItem.raceData.abilityBonusesStr;
+                }
+                const parsed = parseAbilityScoreBonuses(selectedDetailItem.description);
+                if (parsed.length > 0) {
+                  return parsed.map(b => `${b.value >= 0 ? '+' : ''}${b.value} ${b.stat}`).join(', ');
+                }
+                return 'None / Standard';
+              })();
+
+              const rd = selectedDetailItem.raceData;
+
+              return (
+                <div className="space-y-3 bg-stone-900/80 border border-stone-800 p-4 rounded-2xl text-xs text-stone-300">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+                    <div>Speed: <strong className="text-amber-400">{rd.speed || 30} ft</strong></div>
+                    <div>Size: <strong className="text-cyan-300">{rd.size || 'Medium'}</strong></div>
+                    <div>Darkvision: <strong className="text-purple-300">{darkvisionDisplay}</strong></div>
+                    <div>Type: <strong className="text-emerald-300">{rd.creatureType || 'Humanoid'}</strong></div>
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Ability Modifiers & Core Defenses summary */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-stone-800/80 font-mono text-xs">
+                    <div>
+                      <span className="text-stone-400">Ability Modifiers: </span>
+                      <strong className="text-amber-300">{abilityBonusesDisplay}</strong>
+                    </div>
+                    {detectedDr && (
+                      <div>
+                        <span className="text-stone-400">Damage Reduction: </span>
+                        <strong className="text-sky-300">DR {detectedDr.value}/{detectedDr.bypass}</strong>
+                        {detectedDr.progression && (
+                          <span className="text-[10px] text-stone-500 block">Scaling: {detectedDr.progression}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3.5e Defenses: Natural Armor, SR, Energy Resistances, Immunities */}
+                  {(detectedNatArmor || detectedSr || (rd.energyResistances && rd.energyResistances.length > 0) || (rd.immunities && rd.immunities.length > 0)) && (
+                    <div className="p-2.5 rounded-xl bg-stone-950/70 border border-stone-800/80 space-y-1.5 font-mono text-xs">
+                      <div className="text-[11px] text-amber-400 uppercase font-bold tracking-wider">Defenses & Resistances</div>
+                      <div className="flex flex-wrap gap-2">
+                        {detectedNatArmor && (
+                          <span className="px-2 py-0.5 rounded-md bg-stone-800 border border-stone-700 text-stone-200">
+                            Natural Armor: <strong className="text-emerald-300">+{detectedNatArmor.value}</strong>
+                            {detectedNatArmor.progression && <span className="text-[10px] text-stone-400 ml-1">({detectedNatArmor.progression})</span>}
+                          </span>
+                        )}
+                        {detectedSr && (
+                          <span className="px-2 py-0.5 rounded-md bg-stone-800 border border-stone-700 text-stone-200">
+                            Spell Resistance: <strong className="text-purple-300">{detectedSr.value}</strong>
+                            {detectedSr.progression && <span className="text-[10px] text-stone-400 ml-1">({detectedSr.progression})</span>}
+                          </span>
+                        )}
+                        {rd.energyResistances && rd.energyResistances.map((er, idx) => (
+                          <span key={idx} className="px-2 py-0.5 rounded-md bg-amber-950/40 border border-amber-800/60 text-amber-200">
+                            Resist {er.energyType} {er.scaling ? getScalingStatAtLevel(er.scaling, currentLvl) : er.value}
+                            {er.scalingProgression && <span className="text-[10px] text-amber-400/70 ml-1">({er.scalingProgression})</span>}
+                          </span>
+                        ))}
+                        {rd.immunities && rd.immunities.map((imm, idx) => (
+                          <span key={idx} className="px-2 py-0.5 rounded-md bg-emerald-950/40 border border-emerald-800/60 text-emerald-200">
+                            Immune: {imm}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 5e Defenses & Racial Mechanics */}
+                  {(rd.damageResistances5e?.length || rd.conditionImmunities5e?.length || rd.naturalArmorFormula5e || rd.scalingRacialDice5e) && (
+                    <div className="p-2.5 rounded-xl bg-stone-950/70 border border-stone-800/80 space-y-1.5 font-mono text-xs">
+                      <div className="text-[11px] text-cyan-400 uppercase font-bold tracking-wider">5e Racial Features</div>
+                      <div className="flex flex-wrap gap-2">
+                        {rd.damageResistances5e && rd.damageResistances5e.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-sky-950/40 border border-sky-800/60 text-sky-200">
+                            Resistances: <strong>{rd.damageResistances5e.join(', ')}</strong>
+                          </span>
+                        )}
+                        {rd.conditionImmunities5e && rd.conditionImmunities5e.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-md bg-indigo-950/40 border border-indigo-800/60 text-indigo-200">
+                            Condition Immunities: <strong>{rd.conditionImmunities5e.join(', ')}</strong>
+                          </span>
+                        )}
+                        {rd.naturalArmorFormula5e && (
+                          <span className="px-2 py-0.5 rounded-md bg-stone-800 border border-stone-700 text-stone-200">
+                            AC Formula: <strong>{rd.naturalArmorFormula5e}</strong>
+                          </span>
+                        )}
+                        {rd.scalingRacialDice5e && (
+                          <span className="px-2 py-0.5 rounded-md bg-purple-950/40 border border-purple-800/60 text-purple-200">
+                            {rd.scalingRacialDice5e.name}: <strong>{rd.scalingRacialDice5e.progression}</strong>
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Natural Weapons */}
+                  {rd.naturalWeapons && rd.naturalWeapons.length > 0 && (
+                    <div className="p-2.5 rounded-xl bg-stone-950/70 border border-stone-800/80 space-y-1.5 font-mono text-xs">
+                      <div className="text-[11px] text-rose-400 uppercase font-bold tracking-wider">Natural Weapons</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {rd.naturalWeapons.map((nw, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-stone-900 border border-stone-800 text-stone-300">
+                            <span className="font-bold text-rose-300">{nw.name}</span>
+                            <span className="text-amber-300">{nw.damage} + {nw.ability || 'STR'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Skill Affinities */}
+                  {rd.skillAffinities && (
+                    <div className="p-2 rounded-xl bg-stone-950/60 border border-stone-800 text-xs font-mono">
+                      <span className="text-amber-400 font-bold mr-1.5">Skill Affinities:</span>
+                      <span className="text-stone-300">
+                        {typeof rd.skillAffinities === 'string'
+                          ? rd.skillAffinities
+                          : Array.isArray(rd.skillAffinities)
+                          ? rd.skillAffinities.map((sa: any) => `+${sa.bonus || 2} ${sa.skill}`).join(', ')
+                          : ''}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Spell-Like Abilities (SLAs) */}
+                  {rd.spellLikeAbilities && rd.spellLikeAbilities.length > 0 && (
+                    <div className="pt-2 border-t border-stone-800/80 space-y-1.5">
+                      <div className="text-[11px] font-mono text-cyan-300 uppercase font-bold">Spell-Like Abilities (SLAs):</div>
+                      <div className="space-y-1 font-mono text-xs">
+                        {rd.spellLikeAbilities.map((sla, idx) => {
+                          const isUnlocked = currentLvl >= (sla.minLevel || 1);
+                          return (
+                            <div key={idx} className={`p-2 rounded-lg border flex flex-wrap items-center justify-between gap-1.5 ${isUnlocked ? 'bg-cyan-950/20 border-cyan-800/50 text-cyan-200' : 'bg-stone-950/40 border-stone-800/40 text-stone-500'}`}>
+                              <div className="flex items-center gap-2">
+                                <span className="px-1.5 py-0.5 rounded bg-stone-800 text-[10px] text-stone-300 font-bold">{sla.levelRange || `Lv ${sla.minLevel}+`}</span>
+                                <strong className="text-stone-200">{sla.spellName}</strong>
+                              </div>
+                              <div className="text-[11px] text-stone-400">
+                                <span className="text-amber-300 font-bold">{sla.usage}</span>
+                                {sla.notes && <span className="ml-1.5 text-stone-500">({sla.notes})</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 5e Innate Spells */}
+                  {rd.innateSpells5e && rd.innateSpells5e.length > 0 && (
+                    <div className="pt-2 border-t border-stone-800/80 space-y-1.5">
+                      <div className="text-[11px] font-mono text-cyan-300 uppercase font-bold">Innate Spellcasting (5e):</div>
+                      <div className="space-y-1 font-mono text-xs">
+                        {rd.innateSpells5e.map((s, idx) => (
+                          <div key={idx} className="p-2 rounded-lg border bg-cyan-950/20 border-cyan-800/50 text-cyan-200 flex items-center justify-between text-xs">
+                            <span>Level {s.level}+: <strong>{s.spellName}</strong> ({s.ability || 'CHA'})</span>
+                            <span className="text-amber-300">{s.recharge}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {rd.traits && rd.traits.length > 0 && (
+                    <div className="pt-2 border-t border-stone-800/80 space-y-2">
+                      <div className="text-[11px] font-mono text-amber-300 uppercase font-bold">Racial Traits:</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {rd.traits.map((trait, idx) => (
+                          <div key={idx} className="bg-stone-950/60 p-2.5 rounded-xl border border-stone-800 space-y-0.5">
+                            <div className="font-bold text-amber-200">{trait.name}</div>
+                            <p className="text-[11px] text-stone-400">{trait.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {selectedDetailItem.category === 'skills' && selectedDetailItem.skillData && (
               <div className="bg-stone-900/80 border border-stone-800 p-4 rounded-2xl text-xs space-y-2">
@@ -976,15 +1761,26 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                   Close
                 </button>
                 {(selectedDetailItem.isCustom || customEntries.some(c => c.id === selectedDetailItem.id || (c.name.toLowerCase() === selectedDetailItem.name.toLowerCase() && c.category === selectedDetailItem.category))) && (
-                  <button
-                    type="button"
-                    onClick={() => setItemToDelete(selectedDetailItem)}
-                    className="px-3.5 py-2.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-300 border border-rose-800/50 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                    title="Delete custom entry"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Entry</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditModal(selectedDetailItem)}
+                      className="px-3.5 py-2.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 hover:border-amber-400 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      title="Edit this entry & synchronize linked entities"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Edit Entry</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setItemToDelete(selectedDetailItem)}
+                      className="px-3.5 py-2.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-400 hover:text-rose-300 border border-rose-800/50 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                      title="Delete custom entry"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Entry</span>
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -1060,13 +1856,21 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
       {showCustomModal && (
         <HomebrewForgeModal
           initialSystem={selectedSystem !== 'all' ? (selectedSystem as any) : '5e'}
-          onClose={() => setShowCustomModal(false)}
+          onClose={() => {
+            setShowCustomModal(false);
+            setEditingItem(null);
+          }}
           activeCharacter={activeCharacter}
           onUpdateCharacter={onUpdateCharacter}
           onAddItemToInventory={onAddItemToInventory}
+          editingItem={editingItem}
+          correspondingEntitiesCount={editingItem ? countCorrespondingEntities(editingItem, allCharacters || []) : 0}
+          onSaveEditedItem={handleSaveEditedItem}
           onSaved={(newItem) => {
             setCustomEntries(loadCustomCompendiumEntries());
             showToast(`✨ Created custom homebrew entry "${newItem.name}"!`);
+            setShowCustomModal(false);
+            setEditingItem(null);
           }}
           allCustomItems={customEntries}
           onImportCustomItems={(imported) => {

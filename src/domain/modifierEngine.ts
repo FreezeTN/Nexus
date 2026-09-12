@@ -453,7 +453,7 @@ export class UniversalModifierEngine {
     const inventory = character.inventory || [];
     const equipped = inventory.filter(i => {
       if (!i.equipped || i.stored) return false;
-      const requiresAttunement = i.requiresAttunement ?? (i.isMagic || (i.notes || '').toLowerCase().includes('attune'));
+      const requiresAttunement = i.requiresAttunement === true || (i.requiresAttunement !== false && (i.notes || '').toLowerCase().includes('attunement'));
       if (requiresAttunement && !i.attuned) return false;
       return true;
     });
@@ -470,10 +470,14 @@ export class UniversalModifierEngine {
         if (!equippedShield) {
           equippedShield = item;
           let shieldBonus = item.armorAc ?? 2;
-          const magicMatch = nameLower.match(/\+(\d+)/) || notesLower.match(/\+(\d+)/);
-          if (magicMatch) {
-            shieldBonus += parseInt(magicMatch[1], 10);
+          let shieldMagic = item.acBonus ?? 0;
+          if (shieldMagic === 0) {
+            const magicMatch = nameLower.match(/\+(\d+)/) || notesLower.match(/\+(\d+)/);
+            if (magicMatch) {
+              shieldMagic = parseInt(magicMatch[1], 10);
+            }
           }
+          shieldBonus += shieldMagic;
           modifiers.push({
             id: `item_shield_${item.id}`,
             label: item.name,
@@ -487,20 +491,17 @@ export class UniversalModifierEngine {
         continue;
       }
 
-      // Armor
-      const isArmor =
-        item.itemType === 'Armor' ||
-        (item.armorAc !== undefined && (item.armorType as string) !== 'Shield') ||
-        nameLower.includes('armor') ||
-        nameLower.includes('plate') ||
-        nameLower.includes('mail') ||
-        nameLower.includes('leather');
+      // Bonus / Accessory items (Ring of Protection, Cloak of Protection, etc.)
+      const isBonusAccessory =
+        item.armorType === 'Bonus' ||
+        nameLower.includes('ring of') ||
+        nameLower.includes('cloak of') ||
+        nameLower.includes('bracers of') ||
+        nameLower.includes('amulet of') ||
+        (item.itemType === 'Misc' && ((item.acBonus ?? 0) > 0 || (item.armorAc ?? 0) > 0));
 
-      if (isArmor && !equippedArmor) {
-        equippedArmor = item;
-      } else {
-        // Other magic items providing AC bonus (Ring of Protection, Cloak of Protection, Bracers of Defense)
-        let bonusVal = item.acBonus ?? 0;
+      if (isBonusAccessory) {
+        let bonusVal = item.acBonus ?? item.armorAc ?? 0;
         if (bonusVal === 0) {
           const acMatch = notesLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i) ||
                           nameLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i);
@@ -519,19 +520,229 @@ export class UniversalModifierEngine {
             source: `${item.name} (+${bonusVal} AC)`
           });
         }
+      }
 
-        // Saving throw bonuses from magic items (e.g. Ring/Cloak of Protection +1 to all saves)
+      // 1. Saving Throw Bonuses
+      let saveVal = item.savingThrowBonus ?? 0;
+      if (saveVal === 0) {
         const saveMatch = notesLower.match(/\+(\d+)\s*(?:to\s*)?(?:all\s*)?saving\s*throws/i);
         if (saveMatch) {
-          const saveVal = parseInt(saveMatch[1], 10);
+          saveVal = parseInt(saveMatch[1], 10);
+        }
+      }
+      if (saveVal > 0) {
+        modifiers.push({
+          id: `item_save_all_${item.id}`,
+          label: item.name,
+          target: 'saving_throw.all',
+          category: 'equipment',
+          value: saveVal,
+          stackingRule: 'additive',
+          source: `${item.name} (+${saveVal} to all saves)`
+        });
+      }
+
+      if (item.savingThrowSpecificBonuses) {
+        for (const [stat, bonus] of Object.entries(item.savingThrowSpecificBonuses)) {
+          if (bonus && bonus !== 0) {
+            modifiers.push({
+              id: `item_save_${stat}_${item.id}`,
+              label: `${item.name} (${stat} Save)`,
+              target: `saving_throw.${stat}` as ModifierTarget,
+              category: 'equipment',
+              value: bonus,
+              stackingRule: 'additive',
+              source: `${item.name} (${bonus >= 0 ? '+' : ''}${bonus} ${stat} Save)`
+            });
+          }
+        }
+      }
+
+      // 2. Skill & Check Bonuses
+      if (item.checkBonus && item.checkBonus !== 0) {
+        modifiers.push({
+          id: `item_check_all_${item.id}`,
+          label: item.name,
+          target: 'skill.all',
+          category: 'equipment',
+          value: item.checkBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (${item.checkBonus >= 0 ? '+' : ''}${item.checkBonus} Checks)`
+        });
+      }
+
+      if (item.skillBonuses) {
+        for (const [skill, bonus] of Object.entries(item.skillBonuses)) {
+          if (bonus && bonus !== 0) {
+            modifiers.push({
+              id: `item_skill_${skill.toLowerCase()}_${item.id}`,
+              label: `${item.name} (${skill})`,
+              target: `skill.${skill.toLowerCase()}` as ModifierTarget,
+              category: 'equipment',
+              value: bonus,
+              stackingRule: 'additive',
+              source: `${item.name} (${bonus >= 0 ? '+' : ''}${bonus} ${skill})`
+            });
+          }
+        }
+      }
+
+      // 3. Attack & Damage Bonuses
+      if (item.attackBonus && item.attackBonus !== 0) {
+        modifiers.push({
+          id: `item_atk_${item.id}`,
+          label: item.name,
+          target: 'attack.all',
+          category: 'equipment',
+          value: item.attackBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (${item.attackBonus >= 0 ? '+' : ''}${item.attackBonus} Attack)`
+        });
+      }
+
+      if (item.damageBonus && item.damageBonus !== 0) {
+        modifiers.push({
+          id: `item_dmg_${item.id}`,
+          label: item.name,
+          target: 'damage.all',
+          category: 'equipment',
+          value: item.damageBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (${item.damageBonus >= 0 ? '+' : ''}${item.damageBonus} Damage)`
+        });
+      }
+
+      // 4. Spellcasting & Initiative & HP & Speed
+      if (item.spellDcBonus && item.spellDcBonus !== 0) {
+        modifiers.push({
+          id: `item_spelldc_${item.id}`,
+          label: item.name,
+          target: 'spell_dc',
+          category: 'equipment',
+          value: item.spellDcBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (+${item.spellDcBonus} Spell DC)`
+        });
+      }
+
+      if (item.spellAttackBonus && item.spellAttackBonus !== 0) {
+        modifiers.push({
+          id: `item_spellatk_${item.id}`,
+          label: item.name,
+          target: 'spell_attack',
+          category: 'equipment',
+          value: item.spellAttackBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (+${item.spellAttackBonus} Spell Attack)`
+        });
+      }
+
+      if (item.hpMaxBonus && item.hpMaxBonus !== 0) {
+        modifiers.push({
+          id: `item_hpmax_${item.id}`,
+          label: item.name,
+          target: 'hp_max',
+          category: 'equipment',
+          value: item.hpMaxBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (${item.hpMaxBonus >= 0 ? '+' : ''}${item.hpMaxBonus} Max HP)`
+        });
+      }
+
+      if (item.initiativeBonus && item.initiativeBonus !== 0) {
+        modifiers.push({
+          id: `item_init_${item.id}`,
+          label: item.name,
+          target: 'initiative',
+          category: 'equipment',
+          value: item.initiativeBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (${item.initiativeBonus >= 0 ? '+' : ''}${item.initiativeBonus} Initiative)`
+        });
+      }
+
+      if (item.speedBonus && item.speedBonus !== 0) {
+        modifiers.push({
+          id: `item_speed_${item.id}`,
+          label: item.name,
+          target: 'speed',
+          category: 'equipment',
+          value: item.speedBonus,
+          stackingRule: 'additive',
+          source: `${item.name} (+${item.speedBonus} ft Speed)`
+        });
+      }
+
+      // 5. Ability Bonuses & Setters
+      if (item.abilityBonuses) {
+        for (const [stat, bonus] of Object.entries(item.abilityBonuses)) {
+          if (bonus && bonus !== 0) {
+            modifiers.push({
+              id: `item_ability_bonus_${stat}_${item.id}`,
+              label: `${item.name} (+${bonus} ${stat})`,
+              target: `ability.${stat}` as ModifierTarget,
+              category: 'equipment',
+              value: bonus,
+              stackingRule: 'additive',
+              source: `${item.name} (+${bonus} ${stat})`
+            });
+          }
+        }
+      }
+
+      if (item.abilitySetters) {
+        for (const [stat, fixedVal] of Object.entries(item.abilitySetters)) {
+          if (fixedVal && fixedVal > 0) {
+            modifiers.push({
+              id: `item_ability_setter_${stat}_${item.id}`,
+              label: `${item.name} (${stat} ${fixedVal})`,
+              target: `ability.${stat}` as ModifierTarget,
+              category: 'equipment',
+              value: fixedVal,
+              stackingRule: 'override_fixed',
+              source: `${item.name} (Set ${stat} to ${fixedVal})`
+            });
+          }
+        }
+      }
+
+      if (isBonusAccessory) {
+        continue;
+      }
+
+      // Armor
+      const isArmor =
+        item.armorType === 'Light' ||
+        item.armorType === 'Medium' ||
+        item.armorType === 'Heavy' ||
+        item.itemType === 'Armor' ||
+        item.armorAc !== undefined ||
+        nameLower.includes('armor') ||
+        nameLower.includes('plate') ||
+        nameLower.includes('mail') ||
+        nameLower.includes('leather');
+
+      if (isArmor && !equippedArmor) {
+        equippedArmor = item;
+      } else {
+        // Other magic items providing AC bonus
+        let bonusVal = item.acBonus ?? item.armorAc ?? 0;
+        if (bonusVal === 0) {
+          const acMatch = notesLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i) ||
+                          nameLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i);
+          if (acMatch) {
+            bonusVal = parseInt(acMatch[1] || acMatch[2] || '0', 10);
+          }
+        }
+        if (bonusVal > 0) {
           modifiers.push({
-            id: `item_save_${item.id}`,
+            id: `item_bonus_${item.id}`,
             label: item.name,
-            target: 'saving_throw.all',
+            target: 'ac',
             category: 'equipment',
-            value: saveVal,
+            value: bonusVal,
             stackingRule: 'additive',
-            source: `${item.name} (+${saveVal} to all saves)`
+            source: `${item.name} (+${bonusVal} AC)`
           });
         }
       }

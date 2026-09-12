@@ -1,9 +1,23 @@
 import React, { useState } from 'react';
 import { CharacterData, Attack, Spell, EncounterEnvironment } from '../../types';
 import { Combatant } from './encounter/encounterTypes';
-import { getSpellAttackBonus, getSpellSaveDC, formatModifier, rollCompoundDamage, RolledDamagePart, applyResistanceAndDRToDamage, calculateCharacterTotalDR, getCharacterResistances, getConditionEffects } from '../../utils/dndCalculations';
+import { 
+  getSpellAttackBonus, 
+  getSpellSaveDC, 
+  formatModifier, 
+  rollCompoundDamage, 
+  RolledDamagePart, 
+  applyResistanceAndDRToDamage, 
+  calculateCharacterTotalDR, 
+  getCharacterResistances, 
+  getConditionEffects,
+  evaluate35eMissChance,
+  DND35E_MISS_CHANCE_PRESETS,
+  MissChanceResult,
+  evaluateUnderwaterCombatModifiers
+} from '../../utils/dndCalculations';
 import { playDiceSound, playHitSound, playMissSound, playDamageAppliedSound, playFireSound, playIceColdSound, playLightningSound, playAcidPoisonSound } from '../../utils/diceAudio';
-import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2 } from 'lucide-react';
+import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2, EyeOff, Waves } from 'lucide-react';
 import { CollapsibleBox } from '../common/CollapsibleBox';
 
 interface AttackResolverProps {
@@ -80,6 +94,25 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   const [extraBonus, setExtraBonus] = useState<number>(0); // e.g., Bless +1d4 or +1 magic
   const [isPowerAttack, setIsPowerAttack] = useState<boolean>(false); // -5 Attack / +10 Heavy/Ranged Damage (GWM / Sharpshooter / Power Attack)
 
+  // Edition Check
+  const is35e = character.edition === '3.5e';
+
+  // 3.5e Concealment & Miss Chance State (3.5e PHB p. 152) - Only active in 3.5e
+  const [missChancePresetId, setMissChancePresetId] = useState<string>('none');
+  const [customMissChancePercent, setCustomMissChancePercent] = useState<number>(20);
+  const [blindFightOverride, setBlindFightOverride] = useState<boolean | null>(null);
+
+  const charHasBlindFight = is35e && (character.feats || []).some(f =>
+    f.name.toLowerCase().includes('blind-fight') || f.name.toLowerCase().includes('blindfight')
+  );
+  const hasBlindFight = blindFightOverride !== null ? blindFightOverride : charHasBlindFight;
+
+  const activeMissChancePercent = is35e
+    ? (missChancePresetId === 'custom'
+      ? customMissChancePercent
+      : DND35E_MISS_CHANCE_PRESETS.find(p => p.id === missChancePresetId)?.percentage || 0)
+    : 0;
+
   // Resolution Result State
   const [lastResult, setLastResult] = useState<{
     attackName: string;
@@ -96,6 +129,8 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     canCrit: boolean;
     damageExpr: string;
     targetCombatantId?: string;
+    missChanceResult?: MissChanceResult;
+    missedDueToConcealment?: boolean;
   } | null>(null);
 
   const [rolledDamage, setRolledDamage] = useState<{
@@ -163,6 +198,29 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     : '5 ft';
 
   const isRanged = activeAttackRange.toLowerCase().includes('range') || (selectedAttack?.range ? (parseInt(selectedAttack.range) > 5) : false);
+
+  // Underwater Combat Modifiers Check (5e PHB p. 198 / 3.5e DMG p. 92)
+  const isUnderwaterCombat = encounterEnvironment === 'underwater';
+  const charSwimSpeed = (character.inventory || []).reduce((max: number, item) => {
+    if (item.equipped && item.swimSpeed) return Math.max(max, item.swimSpeed);
+    return max;
+  }, 0) || ((character as any).speeds?.swim || 0);
+
+  const hasFreedomOfMovement = (character.conditions || []).some(c => c.toLowerCase().includes('freedom of movement')) ||
+    (character.inventory || []).some(i => i.equipped && (i.name.toLowerCase().includes('freedom of movement') || (i.notes || '').toLowerCase().includes('freedom of movement')));
+  const activeDamageType = selectedAttack?.damageType || (selectedSpell?.school ? 'Force' : 'Slashing');
+
+  const underwaterEval = React.useMemo(() => {
+    if (!isUnderwaterCombat) return null;
+    return evaluateUnderwaterCombatModifiers({
+      damageType: activeDamageType,
+      rangeStr: activeAttackRange,
+      weaponName: activeAttackName,
+      hasSwimSpeed: charSwimSpeed > 0,
+      hasFreedomOfMovement,
+      edition: character.edition === '3.5e' ? '3.5e' : '5e'
+    });
+  }, [isUnderwaterCombat, activeDamageType, activeAttackRange, activeAttackName, charSwimSpeed, hasFreedomOfMovement, character.edition]);
 
   const hasSharpshooter = (character.feats || []).some(f => f.name.toLowerCase().includes('sharpshooter')) ||
                           (character.classFeatures || []).some(f => f.name.toLowerCase().includes('sharpshooter'));
@@ -254,6 +312,11 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     }
   }
 
+  // Underwater Combat Disadvantage (5e PHB p. 198)
+  if (underwaterEval?.hasDisadvantage) {
+    disadvantageSources.push('Underwater: Slashing/Bludgeoning without Swim Speed (-Disadvantage) (5e PHB p. 198)');
+  }
+
   const recommendedRollMode: 'normal' | 'advantage' | 'disadvantage' =
     advantageSources.length > 0 && disadvantageSources.length === 0
       ? 'advantage'
@@ -282,6 +345,23 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     }
   }, [selectedTargetId, targetConditions.join(',')]);
 
+  // Auto-sync target Concealment & Miss Chance from conditions (3.5e only)
+  React.useEffect(() => {
+    if (!is35e) {
+      setMissChancePresetId('none');
+      return;
+    }
+    if (targetConditions.some(c => c.toLowerCase().includes('total concealment') || c.toLowerCase().includes('invisible') || c.toLowerCase().includes('darkness'))) {
+      setMissChancePresetId('total_concealment_50');
+    } else if (targetConditions.some(c => c.toLowerCase().includes('concealment') || c.toLowerCase().includes('blur') || c.toLowerCase().includes('fog') || c.toLowerCase().includes('smoke'))) {
+      setMissChancePresetId('concealment_20');
+    } else if (targetConditions.some(c => c.toLowerCase().includes('blink'))) {
+      setMissChancePresetId('blink_50');
+    } else if (targetConditions.some(c => c.toLowerCase().includes('incorporeal'))) {
+      setMissChancePresetId('incorporeal_50');
+    }
+  }, [selectedTargetId, targetConditions.join(','), is35e]);
+
   // Execute Attack Roll vs Target AC
   const handleRollAttack = () => {
     playDiceSound();
@@ -309,10 +389,21 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     const isNat1 = finalD20 === 1;
 
     // Nat 20 auto-hits; Nat 1 auto-misses; otherwise compare total vs effective target AC
-    const isHit = actionType === 'saving_throw' ? true : (isCrit || (!isNat1 && totalAttack >= effectiveTargetAc));
+    let isHit = actionType === 'saving_throw' ? true : (isCrit || (!isNat1 && totalAttack >= effectiveTargetAc));
+    let missChanceResult: MissChanceResult | undefined = undefined;
+    let missedDueToConcealment = false;
+
+    // 3.5e Concealment & Miss Chance Evaluation (3.5e PHB p. 152) - 3.5e Only
+    if (is35e && isHit && activeMissChancePercent > 0 && actionType === 'attack_roll') {
+      missChanceResult = evaluate35eMissChance(activeMissChancePercent, hasBlindFight);
+      if (!missChanceResult.isOvercome) {
+        missedDueToConcealment = true;
+        isHit = false; // Deflected by concealment!
+      }
+    }
 
     // Trigger hit / crit / miss sound effects
-    if (isCrit) {
+    if (isCrit && !missedDueToConcealment) {
       playHitSound(true);
     } else if (isHit) {
       playHitSound(false);
@@ -328,6 +419,8 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     if (onLogAction) {
       const outcomeStr = actionType === 'saving_throw'
         ? `Spell / Action executed vs ${targetNameStr}`
+        : missedDueToConcealment
+        ? `BEAT AC (${totalAttack} vs ${effectiveTargetAc}), BUT MISSED DUE TO CONCEALMENT! (${missChanceResult?.log}) (3.5e PHB p. 152)`
         : isCrit
         ? `CRITICAL HIT! (Rolled ${finalD20} + ${totalBonus} = ${totalAttack} vs AC ${effectiveTargetAc})`
         : isNat1
@@ -353,7 +446,9 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
       isHit,
       canCrit,
       damageExpr: activeDamageExpr,
-      targetCombatantId: targetCombatant?.id
+      targetCombatantId: targetCombatant?.id,
+      missChanceResult,
+      missedDueToConcealment
     });
 
     setRolledDamage(null);
@@ -374,6 +469,13 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     if (targetEffects.damageResistanceAll) {
       finalTotal = Math.floor(finalTotal / 2);
       finalBreakdown = `${finalBreakdown} | Petrified: [Halved by Resistance to All Damage]`;
+    }
+
+    // 3.5e Underwater Combat Damage Penalty (3.5e DMG p. 92):
+    // Slashing and bludgeoning weapons deal HALF damage without swim speed / freedom of movement
+    if (underwaterEval && underwaterEval.damageMultiplier < 1) {
+      finalTotal = Math.floor(finalTotal * underwaterEval.damageMultiplier);
+      finalBreakdown = `${finalBreakdown} | 🌊 Underwater Combat: [Halved for Slashing/Bludgeoning without Swim Speed (3.5e DMG p. 92)]`;
     }
 
     // Apply DR, Resistance, and Immunity to target (supports multi-part damage e.g. 1d8 Slashing + 2d6 Fire)
@@ -679,6 +781,128 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
               </div>
             </label>
           </div>
+
+          {/* 3.5e Concealment & Miss Chance Selector (3.5e PHB p. 152) - Only visible in 3.5e */}
+          {is35e && (
+            <div className="p-2.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-stone-400 text-xs font-bold flex items-center gap-1.5">
+                  <EyeOff className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Target Concealment & Miss Chance (3.5e)</span>
+                </label>
+                {activeMissChancePercent > 0 && (
+                  <span className="text-[10px] font-mono font-bold text-indigo-300 bg-indigo-950 px-1.5 py-0.5 rounded border border-indigo-700">
+                    {activeMissChancePercent}% Miss
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-3 gap-1 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => setMissChancePresetId('none')}
+                  className={`py-1 px-1.5 rounded-lg border transition ${
+                    missChancePresetId === 'none' ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-stone-900 text-stone-400 border-stone-800'
+                  }`}
+                >
+                  Clear (0%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMissChancePresetId('concealment_20')}
+                  className={`py-1 px-1.5 rounded-lg border transition ${
+                    missChancePresetId === 'concealment_20' ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-stone-900 text-stone-400 border-stone-800'
+                  }`}
+                  title="Fog, Smoke, Foliage, Dim Light, Blur (20% Miss)"
+                >
+                  20% Fog/Blur
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMissChancePresetId('total_concealment_50')}
+                  className={`py-1 px-1.5 rounded-lg border transition ${
+                    missChancePresetId === 'total_concealment_50' ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-stone-900 text-stone-400 border-stone-800'
+                  }`}
+                  title="Total Darkness, Invisibility, Blindness (50% Miss)"
+                >
+                  50% Invis/Dark
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMissChancePresetId('blink_50')}
+                  className={`py-1 px-1.5 rounded-lg border transition ${
+                    missChancePresetId === 'blink_50' ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-stone-900 text-stone-400 border-stone-800'
+                  }`}
+                >
+                  50% Blink
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMissChancePresetId('incorporeal_50')}
+                  className={`py-1 px-1.5 rounded-lg border transition ${
+                    missChancePresetId === 'incorporeal_50' ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-stone-900 text-stone-400 border-stone-800'
+                  }`}
+                >
+                  50% Ghost
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMissChancePresetId('custom')}
+                  className={`py-1 px-1.5 rounded-lg border transition ${
+                    missChancePresetId === 'custom' ? 'bg-indigo-600 text-white border-indigo-400' : 'bg-stone-900 text-stone-400 border-stone-800'
+                  }`}
+                >
+                  Custom %
+                </button>
+              </div>
+
+              {missChancePresetId === 'custom' && (
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    value={customMissChancePercent}
+                    onChange={(e) => setCustomMissChancePercent(parseInt(e.target.value) || 20)}
+                    className="w-20 bg-stone-900 border border-stone-700 rounded p-1 text-xs font-mono font-bold text-indigo-300"
+                  />
+                  <span className="text-[11px] text-stone-400">% Miss Chance</span>
+                </div>
+              )}
+
+              {/* Blind-Fight Feat Status */}
+              <label className="flex items-center gap-2 pt-1 cursor-pointer text-[11px] text-stone-300">
+                <input
+                  type="checkbox"
+                  checked={hasBlindFight}
+                  onChange={(e) => setBlindFightOverride(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-amber-500 focus:ring-amber-500"
+                />
+                <span className="flex items-center gap-1">
+                  <span className={hasBlindFight ? 'text-amber-300 font-bold' : 'text-stone-400'}>
+                    Attacker has Blind-Fight Feat
+                  </span>
+                  {charHasBlindFight && <span className="text-[9px] text-emerald-400 font-mono">(Sheet)</span>}
+                </span>
+              </label>
+            </div>
+          )}
+
+          {/* Underwater Combat Status Banner */}
+          {isUnderwaterCombat && underwaterEval && (
+            <div className="p-2.5 rounded-xl bg-cyan-950/60 border border-cyan-500/50 space-y-1 text-xs font-mono">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                  <Waves className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Underwater Combat</span>
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-900 text-cyan-200 font-bold">
+                  {character.edition === '3.5e' ? '3.5e DMG p. 92' : '5e PHB p. 198'}
+                </span>
+              </div>
+              <p className="text-[11px] text-cyan-100">{underwaterEval.summary}</p>
+            </div>
+          )}
         </div>
 
         {/* Right: Roll Mode & Resolution Button */}
@@ -798,7 +1022,13 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
               ) : (
                 <>
                   <XCircle className="w-5 h-5 text-rose-400" />
-                  <span className="text-rose-300 text-base">{lastResult.isNat1 ? 'NATURAL 1 - MISS!' : 'MISS!'}</span>
+                  <span className="text-rose-300 text-base">
+                    {is35e && lastResult.missedDueToConcealment
+                      ? 'CONCEALMENT MISS! (3.5e PHB p. 152)'
+                      : lastResult.isNat1
+                      ? 'NATURAL 1 - MISS!'
+                      : 'MISS!'}
+                  </span>
                 </>
               )}
             </div>
@@ -843,6 +1073,33 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
               <strong className="text-amber-400 text-xs block truncate">{lastResult.damageExpr}</strong>
             </div>
           </div>
+
+          {/* Concealment Roll Outcome Banner (3.5e only) */}
+          {is35e && lastResult.missChanceResult && (
+            <div className={`p-2.5 rounded-xl border text-xs font-mono flex items-center justify-between gap-2 flex-wrap ${
+              lastResult.missedDueToConcealment
+                ? 'bg-rose-950/90 border-rose-500 text-rose-200'
+                : 'bg-indigo-950/60 border-indigo-500/60 text-indigo-200'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="text-base">{lastResult.missedDueToConcealment ? '🌫️' : '✨'}</span>
+                <div>
+                  <strong className="block font-bold">
+                    {lastResult.missedDueToConcealment ? 'Concealment Deflected Attack!' : 'Concealment Overcome!'}
+                  </strong>
+                  <span className="text-[11px] opacity-90">{lastResult.missChanceResult.log}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-stone-900 border border-stone-700">
+                  Miss Chance: {lastResult.missChanceResult.missChancePercent}%
+                </span>
+                {lastResult.missChanceResult.usedBlindFight && (
+                  <span className="block text-[10px] text-amber-300 font-bold mt-0.5">⚔️ Blind-Fight Reroll</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Roll Damage & Apply HP Section */}
           {lastResult.isHit && (

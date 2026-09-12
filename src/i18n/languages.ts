@@ -470,6 +470,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     'inventory.pushDragLift': 'Push / Drag / Lift',
     'inventory.equipped': 'Equipped',
     'inventory.attuned': 'Attuned',
+    'inventory.magic': 'Magic',
 
     // Passive Senses
     'senses.title': 'Passive Senses',
@@ -961,6 +962,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     'inventory.pushDragLift': 'Schieben / Ziehen / Heben',
     'inventory.equipped': 'Ausgerüstet',
     'inventory.attuned': 'Eingestimmt',
+    'inventory.magic': 'Magie',
 
     // Passive Senses
     'senses.title': 'Passive Sinne',
@@ -1452,6 +1454,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     'inventory.pushDragLift': 'Pousser / Tirer / Soulever',
     'inventory.equipped': 'Équipé',
     'inventory.attuned': 'Harmonisé',
+    'inventory.magic': 'Magie',
 
     // Passive Senses
     'senses.title': 'Sens Passifs',
@@ -1943,6 +1946,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     'inventory.pushDragLift': 'Empujar / Arrastrar / Levantar',
     'inventory.equipped': 'Equipado',
     'inventory.attuned': 'Sintonizado',
+    'inventory.magic': 'Magia',
 
     // Passive Senses
     'senses.title': 'Sentidos Pasivos',
@@ -2434,6 +2438,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     'inventory.pushDragLift': 'Spingi / Trascina / Solleva',
     'inventory.equipped': 'Equipaggiato',
     'inventory.attuned': 'Sintonizzato',
+    'inventory.magic': 'Magia',
 
     // Passive Senses
     'senses.title': 'Sensi Passivi',
@@ -2925,6 +2930,7 @@ export const TRANSLATIONS: Record<string, Record<string, string>> = {
     'inventory.pushDragLift': '押し/引き/持ち上げ許容量',
     'inventory.equipped': '装備中',
     'inventory.attuned': '同調中',
+    'inventory.magic': '魔法',
 
     // Passive Senses
     'senses.title': '受動感覚',

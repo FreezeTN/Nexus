@@ -3,6 +3,7 @@ import {
   WorldLocation,
   CampaignQuest,
   Faction,
+  FactionCategory,
   TravelCalculationParams,
   TravelCalculationResult,
   MapPresetSkin
@@ -794,4 +795,111 @@ export async function generateTavernRumors(locationName: string): Promise<Array<
       source: 'Sewer Worker Apprentice'
     }
   ];
+}
+
+// AI Generation for Factions & Guilds
+export async function generateAiFaction(params: {
+  category: FactionCategory;
+  theme: string;
+}): Promise<Faction> {
+  const apiKey = process.env.GEMINI_API_KEY || (typeof window !== 'undefined' ? (window as any).GEMINI_API_KEY : '');
+
+  if (apiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey });
+      const prompt = `Generate a rich, immersive TRPG Faction / Guild / Syndicate formatted strictly as JSON.
+Setting/Theme: ${params.theme}
+Faction Category: ${params.category}
+
+Return ONLY valid JSON matching this schema:
+{
+  "name": "Evocative Faction Name",
+  "category": "guild" | "syndicate" | "military" | "religious" | "political" | "arcane" | "underworld",
+  "headquartersLocationName": "City, Fortress, or Secret Sanctuary",
+  "leaderName": "Leader / Archmage / Guildmaster Name",
+  "motto": "Short inspiring or chilling motto",
+  "description": "3-4 sentences detailing their purpose, historical origins, and public presence",
+  "alignment": "e.g. Lawful Neutral, Chaotic Good",
+  "secretAgenda": "DM Confidential: Hidden motives or secret conspiracies",
+  "perks": [
+    { "tier": 1, "name": "Perk Name", "description": "Mechanical/roleplay boon", "standingRequired": 15 },
+    { "tier": 2, "name": "Perk Name", "description": "Mechanical/roleplay boon", "standingRequired": 30 },
+    { "tier": 3, "name": "Perk Name", "description": "Mechanical/roleplay boon", "standingRequired": 60 },
+    { "tier": 4, "name": "Perk Name", "description": "Mechanical/roleplay boon", "standingRequired": 85 }
+  ],
+  "rivalFactionNames": ["Rival Faction 1", "Rival Faction 2"]
+}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.7-flash',
+        contents: prompt
+      });
+
+      const rawText = response.text || '';
+      const cleanedJson = rawText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanedJson);
+
+      return {
+        id: `fac-gen-${Date.now()}`,
+        name: parsed.name || 'Order of the Ashen Horizon',
+        category: (parsed.category as any) || params.category,
+        standing: 0,
+        headquartersLocationName: parsed.headquartersLocationName || 'Hidden Citadel',
+        leaderName: parsed.leaderName || 'Grand Chancellor Vane',
+        motto: parsed.motto || 'In darkness we find the dawn.',
+        description: parsed.description || 'A mysterious alliance of spellweavers and scouts.',
+        alignment: parsed.alignment || 'Neutral',
+        secretAgenda: parsed.secretAgenda,
+        perks: (parsed.perks || []).map((p: any, idx: number) => ({
+          tier: p.tier || idx + 1,
+          name: p.name || `Alliance Boon ${idx + 1}`,
+          description: p.description || 'Provides specialized regional assistance.',
+          standingRequired: p.standingRequired || (idx + 1) * 20,
+          unlocked: false
+        })),
+        rivalFactionIds: [],
+        rivalFactionNames: parsed.rivalFactionNames || [],
+        reputationHistory: [
+          {
+            id: `log-init-${Date.now()}`,
+            date: new Date().toLocaleDateString(),
+            delta: 0,
+            reason: 'First diplomatic contact established with the party.'
+          }
+        ]
+      };
+    } catch (e) {
+      console.warn('Gemini faction generation fallback', e);
+    }
+  }
+
+  // Fallback Factions
+  return {
+    id: `fac-gen-${Date.now()}`,
+    name: 'The Moonstone Cartographers',
+    category: params.category || 'guild',
+    standing: 10,
+    headquartersLocationName: 'The Starlight Observatory',
+    leaderName: 'High Navigator Selene Vance',
+    motto: 'No path uncharted, no truth forgotten.',
+    description: 'A prestigious league of celestial cartographers, rangers, and planar explorers who map uncharted wilderness and deep subterranean deltas.',
+    alignment: 'Neutral Good',
+    secretAgenda: 'Secretly locating planar rifts before hostile syndicates can exploit them.',
+    perks: [
+      { tier: 1, name: 'Wilderness Wayfinding', description: 'Party never becomes lost during regional travel.', standingRequired: 15, unlocked: false },
+      { tier: 2, name: 'Secret Leyline Maps', description: 'Advantage on navigating planar rifts and ancient ruins.', standingRequired: 30, unlocked: false },
+      { tier: 3, name: 'Astral Beacon Teleport', description: 'One-time instant evacuation beacon back to headquarters.', standingRequired: 60, unlocked: false },
+      { tier: 4, name: 'Planar Compass Mastery', description: 'Access to legendary dimensional charting scrolls and planar vessels.', standingRequired: 85, unlocked: false }
+    ],
+    rivalFactionIds: [],
+    rivalFactionNames: ['The Iron Consortium'],
+    reputationHistory: [
+      {
+        id: `log-init-${Date.now()}`,
+        date: new Date().toLocaleDateString(),
+        delta: 10,
+        reason: 'Delivered uncharted survey notes from the sunken spire.'
+      }
+    ]
+  };
 }

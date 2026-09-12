@@ -19,7 +19,9 @@ import {
   Users, 
   FileText,
   Copy,
-  FlaskConical
+  FlaskConical,
+  Cloud,
+  Database
 } from 'lucide-react';
 import { useSubscription } from '../../context/SubscriptionContext';
 import { 
@@ -270,6 +272,10 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                     <span>Up to 5 Cloud Character Slots</span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Database className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                    <span>Homebrew & Compendium in Local Cache</span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                     <span>Standard Obsidian & Metal Dice</span>
                   </div>
@@ -340,6 +346,10 @@ export const UpgradeModal: React.FC<UpgradeModalProps> = ({
                   <div className="flex items-center gap-2">
                     <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                     <span>Official Fillable PDF Sheet Exporter</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span><strong>Cloud Database Sync</strong> for Homebrew & Forge</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

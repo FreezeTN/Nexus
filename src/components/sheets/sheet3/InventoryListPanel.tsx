@@ -1,9 +1,24 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CharacterData, GearItem, ItemContainer, ContainerType } from '../../../types';
+import { CharacterData, GearItem, ItemContainer, ContainerType, WeaponDamageRow } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { PRESET_DND_ITEMS } from '../../../data/presetItems';
 import { loadCustomCompendiumEntries, saveCustomCompendiumEntry, deleteCustomCompendiumEntry, CompendiumItem } from '../../../data/compendiumData';
-import { recalculateCharacterAC, getMaxAttunementSlots, getAttunedItemsCount } from '../../../utils/dndCalculations';
+import {
+  recalculateCharacterAC,
+  getMaxAttunementSlots,
+  getAttunedItemsCount,
+  getEquippedHandsUsage,
+  canEquipItem,
+  getItemHandsRequired,
+  isShieldItem,
+  isArmorItem,
+  isWeaponItem,
+  isTwoHandedWeapon,
+  isContainerItem,
+  getItemEquipmentBadge,
+  deductGoldFromWealth,
+  formatWealthDetailed
+} from '../../../utils/dndCalculations';
 import { getCharacterContainers, PRESET_CONTAINERS, getContainerWeightSummaries } from '../../../utils/containerUtils';
 import { eventBus } from '../../../events/eventBus';
 import { useLanguage } from '../../../i18n/LanguageContext';
@@ -41,8 +56,13 @@ import {
   Layers,
   Crown,
   Coins,
-  Eye
+  Eye,
+  ShoppingBag
 } from 'lucide-react';
+import { ItemEffectsEditor, ITEM_CATEGORIES } from './ItemEffectsEditor';
+import { StablesAndMountsModal } from '../../modals/StablesAndMountsModal';
+import { OFFICIAL_MOUNT_PRESETS, purchaseMountForCharacter } from '../../../data/mountData';
+import { playCoinSound } from '../../../utils/soundEffects';
 
 interface InventoryListPanelProps {
   character: CharacterData;
@@ -68,6 +88,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const [categoryFilter, setCategoryFilter] = useState<'all' | 'containers' | 'weapon_melee' | 'weapon_ranged' | 'armor' | 'magic' | 'misc'>('all');
   const [selectedContainerTab, setSelectedContainerTab] = useState<string>('all');
   const [attunementWarning, setAttunementWarning] = useState<string | null>(null);
+  const [handSlotWarning, setHandSlotWarning] = useState<string | null>(null);
   const [openMoveDropdownId, setOpenMoveDropdownId] = useState<string | null>(null);
 
   // Container modal state
@@ -84,7 +105,8 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
 
   // Add Item Modal & Catalog State
   const [addItemModalTab, setAddItemModalTab] = useState<'catalog' | 'custom'>('catalog');
-  const [catalogCategory, setCatalogCategory] = useState<'all' | 'custom' | 'weapons' | 'armor' | 'magic' | 'consumables' | 'gear'>('all');
+  const [catalogCategory, setCatalogCategory] = useState<'all' | 'custom' | 'weapons' | 'armor' | 'magic' | 'consumables' | 'mounts' | 'gear'>('all');
+  const [showStablesModal, setShowStablesModal] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
   const [customCompendiumList, setCustomCompendiumList] = useState<CompendiumItem[]>([]);
   const [saveToCompendiumAlso, setSaveToCompendiumAlso] = useState(true);
@@ -130,6 +152,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   }, [character.id, character.name]);
 
   // New item form state
+  const is5e = (character.edition || '5e') === '5e';
   const [newItemName, setNewItemName] = useState('');
   const [newItemQty, setNewItemQty] = useState<number>(1);
   const [newItemWeight, setNewItemWeight] = useState<number>(1);
@@ -145,11 +168,14 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const [newItemArmorAc, setNewItemArmorAc] = useState<number | ''>('');
   const [newItemAcBonus, setNewItemAcBonus] = useState<number | ''>('');
   const [newItemArmorType, setNewItemArmorType] = useState<'Light' | 'Medium' | 'Heavy' | 'Shield' | 'Bonus'>('Light');
+  const [newItemStrengthReq, setNewItemStrengthReq] = useState<number | ''>('');
+  const [newItemMaxDexBonus, setNewItemMaxDexBonus] = useState<number | ''>('');
   const [newItemStealthDisadv, setNewItemStealthDisadv] = useState(false);
   const [newItemWeaponDamage, setNewItemWeaponDamage] = useState('');
   const [newItemWeaponDmgType, setNewItemWeaponDmgType] = useState('Slashing');
   const [newItemWeaponAtkBonus, setNewItemWeaponAtkBonus] = useState('');
   const [newItemWeaponRange, setNewItemWeaponRange] = useState('Melee');
+  const [newItemWeaponAdditionalRows, setNewItemWeaponAdditionalRows] = useState<WeaponDamageRow[]>([]);
   const [newItemHpBonus, setNewItemHpBonus] = useState<number | ''>('');
   const [newItemInitiativeBonus, setNewItemInitiativeBonus] = useState<number | ''>('');
   const [newItemSpellDcBonus, setNewItemSpellDcBonus] = useState<number | ''>('');
@@ -174,6 +200,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     armorAc?: number;
     armorType?: string;
     acBonus?: number;
+    strengthRequirement?: number;
+    maxDexBonus?: number;
+    stealthDisadvantage?: boolean;
     damageReduction?: number;
     resistance?: string;
     immunity?: string;
@@ -224,6 +253,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
           armorAc: d.armorAc ?? d.armorClass,
           armorType: d.armorType,
           acBonus: d.acBonus,
+          strengthRequirement: d.strengthRequirement,
+          maxDexBonus: d.maxDexBonus,
+          stealthDisadvantage: d.stealthDisadvantage,
           damageReduction: d.damageReduction,
           resistance: d.resistance,
           immunity: d.immunity,
@@ -257,6 +289,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
         range: preset.weaponStats?.range,
         armorAc: preset.armorAc,
         armorType: preset.armorType,
+        strengthRequirement: preset.strengthRequirement,
+        maxDexBonus: preset.maxDexBonus,
+        stealthDisadvantage: preset.stealthDisadvantage,
         isMagic: preset.isMagic,
         notes: preset.notes,
         source: 'SRD Official'
@@ -279,6 +314,12 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
         const name = item.name.toLowerCase();
         const isConsumable = sub.includes('potion') || sub.includes('scroll') || sub.includes('consumable') || name.includes('potion') || name.includes('scroll') || name.includes('ration') || name.includes('arrow') || name.includes('bolt') || name.includes('vial');
         if (!isConsumable) return false;
+      }
+      if (catalogCategory === 'mounts') {
+        const sub = (item.subCategory || '').toLowerCase();
+        const name = item.name.toLowerCase();
+        const isMountOrTack = sub.includes('mount') || sub.includes('steed') || sub.includes('tack') || sub.includes('saddle') || sub.includes('barding') || name.includes('horse') || name.includes('pony') || name.includes('warhorse') || name.includes('saddle') || name.includes('barding') || name.includes('mule') || name.includes('donkey') || name.includes('camel') || name.includes('elephant') || name.includes('dog');
+        if (!isMountOrTack) return false;
       }
       if (catalogCategory === 'gear') {
         if (item.category === 'Weapon' || item.category === 'Armor' || item.category === 'Magic') return false;
@@ -322,6 +363,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     setNewItemWeaponDmgType('Slashing');
     setNewItemWeaponAtkBonus('');
     setNewItemWeaponRange('Melee');
+    setNewItemWeaponAdditionalRows([]);
     setNewItemHpBonus('');
     setNewItemInitiativeBonus('');
     setNewItemSpellDcBonus('');
@@ -331,14 +373,13 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   };
 
   const getItemCategory = (item: GearItem): 'Weapon' | 'Armor' | 'Magic' | 'Misc' => {
-    if (item.itemType === 'Armor') return 'Armor';
-    if (item.itemType === 'Weapon') return 'Weapon';
+    if (isShieldItem(item) || isArmorItem(item) || item.itemType === 'Armor') return 'Armor';
+    if (isWeaponItem(item) || item.itemType === 'Weapon') return 'Weapon';
+    if (isContainerItem(item)) return 'Misc';
     if (item.isMagic) return 'Magic';
 
     const name = item.name.toLowerCase();
-    if (name.includes('armor') || name.includes('shield') || name.includes('chainmail') || name.includes('plate')) return 'Armor';
-    if (name.includes('sword') || name.includes('bow') || name.includes('axe') || name.includes('dagger') || name.includes('mace') || name.includes('spear')) return 'Weapon';
-    if (name.includes('potion') || name.includes('scroll') || name.includes('ring') || name.includes('wand')) return 'Magic';
+    if (name.includes('potion') || name.includes('scroll') || name.includes('ring') || name.includes('wand') || name.includes('rod') || name.includes('staff')) return 'Magic';
     return 'Misc';
   };
 
@@ -346,7 +387,15 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     const mainCat = getItemCategory(item);
     const name = item.name.toLowerCase();
     if (mainCat === 'Weapon') {
-      if (name.includes('bow') || name.includes('crossbow') || name.includes('sling') || name.includes('dart') || name.includes('javelin')) {
+      if (
+        name.includes('bow') ||
+        name.includes('crossbow') ||
+        name.includes('sling') ||
+        name.includes('dart') ||
+        name.includes('blowgun') ||
+        name.includes('javelin') ||
+        (item.weaponStats?.range?.toLowerCase().includes('ft') && !item.weaponStats?.range?.toLowerCase().includes('melee'))
+      ) {
         return 'weapon_ranged';
       }
       return 'weapon_melee';
@@ -357,6 +406,20 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   };
 
   const handleToggleEquipped = (id: string) => {
+    const itemToToggle = character.inventory.find(i => i.id === id);
+    if (!itemToToggle) return;
+
+    // Validate equipping limits (hands capacity, shields)
+    if (!itemToToggle.equipped) {
+      const check = canEquipItem(character, itemToToggle);
+      if (!check.allowed) {
+        setHandSlotWarning(check.reason || 'Cannot equip item: insufficient free hands.');
+        setTimeout(() => setHandSlotWarning(null), 6000);
+        return;
+      }
+    }
+
+    setHandSlotWarning(null);
     const updatedInventory = character.inventory.map(item => {
       if (item.id === id) {
         const nextEquipped = !item.equipped;
@@ -397,6 +460,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   };
 
   const handleToggleAttuned = (id: string) => {
+    if (!is5e) return;
     const itemToToggle = character.inventory.find(i => i.id === id);
     if (!itemToToggle) return;
 
@@ -523,6 +587,113 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     setTimeout(() => setQuickAddFeedback(null), 2500);
   };
 
+  const handleBuyCatalogItem = (item: UnifiedCatalogItem) => {
+    const cost = item.costGp || 0;
+    const wealthInfo = formatWealthDetailed(character.wealth);
+
+    if (wealthInfo.totalGp < cost - 0.001) {
+      setQuickAddFeedback(`⚠️ Not enough currency! You have ${wealthInfo.displayText} total (${wealthInfo.breakdown}), but "${item.name}" costs ${cost} GP.`);
+      setTimeout(() => setQuickAddFeedback(null), 3500);
+      return;
+    }
+
+    // Check if it's a mount
+    const sub = (item.subCategory || '').toLowerCase();
+    const nameLower = item.name.toLowerCase();
+    const isMount = sub.includes('mount') || sub.includes('steed') ||
+      OFFICIAL_MOUNT_PRESETS.some(p => p.name.toLowerCase() === nameLower);
+
+    if (isMount) {
+      const preset = OFFICIAL_MOUNT_PRESETS.find(p => p.name.toLowerCase() === nameLower) || {
+        id: `mount-${Date.now()}`,
+        name: item.name,
+        type: item.name,
+        costGp: cost,
+        size: 'Large' as const,
+        speed: '50 ft.',
+        ac: 14,
+        hp: 20,
+        hpMax: 20,
+        str: 16,
+        dex: 12,
+        con: 14,
+        carryingCapacityLbs: { light: 200, medium: 400, heavy: 600 },
+        isWarTrained: nameLower.includes('war'),
+        attacks: [],
+        description: item.notes || 'Purchased mount',
+        source: 'D&D Catalog'
+      };
+
+      const purchaseResult = purchaseMountForCharacter(character, preset, item.name);
+      if (purchaseResult.success) {
+        onUpdateCharacter(purchaseResult.updatedCharacter);
+        playCoinSound();
+        setQuickAddFeedback(`🐎 Purchased and stabled "${item.name}" for ${cost} GP! Check My Stables.`);
+        setTimeout(() => setQuickAddFeedback(null), 3500);
+        return;
+      }
+    }
+
+    // Regular item purchase (tack, barding, weapons, gear)
+    const deduction = deductGoldFromWealth(cost, character.wealth);
+    if (!deduction.success) {
+      setQuickAddFeedback(`⚠️ Not enough currency to cover ${cost} GP.`);
+      setTimeout(() => setQuickAddFeedback(null), 3500);
+      return;
+    }
+    const updatedWealth = deduction.updatedWealth;
+
+    const hasWeaponData = item.category === 'Weapon' || !!item.damage || !!item.attackBonus || !!item.range;
+    const weaponStats = hasWeaponData ? {
+      damage: item.damage,
+      damageType: item.damageType,
+      attackBonus: item.attackBonus,
+      range: item.range,
+      additionalDamageRows: item.rawItemData?.weaponStats?.additionalDamageRows
+    } : undefined;
+
+    const newGearItem: GearItem = {
+      id: 'gear-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      name: item.name,
+      quantity: 1,
+      weight: item.weight || 1,
+      costGp: cost,
+      equipped: false,
+      stored: false,
+      notes: item.notes,
+      itemType: item.category === 'Weapon' ? 'Weapon' : (item.category === 'Armor' ? 'Armor' : 'Misc'),
+      damageReduction: item.damageReduction,
+      resistance: item.resistance,
+      immunity: item.immunity,
+      armorAc: item.armorAc,
+      acBonus: item.acBonus,
+      armorType: item.armorType as any,
+      strengthRequirement: item.strengthRequirement,
+      maxDexBonus: item.maxDexBonus,
+      stealthDisadvantage: item.stealthDisadvantage,
+      weaponStats: weaponStats,
+      hpMaxBonus: item.hpMaxBonus,
+      initiativeBonus: item.initiativeBonus,
+      spellDcBonus: item.spellDcBonus,
+      isMagic: item.isMagic,
+      isCursed: item.isCursed,
+      rarity: item.rarity,
+      requiresAttunement: item.requiresAttunement
+    };
+
+    const updatedInventory = [newGearItem, ...currentInventory];
+    const updatedChar = recalculateCharacterAC({
+      ...character,
+      wealth: updatedWealth,
+      inventory: updatedInventory
+    });
+
+    onUpdateCharacter(updatedChar);
+    playCoinSound();
+    setQuickAddFeedback(`🛍️ Purchased "${item.name}" for ${cost} GP! Added to inventory.`);
+    setTimeout(() => setQuickAddFeedback(null), 3000);
+  };
+
   const handleDeleteCustomCatalogItem = (item: UnifiedCatalogItem, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!item.isCustom) return;
@@ -549,10 +720,18 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     setNewItemArmorAc(item.armorAc ?? '');
     setNewItemAcBonus(item.acBonus ?? '');
     setNewItemArmorType((item.armorType as any) || 'Light');
+    setNewItemStrengthReq(item.strengthRequirement ?? '');
+    setNewItemMaxDexBonus(item.maxDexBonus ?? '');
+    setNewItemStealthDisadv(!!item.stealthDisadvantage);
     setNewItemWeaponDamage(item.damage || '');
     setNewItemWeaponDmgType(item.damageType || 'Slashing');
     setNewItemWeaponAtkBonus(item.attackBonus || '');
     setNewItemWeaponRange(item.range || 'Melee');
+    setNewItemWeaponAdditionalRows(
+      item.rawItemData?.weaponStats?.additionalDamageRows
+        ? JSON.parse(JSON.stringify(item.rawItemData.weaponStats.additionalDamageRows))
+        : []
+    );
     setNewItemDamageReduction(item.damageReduction ?? '');
     setNewItemResistance(item.resistance || '');
     setNewItemImmunity(item.immunity || '');
@@ -570,12 +749,14 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const handleAddItem = () => {
     if (!newItemName.trim()) return;
 
-    const hasWeaponData = newItemType === 'Weapon' || newItemWeaponDamage.trim() || newItemWeaponAtkBonus.trim() || newItemWeaponRange.trim();
+    const hasWeaponData = newItemType === 'Weapon' || newItemWeaponDamage.trim() || newItemWeaponAtkBonus.trim() || newItemWeaponRange.trim() || newItemWeaponAdditionalRows.length > 0;
+    const validAdditionalRows = newItemWeaponAdditionalRows.filter(r => r.damage && r.damage.trim());
     const weaponStats = hasWeaponData ? {
       damage: newItemWeaponDamage.trim() || undefined,
       damageType: newItemWeaponDmgType.trim() || undefined,
       attackBonus: newItemWeaponAtkBonus.trim() || undefined,
       range: newItemWeaponRange.trim() || undefined,
+      additionalDamageRows: validAdditionalRows.length > 0 ? validAdditionalRows : undefined,
     } : undefined;
 
     const newItem: GearItem = {
@@ -594,6 +775,8 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       armorAc: newItemArmorAc !== '' ? Number(newItemArmorAc) : undefined,
       acBonus: newItemAcBonus !== '' ? Number(newItemAcBonus) : undefined,
       armorType: newItemType === 'Armor' ? newItemArmorType : undefined,
+      strengthRequirement: newItemStrengthReq !== '' ? Number(newItemStrengthReq) : undefined,
+      maxDexBonus: newItemMaxDexBonus !== '' ? Number(newItemMaxDexBonus) : undefined,
       stealthDisadvantage: newItemStealthDisadv || undefined,
       weaponStats: weaponStats,
       hpMaxBonus: newItemHpBonus !== '' ? Number(newItemHpBonus) : undefined,
@@ -734,6 +917,19 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const containerSummaries = getContainerWeightSummaries(character);
 
   const handleMoveItemToContainer = (itemId: string, targetContainerId?: string, isEquipped?: boolean, isStored?: boolean) => {
+    if (isEquipped) {
+      const itemToEquip = character.inventory.find(i => i.id === itemId);
+      if (itemToEquip && !itemToEquip.equipped) {
+        const check = canEquipItem(character, itemToEquip);
+        if (!check.allowed) {
+          setHandSlotWarning(check.reason || 'Cannot equip item: insufficient free hands.');
+          setTimeout(() => setHandSlotWarning(null), 6000);
+          setOpenMoveDropdownId(null);
+          return;
+        }
+      }
+    }
+
     const updatedInventory = character.inventory.map(item => {
       if (item.id === itemId) {
         return {
@@ -808,6 +1004,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     }
 
     if (categoryFilter === 'all' || categoryFilter === 'containers') return true;
+    if (categoryFilter === 'magic') {
+      return Boolean(item.isMagic || item.attuned || item.requiresAttunement || getItemCategory(item) === 'Magic');
+    }
     const subtype = getItemSubtype(item);
     return subtype === categoryFilter;
   });
@@ -817,7 +1016,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const countMelee = currentInventory.filter(i => getItemSubtype(i) === 'weapon_melee').length;
   const countRanged = currentInventory.filter(i => getItemSubtype(i) === 'weapon_ranged').length;
   const countArmor = currentInventory.filter(i => getItemSubtype(i) === 'armor').length;
-  const countMagic = currentInventory.filter(i => getItemSubtype(i) === 'magic').length;
+  const countMagic = currentInventory.filter(i => Boolean(i.isMagic || i.attuned || i.requiresAttunement || getItemCategory(i) === 'Magic')).length;
   const countMisc = currentInventory.filter(i => getItemSubtype(i) === 'misc').length;
 
   return (
@@ -827,6 +1026,16 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       storageKey="sheet3_equipment"
       headerExtra={
         <div className="flex items-center gap-2">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStablesModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/70 hover:bg-amber-900 border border-amber-600/60 text-amber-300 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+            title="Open Stables & Mount Vendor to manage warhorses, tack, saddles, and barding"
+          >
+            <span>🐎 Stables ({character.ownedMounts?.length || 0})</span>
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -953,7 +1162,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
               }`}
             >
               <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-              <span>{t('inventory.attuned', 'Magic')} ({countMagic})</span>
+              <span>{t('inventory.magic', 'Magic')} ({countMagic})</span>
             </button>
 
             <button
@@ -970,7 +1179,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
             </button>
 
             {/* Attunement Slot Capacity Pill */}
-            {character.edition !== '3.5e' && (() => {
+            {is5e && (() => {
               const maxSlots = getMaxAttunementSlots(character).maxSlots;
               const currentAttuned = getAttunedItemsCount(character);
               return (
@@ -985,10 +1194,49 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                 </div>
               );
             })()}
+
+            {/* Hands / Limbs Capacity Pill */}
+            {(() => {
+              const handsUsage = getEquippedHandsUsage(character);
+              const isFull = handsUsage.usedHands >= handsUsage.maxHands && handsUsage.maxHands > 0;
+              const isOver = handsUsage.usedHands > handsUsage.maxHands;
+              const isZero = handsUsage.maxHands === 0;
+              const heldSummary = handsUsage.equippedHeldItems.length > 0
+                ? handsUsage.equippedHeldItems.map(h => `${h.item.name} (${h.hands}h)`).join(', ')
+                : 'None';
+
+              return (
+                <div
+                  className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold flex items-center gap-1.5 border transition cursor-help ${
+                    isZero
+                      ? 'bg-rose-950/80 text-rose-300 border-rose-600/60'
+                      : isOver
+                      ? 'bg-rose-950/80 text-rose-300 border-rose-500/60 animate-pulse'
+                      : isFull
+                      ? 'bg-amber-950/80 text-amber-300 border-amber-500/60'
+                      : 'bg-stone-900 text-stone-300 border-stone-800'
+                  }`}
+                  title={`Hands Capacity: ${handsUsage.usedHands} / ${handsUsage.maxHands} hands occupied.\n${handsUsage.capacityInfo.breakdown}\nWielding: ${heldSummary}`}
+                >
+                  <span>✋</span>
+                  <span>Hands: {handsUsage.usedHands} / {handsUsage.maxHands}</span>
+                  {handsUsage.capacityInfo.hasExtraArms && (
+                    <span className="text-[9px] px-1 py-0.2 bg-emerald-950 text-emerald-300 rounded border border-emerald-600/50">
+                      Extra Arms
+                    </span>
+                  )}
+                  {isZero && (
+                    <span className="text-[9px] px-1 py-0.2 bg-rose-950 text-rose-300 rounded border border-rose-600/50">
+                      No Hands
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
           </div>
 
           {/* Attunement Limit Warning Alert */}
-          {attunementWarning && (
+          {is5e && attunementWarning && (
             <div className="bg-rose-950/80 border border-rose-600/70 text-rose-200 text-xs px-3 py-2 rounded-xl flex items-center justify-between gap-2 animate-fadeIn">
               <div className="flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0" />
@@ -998,6 +1246,23 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                 type="button"
                 onClick={() => setAttunementWarning(null)}
                 className="text-rose-400 hover:text-rose-100 p-0.5"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Hands Capacity Limit Warning Alert */}
+          {handSlotWarning && (
+            <div className="bg-amber-950/90 border border-amber-500/80 text-amber-200 text-xs px-3 py-2.5 rounded-xl flex items-center justify-between gap-2 shadow-lg animate-fadeIn">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0" />
+                <span>{handSlotWarning}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHandSlotWarning(null)}
+                className="text-amber-400 hover:text-amber-100 p-0.5"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -1282,7 +1547,14 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                           ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500 font-bold'
                           : 'bg-stone-900 text-stone-500 border-stone-800 hover:text-stone-300'
                       }`}
-                      title={item.equipped ? 'Equipped (Active)' : 'Unequipped (Carried)'}
+                      title={
+                        item.equipped
+                          ? 'Equipped (Active) - Click to Unequip'
+                          : (() => {
+                              const check = canEquipItem(character, item);
+                              return check.allowed ? 'Unequipped (Carried) - Click to Equip' : check.reason;
+                            })()
+                      }
                     >
                       {item.equipped ? <CheckSquare className="w-3.5 h-3.5 text-emerald-400" /> : <Square className="w-3.5 h-3.5" />}
                       <span>EQ</span>
@@ -1301,35 +1573,50 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                       <span>{item.stored ? 'STASH' : 'CARRY'}</span>
                     </button>
 
-                    <button
-                      onClick={() => handleToggleAttuned(item.id)}
-                      className={`flex items-center gap-1 transition px-1.5 py-0.5 rounded border text-[10px] font-mono cursor-pointer ${
-                        item.attuned
-                          ? 'bg-purple-950/90 text-purple-200 border-purple-500 font-bold shadow'
-                          : 'bg-stone-900 text-stone-500 border-stone-800 hover:text-stone-300'
-                      }`}
-                      title={item.attuned ? 'Attuned Magic Item (Active Bond)' : 'Click to Attune Magic Item'}
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                      <span>{item.attuned ? 'ATTUNED' : 'ATTUNE'}</span>
-                    </button>
+                    {is5e && (
+                      <button
+                        onClick={() => handleToggleAttuned(item.id)}
+                        className={`flex items-center gap-1 transition px-1.5 py-0.5 rounded border text-[10px] font-mono cursor-pointer ${
+                          item.attuned
+                            ? 'bg-purple-950/90 text-purple-200 border-purple-500 font-bold shadow'
+                            : 'bg-stone-900 text-stone-500 border-stone-800 hover:text-stone-300'
+                        }`}
+                        title={item.attuned ? 'Attuned Magic Item (Active Bond)' : 'Click to Attune Magic Item'}
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                        <span>{item.attuned ? 'ATTUNED' : 'ATTUNE'}</span>
+                      </button>
+                    )}
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-amber-200 text-sm truncate">{item.name}</span>
-                        {item.attuned && (
+                        {(() => {
+                          const badge = getItemEquipmentBadge(item);
+                          if (!badge) return null;
+                          return (
+                            <span
+                              className={`text-[9px] px-1.5 py-0.2 rounded border font-mono font-bold flex items-center gap-1 ${badge.className}`}
+                              title={badge.title}
+                            >
+                              <span>{badge.icon}</span>
+                              <span>{badge.label}</span>
+                            </span>
+                          );
+                        })()}
+                        {is5e && item.attuned && (
                           <span className="text-[10px] text-purple-300 bg-purple-950/80 px-1.5 py-0.2 rounded border border-purple-600/60 font-bold flex items-center gap-1">
                             <Sparkles className="w-3 h-3 text-purple-300" /> Attuned
                           </span>
                         )}
-                        {item.itemType && (
+                        {item.itemType && !getItemEquipmentBadge(item) && (
                           <span className="text-[10px] text-stone-400 bg-stone-900 px-1.5 py-0.2 rounded border border-stone-800">
                             {item.itemType}
                           </span>
                         )}
-                        {item.damageReduction !== undefined && item.damageReduction > 0 && (
-                          <span className="text-[10px] text-amber-300 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-600/60 font-bold font-mono" title={`Damage Reduction: Absorbs up to ${item.damageReduction} damage`}>
-                            DR {item.damageReduction}
+                        {item.damageReduction !== undefined && item.damageReduction !== 0 && (
+                          <span className="text-[10px] text-amber-300 bg-amber-950/80 px-1.5 py-0.2 rounded border border-amber-600/60 font-bold font-mono" title={`Damage Reduction: Absorbs up to ${Math.abs(item.damageReduction)} damage`}>
+                            DR {Math.abs(item.damageReduction)}
                           </span>
                         )}
                         {item.armorAc !== undefined && (
@@ -1342,11 +1629,57 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                             +{item.acBonus} AC
                           </span>
                         )}
+                        {item.armorType && (
+                          <span className="text-[10px] text-cyan-300 bg-cyan-950/70 px-1.5 py-0.2 rounded border border-cyan-800/60 font-medium">
+                            {item.armorType}
+                          </span>
+                        )}
+                        {item.strengthRequirement !== undefined && item.strengthRequirement > 0 && (
+                          <span className="text-[10px] text-orange-300 bg-orange-950/80 px-1.5 py-0.2 rounded border border-orange-700/60 font-mono font-bold" title={`Requires Strength ${item.strengthRequirement} to wear without speed penalty`}>
+                            STR {item.strengthRequirement}
+                          </span>
+                        )}
+                        {item.maxDexBonus !== undefined && (
+                          <span className="text-[10px] text-emerald-300 bg-emerald-950/80 px-1.5 py-0.2 rounded border border-emerald-700/60 font-mono" title={`Max DEX Modifier: +${item.maxDexBonus}`}>
+                            Max DEX +{item.maxDexBonus}
+                          </span>
+                        )}
+                        {item.stealthDisadvantage && (
+                          <span className="text-[10px] text-stone-300 bg-stone-900/90 px-1.5 py-0.2 rounded border border-stone-700 text-[9px]" title="Disadvantage on Stealth checks">
+                            Stealth Disadv
+                          </span>
+                        )}
                         {item.weaponStats?.damage && (
-                          <span className="text-[10px] text-rose-300 bg-rose-950/80 px-1.5 py-0.2 rounded border border-rose-600/60 font-bold font-mono">
+                          <span
+                            onClick={(e) => {
+                              if (onRollDamage) {
+                                e.stopPropagation();
+                                onRollDamage(`${item.name} (${item.weaponStats?.damageType || 'Damage'})`, item.weaponStats?.damage || '1d6');
+                              }
+                            }}
+                            className={`text-[10px] text-rose-300 bg-rose-950/80 px-1.5 py-0.2 rounded border border-rose-600/60 font-bold font-mono ${onRollDamage ? 'cursor-pointer hover:bg-rose-900 hover:border-rose-400 transition' : ''}`}
+                            title={onRollDamage ? `Click to roll ${item.weaponStats.damage} ${item.weaponStats.damageType || ''}` : undefined}
+                          >
                             ⚔️ {item.weaponStats.damage} {item.weaponStats.damageType || ''}
                           </span>
                         )}
+                        {item.weaponStats?.additionalDamageRows?.map((extraDmg, idx) => (
+                          extraDmg.damage ? (
+                            <span
+                              key={extraDmg.id || idx}
+                              onClick={(e) => {
+                                if (onRollDamage) {
+                                  e.stopPropagation();
+                                  onRollDamage(`${item.name} Extra (${extraDmg.label || extraDmg.damageType || 'Damage'})`, extraDmg.damage);
+                                }
+                              }}
+                              className={`text-[10px] text-orange-300 bg-orange-950/80 px-1.5 py-0.2 rounded border border-orange-600/60 font-bold font-mono ${onRollDamage ? 'cursor-pointer hover:bg-orange-900 hover:border-orange-400 transition' : ''}`}
+                              title={onRollDamage ? `Click to roll ${extraDmg.damage} ${extraDmg.damageType || ''}` : undefined}
+                            >
+                              + {extraDmg.damage} {extraDmg.damageType || ''} {extraDmg.label ? `(${extraDmg.label})` : ''}
+                            </span>
+                          ) : null
+                        ))}
                         {item.resistance && (
                           <span className="text-[10px] text-orange-300 bg-orange-950/80 px-1.5 py-0.2 rounded border border-orange-600/60 font-mono">
                             🛡️ Resist {item.resistance}
@@ -1686,6 +2019,18 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
 
                     <button
                       type="button"
+                      onClick={() => setCatalogCategory('mounts')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1 ${
+                        catalogCategory === 'mounts'
+                          ? 'bg-amber-700 text-white'
+                          : 'bg-stone-950 text-stone-400 hover:text-stone-200 border border-stone-800'
+                      }`}
+                    >
+                      <span>🐎 Mounts & Stables</span>
+                    </button>
+
+                    <button
+                      type="button"
                       onClick={() => setCatalogCategory('gear')}
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition whitespace-nowrap flex items-center gap-1 ${
                         catalogCategory === 'gear'
@@ -1787,9 +2132,9 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                               </span>
                             )}
 
-                            {item.damageReduction !== undefined && item.damageReduction > 0 && (
+                            {item.damageReduction !== undefined && item.damageReduction !== 0 && (
                               <span className="text-amber-300 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-700/50 font-bold">
-                                🛡️ DR {item.damageReduction}
+                                🛡️ DR {Math.abs(item.damageReduction)}
                               </span>
                             )}
 
@@ -1820,7 +2165,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                             <button
                               type="button"
                               onClick={(e) => handleDeleteCustomCatalogItem(item, e)}
-                              className="p-1.5 bg-stone-850 hover:bg-rose-950/50 text-stone-500 hover:text-rose-400 rounded-xl text-xs transition border border-stone-800 hover:border-rose-900/50 flex items-center justify-center cursor-pointer"
+                              className="p-1.5 bg-stone-900 hover:bg-rose-950/50 text-stone-500 hover:text-rose-400 rounded-xl text-xs transition border border-stone-800 hover:border-rose-900/50 flex items-center justify-center cursor-pointer"
                               title="Delete from custom compendium"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -1837,10 +2182,23 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                             <span>Customize</span>
                           </button>
 
+                          {item.costGp && item.costGp > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleBuyCatalogItem(item)}
+                              className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-1 cursor-pointer"
+                              title={`Buy for ${item.costGp} GP (deducts from character vault, stables mount if steed)`}
+                            >
+                              <ShoppingBag className="w-3.5 h-3.5" />
+                              <span>Buy ({item.costGp} GP)</span>
+                            </button>
+                          ) : null}
+
                           <button
                             type="button"
                             onClick={() => handleAddCatalogItem(item, 1)}
                             className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-1.5 cursor-pointer"
+                            title="Add directly to inventory for free (GM/DM grant or starting gear)"
                           >
                             <Plus className="w-4 h-4" />
                             <span>Add</span>
@@ -1918,9 +2276,36 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                 {/* Weapon Specific Fields */}
                 {newItemType === 'Weapon' && (
                   <div className="bg-rose-950/20 border border-rose-800/40 rounded-xl p-3 space-y-2.5">
-                    <div className="flex items-center gap-1.5 text-rose-300 font-bold font-serif text-xs">
-                      <Swords className="w-4 h-4 text-rose-400" />
-                      <span>Weapon Combat Statistics</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-rose-300 font-bold font-serif text-xs">
+                        <Swords className="w-4 h-4 text-rose-400" />
+                        <span>Weapon Combat Statistics</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={newItemWeaponAdditionalRows.length >= 10}
+                        onClick={() => {
+                          if (newItemWeaponAdditionalRows.length >= 10) return;
+                          setNewItemWeaponAdditionalRows(prev => [
+                            ...prev,
+                            {
+                              id: 'dmg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                              damage: '1d6',
+                              damageType: 'Fire',
+                              label: ''
+                            }
+                          ]);
+                        }}
+                        className={`px-2 py-0.5 text-[10px] sm:text-[11px] rounded border flex items-center gap-1 font-sans transition shadow-sm ${
+                          newItemWeaponAdditionalRows.length >= 10
+                            ? 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed opacity-60'
+                            : 'bg-rose-900/60 hover:bg-rose-800 text-rose-200 hover:text-white border-rose-700/60 cursor-pointer active:scale-95'
+                        }`}
+                        title={newItemWeaponAdditionalRows.length >= 10 ? 'Maximum 10 additional damage rows reached' : 'Add extra damage row (e.g. +2d6 Fire, 1d4 Radiant, etc.)'}
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>Add Damage Row {newItemWeaponAdditionalRows.length > 0 && `(${newItemWeaponAdditionalRows.length}/10)`}</span>
+                      </button>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div>
@@ -1964,6 +2349,73 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                         />
                       </div>
                     </div>
+
+                    {/* Additional Damage Rows */}
+                    {newItemWeaponAdditionalRows.length > 0 && (
+                      <div className="space-y-2 pt-1 border-t border-rose-900/30">
+                        <div className="text-[10px] font-sans uppercase font-bold tracking-wider text-rose-300/80">
+                          Additional Damage Types
+                        </div>
+                        {newItemWeaponAdditionalRows.map((row, idx) => (
+                          <div key={row.id || idx} className="grid grid-cols-12 gap-2 items-end font-mono bg-stone-900/70 p-2 rounded-lg border border-stone-800">
+                            <div className="col-span-4 sm:col-span-3">
+                              <label className="block text-stone-400 text-[10px] font-sans">Extra Damage</label>
+                              <input
+                                type="text"
+                                value={row.damage || ''}
+                                onChange={(e) => {
+                                  const updated = [...newItemWeaponAdditionalRows];
+                                  updated[idx] = { ...updated[idx], damage: e.target.value };
+                                  setNewItemWeaponAdditionalRows(updated);
+                                }}
+                                placeholder="2d6"
+                                className="w-full bg-stone-800 border border-rose-700/40 rounded p-1.5 text-orange-200 font-bold"
+                              />
+                            </div>
+                            <div className="col-span-4 sm:col-span-3">
+                              <label className="block text-stone-400 text-[10px] font-sans">Damage Type</label>
+                              <input
+                                type="text"
+                                value={row.damageType || ''}
+                                onChange={(e) => {
+                                  const updated = [...newItemWeaponAdditionalRows];
+                                  updated[idx] = { ...updated[idx], damageType: e.target.value };
+                                  setNewItemWeaponAdditionalRows(updated);
+                                }}
+                                placeholder="Fire"
+                                className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
+                              />
+                            </div>
+                            <div className="col-span-3 sm:col-span-5">
+                              <label className="block text-stone-400 text-[10px] font-sans">Notes / Condition (Optional)</label>
+                              <input
+                                type="text"
+                                value={row.label || ''}
+                                onChange={(e) => {
+                                  const updated = [...newItemWeaponAdditionalRows];
+                                  updated[idx] = { ...updated[idx], label: e.target.value };
+                                  setNewItemWeaponAdditionalRows(updated);
+                                }}
+                                placeholder="e.g. vs Fiends, On Hit"
+                                className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-300 font-sans"
+                              />
+                            </div>
+                            <div className="col-span-1 flex justify-center pb-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setNewItemWeaponAdditionalRows(prev => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="p-1.5 text-stone-500 hover:text-rose-400 transition hover:bg-rose-950/40 rounded cursor-pointer"
+                                title="Remove damage row"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2021,6 +2473,28 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                         </label>
                       </div>
                     </div>
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-blue-900/30">
+                      <div>
+                        <label className="block text-stone-400 text-[11px] mb-1">Min STR Requirement</label>
+                        <input
+                          type="number"
+                          value={newItemStrengthReq}
+                          onChange={(e) => setNewItemStrengthReq(e.target.value === '' ? '' : parseInt(e.target.value))}
+                          placeholder="e.g. 13, 15 (Heavy Armor)"
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200 font-mono text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-stone-400 text-[11px] mb-1">Max DEX Bonus Cap</label>
+                        <input
+                          type="number"
+                          value={newItemMaxDexBonus}
+                          onChange={(e) => setNewItemMaxDexBonus(e.target.value === '' ? '' : parseInt(e.target.value))}
+                          placeholder="e.g. 2 (Medium), 3 (Feat)"
+                          className="w-full bg-stone-800 border border-stone-700 rounded-lg p-1.5 text-stone-200 font-mono text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -2029,7 +2503,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                   <button
                     type="button"
                     onClick={() => setShowAdvancedStats(!showAdvancedStats)}
-                    className="w-full px-3 py-2 text-left flex items-center justify-between text-xs font-bold text-amber-300/90 hover:bg-stone-850 transition"
+                    className="w-full px-3 py-2 text-left flex items-center justify-between text-xs font-bold text-amber-300/90 hover:bg-stone-900 transition"
                   >
                     <span className="flex items-center gap-1.5">
                       <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
@@ -2305,9 +2779,13 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                     onChange={(e: any) => setEditingItem({ ...editingItem, itemType: e.target.value })}
                     className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
                   >
-                    <option value="Misc">Misc / Gear</option>
-                    <option value="Weapon">Weapon</option>
-                    <option value="Armor">Armor / Shield</option>
+                    {ITEM_CATEGORIES.map((cat) => {
+                      const val = typeof cat === 'object' ? cat.value : cat;
+                      const lbl = typeof cat === 'object' ? cat.label : cat;
+                      return (
+                        <option key={val} value={val}>{lbl}</option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
@@ -2345,16 +2823,50 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                 </div>
               </div>
 
-              {/* Weapon Stats */}
-              {(editingItem.itemType === 'Weapon' || editingItem.weaponStats) && (
-                <div className="bg-rose-950/20 border border-rose-800/40 rounded-xl p-2.5 space-y-2">
-                  <div className="text-rose-300 font-bold flex items-center gap-1.5 font-serif text-xs">
-                    <Swords className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Weapon Attack & Damage</span>
+              {/* Weapon Stats (For Weapons or Items with Weapon attack properties) */}
+              {(editingItem.itemType === 'Weapon' || editingItem.weaponStats || editingItem.attackBonus !== undefined || editingItem.damageBonus !== undefined) && (
+                <div className="bg-rose-950/20 border border-rose-800/40 rounded-xl p-2.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-rose-300 font-bold flex items-center gap-1.5 font-serif text-xs">
+                      <Swords className="w-3.5 h-3.5 text-rose-400" />
+                      <span>Weapon Attack & Damage</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={(editingItem.weaponStats?.additionalDamageRows?.length || 0) >= 10}
+                      onClick={() => {
+                        const currentRows = editingItem.weaponStats?.additionalDamageRows || [];
+                        if (currentRows.length >= 10) return;
+                        const newRow: WeaponDamageRow = {
+                          id: 'dmg-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                          damage: '1d6',
+                          damageType: 'Fire',
+                          label: ''
+                        };
+                        setEditingItem({
+                          ...editingItem,
+                          weaponStats: {
+                            ...(editingItem.weaponStats || {}),
+                            additionalDamageRows: [...currentRows, newRow]
+                          }
+                        });
+                      }}
+                      className={`px-2 py-0.5 text-[10px] sm:text-[11px] rounded border flex items-center gap-1 font-sans transition shadow-sm ${
+                        (editingItem.weaponStats?.additionalDamageRows?.length || 0) >= 10
+                          ? 'bg-stone-800 text-stone-500 border-stone-700 cursor-not-allowed opacity-60'
+                          : 'bg-rose-900/60 hover:bg-rose-800 text-rose-200 hover:text-white border-rose-700/60 cursor-pointer active:scale-95'
+                      }`}
+                      title={(editingItem.weaponStats?.additionalDamageRows?.length || 0) >= 10 ? 'Maximum 10 additional damage rows reached' : 'Add extra damage row (e.g. +2d6 Fire, 1d4 Radiant, etc.)'}
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Add Damage Row {(editingItem.weaponStats?.additionalDamageRows?.length || 0) > 0 && `(${(editingItem.weaponStats?.additionalDamageRows?.length || 0)}/10)`}</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+
+                  {/* Primary Damage & Attack */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono items-end">
                     <div>
-                      <label className="block text-stone-400 text-[10px] font-sans">Damage</label>
+                      <label className="block text-stone-400 text-[10px] font-sans mb-1 whitespace-nowrap truncate" title="Damage">Damage</label>
                       <input
                         type="text"
                         value={editingItem.weaponStats?.damage || ''}
@@ -2363,11 +2875,11 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                           weaponStats: { ...(editingItem.weaponStats || {}), damage: e.target.value }
                         })}
                         placeholder="1d8+2"
-                        className="w-full bg-stone-800 border border-rose-700/40 rounded p-1.5 text-rose-200 font-bold"
+                        className="w-full bg-stone-800 border border-rose-700/40 rounded p-1.5 text-rose-200 font-bold text-xs"
                       />
                     </div>
                     <div>
-                      <label className="block text-stone-400 text-[10px] font-sans">Damage Type</label>
+                      <label className="block text-stone-400 text-[10px] font-sans mb-1 whitespace-nowrap truncate" title="Damage Type">Damage Type</label>
                       <input
                         type="text"
                         value={editingItem.weaponStats?.damageType || ''}
@@ -2376,11 +2888,11 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                           weaponStats: { ...(editingItem.weaponStats || {}), damageType: e.target.value }
                         })}
                         placeholder="Slashing"
-                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
+                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200 text-xs"
                       />
                     </div>
                     <div>
-                      <label className="block text-stone-400 text-[10px] font-sans">Attack Bonus</label>
+                      <label className="block text-stone-400 text-[10px] font-sans mb-1 whitespace-nowrap truncate" title="Attack Bonus">Attack Bonus</label>
                       <input
                         type="text"
                         value={editingItem.weaponStats?.attackBonus || ''}
@@ -2389,11 +2901,11 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                           weaponStats: { ...(editingItem.weaponStats || {}), attackBonus: e.target.value }
                         })}
                         placeholder="+1"
-                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
+                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200 text-xs"
                       />
                     </div>
                     <div>
-                      <label className="block text-stone-400 text-[10px] font-sans">Range</label>
+                      <label className="block text-stone-400 text-[10px] font-sans mb-1 whitespace-nowrap truncate" title="Range">Range</label>
                       <input
                         type="text"
                         value={editingItem.weaponStats?.range || ''}
@@ -2402,186 +2914,99 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                           weaponStats: { ...(editingItem.weaponStats || {}), range: e.target.value }
                         })}
                         placeholder="Melee"
-                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
+                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200 text-xs"
                       />
                     </div>
                   </div>
+
+                  {/* Additional Damage Rows */}
+                  {editingItem.weaponStats?.additionalDamageRows && editingItem.weaponStats.additionalDamageRows.length > 0 && (
+                    <div className="space-y-2 pt-1 border-t border-rose-900/30">
+                      <div className="text-[10px] font-sans uppercase font-bold tracking-wider text-rose-300/80">
+                        Additional Damage Types
+                      </div>
+                      {editingItem.weaponStats.additionalDamageRows.map((row, idx) => (
+                        <div key={row.id || idx} className="grid grid-cols-12 gap-2 items-end font-mono bg-stone-900/70 p-2 rounded-lg border border-stone-800">
+                          <div className="col-span-4 sm:col-span-3">
+                            <label className="block text-stone-400 text-[10px] font-sans">Extra Damage</label>
+                            <input
+                              type="text"
+                              value={row.damage || ''}
+                              onChange={(e) => {
+                                const updated = [...(editingItem.weaponStats?.additionalDamageRows || [])];
+                                updated[idx] = { ...updated[idx], damage: e.target.value };
+                                setEditingItem({
+                                  ...editingItem,
+                                  weaponStats: { ...(editingItem.weaponStats || {}), additionalDamageRows: updated }
+                                });
+                              }}
+                              placeholder="2d6"
+                              className="w-full bg-stone-800 border border-rose-700/40 rounded p-1.5 text-orange-200 font-bold"
+                            />
+                          </div>
+                          <div className="col-span-4 sm:col-span-3">
+                            <label className="block text-stone-400 text-[10px] font-sans">Damage Type</label>
+                            <input
+                              type="text"
+                              value={row.damageType || ''}
+                              onChange={(e) => {
+                                const updated = [...(editingItem.weaponStats?.additionalDamageRows || [])];
+                                updated[idx] = { ...updated[idx], damageType: e.target.value };
+                                setEditingItem({
+                                  ...editingItem,
+                                  weaponStats: { ...(editingItem.weaponStats || {}), additionalDamageRows: updated }
+                                });
+                              }}
+                              placeholder="Fire"
+                              className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
+                            />
+                          </div>
+                          <div className="col-span-3 sm:col-span-5">
+                            <label className="block text-stone-400 text-[10px] font-sans">Notes / Condition (Optional)</label>
+                            <input
+                              type="text"
+                              value={row.label || ''}
+                              onChange={(e) => {
+                                const updated = [...(editingItem.weaponStats?.additionalDamageRows || [])];
+                                updated[idx] = { ...updated[idx], label: e.target.value };
+                                setEditingItem({
+                                  ...editingItem,
+                                  weaponStats: { ...(editingItem.weaponStats || {}), additionalDamageRows: updated }
+                                });
+                              }}
+                              placeholder="e.g. vs Fiends, On Hit"
+                              className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-300 font-sans"
+                            />
+                          </div>
+                          <div className="col-span-1 flex justify-center pb-0.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = (editingItem.weaponStats?.additionalDamageRows || []).filter((_, i) => i !== idx);
+                                setEditingItem({
+                                  ...editingItem,
+                                  weaponStats: { ...(editingItem.weaponStats || {}), additionalDamageRows: updated }
+                                });
+                              }}
+                              className="p-1.5 text-stone-500 hover:text-rose-400 transition hover:bg-rose-950/40 rounded cursor-pointer"
+                              title="Remove damage row"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
 
-              {/* Armor Stats */}
-              {(editingItem.itemType === 'Armor' || editingItem.armorAc !== undefined || editingItem.acBonus !== undefined) && (
-                <div className="bg-blue-950/20 border border-blue-800/40 rounded-xl p-2.5 space-y-2">
-                  <div className="text-blue-300 font-bold flex items-center gap-1.5 font-serif text-xs">
-                    <Shield className="w-3.5 h-3.5 text-blue-400" />
-                    <span>Armor & Shield Defenses</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
-                    <div>
-                      <label className="block text-stone-400 text-[10px] font-sans">Base AC</label>
-                      <input
-                        type="number"
-                        value={editingItem.armorAc ?? ''}
-                        onChange={(e) => setEditingItem({
-                          ...editingItem,
-                          armorAc: e.target.value === '' ? undefined : parseInt(e.target.value)
-                        })}
-                        placeholder="16"
-                        className="w-full bg-stone-800 border border-blue-700/40 rounded p-1.5 text-blue-200 font-bold"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-stone-400 text-[10px] font-sans">AC Bonus (+)</label>
-                      <input
-                        type="number"
-                        value={editingItem.acBonus ?? ''}
-                        onChange={(e) => setEditingItem({
-                          ...editingItem,
-                          acBonus: e.target.value === '' ? undefined : parseInt(e.target.value)
-                        })}
-                        placeholder="1"
-                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-stone-400 text-[10px] font-sans">Armor Type</label>
-                      <select
-                        value={editingItem.armorType || 'Light'}
-                        onChange={(e: any) => setEditingItem({ ...editingItem, armorType: e.target.value })}
-                        className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200 font-sans"
-                      >
-                        <option value="Light">Light</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Heavy">Heavy</option>
-                        <option value="Shield">Shield</option>
-                        <option value="Bonus">Bonus</option>
-                      </select>
-                    </div>
-                    <div className="flex items-center pt-4">
-                      <label className="flex items-center gap-1.5 text-stone-300 text-[11px] cursor-pointer font-sans">
-                        <input
-                          type="checkbox"
-                          checked={editingItem.stealthDisadvantage || false}
-                          onChange={(e) => setEditingItem({ ...editingItem, stealthDisadvantage: e.target.checked })}
-                          className="rounded text-amber-500"
-                        />
-                        <span>Stealth Disadv.</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Combat Defenses: DR, Resistance, Immunity */}
-              <div className="bg-stone-950/60 border border-stone-800 rounded-xl p-3 space-y-2.5">
-                <div className="text-amber-300 font-bold flex items-center gap-1.5 font-serif text-xs">
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Damage Reduction (DR) & Resistances</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  <div>
-                    <label className="block text-amber-300 text-[11px] mb-1 font-semibold">Damage Reduction (DR)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={editingItem.damageReduction ?? ''}
-                      onChange={(e) => setEditingItem({
-                        ...editingItem,
-                        damageReduction: e.target.value === '' ? undefined : parseInt(e.target.value)
-                      })}
-                      placeholder="e.g. 3, 5"
-                      className="w-full bg-stone-800 border border-amber-600/40 rounded p-1.5 text-amber-200 font-mono font-bold"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-orange-300 text-[11px] mb-1 font-semibold">Resistance</label>
-                    <input
-                      type="text"
-                      value={editingItem.resistance || ''}
-                      onChange={(e) => setEditingItem({ ...editingItem, resistance: e.target.value || undefined })}
-                      placeholder="Fire, Cold"
-                      className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-emerald-300 text-[11px] mb-1 font-semibold">Immunity</label>
-                    <input
-                      type="text"
-                      value={editingItem.immunity || ''}
-                      onChange={(e) => setEditingItem({ ...editingItem, immunity: e.target.value || undefined })}
-                      placeholder="Poison, Acid"
-                      className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-stone-200"
-                    />
-                  </div>
-                </div>
-
-                {/* Modifiers */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-stone-800 font-mono">
-                  <div>
-                    <label className="block text-red-300 text-[10px] font-sans">Max HP Mod</label>
-                    <input
-                      type="number"
-                      value={editingItem.hpMaxBonus ?? ''}
-                      onChange={(e) => setEditingItem({
-                        ...editingItem,
-                        hpMaxBonus: e.target.value === '' ? undefined : parseInt(e.target.value)
-                      })}
-                      placeholder="+10"
-                      className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-red-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-indigo-300 text-[10px] font-sans">Spell DC Bonus</label>
-                    <input
-                      type="number"
-                      value={editingItem.spellDcBonus ?? ''}
-                      onChange={(e) => setEditingItem({
-                        ...editingItem,
-                        spellDcBonus: e.target.value === '' ? undefined : parseInt(e.target.value)
-                      })}
-                      placeholder="+1"
-                      className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-indigo-200"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-yellow-300 text-[10px] font-sans">Initiative Bonus</label>
-                    <input
-                      type="number"
-                      value={editingItem.initiativeBonus ?? ''}
-                      onChange={(e) => setEditingItem({
-                        ...editingItem,
-                        initiativeBonus: e.target.value === '' ? undefined : parseInt(e.target.value)
-                      })}
-                      placeholder="+2"
-                      className="w-full bg-stone-800 border border-stone-700 rounded p-1.5 text-yellow-200"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 pt-1">
-                  <label className="flex items-center gap-1.5 text-purple-300 cursor-pointer font-sans">
-                    <input
-                      type="checkbox"
-                      checked={editingItem.isMagic || false}
-                      onChange={(e) => setEditingItem({ ...editingItem, isMagic: e.target.checked })}
-                      className="rounded text-purple-600"
-                    />
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                    <span>Magical</span>
-                  </label>
-
-                  <label className="flex items-center gap-1.5 text-rose-400 cursor-pointer font-sans">
-                    <input
-                      type="checkbox"
-                      checked={editingItem.isCursed || false}
-                      onChange={(e) => setEditingItem({ ...editingItem, isCursed: e.target.checked })}
-                      className="rounded text-rose-600"
-                    />
-                    <Skull className="w-3.5 h-3.5 text-rose-400" />
-                    <span>Cursed</span>
-                  </label>
-                </div>
-              </div>
+              {/* Comprehensive Item Effects Editor (AC, DR, Resistances, Stat/Skill/Save Bonuses, Attunement, etc.) */}
+              <ItemEffectsEditor
+                item={editingItem}
+                onChange={setEditingItem}
+                edition={character.edition}
+              />
 
               {/* Notes */}
               <div>
@@ -2835,6 +3260,16 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* STABLES & MOUNT VENDOR MODAL */}
+      {showStablesModal && (
+        <StablesAndMountsModal
+          isOpen={showStablesModal}
+          onClose={() => setShowStablesModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
       )}
     </CollapsibleBox>
   );

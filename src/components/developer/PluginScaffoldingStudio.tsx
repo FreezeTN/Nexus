@@ -494,7 +494,7 @@ export const ${pluginId.replace(/[^a-zA-Z0-9]/g, '')}Plugin: GameSystemPlugin = 
             <button
               key={preset.id}
               onClick={() => handleApplyPreset(preset)}
-              className="p-3.5 rounded-xl bg-stone-900/80 hover:bg-stone-850 border border-stone-800 hover:border-amber-500/40 transition text-left flex flex-col justify-between group shadow-sm hover:shadow-md"
+              className="p-3.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 hover:border-amber-500/40 transition text-left flex flex-col justify-between group shadow-sm hover:shadow-md"
             >
               <div>
                 <div className="flex items-center justify-between mb-1.5">

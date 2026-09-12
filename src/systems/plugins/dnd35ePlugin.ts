@@ -76,7 +76,7 @@ export const dnd35ePlugin: GameSystemPlugin = {
     },
     getDamageFormula(itemOrAttack: GearItem | Attack, char: CharacterData) {
       if ('attackBonus' in itemOrAttack) {
-        return itemOrAttack.damage;
+        return (itemOrAttack as Attack).damage;
       }
       const strMod = getAbilityModifier(char.abilities?.STR?.score || 10);
       const dmg = itemOrAttack.weaponStats?.damage || '1d8';

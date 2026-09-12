@@ -26,7 +26,8 @@ import {
   Compass,
   LayoutGrid,
   Zap,
-  Sliders
+  Sliders,
+  Copy
 } from 'lucide-react';
 import { HpOrb } from './HpOrb';
 import { UserProfile, CharacterPresence } from '../lib/firebase';
@@ -53,6 +54,7 @@ interface MainMenuProps {
   onOpenCampaignGraph?: () => void;
   onExploreCompendium?: () => void;
   onOpenDeveloperSdk?: () => void;
+  onDuplicateCharacter?: (character: CharacterData) => void;
 }
 
 export const MainMenu: React.FC<MainMenuProps> = ({
@@ -73,7 +75,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   onOpenSessionLobby,
   onOpenCampaignGraph,
   onExploreCompendium,
-  onOpenDeveloperSdk
+  onOpenDeveloperSdk,
+  onDuplicateCharacter
 }) => {
   const { t } = useLanguage();
   const {
@@ -283,6 +286,27 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               <p className="text-xs text-stone-400 truncate">
                 {char.race} • {char.isMonster ? `${char.characterClass || 'Monster'} (CR ${char.challengeRating || (char.subclass ? char.subclass.replace(/^CR\s*/i, '') : char.level || '1')})` : `${char.characterClass || (isSR ? 'Runner' : 'Hero')} ${char.level ? `Lvl ${char.level}` : ''}`}
               </p>
+
+              {/* Campaign Box & Version Badge */}
+              {(char.campaignName || char.versionTag || char.baseCharacterId) && (
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  {char.campaignName && (
+                    <span className="text-[10px] bg-amber-950/80 text-amber-300 border border-amber-600/50 px-1.5 py-0.5 rounded font-mono font-bold truncate max-w-[140px]" title={`Campaign: ${char.campaignName}`}>
+                      🏷️ {char.campaignName}
+                    </span>
+                  )}
+                  {char.versionTag && (
+                    <span className="text-[10px] bg-stone-900 text-stone-300 border border-stone-700 px-1.5 py-0.5 rounded font-mono truncate max-w-[110px]" title={`Version: ${char.versionTag}`}>
+                      {char.versionTag}
+                    </span>
+                  )}
+                  {char.baseCharacterId && (
+                    <span className="text-[10px] bg-emerald-950/80 text-emerald-300 border border-emerald-600/40 px-1.5 py-0.5 rounded font-mono" title="Linked to Base Character (Progression auto-syncs)">
+                      🔗 Linked
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -308,28 +332,44 @@ export const MainMenu: React.FC<MainMenuProps> = ({
           <div className="flex items-center justify-between pt-2 border-t border-stone-800 text-xs">
             <HpOrb hpCurrent={char.hpCurrent} hpMax={getEffectiveMaxHp(char)} size="sm" showLabel={true} />
 
-            <button
-              disabled={isLockedForPlayer}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isLockedForPlayer) {
-                  alert(`🔒 ${char.name} is currently active by ${activeUserName}.`);
-                  return;
-                }
-                onSelectCharacter(char.id);
-                onEnterGame();
-              }}
-              className={`px-3 py-1 ${
-                isLockedForPlayer
-                  ? 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
-                  : isDead
-                  ? 'bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-600/60 shadow-rose-950'
-                  : systemTheme.primaryBtn
-              } rounded-lg font-bold text-[11px] transition flex items-center gap-1 shadow`}
-            >
-              <span>{isLockedForPlayer ? 'Locked 🔒' : isDead ? 'Play (Dead 💀)' : (isSR ? 'Enter Matrix' : systemTheme.playBtnLabel)}</span>
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {onDuplicateCharacter && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDuplicateCharacter(char);
+                  }}
+                  className="p-1.5 bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-amber-300 rounded-lg border border-stone-800 transition shadow-sm cursor-pointer"
+                  title="Duplicate or create a new campaign branch of this character"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
+              )}
+
+              <button
+                disabled={isLockedForPlayer}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isLockedForPlayer) {
+                    alert(`🔒 ${char.name} is currently active by ${activeUserName}.`);
+                    return;
+                  }
+                  onSelectCharacter(char.id);
+                  onEnterGame();
+                }}
+                className={`px-3 py-1 ${
+                  isLockedForPlayer
+                    ? 'bg-stone-800 text-stone-500 border border-stone-700 cursor-not-allowed'
+                    : isDead
+                    ? 'bg-rose-950 hover:bg-rose-900 text-rose-200 border border-rose-600/60 shadow-rose-950'
+                    : systemTheme.primaryBtn
+                } rounded-lg font-bold text-[11px] transition flex items-center gap-1 shadow`}
+              >
+                <span>{isLockedForPlayer ? 'Locked 🔒' : isDead ? 'Play (Dead 💀)' : (isSR ? 'Enter Matrix' : systemTheme.playBtnLabel)}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       );

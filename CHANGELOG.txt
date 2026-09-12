@@ -404,6 +404,76 @@ MILESTONE 26: PHASE 1 - OBSERVABILITY, STRUCTURED TRACING & DIAGNOSTIC HUD
   - System & Memory Health Monitor: V8 heap memory tracking, DOM node counts, and network status.
   - 1-Click Diagnostic Bundle Export: Copy or download complete JSON diagnostic reports for troubleshooting.
 
+--------------------------------------------------------------------------------
+MILESTONE 27: D&D 3.5e TACTICAL COMBAT SUITE, COMBAT REFLEXES, DUAL-WIELDING & XP LEDGER
+--------------------------------------------------------------------------------
+* Attacks of Opportunity (AoO) & Combat Reflexes Tracker (`src/components/modals/AoOTrackerModal.tsx`):
+  - Dynamic AoO budget counter calculating maximum attacks per round based on base Dexterity modifier and the Combat Reflexes feat (1 + DEX modifier, minimum 1).
+  - Provocation triggers reference matrix for movement through threatened squares, spellcasting without defensive casting, ranged attacks in melee, standing up from prone, and unarmed attacks.
+  - 1-click AoO attack and damage launchers with integrated threat roll confirmation.
+  - Embedded into both Sheet 2 Attacks panel and Combat Defenses panel.
+
+* Two-Weapon Fighting (TWF) Multi-Attack Engine (`src/components/modals/TwoWeaponFightingModal.tsx`):
+  - Built full 3.5e dual-wielding penalty calculator factoring feat tiers (Two-Weapon Fighting, Improved TWF, Greater TWF) and light vs. one-handed off-hand weapons.
+  - Generated synchronized sequence of iterative main-hand attacks alongside off-hand attacks.
+  - Automatic 0.5× Strength modifier applied to off-hand damage rolls.
+  - Flanking (+2) attack modifier toggle with live calculations and sequence re-rolls.
+
+* Target Concealment, Miss Chance & Blind-Fight (`src/components/modals/FullAttackModal.tsx`, `src/utils/dndCalculations.ts`):
+  - Integrated 3.5e target concealment presets: 20% Concealment, 50% Total Concealment, 50% Incorporeal Miss Chance, and Blink (50%/20%).
+  - Real-time d100 percentile evaluations integrated into Full Attack sequences and iterative steps.
+  - Automatic detection and re-roll execution for characters with the Blind-Fight feat.
+
+* Ability Score Damage, Permanent Drain & Poison Tracker (`src/components/modals/AbilityDamageDrainModal.tsx`):
+  - Vitality tracker managing temporary ability damage and permanent ability drain across all six core stats (STR, DEX, CON, INT, WIS, CHA).
+  - Dynamic derivation of effective ability scores and modified ability bonuses with live updates to dependent saves and skills.
+  - Poison and disease progression tracking with primary and secondary incubation stages, Fortitude DC checks, and restoration spell helpers.
+
+* XP Crafting & High-Tier Spell Component Ledger (`src/components/modals/XpCraftAndSpellLedgerModal.tsx`):
+  - Dedicated experience point expenditure ledger for magic item creation (1/25th base market gold value in XP) and high-level spell material components (Wish, Limited Wish, Permanency, Miracle, Atonement).
+  - 3.5e level-floor safeguards enforcing minimum XP buffers to prevent accidental de-leveling.
+  - Instant access directly from the Sheet 1 Character Header Summary.
+
+* Specialized 3.5e Tactical Maneuvers & Defense Overlays (`src/components/modals/`):
+  - Combat Maneuvers 3.5e Modal (Bull Rush, Disarm, Grapple, Overrun, Sunder, Trip) with size modifiers and opposed checks.
+  - Spell Resistance (SR) check calculator (1d20 + Caster Level vs SR with Spell Penetration feats) and Arcane Spell Failure (ASF) d100 roller.
+  - Metamagic Spell Modal for spontaneous and prepared spellcasters.
+  - Turn Undead calculator supporting Turning Checks and Turning Damage hit dice rolls.
+
+--------------------------------------------------------------------------------
+MILESTONE 28: HALF-BREED LINEAGE STUDIO, SCALING RACIAL DEFENSES, DRAFT RESILIENCE & STAT PERSISTENCE
+--------------------------------------------------------------------------------
+* Half-Breed & Hybrid Lineage Studio (`src/components/compendium/forge/RaceStudio.tsx`, `src/data/halfBreedData.ts`):
+  - Integrated Classic SRD Half-Breed browser with official archetypes for both 5e and 3.5e:
+    - 5e: Half-Elf, Half-Orc, Half-Dragon, Halfling.
+    - 3.5e: Half-Elf, Half-Orc, Half-Dragon, Half-Celestial, Half-Fiend, Half-Ogre, Half-Giant, Mul.
+  - Detailed preview cards displaying sizes, speeds, flight, vision/senses, stat adjustments, natural armor, damage reduction, energy resistances, immunities, and racial traits with 1-click application into the Forge.
+  - Custom Hybrid Lineage Blender supporting dual parent pairing (Human, Elf, Dwarf, Orc, Tiefling, Dragonborn, Halfling, Gnome, Goliath, Aasimar) with configurable dominance (Balanced 50/50, Parent 1 Dominant, Parent 2 Dominant), blended speeds, inherited vision, and selectable Hybrid Vigor perks (Bonus Stat, Enduring Vitality +1 HP/lvl, Cultural Mastery skills, or Lineage Feats).
+
+* Ruleset-Exclusive Scaling Defenses & Mechanics (`src/components/compendium/forge/RaceStudio.tsx`):
+  - 3.5e Defenses:
+    - Damage Reduction (DR) supporting flat values, level-based scaling progressions (e.g. 2/4/6/8/10 at levels 1/5/10/15/20), and formula notation with bypass materials (magic, silver, cold iron, adamantine).
+    - Natural Armor bonus supporting flat and level-scaling curves.
+    - Spell Resistance (SR) with 10 + level formula or scaling tiers.
+    - Per-Element Energy Resistances supporting both uniform progressions and independent individual curves (Fire vs. Cold vs. Electricity vs. Acid vs. Sonic).
+    - Natural Weapons, Skill Affinities, and Level-Tiered Spell-Like Abilities (SLAs).
+    - Tiefling Trueblood 3.5e preset for 1-click loading of complex scaling lineage rules.
+  - 5e Defenses:
+    - Innate Spells with recharge options (At Will, 1/Long Rest) and level thresholds.
+    - Damage Resistances, Damage Immunities, and Condition Immunities.
+    - Natural Armor formulas (e.g. 13 + DEX) and Scaling Racial Dice (e.g. Breath Weapon 2d6 -> 5d6).
+
+* Form Draft Persistence & Modal Safety Interception (`src/components/modals/NewCharacterModal.tsx`, `src/components/compendium/HomebrewForgeModal.tsx`):
+  - LocalStorage persistence for both Race Studio drafts (`forge_draft_race_${edition}`) and Character Creation drafts (`character_modal_draft_${edition}`).
+  - Added backdrop click interception with confirmation guards to prevent accidental window dismissal and loss of user entries.
+
+* End-to-End Racial Stat Injection in Character Creation (`src/utils/raceApplication.ts`, `src/components/modals/NewCharacterModal.tsx`):
+  - Full application of racial ability score adjustments (STR, DEX, CON, INT, WIS, CHA), size categories, speeds, damage reduction, natural armor, energy resistances, immunities, senses, and natural weapons into newly created characters.
+  - Interactive "Apply Racial Modifiers" toggle with live Base + Race = Total ability breakdown and a Racial Lineage & Defense Modifiers preview card.
+
+* Senses Normalization & Vision Parsing:
+  - Removed redundant Darkvision checkboxes in favor of an intelligent vision parser that detects Darkvision, Low-Light Vision, Blindsight, and Tremorsense directly from the senses definition with quick-insertion pills.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

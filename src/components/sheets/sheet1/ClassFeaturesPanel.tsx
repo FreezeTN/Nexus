@@ -18,6 +18,8 @@ interface ClassFeaturesPanelProps {
   onUpdateCharacter: (updated: CharacterData) => void;
   onOpenShapeshift?: () => void;
   onOpenSummonCompanion?: () => void;
+  onOpenTurnUndead?: () => void;
+  onOpenPrestigeValidator?: () => void;
 }
 
 export const ClassFeaturesPanel: React.FC<ClassFeaturesPanelProps> = ({
@@ -25,7 +27,9 @@ export const ClassFeaturesPanel: React.FC<ClassFeaturesPanelProps> = ({
   isDmRole,
   onUpdateCharacter,
   onOpenShapeshift,
-  onOpenSummonCompanion
+  onOpenSummonCompanion,
+  onOpenTurnUndead,
+  onOpenPrestigeValidator
 }) => {
   const [showAddFeatureModal, setShowAddFeatureModal] = useState(false);
   const [featureModalTab, setFeatureModalTab] = useState<'official' | 'custom'>('official');
@@ -126,6 +130,16 @@ export const ClassFeaturesPanel: React.FC<ClassFeaturesPanelProps> = ({
         storageKey="sheet1_features"
         headerExtra={
           <div className="flex items-center gap-1.5">
+            {character.edition === '3.5e' && onOpenPrestigeValidator && (
+              <button
+                type="button"
+                onClick={onOpenPrestigeValidator}
+                className="flex items-center gap-1 px-2 py-1 bg-purple-950 hover:bg-purple-900 border border-purple-600/60 text-purple-200 rounded-lg text-xs font-bold transition shadow"
+                title="Verify prerequisites for D&D 3.5e Prestige Classes (BAB, Feats, Skills, Alignment)"
+              >
+                <Crown className="w-3.5 h-3.5 text-purple-400" /> Prestige Prereqs
+              </button>
+            )}
             <button
               onClick={() => {
                 const synced = syncClassFeaturesForCharacter(character, character.characterClass, character.level, character.edition);
@@ -180,6 +194,16 @@ export const ClassFeaturesPanel: React.FC<ClassFeaturesPanelProps> = ({
                       >
                         <span>🦅</span>
                         <span>Summon</span>
+                      </button>
+                    )}
+                    {(feature.name.toLowerCase().includes('turn undead') || feature.name.toLowerCase().includes('rebuke undead')) && (
+                      <button
+                        onClick={onOpenTurnUndead}
+                        className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-500/60 rounded-lg font-bold text-[11px] transition flex items-center gap-1 shadow cursor-pointer"
+                        title="Launch 3.5e Turn / Rebuke Undead Sequence"
+                      >
+                        <span>☀️</span>
+                        <span>Turn Undead</span>
                       </button>
                     )}
                     <button

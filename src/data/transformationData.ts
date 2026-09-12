@@ -1,4 +1,5 @@
 import { TransformationForm, CharacterData, ActiveTransformation, Attack, ClassFeature, Feat } from '../types';
+import { reconcileEquippedHands } from '../utils/handSlotCalculations';
 
 export function isShapeshiftAbility(name: string, description?: string): boolean {
   if (!name) return false;
@@ -679,7 +680,7 @@ export function applyTransformation(char: CharacterData, form: TransformationFor
     ? Math.min(originalStats.hpMax, originalStats.hpCurrent + Math.max(1, cleanChar.level || 1))
     : form.formHpMax;
 
-  return {
+  const transformedChar: CharacterData = {
     ...cleanChar,
     activeTransformation,
     hpMax: finalHpMax,
@@ -695,6 +696,8 @@ export function applyTransformation(char: CharacterData, form: TransformationFor
     conditions: updatedConds,
     portraitUrl: form.portraitUrl || cleanChar.portraitUrl,
   };
+
+  return reconcileEquippedHands(transformedChar).character;
 }
 
 export function updateActiveTransformation(char: CharacterData, updatedForm: TransformationForm): CharacterData {
@@ -794,7 +797,7 @@ export function revertTransformation(char: CharacterData): CharacterData {
   // Remove transformation condition
   const cleanedConds = (char.conditions || []).filter(c => !c.startsWith('Transformed:'));
 
-  return {
+  const revertedChar: CharacterData = {
     ...char,
     activeTransformation: undefined,
     hpMax: originalStats.hpMax,
@@ -811,4 +814,6 @@ export function revertTransformation(char: CharacterData): CharacterData {
     conditions: cleanedConds,
     portraitUrl: originalStats.portraitUrl,
   };
+
+  return reconcileEquippedHands(revertedChar).character;
 }

@@ -110,7 +110,7 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="px-3 py-1.5 bg-stone-900 hover:bg-stone-850 text-stone-300 border border-stone-700/80 rounded-xl text-xs font-semibold transition cursor-pointer"
+            className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700/80 rounded-xl text-xs font-semibold transition cursor-pointer"
           >
             {isExpanded ? 'Collapse Studio' : 'Expand Studio'}
           </button>
@@ -365,7 +365,7 @@ export const DmAmbienceBroadcastStudio: React.FC<DmAmbienceBroadcastStudioProps>
                       className={`p-3 rounded-xl border text-left transition flex items-start justify-between gap-2.5 cursor-pointer ${
                         isSelected && isPlaying
                           ? 'bg-amber-950/80 border-amber-500 shadow-md ring-1 ring-amber-500/40 text-amber-100'
-                          : 'bg-stone-900/90 border-stone-800 hover:border-amber-600/50 hover:bg-stone-850 text-stone-200'
+                          : 'bg-stone-900/90 border-stone-800 hover:border-amber-600/50 hover:bg-stone-800 text-stone-200'
                       }`}
                     >
                       <div className="space-y-1 flex-1 min-w-0">

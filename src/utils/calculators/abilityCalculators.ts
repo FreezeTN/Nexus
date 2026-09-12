@@ -90,7 +90,16 @@ export function getItemAbilityBonus(item: GearItem, ability: AbilityName): numbe
  */
 export function getEffectiveAbilityDetails(char: CharacterData, ability: AbilityName): AbilityScoreDetails {
   const baseEntry = char?.abilities?.[ability];
-  const baseScore = Number(baseEntry?.score) || 10;
+  let baseScore = Number(baseEntry?.score) || 10;
+
+  // 3.5e Wild Shape & Polymorph: Physical scores (STR, DEX, CON) replaced by beast base scores
+  if (char?.wildShapeActive && char?.wildShapeForm && (ability === 'STR' || ability === 'DEX' || ability === 'CON')) {
+    const beastVal = char.wildShapeForm[ability.toLowerCase() as 'str' | 'dex' | 'con'];
+    if (typeof beastVal === 'number' && beastVal > 0) {
+      baseScore = beastVal;
+    }
+  }
+
   const manualOverride = baseEntry?.overrideBonus || 0;
 
   let bonusAmount = manualOverride;
@@ -136,6 +145,20 @@ export function getEffectiveAbilityDetails(char: CharacterData, ability: Ability
     overrideSource = `${setterSourceName} (Sets ${ability} to ${highestSetterValue})`;
   }
 
+  // D&D 3.5e Ability Damage vs. Ability Drain
+  if (char?.edition === '3.5e') {
+    const damage = char?.abilityDamage?.[ability] || 0;
+    const drain = char?.abilityDrain?.[ability] || 0;
+    if (damage > 0) {
+      effectiveScore = Math.max(0, effectiveScore - damage);
+      bonusSources.push(`Ability Damage (-${damage})`);
+    }
+    if (drain > 0) {
+      effectiveScore = Math.max(0, effectiveScore - drain);
+      bonusSources.push(`Ability Drain (-${drain})`);
+    }
+  }
+
   return {
     baseScore,
     effectiveScore,
@@ -169,29 +192,82 @@ export function getSavingThrowBonus(
   abilityName: AbilityName,
   abilities: AbilityScores,
   savingThrowProficiencies: AbilityName[],
-  level: number
+  level: number,
+  character?: CharacterData
 ): number {
   const mod = getAbilityModifier(abilities[abilityName]?.score || 10);
   const isProf = savingThrowProficiencies.includes(abilityName);
   const profBonus = isProf ? getProficiencyBonus(level) : 0;
-  return mod + profBonus;
+
+  let itemBonus = 0;
+  if (character?.inventory) {
+    for (const item of character.inventory) {
+      if (!item.equipped || item.stored) continue;
+      const requiresAttunement = item.requiresAttunement ?? (item.isMagic || (item.notes || '').toLowerCase().includes('attune'));
+      if (requiresAttunement && !item.attuned) continue;
+
+      // General saving throw bonus (e.g. Ring of Protection +1)
+      if (item.savingThrowBonus) {
+        itemBonus += item.savingThrowBonus;
+      }
+      // Specific ability saving throw bonus
+      if (item.savingThrowSpecificBonuses && item.savingThrowSpecificBonuses[abilityName]) {
+        itemBonus += item.savingThrowSpecificBonuses[abilityName]!;
+      }
+      // Auto-detect from notes if not explicitly set
+      if (!item.savingThrowBonus && item.notes) {
+        const notesLower = item.notes.toLowerCase();
+        const saveMatch = notesLower.match(/\+(\d+)\s*(?:to\s*)?(?:all\s*)?saving\s*throws/i);
+        if (saveMatch) {
+          itemBonus += parseInt(saveMatch[1], 10);
+        }
+      }
+    }
+  }
+
+  const negPenalty = character?.negativeLevels || 0;
+  return mod + profBonus + itemBonus - negPenalty;
 }
 
 export function getSkillBonus(
   skill: Skill,
   abilities: AbilityScores,
-  level: number
+  level: number,
+  character?: CharacterData
 ): number {
   const abilityScore = abilities[skill.ability]?.score || 10;
   const mod = getAbilityModifier(abilityScore);
   const prof = getProficiencyBonus(level);
 
+  let bonus = mod;
   if (skill.expertise) {
-    return mod + prof * 2;
+    bonus += prof * 2;
+  } else if (skill.proficient) {
+    bonus += prof;
   }
-  if (skill.proficient) {
-    return mod + prof;
+
+  if (character?.inventory) {
+    for (const item of character.inventory) {
+      if (!item.equipped || item.stored) continue;
+      const requiresAttunement = item.requiresAttunement ?? (item.isMagic || (item.notes || '').toLowerCase().includes('attune'));
+      if (requiresAttunement && !item.attuned) continue;
+
+      // All ability checks / skills bonus (e.g. Luckstone +1)
+      if (item.checkBonus) {
+        bonus += item.checkBonus;
+      }
+      // Specific skill bonus (e.g. Boots of Elvenkind Stealth +5)
+      if (item.skillBonuses && item.skillBonuses[skill.name] !== undefined) {
+        bonus += item.skillBonuses[skill.name]!;
+      }
+    }
   }
-  return mod;
+
+  // 3.5e Negative Levels penalty (-1 to all skill and ability checks per negative level)
+  if (character?.negativeLevels && character.negativeLevels > 0) {
+    bonus -= character.negativeLevels;
+  }
+
+  return bonus;
 }
 

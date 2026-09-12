@@ -9,24 +9,38 @@ import {
   getEffectiveAbilities,
   getPreparedSpellsDetails,
   calculateProgressionSpellSlots,
-  generateProgressionSpellSlots
+  generateProgressionSpellSlots,
+  getCharacterCasterLevel,
+  getSpellPenetrationBonus,
+  calculate35eTotalArcaneSpellFailure
 } from '../../../utils/dndCalculations';
-import { Wand2, RefreshCw, BookOpen, Sparkles, Calculator, Flame } from 'lucide-react';
+import { Wand2, RefreshCw, BookOpen, Sparkles, Calculator, Flame, ShieldAlert, Dices } from 'lucide-react';
 import { useLanguage } from '../../../i18n/LanguageContext';
+import { SpellResistanceAndAsf35eModal } from '../../modals/SpellResistanceAndAsf35eModal';
 
 interface SpellcastingStatsPanelProps {
   character: CharacterData;
   onUpdateCharacter: (updated: CharacterData) => void;
+  onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
 }
 
 export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
   character,
-  onUpdateCharacter
+  onUpdateCharacter,
+  onRoll
 }) => {
   const { t } = useLanguage();
   const [showProgressionInfo, setShowProgressionInfo] = useState(false);
+  const [showAsfModal, setShowAsfModal] = useState(false);
 
-  const spellDC = getSpellSaveDC(character);
+  const is35e = character.edition === '3.5e';
+  const casterLevel = getCharacterCasterLevel(character);
+  const spellPenBonus = getSpellPenetrationBonus(character);
+  const asfData = calculate35eTotalArcaneSpellFailure(character);
+
+  const spellDC = is35e
+    ? 10 + getAbilityModifier(getEffectiveAbilities(character)[character.spellcastingAbility]?.score || 10)
+    : getSpellSaveDC(character);
   const spellAtk = getSpellAttackBonus(character);
   const effectiveAbilities = getEffectiveAbilities(character);
   const abilityMod = getAbilityModifier(effectiveAbilities[character.spellcastingAbility]?.score || 10);
@@ -218,16 +232,84 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
           <div className="bg-stone-950 p-3 rounded-xl border border-amber-600/30 flex flex-col items-center justify-center">
             <span className="text-stone-400 text-[10px] font-sans uppercase font-bold">{t('spells.saveDc', 'Spell Save DC')}</span>
             <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{spellDC}</span>
-            <span className="text-[9px] text-stone-500 font-mono">8 + Prof + Ability Mod + Items</span>
+            <span className="text-[9px] text-stone-500 font-mono">
+              {is35e ? '10 + Spell Lvl + Ability Mod' : '8 + Prof + Ability Mod + Items'}
+            </span>
           </div>
 
           {/* Spell Attack Modifier */}
           <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
             <span className="text-stone-400 text-[10px] font-sans uppercase font-bold">{t('spells.attackBonus', 'Spell Attack Bonus')}</span>
             <span className="text-2xl font-serif font-extrabold text-emerald-300 my-0.5">{formatModifier(spellAtk)}</span>
-            <span className="text-[9px] text-stone-500 font-mono">Prof + Ability Mod + Items</span>
+            <span className="text-[9px] text-stone-500 font-mono">
+              {is35e ? 'Base Atk + Ability Mod' : 'Prof + Ability Mod + Items'}
+            </span>
           </div>
         </div>
+
+        {/* 3.5e Caster Suite: Caster Level, Spell Resistance Checks & Arcane Spell Failure */}
+        {is35e && (
+          <div className="bg-stone-950 p-3 rounded-xl border border-cyan-700/40 space-y-2.5">
+            <div className="flex items-center justify-between border-b border-stone-800/80 pb-1.5">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span className="font-serif font-bold text-xs text-cyan-200">
+                  3.5e Caster Level & Arcane Spell Failure (ASF)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAsfModal(true)}
+                className="px-2.5 py-1 bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-200 rounded-lg text-[11px] font-bold font-mono transition flex items-center gap-1 shadow"
+              >
+                <span>⚡</span>
+                <span>SR & ASF Simulator</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center font-mono py-1.5 bg-stone-900/80 rounded-lg border border-stone-800">
+              <div>
+                <span className="text-[9px] text-stone-400 uppercase block">Caster Level</span>
+                <span className="text-sm font-bold text-cyan-300">CL {casterLevel}</span>
+              </div>
+              <div>
+                <span className="text-[9px] text-stone-400 uppercase block">Spell Penetration</span>
+                <span className="text-sm font-bold text-amber-300">
+                  {spellPenBonus > 0 ? `+${spellPenBonus}` : '+0'}
+                </span>
+              </div>
+              <div>
+                <span className="text-[9px] text-stone-400 uppercase block">Arcane Spell Failure</span>
+                <span className={`text-sm font-bold ${asfData.totalAsf > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  {asfData.totalAsf}% ASF
+                </span>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              {onRoll && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onRoll(`Caster Level Check vs SR (1d20+${casterLevel + spellPenBonus})`, 20, 1, casterLevel + spellPenBonus, 'normal')}
+                    className="flex-1 py-1.5 bg-stone-900 hover:bg-cyan-950 border border-cyan-800/60 text-cyan-200 rounded-lg font-mono text-xs font-bold transition flex items-center justify-center gap-1.5"
+                  >
+                    <Dices className="w-3.5 h-3.5 text-cyan-400" /> Roll CL Check (1d20+{casterLevel + spellPenBonus})
+                  </button>
+                  {asfData.totalAsf > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => onRoll(`Arcane Spell Failure Check (d100 vs ${asfData.totalAsf}%)`, 100, 1, 0, 'normal')}
+                      className="px-3 py-1.5 bg-stone-900 hover:bg-amber-950 border border-amber-800/60 text-amber-300 rounded-lg font-mono text-xs font-bold transition flex items-center justify-center gap-1.5"
+                    >
+                      <ShieldAlert className="w-3.5 h-3.5 text-amber-400" /> Check ASF (d100)
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Spell Slot Trackers (Levels 1 to 9) */}
         <div>
@@ -318,6 +400,16 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
             })}
           </div>
         </div>
+        {/* 3.5e Spell Resistance & Arcane Spell Failure Modal */}
+        {showAsfModal && (
+          <SpellResistanceAndAsf35eModal
+            isOpen={true}
+            onClose={() => setShowAsfModal(false)}
+            character={character}
+            onUpdateCharacter={onUpdateCharacter}
+            onRoll={onRoll}
+          />
+        )}
       </div>
     </CollapsibleBox>
   );

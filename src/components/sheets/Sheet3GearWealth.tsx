@@ -62,8 +62,8 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
         />
       )}
 
-      {/* SECTION 2: Magic Item Attunement Slots */}
-      {showAttunement && (
+      {/* SECTION 2: Magic Item Attunement Slots (5e only) */}
+      {showAttunement && (character.edition === '5e' || !character.edition) && (
         <MagicAttunementPanel
           character={character}
           onUpdateCharacter={onUpdateCharacter}

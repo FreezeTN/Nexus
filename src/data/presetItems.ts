@@ -2,13 +2,15 @@ export interface PresetItem {
   id: string;
   name: string;
   category: 'Weapon' | 'Armor' | 'Misc';
-  subCategory?: 'Simple Weapon' | 'Martial Weapon' | 'Magic Weapon' | 'Light Armor' | 'Medium Armor' | 'Heavy Armor' | 'Shield' | 'Potion' | 'Scroll' | 'Ring/Wondrous' | 'Adventuring Gear' | 'Tool/Focus';
+  subCategory?: 'Simple Weapon' | 'Martial Weapon' | 'Magic Weapon' | 'Light Armor' | 'Medium Armor' | 'Heavy Armor' | 'Shield' | 'Potion' | 'Scroll' | 'Ring/Wondrous' | 'Adventuring Gear' | 'Tool/Focus' | 'Mount / Steed' | 'Tack & Harness' | string;
   weight: number;
   costGp?: number;
   isMagic?: boolean;
   notes: string;
   armorAc?: number;
   armorType?: 'Heavy' | 'Medium' | 'Light' | 'Shield' | 'Bonus';
+  strengthRequirement?: number;
+  maxDexBonus?: number;
   stealthDisadvantage?: boolean;
   damageReduction?: number;
   resistance?: string;
@@ -660,6 +662,7 @@ export const PRESET_DND_ITEMS: PresetItem[] = [
     isMagic: false,
     armorAc: 16,
     armorType: 'Heavy',
+    strengthRequirement: 13,
     stealthDisadvantage: true,
     notes: 'AC 16. Requires STR 13. Disadvantage on Stealth.'
   },
@@ -673,6 +676,7 @@ export const PRESET_DND_ITEMS: PresetItem[] = [
     isMagic: false,
     armorAc: 17,
     armorType: 'Heavy',
+    strengthRequirement: 15,
     stealthDisadvantage: true,
     notes: 'AC 17. Requires STR 15. Disadvantage on Stealth.'
   },
@@ -686,6 +690,7 @@ export const PRESET_DND_ITEMS: PresetItem[] = [
     isMagic: false,
     armorAc: 18,
     armorType: 'Heavy',
+    strengthRequirement: 15,
     stealthDisadvantage: true,
     notes: 'AC 18. Requires STR 15. Disadvantage on Stealth.'
   },
@@ -1186,5 +1191,219 @@ export const PRESET_DND_ITEMS: PresetItem[] = [
     costGp: 0.2,
     isMagic: false,
     notes: 'Holds 4 pints of liquid (full weight 5 lbs).'
+  },
+  // ==========================================
+  // MOUNTS & STABLES (OFFICIAL D&D 3.5e & 5e)
+  // ==========================================
+  {
+    id: 'preset-heavy-warhorse',
+    name: 'Heavy Warhorse',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 1400,
+    costGp: 400,
+    isMagic: false,
+    notes: 'Large combat-trained steed. Speed 50 ft. AC 14, 30 HP. War-trained (does not panic in combat). Carrying Capacity: 300/600/900 lbs. Attacks: Hooves x2 (+4, 1d6+4).'
+  },
+  {
+    id: 'preset-light-warhorse',
+    name: 'Light Warhorse',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 1000,
+    costGp: 150,
+    isMagic: false,
+    notes: 'Large swift war steed. Speed 60 ft. AC 14, 22 HP. War-trained. Carrying Capacity: 230/460/690 lbs. Attacks: Hooves x2 (+4, 1d4+3).'
+  },
+  {
+    id: 'preset-riding-horse',
+    name: 'Riding Horse',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 1000,
+    costGp: 75,
+    isMagic: false,
+    notes: 'Large travel steed. Speed 60 ft. AC 14, 15 HP. Not war-trained. Carrying Capacity: 150/300/450 lbs.'
+  },
+  {
+    id: 'preset-draft-horse',
+    name: 'Heavy Draft Horse',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 1600,
+    costGp: 200,
+    isMagic: false,
+    notes: 'Large workhorse for wagons and hauling. Speed 50 ft. AC 13, 21 HP. Carrying Capacity: 400/800/1200 lbs.'
+  },
+  {
+    id: 'preset-warpony',
+    name: 'Warpony',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 600,
+    costGp: 100,
+    isMagic: false,
+    notes: 'Medium combat-trained steed for Small riders (Halflings & Gnomes). Speed 40 ft. AC 15, 13 HP. Carrying Capacity: 150/300/450 lbs.'
+  },
+  {
+    id: 'preset-pony',
+    name: 'Pony',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 500,
+    costGp: 30,
+    isMagic: false,
+    notes: 'Medium mountain travel steed. Speed 40 ft. AC 13, 11 HP. Carrying Capacity: 75/150/225 lbs.'
+  },
+  {
+    id: 'preset-riding-dog',
+    name: 'Riding Dog',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 120,
+    costGp: 150,
+    isMagic: false,
+    notes: 'Medium warhound trained as a steed for Small characters. Speed 40 ft. AC 16, 13 HP. Attack: Bite +3 (1d6+3 plus Trip attempt).'
+  },
+  {
+    id: 'preset-camel',
+    name: 'Camel',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 1200,
+    costGp: 50,
+    isMagic: false,
+    notes: 'Large desert steed with extraordinary water endurance. Speed 50 ft. AC 13, 19 HP. Carrying Capacity: 300/600/900 lbs.'
+  },
+  {
+    id: 'preset-donkey-mule',
+    name: 'Donkey or Mule',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 600,
+    costGp: 8,
+    isMagic: false,
+    notes: 'Medium surefooted pack animal. Speed 30 ft. AC 13, 11 HP. Carrying Capacity: 225/450/675 lbs.'
+  },
+  {
+    id: 'preset-elephant',
+    name: 'Elephant',
+    category: 'Misc',
+    subCategory: 'Mount / Steed',
+    weight: 8000,
+    costGp: 1000,
+    isMagic: false,
+    notes: 'Huge battle mount. Speed 40 ft. AC 15, 45 HP. Carrying Capacity: 1332/2664/4000 lbs. Attacks: Slam +8 (2d6+10) & Stamp x2 +3 (2d6+5).'
+  },
+  // ==========================================
+  // TACK, HARNESS & BARDING
+  // ==========================================
+  {
+    id: 'preset-military-saddle',
+    name: 'Military Saddle',
+    category: 'Misc',
+    subCategory: 'Tack & Harness',
+    weight: 30,
+    costGp: 20,
+    isMagic: false,
+    notes: 'Braced combat saddle. Grants +2 circumstance bonus on Ride checks to Stay in Saddle. 75% chance to remain seated if knocked unconscious.'
+  },
+  {
+    id: 'preset-riding-saddle',
+    name: 'Riding Saddle',
+    category: 'Misc',
+    subCategory: 'Tack & Harness',
+    weight: 25,
+    costGp: 10,
+    isMagic: false,
+    notes: 'Standard travel saddle crafted from stitched leather.'
+  },
+  {
+    id: 'preset-pack-saddle',
+    name: 'Pack Saddle',
+    category: 'Misc',
+    subCategory: 'Tack & Harness',
+    weight: 15,
+    costGp: 5,
+    isMagic: false,
+    notes: 'Frame designed specifically to secure packs, chests, and camping gear on beasts of burden.'
+  },
+  {
+    id: 'preset-exotic-military-saddle',
+    name: 'Exotic Military Saddle',
+    category: 'Misc',
+    subCategory: 'Tack & Harness',
+    weight: 40,
+    costGp: 60,
+    isMagic: false,
+    notes: 'Harness with secure leg loops and straps for riding flying or exotic mounts (Griffons, Pegasi) in combat. +2 bonus to Stay in Saddle.'
+  },
+  {
+    id: 'preset-bit-and-bridle',
+    name: 'Bit and Bridle',
+    category: 'Misc',
+    subCategory: 'Tack & Harness',
+    weight: 1,
+    costGp: 2,
+    isMagic: false,
+    notes: 'Metal bit and reins used for steering and directing a mount.'
+  },
+  {
+    id: 'preset-saddlebags',
+    name: 'Saddlebags',
+    category: 'Misc',
+    subCategory: 'Tack & Harness',
+    weight: 8,
+    costGp: 4,
+    isMagic: false,
+    notes: 'Paired leather pouches mounted behind the saddle. Holds up to 30 lbs of provisions and adventuring gear.'
+  },
+  {
+    id: 'preset-barding-chainmail',
+    name: 'Chainmail Barding (Large)',
+    category: 'Armor',
+    subCategory: 'Heavy Armor',
+    armorType: 'Heavy',
+    armorAc: 5,
+    weight: 80,
+    costGp: 600,
+    isMagic: false,
+    notes: 'Interlocking steel links custom made for a Large warhorse. Grants +5 Armor AC to mount.'
+  },
+  {
+    id: 'preset-barding-scale',
+    name: 'Scale Mail Barding (Large)',
+    category: 'Armor',
+    subCategory: 'Medium Armor',
+    armorType: 'Medium',
+    armorAc: 4,
+    weight: 60,
+    costGp: 200,
+    isMagic: false,
+    notes: 'Overlapping scale mail protecting the chest, neck, and flanks of a mount. Grants +4 Armor AC.'
+  },
+  {
+    id: 'preset-barding-leather',
+    name: 'Leather Barding (Large)',
+    category: 'Armor',
+    subCategory: 'Light Armor',
+    armorType: 'Light',
+    armorAc: 2,
+    weight: 30,
+    costGp: 40,
+    isMagic: false,
+    notes: 'Hardened leather plates strapped onto a mount. Grants +2 Armor AC.'
+  },
+  {
+    id: 'preset-barding-full-plate',
+    name: 'Full Plate Barding (Large)',
+    category: 'Armor',
+    subCategory: 'Heavy Armor',
+    armorType: 'Heavy',
+    armorAc: 8,
+    weight: 100,
+    costGp: 6000,
+    isMagic: false,
+    notes: 'Heavy articulated steel armor covering the head, neck, and body of a warhorse. Grants +8 Armor AC to mount.'
   }
 ];

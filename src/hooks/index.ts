@@ -5,3 +5,4 @@ export * from './useAmbienceBroadcast';
 export * from './useModalCoordinator';
 export * from './useSystemManager';
 export * from './useAuthManager';
+export * from './useHomebrewSync';

@@ -1,4 +1,4 @@
-import { AbilityName, AbilityScores, CharacterData, GearItem, RuleEdition, Skill } from '../types';
+import { AbilityName, AbilityScores, Attack, CharacterData, GearItem, RuleEdition, Skill, Spell, Wealth } from '../types';
 import {
   getCombinedLevel,
   getActiveClassChoice,
@@ -9,8 +9,13 @@ import {
   getProficiencyBonus,
   formatModifier
 } from '../systems/dnd5e';
+import { get35eArmorClass } from './calculators/dnd35eCalculators';
+import { reconcileEquippedHands } from './handSlotCalculations';
 export * from '../systems/dnd5e';
 export * from './calculators/dnd35eCalculators';
+export * from './handSlotCalculations';
+export * from './dnd35eAdvancedMechanics';
+export * from './environmentRules';
 
 
 export {
@@ -44,6 +49,12 @@ export interface ACBreakdown {
   miscBonus: number;
   defenseBonusUA?: number;
   sizeAcBonus?: number;
+  coverBonus?: number;
+  naturalArmorBonus?: number;
+  deflectionBonus?: number;
+  dodgeBonus?: number;
+  touchAc?: number;
+  flatFootedAc?: number;
   armorName?: string;
   shieldName?: string;
   isUnarmored: boolean;
@@ -62,6 +73,29 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
       miscBonus: 0,
       isUnarmored: true,
       explanation: 'Unarmored Base (10)'
+    };
+  }
+
+  if (char.edition === '3.5e') {
+    const ac35 = get35eArmorClass(char);
+    return {
+      total: ac35.totalAc,
+      baseAc: ac35.baseAc,
+      dexBonus: ac35.dexBonus,
+      shieldBonus: ac35.shieldBonus,
+      magicBonus: 0,
+      defenseStyleBonus: 0,
+      miscBonus: ac35.miscBonus,
+      sizeAcBonus: ac35.sizeModifier,
+      naturalArmorBonus: ac35.naturalArmorBonus,
+      deflectionBonus: ac35.deflectionBonus,
+      dodgeBonus: ac35.dodgeBonus,
+      touchAc: ac35.touchAc,
+      flatFootedAc: ac35.flatFootedAc,
+      armorName: ac35.armorName,
+      shieldName: ac35.shieldName,
+      isUnarmored: ac35.armorBonus === 0,
+      explanation: ac35.explanation
     };
   }
 
@@ -86,11 +120,14 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
   const wisMod = getAbilityModifier(effectiveAbilities?.WIS?.score || 10);
 
   const inventory = char.inventory || [];
+  const is5e = (char.edition || '5e') === '5e';
   const equippedItems = inventory.filter(i => {
     if (!i.equipped || i.stored) return false;
-    // If item requires attunement, it must be attuned to grant defense/AC benefits
-    const needsAttunement = i.requiresAttunement ?? (i.isMagic || (i.notes || '').toLowerCase().includes('attune'));
-    if (needsAttunement && !i.attuned) return false;
+    // If item requires attunement, it must be attuned to grant defense/AC benefits (5e only)
+    if (is5e) {
+      const needsAttunement = i.requiresAttunement === true || (i.requiresAttunement !== false && (i.notes || '').toLowerCase().includes('attunement'));
+      if (needsAttunement && !i.attuned) return false;
+    }
     return true;
   });
 
@@ -107,16 +144,41 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
       if (!equippedShield) {
         equippedShield = item;
       } else {
-        const bonusVal = item.armorAc ?? 2;
+        const bonusVal = (item.armorAc ?? 2) + (item.acBonus ?? 0);
         otherEquippedBonusItems.push({ item, bonus: bonusVal });
       }
       continue;
     }
 
-    // Check if item is armor
+    // Check if item is a pure bonus/accessory item (Ring of Protection, Cloak of Protection, Bracers of Defense, etc.)
+    const isBonusAccessory =
+      item.armorType === 'Bonus' ||
+      nameLower.includes('ring of') ||
+      nameLower.includes('cloak of') ||
+      nameLower.includes('bracers of') ||
+      nameLower.includes('amulet of') ||
+      (item.itemType === 'Misc' && ((item.acBonus ?? 0) > 0 || (item.armorAc ?? 0) > 0));
+
+    if (isBonusAccessory) {
+      let bonusVal = item.acBonus ?? item.armorAc ?? 0;
+      if (bonusVal === 0) {
+        const bonusMatch = notesLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i) ||
+                           nameLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i);
+        if (bonusMatch) bonusVal = parseInt(bonusMatch[1] || bonusMatch[2] || '0', 10);
+      }
+      if (bonusVal > 0) {
+        otherEquippedBonusItems.push({ item, bonus: bonusVal });
+      }
+      continue;
+    }
+
+    // Check if item is body armor
     const isArmor =
+      item.armorType === 'Light' ||
+      item.armorType === 'Medium' ||
+      item.armorType === 'Heavy' ||
       item.itemType === 'Armor' ||
-      (item.armorAc !== undefined && (item.armorType as string) !== 'Shield' && (item.armorType as string) !== 'Bonus') ||
+      item.armorAc !== undefined ||
       nameLower.includes('armor') ||
       nameLower.includes('mail') ||
       nameLower.includes('plate') ||
@@ -130,12 +192,13 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     if (isArmor && !equippedArmor) {
       equippedArmor = item;
     } else {
-      // Check for AC bonus on other equipped magic items (Ring of Protection, etc.)
-      const bonusVal = item.armorAc ?? item.acBonus ?? (() => {
+      // Check for AC bonus on other equipped magic items
+      let bonusVal = item.acBonus ?? item.armorAc ?? 0;
+      if (bonusVal === 0) {
         const bonusMatch = notesLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i) ||
                            nameLower.match(/\+(\d+)\s*(?:to\s*)?ac\b|\bac\s*\+(\d+)\b/i);
-        return bonusMatch ? parseInt(bonusMatch[1] || bonusMatch[2] || '0', 10) : 0;
-      })();
+        if (bonusMatch) bonusVal = parseInt(bonusMatch[1] || bonusMatch[2] || '0', 10);
+      }
       if (bonusVal > 0) {
         otherEquippedBonusItems.push({ item, bonus: bonusVal });
       }
@@ -155,24 +218,37 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     const nameLower = equippedArmor.name.toLowerCase();
     const notesLower = (equippedArmor.notes || '').toLowerCase();
 
-    // Check magic bonus in name or notes (+1, +2, +3)
-    const magicMatch = nameLower.match(/\+(\d+)/) || notesLower.match(/\+(\d+)/);
-    if (magicMatch) {
-      magicBonus = parseInt(magicMatch[1], 10);
+    // Check magic bonus in item properties (acBonus) OR regex in name/notes (+1, +2, +3)
+    if (equippedArmor.acBonus !== undefined && equippedArmor.acBonus > 0) {
+      magicBonus = equippedArmor.acBonus;
+    } else {
+      const magicMatch = nameLower.match(/\+(\d+)/) || notesLower.match(/\+(\d+)/);
+      if (magicMatch) {
+        magicBonus = parseInt(magicMatch[1], 10);
+      }
     }
 
     const explicitAcMatch = notesLower.match(/ac\s*(\d+)/i) || nameLower.match(/ac\s*(\d+)/i);
 
     if (equippedArmor.armorAc !== undefined) {
       baseAc = equippedArmor.armorAc;
-      if (equippedArmor.armorType === 'Heavy') {
-        dexBonus = 0;
+      const computedArmorType = equippedArmor.armorType || (
+        nameLower.includes('plate') || nameLower.includes('splint') || nameLower.includes('chain mail') || nameLower.includes('ring mail') ? 'Heavy' :
+        nameLower.includes('half plate') || nameLower.includes('scale') || nameLower.includes('breastplate') || nameLower.includes('chain shirt') || nameLower.includes('hide') ? 'Medium' :
+        'Light'
+      );
+
+      if (computedArmorType === 'Heavy') {
+        dexBonus = equippedArmor.maxDexBonus !== undefined ? Math.min(dexMod, equippedArmor.maxDexBonus) : 0;
         explanationParts.push(`${equippedArmor.name} (AC ${baseAc})`);
-      } else if (equippedArmor.armorType === 'Medium') {
-        dexBonus = Math.min(dexMod, 2);
+        if (dexBonus !== 0) explanationParts.push(`DEX (${dexBonus >= 0 ? '+' + dexBonus : dexBonus})`);
+      } else if (computedArmorType === 'Medium') {
+        const featMaxDex = (char.feats || []).some(f => f.name.toLowerCase().includes('medium armor master')) ? 3 : 2;
+        const maxDex = equippedArmor.maxDexBonus !== undefined ? equippedArmor.maxDexBonus : featMaxDex;
+        dexBonus = Math.min(dexMod, maxDex);
         explanationParts.push(`${equippedArmor.name} (AC ${baseAc})`);
-        if (dexBonus !== 0) explanationParts.push(`DEX (Max +2: ${dexBonus >= 0 ? '+' + dexBonus : dexBonus})`);
-      } else if (equippedArmor.armorType === 'Bonus') {
+        if (dexBonus !== 0) explanationParts.push(`DEX (Max +${maxDex}: ${dexBonus >= 0 ? '+' + dexBonus : dexBonus})`);
+      } else if (computedArmorType === 'Bonus') {
         baseAc = 10;
         dexBonus = dexMod;
         magicBonus += equippedArmor.armorAc;
@@ -188,7 +264,7 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
       if (nameLower.includes('plate')) baseAc = 18;
       else if (nameLower.includes('splint')) baseAc = 17;
       else if (nameLower.includes('chain mail')) baseAc = 16;
-      else if (nameLower.includes('ring mail')) baseAc = 11;
+      else if (nameLower.includes('ring mail')) baseAc = 14;
       else if (explicitAcMatch) baseAc = parseInt(explicitAcMatch[1], 10);
       else baseAc = 16;
       dexBonus = 0;
@@ -201,9 +277,10 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
       else if (nameLower.includes('hide')) baseAc = 12;
       else if (explicitAcMatch) baseAc = parseInt(explicitAcMatch[1], 10);
       else baseAc = 14;
-      dexBonus = Math.min(dexMod, 2);
+      const maxDex = (char.feats || []).some(f => f.name.toLowerCase().includes('medium armor master')) ? 3 : 2;
+      dexBonus = Math.min(dexMod, maxDex);
       explanationParts.push(`${equippedArmor.name} (AC ${baseAc})`);
-      if (dexBonus !== 0) explanationParts.push(`DEX (Max +2: ${dexBonus >= 0 ? '+' + dexBonus : dexBonus})`);
+      if (dexBonus !== 0) explanationParts.push(`DEX (Max +${maxDex}: ${dexBonus >= 0 ? '+' + dexBonus : dexBonus})`);
     } else if (nameLower.includes('studded') || nameLower.includes('leather') || nameLower.includes('padded')) {
       // Light Armor
       if (nameLower.includes('studded')) baseAc = 12;
@@ -304,16 +381,35 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     }
   }
 
-  // Size Modifier to AC (D&D 3.5e)
+  // Size Modifier to AC
   let sizeAcBonus = 0;
-  if (char.edition === '3.5e' && char.sizeCategory) {
+  if (char.sizeCategory) {
     sizeAcBonus = getSizeACModifier(char.sizeCategory);
     if (sizeAcBonus !== 0) {
       explanationParts.push(`Size (${sizeAcBonus > 0 ? '+' + sizeAcBonus : sizeAcBonus})`);
     }
   }
 
-  const total = baseAc + dexBonus + magicBonus + shieldBonus + defenseStyleBonus + miscBonus + defenseBonusUA + sizeAcBonus;
+  // Tactical Cover bonus for 5e (PHB p. 196: Half Cover = +2 AC, Three-Quarters Cover = +5 AC)
+  let coverBonus = 0;
+  if (is5e) {
+    if (char.activeCover === 'standard' || char.activeCover === 'soft') {
+      coverBonus = 2;
+      explanationParts.push('Half Cover (+2)');
+    } else if (char.activeCover === 'improved') {
+      coverBonus = 5;
+      explanationParts.push('3/4 Cover (+5)');
+    }
+  }
+
+  // Natural Armor Bonus (5e or generic)
+  const naturalArmorBonus = char.naturalArmorBonus || 0;
+  if (naturalArmorBonus > 0) {
+    miscBonus += naturalArmorBonus;
+    explanationParts.push(`Natural Armor (+${naturalArmorBonus})`);
+  }
+
+  const total = baseAc + dexBonus + magicBonus + shieldBonus + defenseStyleBonus + miscBonus + defenseBonusUA + sizeAcBonus + coverBonus;
 
   return {
     total,
@@ -325,6 +421,7 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     miscBonus,
     defenseBonusUA,
     sizeAcBonus,
+    coverBonus,
     armorName,
     shieldName,
     isUnarmored,
@@ -395,18 +492,26 @@ export function calculateCharacterTotalDR(char: CharacterData): TotalDRResult {
   let totalDR = 0;
   const sources: string[] = [];
 
+  // 1. Innate / Racial Damage Reduction
+  if (char.damageReductionValue && char.damageReductionValue > 0) {
+    totalDR += char.damageReductionValue;
+    const bypassStr = char.damageReductionBypass || '-';
+    sources.push(`Innate/Racial DR (${char.damageReductionValue}/${bypassStr})`);
+  }
+
   const inventory = char.inventory || [];
   const equippedItems = inventory.filter(i => i.equipped && !i.stored);
 
-  // 1. Explicit Item Damage Reduction fields
+  // 2. Explicit Item Damage Reduction fields
   for (const item of equippedItems) {
-    if (item.damageReduction && item.damageReduction > 0) {
-      totalDR += item.damageReduction;
-      sources.push(`${item.name} (DR ${item.damageReduction})`);
+    if (item.damageReduction && item.damageReduction !== 0) {
+      const val = Math.abs(item.damageReduction);
+      totalDR += val;
+      sources.push(`${item.name} (DR ${val})`);
     }
   }
 
-  // 2. Unearthed Arcana p. 109/111 Armor as Damage Reduction Rule
+  // 3. Unearthed Arcana p. 109/111 Armor as Damage Reduction Rule
   if (char.optionalRules?.useArmorAsDRUA109) {
     for (const item of equippedItems) {
       const type = item.armorType;
@@ -442,10 +547,36 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
   if (!char) return [];
 
   const list: ResistanceEntry[] = [];
+
+  // 1. Explicit Damage Resistances array (e.g. 5e / generic)
+  if (Array.isArray(char.damageResistances)) {
+    for (const dr of char.damageResistances) {
+      if (dr && typeof dr === 'string') {
+        const cap = dr.charAt(0).toUpperCase() + dr.slice(1).toLowerCase();
+        if (!list.some(r => r.type.toLowerCase() === cap.toLowerCase())) {
+          list.push({ type: cap, source: 'Racial / Innate Resistance' });
+        }
+      }
+    }
+  }
+
+  // 2. Explicit Energy Resistances dictionary (e.g. 3.5e energy resistances: { fire: 6, cold: 6, acid: 6, electricity: 6 })
+  if (char.energyResistances && typeof char.energyResistances === 'object') {
+    for (const [eType, eVal] of Object.entries(char.energyResistances)) {
+      if (typeof eVal === 'number' && eVal > 0) {
+        const cap = eType.charAt(0).toUpperCase() + eType.slice(1).toLowerCase();
+        const displayLabel = `${cap} (${eVal})`;
+        if (!list.some(r => r.type.toLowerCase().startsWith(eType.toLowerCase()))) {
+          list.push({ type: displayLabel, source: 'Energy Resistance' });
+        }
+      }
+    }
+  }
+
   const inventory = char.inventory || [];
   const equippedItems = inventory.filter(i => i.equipped && !i.stored);
 
-  // 1. Equipped Items
+  // 3. Equipped Items
   for (const item of equippedItems) {
     if (item.resistance && item.resistance.trim()) {
       const parts = item.resistance.split(/[,/]/).map(s => s.trim()).filter(Boolean);
@@ -457,34 +588,33 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
     }
   }
 
-  // 2. Base Race & Ancestry Resistances
+  // 4. Base Race & Ancestry Resistances
   const raceLower = (char.race || '').toLowerCase();
 
   if (raceLower.includes('tiefling')) {
-    if (!list.some(r => r.type.toLowerCase() === 'fire')) {
+    if (!list.some(r => r.type.toLowerCase().startsWith('fire'))) {
       list.push({ type: 'Fire', source: 'Hellish Resistance (Tiefling)' });
     }
   }
   if (raceLower.includes('dwarf')) {
-    if (!list.some(r => r.type.toLowerCase() === 'poison')) {
+    if (!list.some(r => r.type.toLowerCase().startsWith('poison'))) {
       list.push({ type: 'Poison', source: 'Dwarven Resilience (Dwarf)' });
     }
   }
   if (raceLower.includes('aasimar')) {
-    if (!list.some(r => r.type.toLowerCase() === 'necrotic')) {
+    if (!list.some(r => r.type.toLowerCase().startsWith('necrotic'))) {
       list.push({ type: 'Necrotic', source: 'Celestial Resistance (Aasimar)' });
     }
-    if (!list.some(r => r.type.toLowerCase() === 'radiant')) {
+    if (!list.some(r => r.type.toLowerCase().startsWith('radiant'))) {
       list.push({ type: 'Radiant', source: 'Celestial Resistance (Aasimar)' });
     }
   }
   if (raceLower.includes('warforged')) {
-    if (!list.some(r => r.type.toLowerCase() === 'poison')) {
+    if (!list.some(r => r.type.toLowerCase().startsWith('poison'))) {
       list.push({ type: 'Poison', source: 'Constructed Resilience (Warforged)' });
     }
   }
   if (raceLower.includes('dragonborn')) {
-    // Detect elemental type from feature text, defaulting to Fire
     const featStr = (char.classFeatures || []).map(f => `${f.name} ${f.description}`).join(' ').toLowerCase();
     let draconicType = 'Fire';
     if (featStr.includes('cold') || featStr.includes('white') || featStr.includes('silver')) draconicType = 'Cold';
@@ -492,7 +622,7 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
     else if (featStr.includes('acid') || featStr.includes('black') || featStr.includes('copper')) draconicType = 'Acid';
     else if (featStr.includes('poison') || featStr.includes('green')) draconicType = 'Poison';
 
-    if (!list.some(r => r.type.toLowerCase() === draconicType.toLowerCase())) {
+    if (!list.some(r => r.type.toLowerCase().startsWith(draconicType.toLowerCase()))) {
       list.push({ type: draconicType, source: `Draconic Resistance (${draconicType} Dragonborn)` });
     }
   }
@@ -503,31 +633,31 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
     else if (featStr.includes('earth') || featStr.includes('acid')) genasiType = 'Acid';
     else if (featStr.includes('air') || featStr.includes('lightning')) genasiType = 'Lightning';
 
-    if (!list.some(r => r.type.toLowerCase() === genasiType.toLowerCase())) {
+    if (!list.some(r => r.type.toLowerCase().startsWith(genasiType.toLowerCase()))) {
       list.push({ type: genasiType, source: `Elemental Resistance (${genasiType} Genasi)` });
     }
   }
 
-  // 3. Half-Breed / Hybrid Heritage Ancestry (The Alpine DM System)
+  // 5. Half-Breed / Hybrid Heritage Ancestry (The Alpine DM System)
   if (char.hybridHeritage?.enabled) {
     const p1 = (char.hybridHeritage.primaryParent || '').toLowerCase();
     const p2 = (char.hybridHeritage.secondaryParent || '').toLowerCase();
 
     const applyParentResist = (pName: string) => {
-      if (pName.includes('tiefling') && !list.some(r => r.type.toLowerCase() === 'fire')) {
+      if (pName.includes('tiefling') && !list.some(r => r.type.toLowerCase().startsWith('fire'))) {
         list.push({ type: 'Fire', source: 'Tiefling Heritage Resistance' });
       }
-      if ((pName.includes('dwarf') || pName.includes('warforged')) && !list.some(r => r.type.toLowerCase() === 'poison')) {
+      if ((pName.includes('dwarf') || pName.includes('warforged')) && !list.some(r => r.type.toLowerCase().startsWith('poison'))) {
         list.push({ type: 'Poison', source: 'Dwarven / Warforged Heritage Resilience' });
       }
       if (pName.includes('aasimar')) {
-        if (!list.some(r => r.type.toLowerCase() === 'necrotic')) list.push({ type: 'Necrotic', source: 'Celestial Heritage Resistance' });
-        if (!list.some(r => r.type.toLowerCase() === 'radiant')) list.push({ type: 'Radiant', source: 'Celestial Heritage Resistance' });
+        if (!list.some(r => r.type.toLowerCase().startsWith('necrotic'))) list.push({ type: 'Necrotic', source: 'Celestial Heritage Resistance' });
+        if (!list.some(r => r.type.toLowerCase().startsWith('radiant'))) list.push({ type: 'Radiant', source: 'Celestial Heritage Resistance' });
       }
-      if (pName.includes('dragonborn') && !list.some(r => r.type.toLowerCase() === 'fire')) {
+      if (pName.includes('dragonborn') && !list.some(r => r.type.toLowerCase().startsWith('fire'))) {
         list.push({ type: 'Fire', source: 'Draconic Heritage Resistance' });
       }
-      if (pName.includes('genasi') && !list.some(r => r.type.toLowerCase() === 'fire')) {
+      if (pName.includes('genasi') && !list.some(r => r.type.toLowerCase().startsWith('fire'))) {
         list.push({ type: 'Fire', source: 'Elemental Heritage Resistance' });
       }
     };
@@ -536,14 +666,14 @@ export function getCharacterResistances(char: CharacterData): ResistanceEntry[] 
     applyParentResist(p2);
   }
 
-  // 4. Scan Class / Racial Features for explicit "resistance to [type]"
+  // 6. Scan Class / Racial Features for explicit "resistance to [type]"
   if (char.classFeatures) {
     for (const feat of char.classFeatures) {
       const text = `${feat.name} ${feat.description}`.toLowerCase();
       const matches = text.matchAll(/resistance to (fire|cold|lightning|acid|poison|necrotic|radiant|psychic|force|thunder|slashing|piercing|bludgeoning|physical)/gi);
       for (const match of matches) {
         const typeFound = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
-        if (!list.some(r => r.type.toLowerCase() === typeFound.toLowerCase() && r.source === feat.name)) {
+        if (!list.some(r => r.type.toLowerCase().startsWith(typeFound.toLowerCase()) && r.source === feat.name)) {
           list.push({ type: typeFound, source: feat.name });
         }
       }
@@ -557,10 +687,35 @@ export function getCharacterImmunities(char: CharacterData): ResistanceEntry[] {
   if (!char) return [];
 
   const list: ResistanceEntry[] = [];
+
+  // 1. Explicit damage immunities
+  if (Array.isArray(char.damageImmunities)) {
+    for (const di of char.damageImmunities) {
+      if (di && typeof di === 'string') {
+        const cap = di.charAt(0).toUpperCase() + di.slice(1).toLowerCase();
+        if (!list.some(r => r.type.toLowerCase() === cap.toLowerCase())) {
+          list.push({ type: cap, source: 'Damage Immunity' });
+        }
+      }
+    }
+  }
+
+  // 2. Explicit condition immunities
+  if (Array.isArray(char.conditionImmunities)) {
+    for (const ci of char.conditionImmunities) {
+      if (ci && typeof ci === 'string') {
+        const cap = ci.charAt(0).toUpperCase() + ci.slice(1).toLowerCase();
+        if (!list.some(r => r.type.toLowerCase() === cap.toLowerCase())) {
+          list.push({ type: cap, source: 'Condition Immunity' });
+        }
+      }
+    }
+  }
+
   const inventory = char.inventory || [];
   const equippedItems = inventory.filter(i => i.equipped && !i.stored);
 
-  // 1. Equipped items with immunity
+  // 3. Equipped items with immunity
   for (const item of equippedItems) {
     if (item.immunity && item.immunity.trim()) {
       const parts = item.immunity.split(/[,/]/).map(s => s.trim()).filter(Boolean);
@@ -572,7 +727,21 @@ export function getCharacterImmunities(char: CharacterData): ResistanceEntry[] {
     }
   }
 
-  // 2. Active condition effects
+  // 4. Scan class/racial features for immunities
+  if (char.classFeatures) {
+    for (const feat of char.classFeatures) {
+      const text = `${feat.name} ${feat.description}`.toLowerCase();
+      const matches = text.matchAll(/immun(?:e|ity)\s+(?:to\s+)?(poison|sleep|paralysis|disease|charm|charmed|petrified|exhaustion|frightened|fear|fire|cold|lightning|acid|necrotic|radiant|psychic|force|thunder)/gi);
+      for (const match of matches) {
+        const typeFound = match[1].charAt(0).toUpperCase() + match[1].slice(1).toLowerCase();
+        if (!list.some(r => r.type.toLowerCase() === typeFound.toLowerCase())) {
+          list.push({ type: typeFound, source: feat.name });
+        }
+      }
+    }
+  }
+
+  // 5. Active condition effects
   if (char.conditions && char.conditions.length > 0) {
     const effects = getConditionEffects(char.conditions);
     if (effects.immuneToPoison) {
@@ -680,10 +849,12 @@ export function calculateArmorClass(char: CharacterData): number {
 
 export function recalculateCharacterAC(char: CharacterData): CharacterData {
   if (!char) return char;
-  const computedAC = calculateArmorClass(char);
-  if (char.armorClass === computedAC) return char;
+  // Reconcile hand capacity limits (e.g. if spells, arms, or conditions changed/ended)
+  const { character: reconciledChar } = reconcileEquippedHands(char);
+  const computedAC = calculateArmorClass(reconciledChar);
+  if (char.armorClass === computedAC && reconciledChar.inventory === char.inventory) return char;
   return {
-    ...char,
+    ...reconciledChar,
     armorClass: computedAC
   };
 }
@@ -1263,7 +1434,14 @@ export function getMaxHpBreakdown(char: CharacterData): MaxHpBreakdown {
     details.push(`Active Max HP Modifier (Spell/Drain/Curse): ${tempModifier > 0 ? '+' : ''}${tempModifier} Max HP`);
   }
 
-  let subtotal = baseMaxHp + featBonus + equippedItemBonus + tempModifier;
+  // 3.5e Negative Levels: -5 Hit Points per negative level
+  let negativeLevelHpPenalty = 0;
+  if (char.negativeLevels && char.negativeLevels > 0) {
+    negativeLevelHpPenalty = char.negativeLevels * 5;
+    details.push(`Negative Levels (${char.negativeLevels}): -${negativeLevelHpPenalty} Max HP (-5 per level)`);
+  }
+
+  let subtotal = baseMaxHp + featBonus + equippedItemBonus + tempModifier - negativeLevelHpPenalty;
   subtotal = Math.max(1, subtotal);
 
   const exhaustion = char.exhaustionLevel || 0;
@@ -1694,15 +1872,152 @@ export function calculateWeaponAttackDetails(
   };
 }
 
-export function getTotalWealthInGold(char: CharacterData): number {
-  if (!char || !char.wealth) return 0;
-  const cp = Number(char.wealth.cp) || 0;
-  const sp = Number(char.wealth.sp) || 0;
-  const ep = Number(char.wealth.ep) || 0;
-  const gp = Number(char.wealth.gp) || 0;
-  const pp = Number(char.wealth.pp) || 0;
+export function getTotalWealthInGoldFromWealth(wealth?: Wealth): number {
+  if (!wealth) return 0;
+  const cp = Number(wealth.cp) || 0;
+  const sp = Number(wealth.sp) || 0;
+  const ep = Number(wealth.ep) || 0;
+  const gp = Number(wealth.gp) || 0;
+  const pp = Number(wealth.pp) || 0;
   const total = cp / 100 + sp / 10 + ep / 2 + gp + pp * 10;
   return isNaN(total) ? 0 : Number(total.toFixed(2));
+}
+
+export function getTotalWealthInGold(char: CharacterData): number {
+  if (!char) return 0;
+  return getTotalWealthInGoldFromWealth(char.wealth);
+}
+
+/**
+ * Deducts gold value from character wealth across denominations (GP -> PP with change -> EP -> SP -> CP).
+ * Returns the updated wealth and whether the player had sufficient funds.
+ */
+export function deductGoldFromWealth(amountGp: number, currentWealth?: Wealth): { updatedWealth: Wealth; success: boolean } {
+  const safeWealth: Wealth = {
+    cp: Number(currentWealth?.cp) || 0,
+    sp: Number(currentWealth?.sp) || 0,
+    ep: Number(currentWealth?.ep) || 0,
+    gp: Number(currentWealth?.gp) || 0,
+    pp: Number(currentWealth?.pp) || 0,
+  };
+
+  const totalAvailable = getTotalWealthInGoldFromWealth(safeWealth);
+  if (totalAvailable < amountGp - 0.001) {
+    return { updatedWealth: safeWealth, success: false };
+  }
+
+  let remainingToPay = amountGp;
+  let gp = safeWealth.gp;
+  let pp = safeWealth.pp;
+  let ep = safeWealth.ep;
+  let sp = safeWealth.sp;
+  let cp = safeWealth.cp;
+
+  // 1. Prefer paying from GP
+  if (gp >= remainingToPay) {
+    gp -= remainingToPay;
+    remainingToPay = 0;
+  } else {
+    remainingToPay -= gp;
+    gp = 0;
+  }
+
+  // 2. Pay from Platinum (1 PP = 10 GP), giving change in GP/SP/CP
+  if (remainingToPay > 0 && pp > 0) {
+    if (pp * 10 >= remainingToPay) {
+      const ppNeeded = Math.ceil(remainingToPay / 10);
+      pp -= ppNeeded;
+      const changeGp = ppNeeded * 10 - remainingToPay;
+      const wholeGp = Math.floor(changeGp);
+      gp += wholeGp;
+      const decimalChange = changeGp - wholeGp;
+      if (decimalChange > 0) {
+        const spAdd = Math.floor(decimalChange * 10);
+        sp += spAdd;
+        const cpAdd = Math.round((decimalChange * 10 - spAdd) * 10);
+        cp += cpAdd;
+      }
+      remainingToPay = 0;
+    } else {
+      remainingToPay -= pp * 10;
+      pp = 0;
+    }
+  }
+
+  // 3. Pay from Electrum (1 EP = 0.5 GP, 2 EP = 1 GP)
+  if (remainingToPay > 0 && ep > 0) {
+    if (ep * 0.5 >= remainingToPay) {
+      const epNeeded = Math.ceil(remainingToPay / 0.5);
+      ep -= epNeeded;
+      const changeGp = epNeeded * 0.5 - remainingToPay;
+      if (changeGp > 0) {
+        sp += Math.round(changeGp * 10);
+      }
+      remainingToPay = 0;
+    } else {
+      remainingToPay -= ep * 0.5;
+      ep = 0;
+    }
+  }
+
+  // 4. Pay from Silver (10 SP = 1 GP)
+  if (remainingToPay > 0 && sp > 0) {
+    const spNeeded = remainingToPay * 10;
+    if (sp >= spNeeded) {
+      const wholeSpNeeded = Math.ceil(spNeeded);
+      sp -= wholeSpNeeded;
+      const changeCp = Math.round((wholeSpNeeded - spNeeded) * 10);
+      cp += changeCp;
+      remainingToPay = 0;
+    } else {
+      remainingToPay -= sp / 10;
+      sp = 0;
+    }
+  }
+
+  // 5. Pay from Copper (100 CP = 1 GP)
+  if (remainingToPay > 0 && cp > 0) {
+    const cpNeeded = Math.round(remainingToPay * 100);
+    cp = Math.max(0, cp - cpNeeded);
+    remainingToPay = 0;
+  }
+
+  return {
+    updatedWealth: {
+      cp: Math.max(0, Math.round(cp)),
+      sp: Math.max(0, Math.round(sp)),
+      ep: Math.max(0, Math.round(ep)),
+      gp: Math.max(0, Math.round(gp)),
+      pp: Math.max(0, Math.round(pp))
+    },
+    success: true
+  };
+}
+
+export function formatWealthDetailed(wealth?: Wealth): {
+  totalGp: number;
+  displayText: string;
+  breakdown: string;
+} {
+  const totalGp = getTotalWealthInGoldFromWealth(wealth);
+  const cp = Number(wealth?.cp) || 0;
+  const sp = Number(wealth?.sp) || 0;
+  const ep = Number(wealth?.ep) || 0;
+  const gp = Number(wealth?.gp) || 0;
+  const pp = Number(wealth?.pp) || 0;
+
+  const parts: string[] = [];
+  if (pp > 0) parts.push(`${pp} PP`);
+  if (gp > 0 || (pp === 0 && sp === 0 && cp === 0 && ep === 0)) parts.push(`${gp} GP`);
+  if (ep > 0) parts.push(`${ep} EP`);
+  if (sp > 0) parts.push(`${sp} SP`);
+  if (cp > 0) parts.push(`${cp} CP`);
+
+  return {
+    totalGp,
+    displayText: `~${totalGp.toLocaleString(undefined, { minimumFractionDigits: totalGp % 1 !== 0 ? 2 : 0, maximumFractionDigits: 2 })} GP`,
+    breakdown: parts.join(', ') || '0 GP'
+  };
 }
 
 export const DEFAULT_SKILLS_LIST: { name: string; ability: AbilityName }[] = [
@@ -1769,46 +2084,785 @@ export const DEFAULT_35E_SKILLS_LIST: { name: string; ability: AbilityName }[] =
   { name: 'Use Rope', ability: 'DEX' },
 ];
 
-export function get35eSkillBonus(skill: Skill, abilities: AbilityScores): number {
+export function get35eSkillSynergyBonus(
+  skillName: string,
+  allSkills?: Skill[]
+): { totalBonus: number; sources: string[] } {
+  if (!allSkills || allSkills.length === 0) {
+    return { totalBonus: 0, sources: [] };
+  }
+
+  const cleanName = skillName.trim().toLowerCase();
+  let totalBonus = 0;
+  const sources: string[] = [];
+
+  for (const rule of DND35E_SKILL_SYNERGIES) {
+    if (rule.targetSkill.toLowerCase() === cleanName) {
+      // Find source skill
+      const source = allSkills.find(
+        (s) => s.name.trim().toLowerCase() === rule.sourceSkill.toLowerCase()
+      );
+      if (source && (source.ranks || 0) >= rule.requiredRanks) {
+        totalBonus += rule.bonus;
+        sources.push(`${rule.sourceSkill} (${source.ranks} ranks): +${rule.bonus}`);
+      }
+    }
+  }
+
+  return { totalBonus, sources };
+}
+
+export const DND35E_ACP_SKILLS = [
+  'Balance',
+  'Climb',
+  'Escape Artist',
+  'Hide',
+  'Jump',
+  'Move Silently',
+  'Sleight of Hand',
+  'Swim',
+  'Tumble'
+];
+
+export function is35eAcpSkill(skillName: string): boolean {
+  const clean = (skillName || '').trim().toLowerCase();
+  return DND35E_ACP_SKILLS.some((s) => s.toLowerCase() === clean);
+}
+
+export function get35eSkillBonus(
+  skill: Skill,
+  abilities: AbilityScores,
+  allSkills?: Skill[],
+  totalAcp: number = 0
+): number {
   const abilityMod = getAbilityModifier(abilities[skill.ability]?.score || 10);
   const ranks = skill.ranks || 0;
   const misc = skill.miscMod || 0;
-  return ranks + abilityMod + misc;
+  const synergy = get35eSkillSynergyBonus(skill.name, allSkills).totalBonus;
+
+  let acpPenalty = 0;
+  if (totalAcp !== 0 && is35eAcpSkill(skill.name)) {
+    const isSwim = (skill.name || '').trim().toLowerCase() === 'swim';
+    // Swim suffers double ACP in 3.5e (-2 per point of ACP)
+    // totalAcp is typically negative (e.g. -4), so isSwim ? totalAcp * 2 : totalAcp
+    acpPenalty = isSwim ? totalAcp * 2 : totalAcp;
+  }
+
+  return ranks + abilityMod + misc + synergy + acpPenalty;
+}
+
+export interface Save35eBreakdown {
+  saveType: 'fort' | 'ref' | 'will';
+  label: string;
+  total: number;
+  base: number;
+  abilityName: 'CON' | 'DEX' | 'WIS';
+  abilityMod: number;
+  magicMod: number;
+  miscMod: number;
+  divineGraceMod: number;
+  halflingMod: number;
+  conditionalNotes?: string;
+}
+
+/**
+ * Derives official 3.5e Good/Poor base saving throws based on core class.
+ * Good Save = 2 + floor(level / 2)
+ * Poor Save = floor(level / 3)
+ */
+export function calculate35eBaseSaves(
+  characterClass: string,
+  level: number
+): {
+  fort: number;
+  ref: number;
+  will: number;
+  isGoodFort: boolean;
+  isGoodRef: boolean;
+  isGoodWill: boolean;
+} {
+  const lvl = Math.max(1, level || 1);
+  const cls = (characterClass || '').toLowerCase();
+
+  const good = 2 + Math.floor(lvl / 2);
+  const poor = Math.floor(lvl / 3);
+
+  let isGoodFort = false;
+  let isGoodRef = false;
+  let isGoodWill = false;
+
+  if (cls.includes('fighter') || cls.includes('barbarian')) {
+    isGoodFort = true;
+  } else if (cls.includes('paladin')) {
+    isGoodFort = true;
+  } else if (cls.includes('cleric') || cls.includes('druid')) {
+    isGoodFort = true;
+    isGoodWill = true;
+  } else if (cls.includes('monk')) {
+    isGoodFort = true;
+    isGoodRef = true;
+    isGoodWill = true;
+  } else if (cls.includes('ranger')) {
+    isGoodFort = true;
+    isGoodRef = true;
+  } else if (cls.includes('rogue')) {
+    isGoodRef = true;
+  } else if (cls.includes('bard')) {
+    isGoodRef = true;
+    isGoodWill = true;
+  } else if (cls.includes('sorcerer') || cls.includes('wizard')) {
+    isGoodWill = true;
+  } else {
+    // Default fallback: medium progression
+    isGoodFort = true;
+  }
+
+  return {
+    fort: isGoodFort ? good : poor,
+    ref: isGoodRef ? good : poor,
+    will: isGoodWill ? good : poor,
+    isGoodFort,
+    isGoodRef,
+    isGoodWill
+  };
+}
+
+export function get35eSaveBreakdown(
+  char: CharacterData,
+  saveType: 'fort' | 'ref' | 'will'
+): Save35eBreakdown {
+  const baseCalculated = calculate35eBaseSaves(char.characterClass, char.level || 1);
+  const chaMod = getAbilityModifier(char.abilities.CHA?.score || 10);
+  const isPaladin2Plus =
+    (char.characterClass || '').toLowerCase().includes('paladin') &&
+    (char.level || 1) >= 2;
+  const hasDivineGrace = Boolean(char.divineGraceActive || isPaladin2Plus);
+  const divineGraceMod = hasDivineGrace ? Math.max(0, chaMod) : 0;
+
+  const isHalfling = (char.race || '').toLowerCase().includes('halfling');
+  const halflingMod = isHalfling ? 1 : 0;
+
+  // 3.5e Negative Levels penalty (-1 to all saving throws per negative level)
+  const negLevelPenalty = char.negativeLevels || 0;
+
+  // 3.5e Cover Reflex Save Bonus
+  let coverReflexBonus = 0;
+  if (char.activeCover === 'standard') {
+    coverReflexBonus = 2;
+  } else if (char.activeCover === 'improved') {
+    coverReflexBonus = 4;
+  }
+
+  if (saveType === 'fort') {
+    const base = char.fortSaveBase ?? baseCalculated.fort;
+    const abilityMod = getAbilityModifier(char.abilities.CON?.score || 10);
+    const magicMod = char.fortSaveMagic || 0;
+    const miscMod = char.fortSaveMisc || 0;
+    const total = base + abilityMod + magicMod + miscMod + divineGraceMod + halflingMod - negLevelPenalty;
+    return {
+      saveType: 'fort',
+      label: 'Fortitude',
+      total,
+      base,
+      abilityName: 'CON',
+      abilityMod,
+      magicMod,
+      miscMod,
+      divineGraceMod,
+      halflingMod,
+      conditionalNotes: char.saveConditionalModifiers
+    };
+  }
+
+  if (saveType === 'ref') {
+    const base = char.refSaveBase ?? baseCalculated.ref;
+    const abilityMod = getAbilityModifier(char.abilities.DEX?.score || 10);
+    const magicMod = char.refSaveMagic || 0;
+    const miscMod = char.refSaveMisc || 0;
+    const total = base + abilityMod + magicMod + miscMod + divineGraceMod + halflingMod + coverReflexBonus - negLevelPenalty;
+    return {
+      saveType: 'ref',
+      label: 'Reflex',
+      total,
+      base,
+      abilityName: 'DEX',
+      abilityMod,
+      magicMod,
+      miscMod: miscMod + coverReflexBonus,
+      divineGraceMod,
+      halflingMod,
+      conditionalNotes: char.saveConditionalModifiers
+    };
+  }
+
+  // Will
+  const base = char.willSaveBase ?? baseCalculated.will;
+  const abilityMod = getAbilityModifier(char.abilities.WIS?.score || 10);
+  const magicMod = char.willSaveMagic || 0;
+  const miscMod = char.willSaveMisc || 0;
+  const total = base + abilityMod + magicMod + miscMod + divineGraceMod + halflingMod - negLevelPenalty;
+  return {
+    saveType: 'will',
+    label: 'Will',
+    total,
+    base,
+    abilityName: 'WIS',
+    abilityMod,
+    magicMod,
+    miscMod,
+    divineGraceMod,
+    halflingMod,
+    conditionalNotes: char.saveConditionalModifiers
+  };
 }
 
 export function get35eFortSave(char: CharacterData): number {
-  const base = char.fortSaveBase ?? (Math.floor(char.level / 2) + 2);
-  const conMod = getAbilityModifier(char.abilities.CON?.score || 10);
-  return base + conMod;
+  return get35eSaveBreakdown(char, 'fort').total;
 }
 
 export function get35eRefSave(char: CharacterData): number {
-  const base = char.refSaveBase ?? Math.floor(char.level / 3);
-  const dexMod = getAbilityModifier(char.abilities.DEX?.score || 10);
-  return base + dexMod;
+  return get35eSaveBreakdown(char, 'ref').total;
 }
 
 export function get35eWillSave(char: CharacterData): number {
-  const base = char.willSaveBase ?? Math.floor(char.level / 3);
-  const wisMod = getAbilityModifier(char.abilities.WIS?.score || 10);
-  return base + wisMod;
+  return get35eSaveBreakdown(char, 'will').total;
+}
+
+export function getEffectiveSaves(char: CharacterData) {
+  if (!char) {
+    return {
+      FORT: { total: 0, base: 0 },
+      REF: { total: 0, base: 0 },
+      WILL: { total: 0, base: 0 }
+    };
+  }
+  if (char.edition === '3.5e') {
+    const fort = get35eSaveBreakdown(char, 'fort');
+    const ref = get35eSaveBreakdown(char, 'ref');
+    const will = get35eSaveBreakdown(char, 'will');
+    return {
+      FORT: fort,
+      REF: ref,
+      WILL: will
+    };
+  }
+  const abilities = getEffectiveAbilities(char);
+  const profs = char.savingThrowProficiencies || [];
+  const lvl = char.level || 1;
+  const con = getSavingThrowBonus('CON', abilities, profs, lvl, char);
+  const dex = getSavingThrowBonus('DEX', abilities, profs, lvl, char);
+  const wis = getSavingThrowBonus('WIS', abilities, profs, lvl, char);
+  return {
+    FORT: { total: con, base: con },
+    REF: { total: dex, base: dex },
+    WILL: { total: wis, base: wis }
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e SKILL SYNERGIES & CLASS SKILLS DATA
+// ----------------------------------------------------
+
+export interface SkillSynergyRule {
+  sourceSkill: string;
+  requiredRanks: number;
+  targetSkill: string;
+  bonus: number;
+  conditionDesc?: string;
+}
+
+export const DND35E_SKILL_SYNERGIES: SkillSynergyRule[] = [
+  { sourceSkill: 'Tumble', requiredRanks: 5, targetSkill: 'Balance', bonus: 2 },
+  { sourceSkill: 'Tumble', requiredRanks: 5, targetSkill: 'Jump', bonus: 2 },
+  { sourceSkill: 'Balance', requiredRanks: 5, targetSkill: 'Tumble', bonus: 2 },
+  { sourceSkill: 'Jump', requiredRanks: 5, targetSkill: 'Tumble', bonus: 2 },
+  { sourceSkill: 'Bluff', requiredRanks: 5, targetSkill: 'Diplomacy', bonus: 2 },
+  { sourceSkill: 'Bluff', requiredRanks: 5, targetSkill: 'Intimidate', bonus: 2 },
+  { sourceSkill: 'Bluff', requiredRanks: 5, targetSkill: 'Sleight of Hand', bonus: 2 },
+  { sourceSkill: 'Bluff', requiredRanks: 5, targetSkill: 'Disguise', bonus: 2, conditionDesc: 'when acting in character' },
+  { sourceSkill: 'Sense Motive', requiredRanks: 5, targetSkill: 'Diplomacy', bonus: 2 },
+  { sourceSkill: 'Knowledge (Arcana)', requiredRanks: 5, targetSkill: 'Spellcraft', bonus: 2 },
+  { sourceSkill: 'Spellcraft', requiredRanks: 5, targetSkill: 'Use Magic Device', bonus: 2, conditionDesc: 'scrolls' },
+  { sourceSkill: 'Use Magic Device', requiredRanks: 5, targetSkill: 'Spellcraft', bonus: 2, conditionDesc: 'decipher scrolls' },
+  { sourceSkill: 'Handle Animal', requiredRanks: 5, targetSkill: 'Ride', bonus: 2 },
+  { sourceSkill: 'Survival', requiredRanks: 5, targetSkill: 'Knowledge (Nature)', bonus: 2 },
+  { sourceSkill: 'Knowledge (Nature)', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'in aboveground natural terrain' },
+  { sourceSkill: 'Knowledge (Dungeoneering)', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'underground' },
+  { sourceSkill: 'Knowledge (Geography)', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'avoid getting lost' },
+  { sourceSkill: 'Knowledge (Local)', requiredRanks: 5, targetSkill: 'Gather Information', bonus: 2 },
+  { sourceSkill: 'Knowledge (Nobility and Royalty)', requiredRanks: 5, targetSkill: 'Diplomacy', bonus: 2 },
+  { sourceSkill: 'Search', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'tracking' },
+  { sourceSkill: 'Escape Artist', requiredRanks: 5, targetSkill: 'Use Rope', bonus: 2, conditionDesc: 'bindings' },
+  { sourceSkill: 'Use Rope', requiredRanks: 5, targetSkill: 'Climb', bonus: 2, conditionDesc: 'with ropes' },
+  { sourceSkill: 'Use Rope', requiredRanks: 5, targetSkill: 'Escape Artist', bonus: 2, conditionDesc: 'bound with rope' },
+  { sourceSkill: 'Knowledge (Religion)', requiredRanks: 5, targetSkill: 'Turn Undead', bonus: 2, conditionDesc: 'turning check' }
+];
+
+export const DND35E_CORE_CLASS_SKILLS: Record<string, string[]> = {
+  Barbarian: ['Climb', 'Craft', 'Handle Animal', 'Intimidate', 'Jump', 'Listen', 'Ride', 'Survival', 'Swim'],
+  Bard: [
+    'Appraise', 'Balance', 'Bluff', 'Climb', 'Concentration', 'Craft', 'Decipher Script', 'Diplomacy', 'Disguise',
+    'Escape Artist', 'Gather Information', 'Hide', 'Jump', 'Knowledge (all)', 'Listen', 'Move Silently', 'Perform',
+    'Profession', 'Sense Motive', 'Sleight of Hand', 'Speak Language', 'Spellcraft', 'Swim', 'Tumble', 'Use Magic Device'
+  ],
+  Cleric: [
+    'Concentration', 'Craft', 'Diplomacy', 'Heal', 'Knowledge (Arcana)', 'Knowledge (History)',
+    'Knowledge (Religion)', 'Knowledge (the planes)', 'Profession', 'Spellcraft'
+  ],
+  Druid: [
+    'Concentration', 'Craft', 'Diplomacy', 'Handle Animal', 'Heal', 'Knowledge (Nature)',
+    'Listen', 'Profession', 'Ride', 'Spellcraft', 'Spot', 'Survival', 'Swim'
+  ],
+  Fighter: ['Climb', 'Craft', 'Handle Animal', 'Intimidate', 'Jump', 'Ride', 'Swim'],
+  Monk: [
+    'Balance', 'Climb', 'Concentration', 'Craft', 'Diplomacy', 'Escape Artist', 'Hide',
+    'Jump', 'Knowledge (Arcana)', 'Knowledge (Religion)', 'Listen', 'Move Silently',
+    'Perform', 'Profession', 'Sense Motive', 'Spot', 'Swim', 'Tumble'
+  ],
+  Paladin: [
+    'Concentration', 'Craft', 'Diplomacy', 'Handle Animal', 'Heal',
+    'Knowledge (Nobility and Royalty)', 'Knowledge (Religion)', 'Profession', 'Ride'
+  ],
+  Ranger: [
+    'Climb', 'Concentration', 'Craft', 'Handle Animal', 'Heal', 'Hide', 'Jump',
+    'Knowledge (Dungeoneering)', 'Knowledge (Geography)', 'Knowledge (Nature)',
+    'Listen', 'Move Silently', 'Profession', 'Ride', 'Search', 'Spot', 'Survival', 'Swim', 'Use Rope'
+  ],
+  Rogue: [
+    'Appraise', 'Balance', 'Bluff', 'Climb', 'Craft', 'Decipher Script', 'Diplomacy',
+    'Disable Device', 'Disguise', 'Escape Artist', 'Forgery', 'Gather Information', 'Hide',
+    'Intimidate', 'Jump', 'Listen', 'Move Silently', 'Open Lock', 'Perform', 'Profession',
+    'Search', 'Sense Motive', 'Sleight of Hand', 'Spot', 'Swim', 'Tumble', 'Use Magic Device', 'Use Rope'
+  ],
+  Sorcerer: ['Bluff', 'Concentration', 'Craft', 'Knowledge (Arcana)', 'Profession', 'Spellcraft'],
+  Wizard: ['Concentration', 'Craft', 'Decipher Script', 'Knowledge (all)', 'Profession', 'Spellcraft']
+};
+
+export function is35eClassSkill(characterClass: string, skillName: string): boolean {
+  const cls = characterClass?.trim() || '';
+  const list = DND35E_CORE_CLASS_SKILLS[cls];
+  if (!list) return true; // Default to class if unknown
+
+  const lower = skillName.trim().toLowerCase();
+  if (list.includes('Knowledge (all)') && lower.startsWith('knowledge')) {
+    return true;
+  }
+  return list.some((item) => item.toLowerCase() === lower);
+}
+
+export function apply35eDefaultClassSkills(char: CharacterData): CharacterData {
+  const updatedSkills = char.skills.map((skill) => ({
+    ...skill,
+    isClassSkill: is35eClassSkill(char.characterClass, skill.name)
+  }));
+  return {
+    ...char,
+    skills: updatedSkills
+  };
+}
+
+export function check35eSkillRankCap(
+  skill: Skill,
+  level: number
+): { isCapped: boolean; maxRanks: number; currentRanks: number; isExceeded: boolean } {
+  const isClass = skill.isClassSkill !== false;
+  const lvl = Math.max(1, level || 1);
+  const maxRanks = isClass ? lvl + 3 : (lvl + 3) / 2;
+  const currentRanks = skill.ranks || 0;
+  return {
+    isCapped: currentRanks >= maxRanks,
+    maxRanks,
+    currentRanks,
+    isExceeded: currentRanks > maxRanks
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e CASTER LEVEL, SPELL RESISTANCE & ARCANE SPELL FAILURE (ASF)
+// ----------------------------------------------------
+
+export function getCharacterCasterLevel(char: CharacterData): number {
+  let baseCl = 0;
+  if (typeof char.casterLevelOverride === 'number') {
+    baseCl = char.casterLevelOverride;
+  } else {
+    const lvl = Math.max(1, char.level || 1);
+    const cls = (char.characterClass || '').toLowerCase();
+
+    // Full Casters (Wizard, Sorcerer, Cleric, Druid, Bard)
+    if (
+      cls.includes('wizard') ||
+      cls.includes('sorcerer') ||
+      cls.includes('cleric') ||
+      cls.includes('druid') ||
+      cls.includes('bard')
+    ) {
+      baseCl = lvl;
+    } else if (cls.includes('paladin') || cls.includes('ranger')) {
+      // Paladins and Rangers cast spells starting at level 4 with CL = floor(level / 2)
+      baseCl = lvl >= 4 ? Math.floor(lvl / 2) : 0;
+    } else {
+      baseCl = lvl;
+    }
+  }
+
+  // 3.5e Negative Levels: -1 effective caster level per negative level
+  const negLevels = char.negativeLevels || 0;
+  return Math.max(0, baseCl - negLevels);
+}
+
+export function getSpellPenetrationBonus(char: CharacterData): number {
+  if (char.spellPenetration === 'greater') return 4;
+  if (char.spellPenetration === 'spell_penetration') return 2;
+  return 0;
+}
+
+export function calculate35eTotalArcaneSpellFailure(char: CharacterData): {
+  totalAsf: number;
+  breakdown: Array<{ name: string; asf: number }>;
+  isIgnored: boolean;
+  note?: string;
+} {
+  if (typeof char.arcaneSpellFailureOverride === 'number') {
+    return {
+      totalAsf: char.arcaneSpellFailureOverride,
+      breakdown: [{ name: 'Manual Override', asf: char.arcaneSpellFailureOverride }],
+      isIgnored: false
+    };
+  }
+
+  const items = char.inventory || [];
+  const equippedArmors = items.filter(
+    (it) => it.equipped && typeof it.arcaneSpellFailure === 'number' && it.arcaneSpellFailure > 0
+  );
+
+  const isBard = (char.characterClass || '').toLowerCase().includes('bard');
+
+  let totalAsf = 0;
+  const breakdown: Array<{ name: string; asf: number }> = [];
+
+  for (const item of equippedArmors) {
+    const asf = item.arcaneSpellFailure || 0;
+    // Bards ignore light armor ASF in 3.5e
+    const isLightArmor =
+      item.armorType === 'Light' ||
+      (item.notes || '').toLowerCase().includes('light') ||
+      item.name.toLowerCase().includes('leather') ||
+      item.name.toLowerCase().includes('padded');
+
+    if (isBard && isLightArmor) {
+      breakdown.push({ name: `${item.name} (Bard Light Armor Ignore)`, asf: 0 });
+    } else {
+      totalAsf += asf;
+      breakdown.push({ name: item.name, asf });
+    }
+  }
+
+  return {
+    totalAsf,
+    breakdown,
+    isIgnored: isBard && totalAsf === 0 && equippedArmors.length > 0,
+    note: isBard ? 'Bards ignore ASF from light armor for bardic spells' : undefined
+  };
+}
+
+export function roll35eArcaneSpellFailure(char: CharacterData): {
+  passed: boolean;
+  roll: number;
+  asf: number;
+  message: string;
+} {
+  const { totalAsf } = calculate35eTotalArcaneSpellFailure(char);
+  if (totalAsf <= 0) {
+    return {
+      passed: true,
+      roll: 100,
+      asf: 0,
+      message: 'No Arcane Spell Failure (0% ASF) — spell cast cleanly!'
+    };
+  }
+
+  // Roll d100 (1-100)
+  const roll = Math.floor(Math.random() * 100) + 1;
+  const passed = roll > totalAsf;
+
+  return {
+    passed,
+    roll,
+    asf: totalAsf,
+    message: passed
+      ? `ASF Check Passed! Rolled ${roll}% (needed > ${totalAsf}% ASF). Spell casts normally!`
+      : `ASF Check Failed! Rolled ${roll}% (fell within ${totalAsf}% ASF). Spell is lost in somatic interference!`
+  };
+}
+
+export function roll35eCasterLevelCheck(
+  char: CharacterData,
+  targetSr?: number
+): {
+  d20: number;
+  cl: number;
+  spellPenBonus: number;
+  total: number;
+  targetSr?: number;
+  passed?: boolean;
+} {
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const cl = getCharacterCasterLevel(char);
+  const spellPenBonus = getSpellPenetrationBonus(char);
+  const total = d20 + cl + spellPenBonus;
+
+  return {
+    d20,
+    cl,
+    spellPenBonus,
+    total,
+    targetSr,
+    passed: typeof targetSr === 'number' ? total >= targetSr : undefined
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e TURN / REBUKE UNDEAD SYSTEM
+// ----------------------------------------------------
+
+export interface TurningStats35e {
+  effectiveLevel: number;
+  chaMod: number;
+  religionSynergy: number;
+  turningCheckBonus: number;
+  maxUses: number;
+  remainingUses: number;
+  variant: 'turn' | 'rebuke';
+  hasExtraTurning: boolean;
+}
+
+export function get35eTurningStats(char: CharacterData): TurningStats35e {
+  const chaMod = getAbilityModifier(char.abilities.CHA?.score || 10);
+  const cls = (char.characterClass || '').toLowerCase();
+  const lvl = Math.max(1, char.level || 1);
+
+  // Paladins turn undead at effective level = Paladin level - 3
+  let effectiveLevel = lvl;
+  if (typeof char.turnUndeadLevelOverride === 'number') {
+    effectiveLevel = char.turnUndeadLevelOverride;
+  } else if (cls.includes('paladin')) {
+    effectiveLevel = Math.max(0, lvl - 3);
+  }
+
+  // Check Knowledge (Religion) synergy for Turn Undead (+2 if 5+ ranks)
+  const religionSkill = char.skills.find((s) => s.name.toLowerCase().includes('religion'));
+  const religionSynergy = (religionSkill?.ranks || 0) >= 5 ? 2 : 0;
+  const turningCheckBonus = chaMod + religionSynergy;
+
+  const hasExtraTurning = Boolean(char.hasExtraTurning);
+  const extraUses = hasExtraTurning ? 4 : 0;
+  const defaultMaxUses = Math.max(1, 3 + chaMod + extraUses);
+  const maxUses = typeof char.turnUndeadUsesMax === 'number' ? char.turnUndeadUsesMax : defaultMaxUses;
+  const remainingUses = typeof char.turnUndeadUsesRemaining === 'number' ? char.turnUndeadUsesRemaining : maxUses;
+
+  const isEvil = (char.alignment || '').toLowerCase().includes('evil');
+  const variant = char.turnUndeadVariant || (isEvil ? 'rebuke' : 'turn');
+
+  return {
+    effectiveLevel,
+    chaMod,
+    religionSynergy,
+    turningCheckBonus,
+    maxUses,
+    remainingUses,
+    variant,
+    hasExtraTurning
+  };
+}
+
+/**
+ * 3.5e Turning Check Table (PHB p. 159):
+ * Compares 1d20 + Cha mod (and +2 Religion synergy) to determine maximum HD of undead affected.
+ */
+export function get35eTurningCheckMaxHd(turningLevel: number, checkRollTotal: number): number {
+  let relativeOffset = 0;
+  if (checkRollTotal <= 0) relativeOffset = -4;
+  else if (checkRollTotal <= 3) relativeOffset = -3;
+  else if (checkRollTotal <= 6) relativeOffset = -2;
+  else if (checkRollTotal <= 9) relativeOffset = -1;
+  else if (checkRollTotal <= 12) relativeOffset = 0;
+  else if (checkRollTotal <= 15) relativeOffset = 1;
+  else if (checkRollTotal <= 18) relativeOffset = 2;
+  else if (checkRollTotal <= 21) relativeOffset = 3;
+  else relativeOffset = 4;
+
+  return Math.max(0, turningLevel + relativeOffset);
+}
+
+export interface TurningRollResult35e {
+  d20: number;
+  checkBonus: number;
+  checkTotal: number;
+  maxHdCreatureAffected: number;
+  damageDice: [number, number];
+  damageBonus: number;
+  totalDamageHd: number; // Total HD of undead turned/rebuked
+  effectiveLevel: number;
+  variant: 'turn' | 'rebuke';
+  destroyThresholdHd: number; // If creature HD <= destroyThresholdHd, it is destroyed / commanded
+}
+
+export function roll35eTurningSequence(char: CharacterData): TurningRollResult35e {
+  const stats = get35eTurningStats(char);
+  const d20 = Math.floor(Math.random() * 20) + 1;
+  const checkTotal = d20 + stats.turningCheckBonus;
+  const maxHdCreatureAffected = get35eTurningCheckMaxHd(stats.effectiveLevel, checkTotal);
+
+  // 2d6 + Cleric level + Cha modifier
+  const d1 = Math.floor(Math.random() * 6) + 1;
+  const d2 = Math.floor(Math.random() * 6) + 1;
+  const damageBonus = stats.effectiveLevel + stats.chaMod;
+  const totalDamageHd = Math.max(1, d1 + d2 + damageBonus);
+  const destroyThresholdHd = Math.floor(stats.effectiveLevel / 2);
+
+  return {
+    d20,
+    checkBonus: stats.turningCheckBonus,
+    checkTotal,
+    maxHdCreatureAffected,
+    damageDice: [d1, d2],
+    damageBonus,
+    totalDamageHd,
+    effectiveLevel: stats.effectiveLevel,
+    variant: stats.variant,
+    destroyThresholdHd
+  };
 }
 
 export function get35eTouchAC(char: CharacterData): number {
-  const dexMod = getAbilityModifier(char.abilities.DEX?.score || 10);
-  return 10 + dexMod + (char.touchAcOverride || 0);
+  return get35eArmorClass(char).touchAc;
 }
 
 export function get35eFlatFootedAC(char: CharacterData): number {
-  const dexMod = getAbilityModifier(char.abilities.DEX?.score || 10);
-  const baseAc = char.armorClass;
-  return Math.max(10, baseAc - Math.max(0, dexMod)) + (char.flatFootedAcOverride || 0);
+  return get35eArmorClass(char).flatFootedAc;
+}
+
+export function getCharacterBab(char: CharacterData): number {
+  if (typeof char.bab === 'number') return char.bab;
+  if (typeof char.baseAttackBonus === 'number') return char.baseAttackBonus;
+
+  const level = Math.max(1, char.level || 1);
+  const className = (char.characterClass || '').toLowerCase();
+
+  // Full BAB (1.0x Level): Fighter, Paladin, Ranger, Barbarian
+  if (
+    className.includes('fighter') ||
+    className.includes('paladin') ||
+    className.includes('ranger') ||
+    className.includes('barbarian')
+  ) {
+    return level;
+  }
+
+  // Poor BAB (0.5x Level): Wizard, Sorcerer
+  if (className.includes('wizard') || className.includes('sorcerer')) {
+    return Math.floor(level * 0.5);
+  }
+
+  // Medium BAB (0.75x Level): Cleric, Druid, Monk, Rogue, Bard
+  return Math.floor(level * 0.75);
+}
+
+export function get35eGrappleSizeModifier(size?: string): number {
+  switch ((size || 'Medium').toLowerCase()) {
+    case 'colossal': return 16;
+    case 'gargantuan': return 12;
+    case 'huge': return 8;
+    case 'large': return 4;
+    case 'medium': return 0;
+    case 'small': return -4;
+    case 'tiny': return -8;
+    case 'diminutive': return -12;
+    case 'fine': return -16;
+    default: return 0;
+  }
 }
 
 export function get35eGrapple(char: CharacterData): number {
-  const bab = char.bab ?? char.level;
+  const bab = getCharacterBab(char);
   const strMod = getAbilityModifier(char.abilities.STR?.score || 10);
-  return bab + strMod;
+  const sizeMod = get35eGrappleSizeModifier(char.sizeCategory);
+  return bab + strMod + sizeMod;
+}
+
+export interface IterativeAttackEntry {
+  attackIndex: number; // 0-based: 0, 1, 2, 3
+  attackNumber: number; // 1-based: 1, 2, 3, 4
+  penalty: number; // 0, -5, -10, -15
+  bonus: number; // baseBonus + penalty
+  label: string; // "1st Attack", "2nd Attack", etc.
+  display: string; // e.g. "+11", "+6"
+}
+
+/**
+ * Calculates 3.5e iterative attacks for a given primary attack bonus and BAB.
+ * At BAB +1 to +5: 1 attack (+0)
+ * At BAB +6 to +10: 2 attacks (+0, -5)
+ * At BAB +11 to +15: 3 attacks (+0, -5, -10)
+ * At BAB +16+: 4 attacks (+0, -5, -10, -15)
+ */
+export function get35eIterativeAttacks(
+  primaryAttackBonus: number,
+  bab: number
+): IterativeAttackEntry[] {
+  const attacks: IterativeAttackEntry[] = [
+    {
+      attackIndex: 0,
+      attackNumber: 1,
+      penalty: 0,
+      bonus: primaryAttackBonus,
+      label: '1st Attack',
+      display: formatModifier(primaryAttackBonus)
+    }
+  ];
+
+  if (bab >= 6) {
+    attacks.push({
+      attackIndex: 1,
+      attackNumber: 2,
+      penalty: -5,
+      bonus: primaryAttackBonus - 5,
+      label: '2nd Attack',
+      display: formatModifier(primaryAttackBonus - 5)
+    });
+  }
+  if (bab >= 11) {
+    attacks.push({
+      attackIndex: 2,
+      attackNumber: 3,
+      penalty: -10,
+      bonus: primaryAttackBonus - 10,
+      label: '3rd Attack',
+      display: formatModifier(primaryAttackBonus - 10)
+    });
+  }
+  if (bab >= 16) {
+    attacks.push({
+      attackIndex: 3,
+      attackNumber: 4,
+      penalty: -15,
+      bonus: primaryAttackBonus - 15,
+      label: '4th Attack',
+      display: formatModifier(primaryAttackBonus - 15)
+    });
+  }
+
+  return attacks;
+}
+
+export function format35eIterativeString(primaryBonus: number, bab: number): string {
+  const entries = get35eIterativeAttacks(primaryBonus, bab);
+  return entries.map(e => e.display).join(' / ');
+}
+
+export function format35eBabProgression(bab: number): string {
+  return format35eIterativeString(bab, bab);
 }
 
 export interface DamagePart {
@@ -2077,5 +3131,1326 @@ export function getEffectiveSpellAttackBonus(char: CharacterData): number {
 
 export const getSpellSaveDC = getEffectiveSpellSaveDC;
 export const getSpellAttackBonus = getEffectiveSpellAttackBonus;
+
+// ----------------------------------------------------
+// D&D 3.5e CRITICAL THREATS, MULTIPLIERS & CONFIRMATION
+// ----------------------------------------------------
+
+export function get35eEffectiveThreatRange(attack: Attack): { minRoll: number; minThreat: number; label: string; display: string } {
+  let baseThreat = attack.threatRange && attack.threatRange >= 15 && attack.threatRange <= 20
+    ? attack.threatRange
+    : 20;
+
+  if (attack.isKeen) {
+    // Keen or Improved Critical doubles the threat range:
+    // 20 (span 1: 20) -> 19 (span 2: 19-20)
+    // 19 (span 2: 19-20) -> 17 (span 4: 17-20)
+    // 18 (span 3: 18-20) -> 15 (span 6: 15-20)
+    const span = 21 - baseThreat;
+    baseThreat = Math.max(12, 21 - (span * 2));
+  }
+
+  const label = baseThreat === 20 ? '20' : `${baseThreat}–20`;
+  return { minRoll: baseThreat, minThreat: baseThreat, label, display: label };
+}
+
+export function get35eCriticalMultiplier(attack: Attack): { multiplier: number; display: string } {
+  const mult = attack.critMultiplier && attack.critMultiplier >= 2 && attack.critMultiplier <= 5
+    ? attack.critMultiplier
+    : 2;
+  return { multiplier: mult, display: `×${mult}` };
+}
+
+export function is35eCriticalThreat(naturalD20: number, attack: Attack): boolean {
+  const { minRoll } = get35eEffectiveThreatRange(attack);
+  return naturalD20 >= minRoll;
+}
+
+export function calculate35eCriticalDamage(
+  damageExpr: string,
+  critMultiplier: number = 2
+): {
+  multipliedExpr: string;
+  diceMultiplied: string;
+  staticBonusMultiplied: number;
+} {
+  const clean = (damageExpr || '1d8').trim();
+  const match = clean.match(/(\d+)d(\d+)(?:\s*([+-])\s*(\d+))?/i);
+  const multiplier = Math.max(2, Math.min(6, critMultiplier || 2));
+
+  if (match) {
+    const diceCount = parseInt(match[1], 10);
+    const diceSides = parseInt(match[2], 10);
+    const sign = match[3] || '+';
+    const staticMod = match[4] ? parseInt(match[4], 10) : 0;
+    const signedMod = sign === '-' ? -staticMod : staticMod;
+
+    const totalDice = diceCount * multiplier;
+    const totalStatic = signedMod * multiplier;
+
+    const staticStr = totalStatic !== 0
+      ? (totalStatic > 0 ? ` + ${totalStatic}` : ` - ${Math.abs(totalStatic)}`)
+      : '';
+
+    return {
+      multipliedExpr: `${totalDice}d${diceSides}${staticStr}`,
+      diceMultiplied: `${totalDice}d${diceSides}`,
+      staticBonusMultiplied: totalStatic
+    };
+  }
+
+  return {
+    multipliedExpr: `(${clean}) × ${multiplier}`,
+    diceMultiplied: clean,
+    staticBonusMultiplied: 0
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e CARRYING CAPACITY & ARMOR CHECK PENALTY (ACP)
+// ----------------------------------------------------
+
+export const DND35E_STR_CARRYING_CAPACITY: Record<number, { light: number; medium: number; heavy: number }> = {
+  1: { light: 3, medium: 6, heavy: 10 },
+  2: { light: 6, medium: 13, heavy: 20 },
+  3: { light: 10, medium: 20, heavy: 30 },
+  4: { light: 13, medium: 26, heavy: 40 },
+  5: { light: 16, medium: 33, heavy: 50 },
+  6: { light: 20, medium: 40, heavy: 60 },
+  7: { light: 23, medium: 46, heavy: 70 },
+  8: { light: 26, medium: 53, heavy: 80 },
+  9: { light: 30, medium: 60, heavy: 90 },
+  10: { light: 33, medium: 66, heavy: 100 },
+  11: { light: 38, medium: 76, heavy: 115 },
+  12: { light: 43, medium: 86, heavy: 130 },
+  13: { light: 50, medium: 100, heavy: 150 },
+  14: { light: 58, medium: 116, heavy: 175 },
+  15: { light: 66, medium: 133, heavy: 200 },
+  16: { light: 76, medium: 153, heavy: 230 },
+  17: { light: 86, medium: 173, heavy: 260 },
+  18: { light: 100, medium: 200, heavy: 300 },
+  19: { light: 116, medium: 233, heavy: 350 },
+  20: { light: 133, medium: 266, heavy: 400 },
+  21: { light: 153, medium: 306, heavy: 460 },
+  22: { light: 173, medium: 346, heavy: 520 },
+  23: { light: 200, medium: 400, heavy: 600 },
+  24: { light: 233, medium: 466, heavy: 700 },
+  25: { light: 266, medium: 533, heavy: 800 },
+  26: { light: 306, medium: 613, heavy: 920 },
+  27: { light: 346, medium: 693, heavy: 1040 },
+  28: { light: 400, medium: 800, heavy: 1200 },
+  29: { light: 466, medium: 933, heavy: 1400 }
+};
+
+export function get35eSizeCarryingMultiplier(sizeCategory?: string, isQuadruped?: boolean): number {
+  const size = (sizeCategory || 'Medium').toLowerCase();
+  if (isQuadruped) {
+    if (size.includes('fine')) return 0.25;
+    if (size.includes('diminutive')) return 0.5;
+    if (size.includes('tiny')) return 0.75;
+    if (size.includes('small')) return 1.0;
+    if (size.includes('medium')) return 1.5;
+    if (size.includes('large')) return 3.0;
+    if (size.includes('huge')) return 6.0;
+    if (size.includes('gargantuan')) return 12.0;
+    if (size.includes('colossal')) return 24.0;
+    return 1.5;
+  }
+
+  if (size.includes('fine')) return 0.125;
+  if (size.includes('diminutive')) return 0.25;
+  if (size.includes('tiny')) return 0.5;
+  if (size.includes('small')) return 0.75;
+  if (size.includes('medium')) return 1.0;
+  if (size.includes('large')) return 2.0;
+  if (size.includes('huge')) return 4.0;
+  if (size.includes('gargantuan')) return 8.0;
+  if (size.includes('colossal')) return 16.0;
+  return 1.0;
+}
+
+export function calculate35eCarryingCapacity(
+  strScore: number,
+  sizeCategory?: string,
+  isQuadruped?: boolean
+): {
+  lightMax: number;
+  mediumMax: number;
+  heavyMax: number;
+  liftOverhead: number;
+  liftOffGround: number;
+  pushOrDrag: number;
+  multiplier: number;
+} {
+  const clampedStr = Math.max(1, strScore || 10);
+  let baseHeavy = 100;
+  let baseLight = 33;
+  let baseMedium = 66;
+
+  if (clampedStr <= 29) {
+    const row = DND35E_STR_CARRYING_CAPACITY[clampedStr] || DND35E_STR_CARRYING_CAPACITY[10];
+    baseLight = row.light;
+    baseMedium = row.medium;
+    baseHeavy = row.heavy;
+  } else {
+    const diff = clampedStr - 20;
+    const baseDiff = (diff % 10) + 10;
+    const multiple = Math.pow(4, Math.floor(diff / 10));
+    const row = DND35E_STR_CARRYING_CAPACITY[baseDiff] || DND35E_STR_CARRYING_CAPACITY[20];
+    baseLight = row.light * multiple;
+    baseMedium = row.medium * multiple;
+    baseHeavy = row.heavy * multiple;
+  }
+
+  const mult = get35eSizeCarryingMultiplier(sizeCategory, isQuadruped);
+  const lightMax = Math.round(baseLight * mult);
+  const mediumMax = Math.round(baseMedium * mult);
+  const heavyMax = Math.round(baseHeavy * mult);
+
+  return {
+    lightMax,
+    mediumMax,
+    heavyMax,
+    liftOverhead: heavyMax,
+    liftOffGround: heavyMax * 2,
+    pushOrDrag: heavyMax * 5,
+    multiplier: mult
+  };
+}
+
+export function calculate35eEncumbranceLoad(
+  totalWeightLbs: number,
+  capacity: { lightMax: number; mediumMax: number; heavyMax: number }
+): {
+  load: 'light' | 'medium' | 'heavy' | 'overburdened';
+  label: string;
+  maxDexBonus: number | null;
+  loadAcp: number;
+  speedMultiplier: number;
+  runMultiplier: number;
+} {
+  const wt = Math.max(0, totalWeightLbs || 0);
+
+  if (wt <= capacity.lightMax) {
+    return {
+      load: 'light',
+      label: 'Light Load',
+      maxDexBonus: null,
+      loadAcp: 0,
+      speedMultiplier: 1.0,
+      runMultiplier: 4
+    };
+  }
+  if (wt <= capacity.mediumMax) {
+    return {
+      load: 'medium',
+      label: 'Medium Load',
+      maxDexBonus: 3,
+      loadAcp: -3,
+      speedMultiplier: 0.67,
+      runMultiplier: 4
+    };
+  }
+  if (wt <= capacity.heavyMax) {
+    return {
+      load: 'heavy',
+      label: 'Heavy Load',
+      maxDexBonus: 1,
+      loadAcp: -6,
+      speedMultiplier: 0.67,
+      runMultiplier: 3
+    };
+  }
+
+  return {
+    load: 'overburdened',
+    label: 'Overburdened',
+    maxDexBonus: 0,
+    loadAcp: -10,
+    speedMultiplier: 0,
+    runMultiplier: 0
+  };
+}
+
+export function calculate35eTotalArmorCheckPenalty(char: CharacterData): {
+  totalAcp: number;
+  armorAcp: number;
+  shieldAcp: number;
+  loadAcp: number;
+  effectiveBodyAcp: number;
+  breakdown: string[];
+} {
+  if (typeof char.armorCheckPenaltyOverride === 'number') {
+    return {
+      totalAcp: char.armorCheckPenaltyOverride,
+      armorAcp: char.armorCheckPenaltyOverride,
+      shieldAcp: 0,
+      loadAcp: 0,
+      effectiveBodyAcp: char.armorCheckPenaltyOverride,
+      breakdown: [`Manual Override: ${char.armorCheckPenaltyOverride}`]
+    };
+  }
+
+  let armorAcp = 0;
+  let shieldAcp = 0;
+  const breakdown: string[] = [];
+
+  const equippedItems = (char.inventory || []).filter((i) => i.equipped && !i.stored);
+  for (const it of equippedItems) {
+    let penalty = 0;
+    if (typeof it.armorCheckPenalty === 'number') {
+      penalty = Math.abs(it.armorCheckPenalty);
+    } else {
+      const name = (it.name || '').toLowerCase();
+      if (name.includes('full plate')) penalty = 6;
+      else if (name.includes('half-plate')) penalty = 7;
+      else if (name.includes('banded')) penalty = 6;
+      else if (name.includes('splint')) penalty = 7;
+      else if (name.includes('chainmail')) penalty = 5;
+      else if (name.includes('breastplate')) penalty = 4;
+      else if (name.includes('scale')) penalty = 4;
+      else if (name.includes('chain shirt')) penalty = 2;
+      else if (name.includes('studded leather')) penalty = 1;
+      else if (name.includes('tower shield')) penalty = 10;
+      else if (name.includes('heavy shield') || name.includes('large shield')) penalty = 2;
+      else if (name.includes('light shield') || name.includes('small shield')) penalty = 1;
+      else if (name.includes('buckler')) penalty = 1;
+    }
+
+    if (penalty > 0) {
+      if (it.armorType === 'Shield' || (it.name || '').toLowerCase().includes('shield')) {
+        shieldAcp += penalty;
+        breakdown.push(`${it.name}: -${penalty} ACP (Shield)`);
+      } else {
+        armorAcp = Math.max(armorAcp, penalty);
+        breakdown.push(`${it.name}: -${penalty} ACP (Armor)`);
+      }
+    }
+  }
+
+  const abilities = getEffectiveAbilities(char);
+  const str = abilities.STR?.score || 10;
+  const capacity = calculate35eCarryingCapacity(str, char.sizeCategory, char.isQuadruped);
+  const totalWeight = getTotalWeight(char);
+  const loadInfo = calculate35eEncumbranceLoad(totalWeight, capacity);
+  const loadAcp = Math.abs(loadInfo.loadAcp);
+
+  if (loadAcp > 0) {
+    breakdown.push(`${loadInfo.label}: -${loadAcp} ACP`);
+  }
+
+  // In 3.5e: Apply worse of armor ACP or load ACP for body, + shield ACP
+  const effectiveBodyAcp = Math.max(armorAcp, loadAcp);
+  const totalAcp = -(effectiveBodyAcp + shieldAcp);
+
+  return {
+    totalAcp,
+    armorAcp: -armorAcp,
+    shieldAcp: -shieldAcp,
+    loadAcp: -loadAcp,
+    effectiveBodyAcp: -effectiveBodyAcp,
+    breakdown
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e SPECIAL COMBAT MANEUVERS
+// ----------------------------------------------------
+
+export function get35eSizeManeuverModifier(sizeCategory?: string): number {
+  const size = (sizeCategory || 'Medium').toLowerCase();
+  if (size.includes('fine')) return -16;
+  if (size.includes('diminutive')) return -12;
+  if (size.includes('tiny')) return -8;
+  if (size.includes('small')) return -4;
+  if (size.includes('medium')) return 0;
+  if (size.includes('large')) return 4;
+  if (size.includes('huge')) return 8;
+  if (size.includes('gargantuan')) return 12;
+  if (size.includes('colossal')) return 16;
+  return 0;
+}
+
+export interface Maneuver35eResult {
+  name: string;
+  checkBonus: number;
+  formula: string;
+  provokesAoO: boolean;
+  improvedFeatActive: boolean;
+  description: string;
+  notes?: string;
+}
+
+export function calculate35eCombatManeuvers(char: CharacterData): {
+  grapple: Maneuver35eResult;
+  trip: Maneuver35eResult & { touchAttackBonus: number };
+  disarm: Maneuver35eResult;
+  bullRush: Maneuver35eResult;
+  sunder: Maneuver35eResult;
+  overrun: Maneuver35eResult;
+  sizeModifier: number;
+  stabilityBonus: number;
+} {
+  const bab = getCharacterBab(char);
+  const abilities = getEffectiveAbilities(char);
+  const strMod = getAbilityModifier(abilities.STR?.score || 10);
+  const dexMod = getAbilityModifier(abilities.DEX?.score || 10);
+  const sizeMod = get35eSizeManeuverModifier(char.sizeCategory);
+
+  const improved = char.improvedManeuvers || {};
+  const isDwarf = (char.race || '').toLowerCase().includes('dwarf');
+  const stabilityBonus = (char.isQuadruped ? 4 : 0) + (isDwarf ? 4 : 0) + (char.stabilityBonus || 0);
+
+  // 1. GRAPPLE: BAB + STR + Size + 4 (Improved Grapple)
+  const hasImpGrapple = Boolean(improved.improvedGrapple);
+  const grappleBonus = bab + strMod + sizeMod + (hasImpGrapple ? 4 : 0);
+  const grapple: Maneuver35eResult = {
+    name: 'Grapple Check',
+    checkBonus: grappleBonus,
+    formula: `BAB (${formatModifier(bab)}) + STR (${formatModifier(strMod)}) + Size (${formatModifier(sizeMod)})${hasImpGrapple ? ' + Imp Grapple (+4)' : ''}`,
+    provokesAoO: !hasImpGrapple,
+    improvedFeatActive: hasImpGrapple,
+    description: 'Opposed check to establish hold, pin foe, deal unarmed damage, or escape grapple.'
+  };
+
+  // 2. TRIP: Touch Attack: BAB + STR/DEX -> Trip Check: STR + Size + 4 (Improved Trip)
+  const hasImpTrip = Boolean(improved.improvedTrip);
+  const tripTouchAtk = bab + Math.max(strMod, dexMod);
+  const tripBonus = strMod + sizeMod + (hasImpTrip ? 4 : 0);
+  const trip = {
+    name: 'Trip Check',
+    touchAttackBonus: tripTouchAtk,
+    checkBonus: tripBonus,
+    formula: `STR (${formatModifier(strMod)}) + Size (${formatModifier(sizeMod)})${hasImpTrip ? ' + Imp Trip (+4)' : ''}`,
+    provokesAoO: !hasImpTrip,
+    improvedFeatActive: hasImpTrip,
+    description: 'Make unarmed melee touch attack; if hits, make opposed STR check to knock defender prone.' + (hasImpTrip ? ' (Improved Trip grants immediate free melee attack on success!)' : '')
+  };
+
+  // 3. DISARM: Opposed attack roll: BAB + STR + 4 (Improved Disarm)
+  const hasImpDisarm = Boolean(improved.improvedDisarm);
+  const disarmBonus = bab + strMod + (hasImpDisarm ? 4 : 0);
+  const disarm: Maneuver35eResult = {
+    name: 'Disarm Check',
+    checkBonus: disarmBonus,
+    formula: `Melee Atk (${formatModifier(bab + strMod)})${hasImpDisarm ? ' + Imp Disarm (+4)' : ''} (add +4 if two-handed, -4 if light)`,
+    provokesAoO: !hasImpDisarm,
+    improvedFeatActive: hasImpDisarm,
+    description: 'Opposed melee attack roll to disarm defender of their weapon or shield.'
+  };
+
+  // 4. BULL RUSH: STR + Size + 4 (Improved Bull Rush)
+  const hasImpBullRush = Boolean(improved.improvedBullRush);
+  const bullRushBonus = strMod + sizeMod + (hasImpBullRush ? 4 : 0);
+  const bullRush: Maneuver35eResult = {
+    name: 'Bull Rush Check',
+    checkBonus: bullRushBonus,
+    formula: `STR (${formatModifier(strMod)}) + Size (${formatModifier(sizeMod)})${hasImpBullRush ? ' + Imp Bull Rush (+4)' : ''} (+2 if charging)`,
+    provokesAoO: !hasImpBullRush,
+    improvedFeatActive: hasImpBullRush,
+    description: 'Opposed STR check to push defender back 5 ft, +5 ft per 5 points you exceed their check.'
+  };
+
+  // 5. SUNDER: Opposed attack roll: Melee Atk + 4 (Improved Sunder)
+  const hasImpSunder = Boolean(improved.improvedSunder);
+  const sunderBonus = bab + strMod + (hasImpSunder ? 4 : 0);
+  const sunder: Maneuver35eResult = {
+    name: 'Sunder Check',
+    checkBonus: sunderBonus,
+    formula: `Melee Atk (${formatModifier(bab + strMod)})${hasImpSunder ? ' + Imp Sunder (+4)' : ''} (add +4 if two-handed, -4 if light)`,
+    provokesAoO: !hasImpSunder,
+    improvedFeatActive: hasImpSunder,
+    description: 'Opposed attack roll to strike held weapon or shield directly; deals damage to item Hardness & HP.'
+  };
+
+  // 6. OVERRUN: STR + Size + 4 (Improved Overrun)
+  const hasImpOverrun = Boolean(improved.improvedOverrun);
+  const overrunBonus = strMod + sizeMod + (hasImpOverrun ? 4 : 0);
+  const overrun: Maneuver35eResult = {
+    name: 'Overrun Check',
+    checkBonus: overrunBonus,
+    formula: `STR (${formatModifier(strMod)}) + Size (${formatModifier(sizeMod)})${hasImpOverrun ? ' + Imp Overrun (+4)' : ''}`,
+    provokesAoO: !hasImpOverrun,
+    improvedFeatActive: hasImpOverrun,
+    description: 'Opposed STR check as standard action while moving to knock target prone.'
+  };
+
+  return {
+    grapple,
+    trip,
+    disarm,
+    bullRush,
+    sunder,
+    overrun,
+    sizeModifier: sizeMod,
+    stabilityBonus
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e DAMAGE REDUCTION (DR) & ENERGY RESISTANCE
+// ----------------------------------------------------
+
+export function calculate35eDamageReduction(char: CharacterData): {
+  value: number;
+  bypass: string;
+  displayString: string;
+} {
+  const val = char.damageReductionValue || 0;
+  const bypass = (char.damageReductionBypass || '-').trim();
+  const displayString = val > 0 ? `DR ${val}/${bypass}` : 'DR 0/-';
+  return { value: val, bypass, displayString };
+}
+
+export function calculate35eIncomingDamage(
+  char: CharacterData,
+  rawDamage: number,
+  damageType: string = 'Slashing',
+  attackProperties: {
+    isMagic?: boolean;
+    material?: 'normal' | 'magic' | 'silver' | 'cold_iron' | 'adamantine' | string;
+    alignment?: 'none' | 'good' | 'evil' | 'lawful' | 'chaotic' | string;
+  } = {}
+): {
+  finalDamage: number;
+  drMitigated: number;
+  energyMitigated: number;
+  bypassed: boolean;
+  explanation: string;
+} {
+  const dmg = Math.max(0, rawDamage);
+  const cleanType = (damageType || 'Slashing').toLowerCase();
+
+  // 1. Energy Damage Check
+  const energyResistances = char.energyResistances || {};
+  let energyMitigated = 0;
+  if (['fire', 'cold', 'electricity', 'acid', 'sonic'].includes(cleanType)) {
+    const resValue = energyResistances[cleanType as 'fire'] || 0;
+    energyMitigated = Math.min(dmg, resValue);
+    const finalDamage = Math.max(0, dmg - energyMitigated);
+    return {
+      finalDamage,
+      drMitigated: 0,
+      energyMitigated,
+      bypassed: false,
+      explanation: energyMitigated > 0
+        ? `Energy Resistance (${cleanType} ${resValue}) absorbed ${energyMitigated} damage (taking ${finalDamage})`
+        : `Full damage taken (${finalDamage} ${damageType})`
+    };
+  }
+
+  // 2. Physical Damage & DR Check (Bludgeoning, Piercing, Slashing)
+  const dr = calculate35eDamageReduction(char);
+  if (dr.value <= 0) {
+    return {
+      finalDamage: dmg,
+      drMitigated: 0,
+      energyMitigated: 0,
+      bypassed: true,
+      explanation: `No DR active (${dmg} damage taken)`
+    };
+  }
+
+  const bypassReq = dr.bypass.toLowerCase();
+  let bypassed = false;
+
+  if (bypassReq === '-' || bypassReq === 'none') {
+    bypassed = false;
+  } else if (bypassReq.includes('magic') && (attackProperties.isMagic || attackProperties.material === 'magic')) {
+    bypassed = true;
+  } else if (bypassReq.includes('silver') && attackProperties.material === 'silver') {
+    bypassed = true;
+  } else if (bypassReq.includes('cold iron') && attackProperties.material === 'cold_iron') {
+    bypassed = true;
+  } else if (bypassReq.includes('adamantine') && attackProperties.material === 'adamantine') {
+    bypassed = true;
+  } else if (bypassReq.includes('bludgeoning') && cleanType.includes('bludgeon')) {
+    bypassed = true;
+  } else if (bypassReq.includes('piercing') && cleanType.includes('pierc')) {
+    bypassed = true;
+  } else if (bypassReq.includes('slashing') && cleanType.includes('slash')) {
+    bypassed = true;
+  } else if (bypassReq.includes('good') && attackProperties.alignment === 'good') {
+    bypassed = true;
+  } else if (bypassReq.includes('evil') && attackProperties.alignment === 'evil') {
+    bypassed = true;
+  } else if (bypassReq.includes('lawful') && attackProperties.alignment === 'lawful') {
+    bypassed = true;
+  } else if (bypassReq.includes('chaotic') && attackProperties.alignment === 'chaotic') {
+    bypassed = true;
+  }
+
+  if (bypassed) {
+    return {
+      finalDamage: dmg,
+      drMitigated: 0,
+      energyMitigated: 0,
+      bypassed: true,
+      explanation: `Bypassed ${dr.displayString}! Full damage taken (${dmg})`
+    };
+  }
+
+  const drMitigated = Math.min(dmg, dr.value);
+  const finalDamage = Math.max(0, dmg - drMitigated);
+  return {
+    finalDamage,
+    drMitigated,
+    energyMitigated: 0,
+    bypassed: false,
+    explanation: `${dr.displayString} absorbed ${drMitigated} damage (taking ${finalDamage})`
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e METAMAGIC SPELL ENGINE
+// ----------------------------------------------------
+
+export interface MetamagicFeatDefinition {
+  id: string;
+  name: string;
+  slotAdjustment: number;
+  description: string;
+  effectType: 'damage' | 'duration' | 'range' | 'area' | 'action' | 'component';
+}
+
+export const DND35E_METAMAGIC_FEATS: MetamagicFeatDefinition[] = [
+  {
+    id: 'empower',
+    name: 'Empower Spell',
+    slotAdjustment: 2,
+    description: 'Increases all variable, numeric effects by 50% (+50% roll damage/healing).',
+    effectType: 'damage'
+  },
+  {
+    id: 'maximize',
+    name: 'Maximize Spell',
+    slotAdjustment: 3,
+    description: 'All variable, numeric effects are maximized (e.g. 8d6 becomes 48).',
+    effectType: 'damage'
+  },
+  {
+    id: 'quicken',
+    name: 'Quicken Spell',
+    slotAdjustment: 4,
+    description: 'Casting time becomes a Swift Action (1 per turn).',
+    effectType: 'action'
+  },
+  {
+    id: 'extend',
+    name: 'Extend Spell',
+    slotAdjustment: 1,
+    description: 'Doubles duration of spells with duration longer than instantaneous.',
+    effectType: 'duration'
+  },
+  {
+    id: 'enlarge',
+    name: 'Enlarge Spell',
+    slotAdjustment: 1,
+    description: 'Doubles the range of close, medium, or long range spells.',
+    effectType: 'range'
+  },
+  {
+    id: 'widen',
+    name: 'Widen Spell',
+    slotAdjustment: 3,
+    description: 'Increases area (radius, cone, burst, emanation) by 100%.',
+    effectType: 'area'
+  },
+  {
+    id: 'silent',
+    name: 'Silent Spell',
+    slotAdjustment: 1,
+    description: 'Casts without verbal (V) component. Can cast while silenced.',
+    effectType: 'component'
+  },
+  {
+    id: 'still',
+    name: 'Still Spell',
+    slotAdjustment: 1,
+    description: 'Casts without somatic (S) component. Completely eliminates Arcane Spell Failure (0% ASF)!',
+    effectType: 'component'
+  }
+];
+
+export function calculate35eMetamagicSpell(
+  spell: Spell,
+  activeFeats: Record<string, boolean>
+): {
+  adjustedLevel: number;
+  levelDifference: number;
+  components: string;
+  castingTime: string;
+  range: string;
+  duration: string;
+  ignoresAsf: boolean;
+  damageFormula: string;
+  appliedFeats: string[];
+} {
+  const baseLvl = spell.originalLevel !== undefined ? spell.originalLevel : spell.level;
+  let levelDiff = 0;
+  const appliedFeats: string[] = [];
+
+  for (const feat of DND35E_METAMAGIC_FEATS) {
+    if (activeFeats[feat.id]) {
+      levelDiff += feat.slotAdjustment;
+      appliedFeats.push(feat.name);
+    }
+  }
+
+  const adjustedLevel = Math.min(9, Math.max(baseLvl, baseLvl + levelDiff));
+
+  let components = spell.components || 'V, S, M';
+  if (activeFeats.silent) {
+    components = components.replace(/V\s*,?\s*/i, '').trim().replace(/,\s*$/, '');
+  }
+  if (activeFeats.still) {
+    components = components.replace(/S\s*,?\s*/i, '').trim().replace(/,\s*$/, '');
+  }
+  if (!components) components = 'None';
+
+  let castingTime = spell.castingTime;
+  if (activeFeats.quicken) {
+    castingTime = 'Swift Action (1/turn)';
+  }
+
+  let range = spell.range;
+  if (activeFeats.enlarge) {
+    range = `${spell.range} (Enlarged: 2× Range)`;
+  }
+
+  let duration = spell.duration;
+  if (activeFeats.extend) {
+    duration = `${spell.duration} (Extended: 2× Duration)`;
+  }
+
+  let damageFormula = spell.damage || '';
+  if (damageFormula) {
+    if (activeFeats.maximize && activeFeats.empower) {
+      damageFormula = `(${damageFormula} Maximized) + 50%`;
+    } else if (activeFeats.maximize) {
+      damageFormula = `${damageFormula} (Maximized)`;
+    } else if (activeFeats.empower) {
+      damageFormula = `(${damageFormula}) × 1.5 (+50%)`;
+    }
+  }
+
+  return {
+    adjustedLevel,
+    levelDifference: levelDiff,
+    components,
+    castingTime,
+    range,
+    duration,
+    ignoresAsf: Boolean(activeFeats.still),
+    damageFormula,
+    appliedFeats
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e ATTACKS OF OPPORTUNITY & COMBAT REFLEXES
+// ----------------------------------------------------
+
+export interface AoOPoolInfo {
+  maxAoO: number;
+  currentAoO: number;
+  dexBonus: number;
+  hasCombatReflexes: boolean;
+  canAoOFlatFooted: boolean;
+  threatReachFt: number;
+  explanation: string;
+}
+
+export function calculate35eAoOPool(character: CharacterData): AoOPoolInfo {
+  const abilities = getEffectiveAbilities(character);
+  const dexMod = getAbilityModifier(abilities?.DEX?.score || 10);
+  const hasCombatReflexes = Boolean(
+    character.hasCombatReflexes ||
+    character.feats?.some((f) => f.name.toLowerCase().includes('combat reflexes'))
+  );
+
+  let maxAoO = 1;
+  if (hasCombatReflexes) {
+    maxAoO = Math.max(1, 1 + dexMod);
+  }
+  if (character.aooMaxOverride !== undefined && character.aooMaxOverride >= 0) {
+    maxAoO = character.aooMaxOverride;
+  }
+
+  const currentAoO = character.aooRemaining !== undefined ? Math.min(maxAoO, character.aooRemaining) : maxAoO;
+
+  let threatReachFt = character.threatReachFt || 5;
+  if (!character.threatReachFt) {
+    if (character.sizeCategory === 'Large') threatReachFt = 10;
+    if (character.sizeCategory === 'Huge') threatReachFt = 15;
+    if (character.sizeCategory === 'Gargantuan') threatReachFt = 20;
+    if (character.sizeCategory === 'Colossal') threatReachFt = 30;
+  }
+
+  return {
+    maxAoO,
+    currentAoO,
+    dexBonus: dexMod,
+    hasCombatReflexes,
+    canAoOFlatFooted: hasCombatReflexes,
+    threatReachFt,
+    explanation: hasCombatReflexes
+      ? `1 base + ${dexMod >= 0 ? '+' : ''}${dexMod} (Dex mod from Combat Reflexes) = ${maxAoO} AoOs/round`
+      : `1 base AoO per round (Standard rule without Combat Reflexes)`
+  };
+}
+
+export interface AoOActionTrigger {
+  id: string;
+  name: string;
+  category: 'Movement' | 'Spells' | 'Combat Actions' | 'Item Use';
+  provokes: boolean;
+  description: string;
+  exceptionOrAvoidance?: string;
+}
+
+export const DND35E_AOO_TRIGGERS: AoOActionTrigger[] = [
+  {
+    id: 'move_threatened',
+    name: 'Moving Out of / Through a Threatened Square',
+    category: 'Movement',
+    provokes: true,
+    description: 'Moving through or out of an enemy’s threatened space provokes an Attack of Opportunity before you leave the square.',
+    exceptionOrAvoidance: 'A 5-foot step or the Withdraw full-round action avoids this.'
+  },
+  {
+    id: 'cast_spell',
+    name: 'Casting a Spell or Spell-like Ability',
+    category: 'Spells',
+    provokes: true,
+    description: 'Casting a spell while threatened provokes an AoO. If hit and dealt damage, you must make a Concentration check (DC 10 + damage dealt + spell level) or lose the spell.',
+    exceptionOrAvoidance: 'Cast defensively (Concentration DC 15 + spell level) to avoid provoking.'
+  },
+  {
+    id: 'ranged_attack',
+    name: 'Making a Ranged Attack in Melee',
+    category: 'Combat Actions',
+    provokes: true,
+    description: 'Firing a bow, crossbow, throwing weapon, or sling while threatened provokes an AoO.',
+    exceptionOrAvoidance: 'Step away with a 5-foot step first, or take the Close Quarters feat.'
+  },
+  {
+    id: 'stand_prone',
+    name: 'Standing Up from Prone',
+    category: 'Movement',
+    provokes: true,
+    description: 'Standing up from the ground is a move action that provokes an AoO.',
+    exceptionOrAvoidance: 'Remain prone or use magic/tumbling to reposition.'
+  },
+  {
+    id: 'unarmed_attack',
+    name: 'Unarmed Strike / Maneuver without Feat',
+    category: 'Combat Actions',
+    provokes: true,
+    description: 'Striking unarmed (without Improved Unarmed Strike) or initiating a Grapple, Trip, Disarm, Sunder, or Bull Rush without their Improved feat provokes an AoO.',
+    exceptionOrAvoidance: 'Acquire Improved Unarmed Strike, Improved Grapple, Improved Trip, etc.'
+  },
+  {
+    id: 'drink_potion',
+    name: 'Drinking a Potion or Retrieving Stored Item',
+    category: 'Item Use',
+    provokes: true,
+    description: 'Drinking a potion, oils, or retrieving an item from a backpack or pouch provokes an AoO.',
+    exceptionOrAvoidance: 'Have item in a Handy Haversack (move action) or prepare beforehand.'
+  },
+  {
+    id: 'turn_undead',
+    name: 'Turn / Rebuke Undead',
+    category: 'Combat Actions',
+    provokes: false,
+    description: 'Channeling divine energy to Turn or Rebuke Undead does NOT provoke an Attack of Opportunity.',
+    exceptionOrAvoidance: 'Standard action that is completely safe from AoOs.'
+  },
+  {
+    id: 'total_defense',
+    name: 'Total Defense (+4 Dodge AC)',
+    category: 'Combat Actions',
+    provokes: false,
+    description: 'Taking the Total Defense standard action grants a +4 dodge bonus to AC and does NOT provoke an AoO.',
+    exceptionOrAvoidance: 'Standard action.'
+  }
+];
+
+// ----------------------------------------------------
+// D&D 3.5e TWO-WEAPON FIGHTING (TWF) PENALTIES & DAMAGE
+// ----------------------------------------------------
+
+export interface TwoWeaponPenalties {
+  mainHandPenalty: number;
+  offhandPenalty: number;
+  hasTWF: boolean;
+  hasITWF: boolean;
+  hasGTWF: boolean;
+  hasTwoWeaponDefense: boolean;
+  maxOffhandAttacks: number;
+  description: string;
+}
+
+export function calculate35eTwoWeaponPenalties(character: CharacterData, isOffhandLight: boolean): TwoWeaponPenalties {
+  const feats = character.feats || [];
+  const featNames = feats.map((f) => f.name.toLowerCase());
+  const hasTWF = Boolean(character.hasTwoWeaponFighting || featNames.some((n) => n.includes('two-weapon fighting') && !n.includes('improved') && !n.includes('greater')));
+  const hasITWF = Boolean(character.hasImprovedTwoWeaponFighting || featNames.some((n) => n.includes('improved two-weapon fighting')));
+  const hasGTWF = Boolean(character.hasGreaterTwoWeaponFighting || featNames.some((n) => n.includes('greater two-weapon fighting')));
+  const hasTwoWeaponDefense = Boolean(character.hasTwoWeaponDefense || featNames.some((n) => n.includes('two-weapon defense')));
+
+  let mainHandPenalty = -6;
+  let offhandPenalty = -10;
+
+  if (isOffhandLight) {
+    mainHandPenalty = -4;
+    offhandPenalty = -8;
+  }
+
+  if (hasTWF) {
+    if (isOffhandLight) {
+      mainHandPenalty = -2;
+      offhandPenalty = -2;
+    } else {
+      mainHandPenalty = -4;
+      offhandPenalty = -4;
+    }
+  }
+
+  const bab = getCharacterBab(character);
+  let maxOffhandAttacks = 1;
+  if (hasITWF && bab >= 6) maxOffhandAttacks = 2;
+  if (hasGTWF && bab >= 11) maxOffhandAttacks = 3;
+
+  return {
+    mainHandPenalty,
+    offhandPenalty,
+    hasTWF,
+    hasITWF,
+    hasGTWF,
+    hasTwoWeaponDefense,
+    maxOffhandAttacks,
+    description: hasTWF
+      ? isOffhandLight
+        ? 'Two-Weapon Fighting with Light off-hand: -2 Main / -2 Off-hand penalty'
+        : 'Two-Weapon Fighting with Normal off-hand: -4 Main / -4 Off-hand penalty'
+      : isOffhandLight
+        ? 'Dual-wielding without TWF feat (Light off-hand): -4 Main / -8 Off-hand penalty'
+        : 'Dual-wielding without TWF feat (Normal off-hand): -6 Main / -10 Off-hand penalty'
+  };
+}
+
+export function adjust35eOffhandDamageFormula(baseDamage: string, strModifier: number): string {
+  // In 3.5e, off-hand adds only 1/2 STR bonus (rounded down). Negative STR applies in full.
+  const offhandStrMod = strModifier > 0 ? Math.floor(strModifier / 2) : strModifier;
+  // If base formula has an existing flat bonus, replace or append
+  const match = baseDamage.match(/^([0-9]+d[0-9]+)\s*([+-]\s*[0-9]+)?(.*)$/i);
+  if (match) {
+    const dice = match[1];
+    const rest = match[3] || '';
+    const sign = offhandStrMod >= 0 ? '+' : '-';
+    return `${dice} ${sign} ${Math.abs(offhandStrMod)} (½ STR)${rest}`.trim();
+  }
+  const sign = offhandStrMod >= 0 ? '+' : '-';
+  return `${baseDamage} ${sign} ${Math.abs(offhandStrMod)} (½ STR)`.trim();
+}
+
+// ----------------------------------------------------
+// D&D 3.5e CONCEALMENT, MISS CHANCE & BLIND-FIGHT
+// ----------------------------------------------------
+
+export type MissChanceType = 'none' | 'concealment_20' | 'total_concealment_50' | 'blink_50' | 'blink_20' | 'incorporeal_50' | 'custom';
+
+export interface MissChancePreset {
+  id: MissChanceType;
+  label: string;
+  percentage: number;
+  description: string;
+}
+
+export const DND35E_MISS_CHANCE_PRESETS: MissChancePreset[] = [
+  {
+    id: 'none',
+    label: 'None (0%)',
+    percentage: 0,
+    description: 'Clear line of sight with no concealment or miss chance.'
+  },
+  {
+    id: 'concealment_20',
+    label: 'Concealment (20%)',
+    percentage: 20,
+    description: 'Target has partial concealment (fog, dim light, dense foliage, blur spell).'
+  },
+  {
+    id: 'total_concealment_50',
+    label: 'Total Concealment (50%)',
+    percentage: 50,
+    description: 'Target has total concealment (darkness, invisibility, smoke, blindness). Defender also loses Dex to AC.'
+  },
+  {
+    id: 'blink_50',
+    label: 'Blink Spell (50%)',
+    percentage: 50,
+    description: 'Target is actively blinking into the Ethereal Plane. Physical and magical attacks have a 50% miss chance.'
+  },
+  {
+    id: 'blink_20',
+    label: 'Attacking While Blinking (20%)',
+    percentage: 20,
+    description: 'The attacker is blinking and making an attack against a corporeal target.'
+  },
+  {
+    id: 'incorporeal_50',
+    label: 'Incorporeal Target (50%)',
+    percentage: 50,
+    description: 'Target is incorporeal (wraith, ghost, shadow). Magic weapons and spells have a 50% miss chance; non-magical attacks deal 0 damage. Force effects have 0% miss chance.'
+  }
+];
+
+export interface MissChanceResult {
+  missChancePercent: number;
+  d100Roll: number;
+  secondRoll?: number;
+  isOvercome: boolean;
+  usedBlindFight: boolean;
+  log: string;
+}
+
+export function evaluate35eMissChance(missChancePercent: number, hasBlindFight: boolean = false): MissChanceResult {
+  if (missChancePercent <= 0) {
+    return {
+      missChancePercent: 0,
+      d100Roll: 100,
+      isOvercome: true,
+      usedBlindFight: false,
+      log: 'No miss chance active.'
+    };
+  }
+
+  // In 3.5e: d100 roll. A roll from 1 to missChancePercent is a MISS. A roll above missChancePercent HITS.
+  const firstRoll = Math.floor(Math.random() * 100) + 1;
+  const firstOvercome = firstRoll > missChancePercent;
+
+  if (firstOvercome || !hasBlindFight) {
+    return {
+      missChancePercent,
+      d100Roll: firstRoll,
+      isOvercome: firstOvercome,
+      usedBlindFight: false,
+      log: firstOvercome
+        ? `d100 = ${firstRoll} vs ${missChancePercent}% miss chance: Overcome! (Hit)`
+        : `d100 = ${firstRoll} vs ${missChancePercent}% miss chance: Missed due to concealment!`
+    };
+  }
+
+  // Blind-Fight feat allows 1 reroll on concealment miss chance
+  const secondRoll = Math.floor(Math.random() * 100) + 1;
+  const secondOvercome = secondRoll > missChancePercent;
+
+  return {
+    missChancePercent,
+    d100Roll: firstRoll,
+    secondRoll,
+    isOvercome: secondOvercome,
+    usedBlindFight: true,
+    log: secondOvercome
+      ? `First roll d100 = ${firstRoll} (Miss). Blind-Fight Reroll: d100 = ${secondRoll} vs ${missChancePercent}%: Success! (Hit)`
+      : `First roll d100 = ${firstRoll}. Blind-Fight Reroll: d100 = ${secondRoll} vs ${missChancePercent}%: Missed due to concealment!`
+  };
+}
+
+// ----------------------------------------------------
+// D&D 3.5e ABILITY DAMAGE VS. DRAIN & POISON INCUBATION
+// ----------------------------------------------------
+
+export interface AbilityDamageDrainSummary {
+  totalDamage: number;
+  totalDrain: number;
+  affectedAbilities: AbilityName[];
+  conHpPenalty: number;
+}
+
+export function calculate35eAbilityDamageDrainSummary(character: CharacterData): AbilityDamageDrainSummary {
+  const abilities: AbilityName[] = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+  let totalDamage = 0;
+  let totalDrain = 0;
+  const affectedAbilities: AbilityName[] = [];
+
+  for (const ab of abilities) {
+    const dmg = character.abilityDamage?.[ab] || 0;
+    const drn = character.abilityDrain?.[ab] || 0;
+    if (dmg > 0 || drn > 0) {
+      affectedAbilities.push(ab);
+      totalDamage += dmg;
+      totalDrain += drn;
+    }
+  }
+
+  // In 3.5e: Every 2 points of CON loss reduces HP by 1 point per character level
+  const conLoss = (character.abilityDamage?.CON || 0) + (character.abilityDrain?.CON || 0);
+  const conPenaltyMod = Math.floor(conLoss / 2);
+  const conHpPenalty = conPenaltyMod * Math.max(1, character.level);
+
+  return {
+    totalDamage,
+    totalDrain,
+    affectedAbilities,
+    conHpPenalty
+  };
+}
+
+export interface PresetPoison {
+  id: string;
+  name: string;
+  source: string;
+  dc: number;
+  saveType: 'Fortitude';
+  primaryEffect: string;
+  secondaryEffect: string;
+  priceGp: number;
+  description: string;
+}
+
+export const DND35E_COMMON_POISONS: PresetPoison[] = [
+  {
+    id: 'greenblood_oil',
+    name: 'Greenblood Oil',
+    source: 'Injury',
+    dc: 13,
+    saveType: 'Fortitude',
+    primaryEffect: '1 CON damage',
+    secondaryEffect: '1d2 CON damage',
+    priceGp: 100,
+    description: 'A viscous dark-green plant distillation favored by assassins.'
+  },
+  {
+    id: 'black_adder_venom',
+    name: 'Black Adder Venom',
+    source: 'Injury',
+    dc: 11,
+    saveType: 'Fortitude',
+    primaryEffect: '1d6 CON damage',
+    secondaryEffect: '1d6 CON damage',
+    priceGp: 120,
+    description: 'Extracted from the deadly black adder serpent.'
+  },
+  {
+    id: 'shadow_essence',
+    name: 'Shadow Essence',
+    source: 'Injury',
+    dc: 17,
+    saveType: 'Fortitude',
+    primaryEffect: '1 STR drain',
+    secondaryEffect: '2d6 STR damage',
+    priceGp: 250,
+    description: 'Tainted vapor from the Plane of Shadow that leeches muscular vigor.'
+  },
+  {
+    id: 'arsenic',
+    name: 'Arsenic',
+    source: 'Ingested',
+    dc: 13,
+    saveType: 'Fortitude',
+    primaryEffect: '1 CON damage',
+    secondaryEffect: '1d8 CON damage',
+    priceGp: 120,
+    description: 'Classic mineral toxin dissolved into food or wine.'
+  },
+  {
+    id: 'medium_spider_venom',
+    name: 'Medium Spider Venom',
+    source: 'Injury',
+    dc: 14,
+    saveType: 'Fortitude',
+    primaryEffect: '1d4 STR damage',
+    secondaryEffect: '1d4 STR damage',
+    priceGp: 150,
+    description: 'Neurotoxic venom extracted from giant monstrous arachnids.'
+  },
+  {
+    id: 'wyvern_poison',
+    name: 'Wyvern Poison',
+    source: 'Injury',
+    dc: 17,
+    saveType: 'Fortitude',
+    primaryEffect: '2d6 CON damage',
+    secondaryEffect: '2d6 CON damage',
+    priceGp: 3000,
+    description: 'Devastating stinger secretion capable of slaying a knight in seconds.'
+  },
+  {
+    id: 'purple_worm_poison',
+    name: 'Purple Worm Poison',
+    source: 'Injury',
+    dc: 24,
+    saveType: 'Fortitude',
+    primaryEffect: '1d6 STR damage',
+    secondaryEffect: '2d6 STR damage',
+    priceGp: 700,
+    description: 'Potent subterranean poison that atrophies muscles.'
+  }
+];
+
+// ----------------------------------------------------
+// D&D 3.5e XP-TO-CRAFT & SPELL XP LEDGER
+// ----------------------------------------------------
+
+export interface ItemCraftingCalculation {
+  basePriceGp: number;
+  rawMaterialsGp: number;
+  xpCost: number;
+  craftingDays: number;
+  minCasterLevel: number;
+}
+
+export function calculate35eItemCraftingCost(
+  itemType: 'scroll' | 'potion' | 'wand' | 'wondrous' | 'arms_armor',
+  spellLevel: number = 1,
+  casterLevel: number = 1,
+  basePriceInput?: number
+): ItemCraftingCalculation {
+  let basePriceGp = 0;
+  let minCasterLevel = casterLevel;
+
+  if (itemType === 'scroll') {
+    // Scroll base price: Spell Level x Caster Level x 25 gp (Cantrip = 0.5 x CL x 25 = 12.5 gp)
+    const effLevel = spellLevel === 0 ? 0.5 : spellLevel;
+    basePriceGp = basePriceInput || Math.max(12.5, effLevel * casterLevel * 25);
+    minCasterLevel = spellLevel === 0 ? 1 : Math.max(1, spellLevel * 2 - 1);
+  } else if (itemType === 'potion') {
+    // Potion base price: Spell Level x Caster Level x 50 gp (Max 3rd level)
+    const effLevel = spellLevel === 0 ? 0.5 : Math.min(3, spellLevel);
+    basePriceGp = basePriceInput || Math.max(25, effLevel * casterLevel * 50);
+    minCasterLevel = spellLevel === 0 ? 1 : Math.max(1, spellLevel * 2 - 1);
+  } else if (itemType === 'wand') {
+    // Wand base price: Spell Level x Caster Level x 750 gp (50 charges, Max 4th level)
+    const effLevel = spellLevel === 0 ? 0.5 : Math.min(4, spellLevel);
+    basePriceGp = basePriceInput || Math.max(375, effLevel * casterLevel * 750);
+    minCasterLevel = spellLevel === 0 ? 1 : Math.max(1, spellLevel * 2 - 1);
+  } else {
+    // Wondrous item or Arms & Armor: uses basePriceInput
+    basePriceGp = basePriceInput || 1000;
+  }
+
+  // 3.5e Rule: Raw materials cost = 1/2 base price
+  const rawMaterialsGp = Math.round((basePriceGp / 2) * 100) / 100;
+
+  // 3.5e Rule: XP cost = 1/25th (4%) of base price
+  const xpCost = Math.ceil(basePriceGp / 25);
+
+  // 3.5e Rule: 1 day per 1,000 gp base price (minimum 1 day)
+  const craftingDays = Math.max(1, Math.ceil(basePriceGp / 1000));
+
+  return {
+    basePriceGp,
+    rawMaterialsGp,
+    xpCost,
+    craftingDays,
+    minCasterLevel
+  };
+}
+
+export interface PresetXpSpell {
+  name: string;
+  level: number;
+  school: string;
+  xpCost: number;
+  materialCostGp?: number;
+  description: string;
+}
+
+export const DND35E_XP_SPELLS: PresetXpSpell[] = [
+  {
+    name: 'Wish',
+    level: 9,
+    school: 'Universal',
+    xpCost: 5000,
+    description: 'Reshape reality or duplicate spells. Minimum 5,000 XP cost (more if duplicating spells with XP costs or creating magic items).'
+  },
+  {
+    name: 'Limited Wish',
+    level: 7,
+    school: 'Universal',
+    xpCost: 300,
+    description: 'Alters reality within bounded limits or duplicates lower level spells.'
+  },
+  {
+    name: 'Permanency',
+    level: 5,
+    school: 'Transmutation',
+    xpCost: 500, // 500 to 4500 XP depending on spell
+    description: 'Makes certain spells permanent on yourself, an object, or another creature. Minimum 500 XP (up to 4,500 XP).'
+  },
+  {
+    name: 'Restoration',
+    level: 4,
+    school: 'Conjuration',
+    xpCost: 100,
+    materialCostGp: 100,
+    description: 'Restores all permanent ability drain and dispels negative levels.'
+  },
+  {
+    name: 'Commune',
+    level: 5,
+    school: 'Divination',
+    xpCost: 100,
+    description: 'Contact a deity or divine proxy for yes/no answers.'
+  },
+  {
+    name: 'Atonement',
+    level: 5,
+    school: 'Abjuration',
+    xpCost: 500,
+    description: 'Restores paladins or clerics who have lost their divine favor through minor infractions.'
+  },
+  {
+    name: 'Simulacrum',
+    level: 7,
+    school: 'Illusion',
+    xpCost: 1000, // 100 XP per HD of the created creature
+    materialCostGp: 1000,
+    description: 'Creates a duplicate illusion/construct of a living creature. 100 XP per HD of creature.'
+  },
+  {
+    name: 'Gate',
+    level: 9,
+    school: 'Conjuration',
+    xpCost: 1000,
+    description: 'Opens a portal across planes or summons a planar entity to perform a service.'
+  },
+  {
+    name: 'Miracle',
+    level: 9,
+    school: 'Evocation',
+    xpCost: 5000,
+    description: 'Calls upon divine intercession for grand, impossible effects (free if standard clerical request; 5,000 XP for grand requests).'
+  }
+];
+
+export function calculate35eMinLevelXpBuffer(character: CharacterData): {
+  currentXp: number;
+  levelMinXp: number;
+  nextLevelXp: number;
+  expendableXp: number;
+  canAfford: (xpCost: number) => boolean;
+} {
+  const currentLevel = Math.max(1, character.level);
+  // 3.5e XP thresholds: Level N requires N*(N-1)/2 * 1,000 XP
+  const levelMinXp = ((currentLevel * (currentLevel - 1)) / 2) * 1000;
+  const nextLevelXp = (((currentLevel + 1) * currentLevel) / 2) * 1000;
+  const currentXp = character.experiencePoints || 0;
+
+  // In 3.5e, a character cannot spend XP that would reduce their total below the minimum for their current level.
+  const expendableXp = Math.max(0, currentXp - levelMinXp);
+
+  return {
+    currentXp,
+    levelMinXp,
+    nextLevelXp,
+    expendableXp,
+    canAfford: (xpCost: number) => expendableXp >= xpCost
+  };
+}
+
 
 

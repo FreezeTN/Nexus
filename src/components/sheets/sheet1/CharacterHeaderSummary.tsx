@@ -17,8 +17,14 @@ import {
   Dna,
   Star,
   TrendingUp,
-  Edit2
+  Edit2,
+  Hammer,
+  Bookmark,
+  Layers,
+  RefreshCw,
+  Copy
 } from 'lucide-react';
+import { XpCraftAndSpellLedgerModal } from '../../modals/XpCraftAndSpellLedgerModal';
 
 interface CharacterHeaderSummaryProps {
   character: CharacterData;
@@ -31,6 +37,9 @@ interface CharacterHeaderSummaryProps {
   setShowTransformationModal: (val: boolean) => void;
   setShowCompanionModal?: (val: boolean) => void;
   setShowLevelProgressionModal: (val: boolean) => void;
+  onDuplicateCharacter?: (character: CharacterData) => void;
+  onSyncToBaseCharacter?: (sessionCharId: string) => void;
+  baseCharacterName?: string;
 }
 
 export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
@@ -43,9 +52,13 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
   setShowHybridHeritageModal,
   setShowTransformationModal,
   setShowCompanionModal,
-  setShowLevelProgressionModal
+  setShowLevelProgressionModal,
+  onDuplicateCharacter,
+  onSyncToBaseCharacter,
+  baseCharacterName
 }) => {
   const { t } = useLanguage();
+  const [show35eXpLedger, setShow35eXpLedger] = useState(false);
   return (
     <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl text-stone-100 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -211,6 +224,45 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
                   <span>Merchant / Vendor ({character.vendorMargin || 120}%)</span>
                 </div>
               )}
+
+              {/* Campaign & Version Box Badge */}
+              {(character.campaignName || character.versionTag) && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 bg-stone-950/90 border border-amber-500/60 px-2.5 py-1 rounded-xl text-xs font-mono text-amber-300 shadow-sm" title="Active Campaign / Version Box">
+                    <Bookmark className="w-3.5 h-3.5 text-amber-400" />
+                    {character.campaignName && (
+                      <span className="font-bold">Campaign: {character.campaignName}</span>
+                    )}
+                    {character.campaignName && character.versionTag && <span className="text-stone-500">•</span>}
+                    {character.versionTag && <span>{character.versionTag}</span>}
+                  </span>
+                </div>
+              )}
+
+              {/* Linked to Base Character Badge & Sync Button */}
+              {character.baseCharacterId && (
+                <div className="flex items-center gap-2 flex-wrap bg-stone-950/70 border border-stone-800 px-2.5 py-1 rounded-xl">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-mono text-stone-300">
+                    <Layers className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Linked to Base</span>
+                  </span>
+                  {onSyncToBaseCharacter && (
+                    <button
+                      onClick={() => onSyncToBaseCharacter(character.id)}
+                      className="inline-flex items-center gap-1 bg-emerald-950/90 hover:bg-emerald-900 active:scale-95 border border-emerald-600/70 text-emerald-300 text-[11px] font-bold px-2.5 py-0.5 rounded-lg transition shadow-sm cursor-pointer"
+                      title="Sync permanent progression (Level, XP, Items, Spells, Lost Limbs, Feats) to your Base Character. Base Character HP remains 100% full."
+                    >
+                      <RefreshCw className="w-3 h-3 text-emerald-400" />
+                      <span>Sync to Base Now</span>
+                    </button>
+                  )}
+                  {character.lastSyncedFromSessionAt && (
+                    <span className="text-[10px] text-stone-500 font-mono">
+                      Synced {new Date(character.lastSyncedFromSessionAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="text-xs text-stone-400 mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -309,6 +361,16 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
           <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
           <span>{t('level.title', 'Level Progression & Table')}</span>
         </button>
+        {character.edition === '3.5e' && (
+          <button
+            onClick={() => setShow35eXpLedger(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-950/90 hover:bg-amber-900 text-amber-200 border border-amber-500/50 rounded-xl text-xs font-bold transition shadow-md"
+            title="Open 3.5e Crafting XP & Spell XP Ledger"
+          >
+            <Hammer className="w-3.5 h-3.5 text-amber-400" />
+            <span>XP Crafting & Spells</span>
+          </button>
+        )}
         <button
           onClick={() => setEditingProfile(!editingProfile)}
           className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 rounded-xl text-xs font-semibold border border-stone-700 transition"
@@ -323,7 +385,28 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
           <Edit2 className="w-3.5 h-3.5 text-amber-400" />
           <span>{editingAbilities ? t('common.done', 'Done') : t('stats.abilityScores', 'Edit Ability Scores')}</span>
         </button>
+
+        {onDuplicateCharacter && (
+          <button
+            onClick={() => onDuplicateCharacter(character)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-stone-200 hover:text-amber-300 rounded-xl text-xs font-semibold border border-stone-700 transition shadow cursor-pointer"
+            title="Duplicate / Create a new version of this character for a campaign or session"
+          >
+            <Copy className="w-3.5 h-3.5 text-amber-400" />
+            <span>Duplicate / Version</span>
+          </button>
+        )}
       </div>
+
+      {/* 3.5e XP Crafting & Spell Ledger Modal */}
+      {character.edition === '3.5e' && (
+        <XpCraftAndSpellLedgerModal
+          isOpen={show35eXpLedger}
+          onClose={() => setShow35eXpLedger(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
     </div>
   );
 };

@@ -53,6 +53,13 @@ service cloud.firestore {
              data.type is string && data.type.size() <= 32;
     }
 
+    function isValidHomebrew(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.ownerId is string && data.ownerId.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             data.category is string && data.category.size() <= 64;
+    }
+
     function isValidPresence(data) {
       return data.characterId is string && data.characterId.size() <= 128 &&
              (!('sessionCode' in data) || (data.sessionCode is string && data.sessionCode.size() <= 32));
@@ -63,13 +70,22 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // User profiles
+    // User profiles & Custom Compendium / Homebrew
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId);
       allow list: if isSignedIn();
       allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
       allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
       allow delete: if false;
+
+      // Subscribed user custom compendium & homebrew
+      match /custom_compendium/{entryId} {
+        allow get: if isSignedIn() && request.auth.uid == userId && isValidId(entryId);
+        allow list: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn() && request.auth.uid == userId && isValidId(entryId) && request.resource.data.ownerId == request.auth.uid && isValidHomebrew(request.resource.data);
+        allow update: if isSignedIn() && request.auth.uid == userId && isValidId(entryId) && resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == request.auth.uid && isValidHomebrew(request.resource.data);
+        allow delete: if isSignedIn() && request.auth.uid == userId && isValidId(entryId) && resource.data.ownerId == request.auth.uid;
+      }
     }
 
     // Characters

@@ -18,8 +18,16 @@ import {
   DollarSign,
   PackageCheck
 } from 'lucide-react';
-import { getAbilityModifier, formatModifier } from '../../../utils/dndCalculations';
+import {
+  getAbilityModifier,
+  formatModifier,
+  getTotalWealthInGold,
+  deductGoldFromWealth,
+  formatWealthDetailed
+} from '../../../utils/dndCalculations';
 import { playCoinSound } from '../../../utils/soundEffects';
+import { OFFICIAL_MOUNT_PRESETS, purchaseMountForCharacter } from '../../../data/mountData';
+import { StablesAndMountsModal } from '../../modals/StablesAndMountsModal';
 
 interface MerchantEncounterPanelProps {
   merchant: MerchantEncounterState;
@@ -44,11 +52,14 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'buy' | 'sell' | 'details'>('buy');
   const [selectedFilter, setSelectedFilter] = useState<string>('All');
+  const [showStablesModal, setShowStablesModal] = useState<boolean>(false);
   const [haggleSkill, setHaggleSkill] = useState<'Persuasion' | 'Deception' | 'Intimidation'>('Persuasion');
   const [customHaggleRoll, setCustomHaggleRoll] = useState<string>('');
   const [tradeMessage, setTradeMessage] = useState<{ text: string; type: 'success' | 'warning' | 'info' } | null>(null);
 
   // Player wealth calculation (normalize to GP)
+  const wealthInfo = formatWealthDetailed(character.wealth);
+  const totalWealthGp = wealthInfo.totalGp;
   const playerGold = character.wealth?.gp || 0;
   const playerSilver = character.wealth?.sp || 0;
   const playerCopper = character.wealth?.cp || 0;
@@ -131,27 +142,69 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
   // Buy Item from Merchant
   const handleBuyItem = (item: GearItem) => {
     const costGp = getEffectiveBuyCostGp(item.costGp || 10);
-    if (playerGold < costGp) {
+    if (totalWealthGp < costGp - 0.001) {
       setTradeMessage({
-        text: `⚠️ Not enough gold! You have ${playerGold} GP, but this item costs ${costGp} GP.`,
+        text: `⚠️ Not enough currency! You have ${wealthInfo.displayText} total (${wealthInfo.breakdown}), but this item costs ${costGp} GP.`,
         type: 'warning'
       });
       return;
     }
 
-    // Deduct player gold, add item to player inventory
+    const sub = (item.subCategory || '').toLowerCase();
+    const nameLower = item.name.toLowerCase();
+    const isMount = sub.includes('mount') || sub.includes('steed') ||
+      OFFICIAL_MOUNT_PRESETS.some(p => p.name.toLowerCase() === nameLower);
+
+    // Deduct player gold, add item or mount to player
     if (onUpdateCharacter) {
-      const currentInv = character.inventory || [];
-      const updatedInv = [...currentInv, { ...item, id: 'inv-' + Date.now() + '-' + Math.floor(Math.random() * 1000) }];
-      const updatedWealth = {
-        ...(character.wealth || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 }),
-        gp: playerGold - costGp
-      };
-      onUpdateCharacter({
-        ...character,
-        wealth: updatedWealth,
-        inventory: updatedInv
-      });
+      if (isMount) {
+        const preset = OFFICIAL_MOUNT_PRESETS.find(p => p.name.toLowerCase() === nameLower) || {
+          id: `mount-${Date.now()}`,
+          name: item.name,
+          type: item.name,
+          costGp: costGp,
+          size: 'Large' as const,
+          speed: '50 ft.',
+          ac: 14,
+          hp: 20,
+          hpMax: 20,
+          str: 16,
+          dex: 12,
+          con: 14,
+          carryingCapacityLbs: { light: 200, medium: 400, heavy: 600 },
+          isWarTrained: nameLower.includes('war'),
+          attacks: [],
+          description: item.notes || 'Purchased mount',
+          source: 'Merchant'
+        };
+
+        const purchaseResult = purchaseMountForCharacter(
+          character,
+          { ...preset, costGp },
+          item.name
+        );
+
+        if (purchaseResult.success) {
+          onUpdateCharacter(purchaseResult.updatedCharacter);
+        }
+      } else {
+        const deduction = deductGoldFromWealth(costGp, character.wealth);
+        if (!deduction.success) {
+          setTradeMessage({
+            text: `⚠️ Not enough currency to cover ${costGp} GP.`,
+            type: 'warning'
+          });
+          return;
+        }
+
+        const currentInv = character.inventory || [];
+        const updatedInv = [...currentInv, { ...item, id: 'inv-' + Date.now() + '-' + Math.floor(Math.random() * 1000) }];
+        onUpdateCharacter({
+          ...character,
+          wealth: deduction.updatedWealth,
+          inventory: updatedInv
+        });
+      }
     }
 
     // Update merchant inventory (reduce qty or remove) and add gold till
@@ -170,7 +223,9 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
     onUpdateMerchant(updatedMerchant);
     playCoinSound();
 
-    const logText = `🛍️ Bought "${item.name}" for ${costGp} GP. (Merchant Gold Till: ${updatedMerchant.goldGp} GP)`;
+    const logText = isMount
+      ? `🐎 Bought & Stabled "${item.name}" for ${costGp} GP! (Merchant Gold Till: ${updatedMerchant.goldGp} GP)`
+      : `🛍️ Bought "${item.name}" for ${costGp} GP. (Merchant Gold Till: ${updatedMerchant.goldGp} GP)`;
     setTradeMessage({ text: logText, type: 'success' });
     onAddLogEntry('trade', logText, character.name);
   };
@@ -228,6 +283,11 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
     if (selectedFilter === 'Weapons') return item.itemType === 'Weapon' || !!item.weaponStats;
     if (selectedFilter === 'Armor') return item.itemType === 'Armor' || !!item.armorAc;
     if (selectedFilter === 'Potions/Magic') return !!item.isMagic || item.name.toLowerCase().includes('potion') || item.name.toLowerCase().includes('scroll') || item.name.toLowerCase().includes('elixir');
+    if (selectedFilter === 'Mounts & Tack') {
+      const sub = (item.subCategory || '').toLowerCase();
+      const name = item.name.toLowerCase();
+      return sub.includes('mount') || sub.includes('steed') || sub.includes('tack') || sub.includes('saddle') || sub.includes('barding') || name.includes('horse') || name.includes('pony') || name.includes('saddle') || name.includes('barding') || name.includes('mule') || name.includes('camel') || name.includes('dog');
+    }
     return true;
   });
 
@@ -293,8 +353,17 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
           </div>
         </div>
 
-        {/* Action Buttons: Draw Weapons / Leave Shop */}
+        {/* Action Buttons: Stables / Draw Weapons / Leave Shop */}
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setShowStablesModal(true)}
+            className="flex items-center gap-1.5 bg-amber-950/80 hover:bg-amber-900 text-amber-300 border border-amber-600/60 px-3 py-1.5 rounded-xl font-bold text-xs shadow transition hover:scale-102"
+            title="Open Character Stables to inspect owned mounts & tack"
+          >
+            <span>🐎 Stables ({character.ownedMounts?.length || 0})</span>
+          </button>
+
           <button
             type="button"
             onClick={onPivotToCombat}
@@ -414,10 +483,12 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
         </div>
 
         {/* Player Current Gold Display */}
-        <div className="flex items-center gap-2 text-xs font-mono bg-stone-900 border border-amber-600/40 px-3 py-1 rounded-xl">
-          <span className="text-stone-400 font-sans">Your Purse:</span>
-          <span className="text-amber-300 font-bold">{playerGold} GP</span>
-          <span className="text-stone-400">({playerSilver} SP, {playerCopper} CP)</span>
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 text-xs font-mono bg-stone-900 border border-amber-600/40 px-3 py-1.5 rounded-xl shadow-inner">
+          <div className="flex items-center gap-1.5">
+            <span className="text-stone-400 font-sans">Your Purse:</span>
+            <span className="text-amber-300 font-bold">{wealthInfo.displayText}</span>
+          </div>
+          <span className="text-stone-400 text-[11px]">({wealthInfo.breakdown})</span>
         </div>
       </div>
 
@@ -426,7 +497,7 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
         <div className="space-y-3">
           {/* Filter Pills */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            {['All', 'Weapons', 'Armor', 'Potions/Magic'].map(filt => (
+            {['All', 'Weapons', 'Armor', 'Potions/Magic', 'Mounts & Tack'].map(filt => (
               <button
                 key={filt}
                 type="button"
@@ -452,7 +523,7 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
             ) : (
               filteredMerchantWares.map(item => {
                 const buyCost = getEffectiveBuyCostGp(item.costGp || 10);
-                const canAfford = playerGold >= buyCost;
+                const canAfford = totalWealthGp >= buyCost - 0.001;
 
                 return (
                   <div
@@ -590,6 +661,15 @@ export const MerchantEncounterPanel: React.FC<MerchantEncounterPanelProps> = ({
             )}
           </div>
         </div>
+      )}
+      {/* Stables & Mounts Modal */}
+      {showStablesModal && (
+        <StablesAndMountsModal
+          isOpen={showStablesModal}
+          onClose={() => setShowStablesModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
       )}
     </div>
   );

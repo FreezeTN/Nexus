@@ -1,6 +1,13 @@
 import { CharacterData, GearItem, Spell, RuleEdition, AbilityName, Skill } from '../types';
 import { CampaignEntity } from '../utils/searchIndexer';
 import { generateProceduralEntity } from './proceduralGenerators';
+import {
+  parseSlashProgression,
+  parseDamageReductionFromText,
+  parseNaturalArmorFromText,
+  parseSpellResistanceFromText,
+  parseEnergyResistancesFromText
+} from '../utils/homebrewValidator';
 
 export { generateProceduralEntity };
 
@@ -669,12 +676,131 @@ export function hydrateGeneratedClass(raw: any, edition: RuleEdition = '5e'): an
  */
 export function hydrateGeneratedRace(raw: any, edition: RuleEdition = '5e'): any {
   const id = `race_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  return {
-    id,
-    name: raw.name || 'Homebrew Race',
-    category: 'races',
-    edition,
-    description: raw.description || '',
+
+  // DR parsing
+  let drValue = raw.damageReductionValue !== undefined ? Number(raw.damageReductionValue) : undefined;
+  let drBypass = raw.damageReductionBypass || '-';
+  let drProgression = raw.damageReductionScalingProgression;
+  let drScaling = Array.isArray(raw.damageReductionScaling) ? raw.damageReductionScaling : undefined;
+
+  // If progression string exists without scaling array, parse it
+  if (drProgression && !drScaling) {
+    const parsed = parseSlashProgression(drProgression);
+    if (parsed) {
+      drScaling = parsed.scaling;
+      if (drValue === undefined) drValue = parsed.scaling[0]?.value;
+    }
+  }
+
+  // If not explicitly provided, check description and trait text
+  if (drValue === undefined && !drProgression) {
+    const fullText = [
+      raw.description || '',
+      ...(Array.isArray(raw.traits) ? raw.traits.map((t: any) => `${t.name}: ${t.description}`) : [])
+    ].join(' ');
+    const detected = parseDamageReductionFromText(fullText);
+    if (detected) {
+      drValue = detected.value;
+      drBypass = detected.bypass || '-';
+      drProgression = detected.scalingProgression;
+      drScaling = detected.scaling;
+    }
+  }
+
+  // Natural Armor
+  let natArmorBonus = raw.naturalArmorBonus !== undefined ? Number(raw.naturalArmorBonus) : undefined;
+  let natArmorProg = raw.naturalArmorScalingProgression;
+  let natArmorScaling = Array.isArray(raw.naturalArmorScaling) ? raw.naturalArmorScaling : undefined;
+  if (natArmorProg && !natArmorScaling) {
+    const parsed = parseSlashProgression(natArmorProg);
+    if (parsed) {
+      natArmorScaling = parsed.scaling;
+      if (natArmorBonus === undefined) natArmorBonus = parsed.scaling[0]?.value;
+    }
+  }
+  if (natArmorBonus === undefined && !natArmorProg) {
+    const fullText = [
+      raw.description || '',
+      ...(Array.isArray(raw.traits) ? raw.traits.map((t: any) => `${t.name}: ${t.description}`) : [])
+    ].join(' ');
+    const detected = parseNaturalArmorFromText(fullText);
+    if (detected) {
+      natArmorBonus = detected.value;
+      natArmorProg = detected.scalingProgression;
+      natArmorScaling = detected.scaling;
+    }
+  }
+
+  // Spell Resistance
+  let srBase = raw.spellResistanceBase !== undefined ? Number(raw.spellResistanceBase) : undefined;
+  let srProg = raw.spellResistanceScalingProgression;
+  let srScaling = Array.isArray(raw.spellResistanceScaling) ? raw.spellResistanceScaling : undefined;
+  if (srProg && !srScaling) {
+    const parsed = parseSlashProgression(srProg);
+    if (parsed) {
+      srScaling = parsed.scaling;
+      if (srBase === undefined) srBase = parsed.base || 10;
+    }
+  }
+  if (srBase === undefined && !srProg) {
+    const fullText = [
+      raw.description || '',
+      ...(Array.isArray(raw.traits) ? raw.traits.map((t: any) => `${t.name}: ${t.description}`) : [])
+    ].join(' ');
+    const detected = parseSpellResistanceFromText(fullText);
+    if (detected) {
+      srBase = detected.base;
+      srProg = detected.scalingProgression;
+      srScaling = detected.scaling;
+    }
+  }
+
+  // Energy Resistances
+  let energyResistances = Array.isArray(raw.energyResistances) ? raw.energyResistances : undefined;
+  if (!energyResistances) {
+    const fullText = [
+      raw.description || '',
+      ...(Array.isArray(raw.traits) ? raw.traits.map((t: any) => `${t.name}: ${t.description}`) : [])
+    ].join(' ');
+    const detected = parseEnergyResistancesFromText(fullText);
+    if (detected && detected.length > 0) {
+      energyResistances = detected;
+    }
+  }
+
+  // Immunities
+  const immunities = Array.isArray(raw.immunities)
+    ? raw.immunities
+    : Array.isArray(raw.damageImmunities)
+    ? raw.damageImmunities
+    : [];
+
+  // Natural weapons
+  const naturalWeapons = Array.isArray(raw.naturalWeapons) ? raw.naturalWeapons : [];
+
+  // Skill affinities
+  const skillAffinities = raw.skillAffinities || '';
+
+  // Spell-like abilities
+  const spellLikeAbilities = Array.isArray(raw.spellLikeAbilities) ? raw.spellLikeAbilities : [];
+
+  // 5e properties
+  const damageResistances5e = Array.isArray(raw.damageResistances5e)
+    ? raw.damageResistances5e
+    : Array.isArray(raw.damageResistances)
+    ? raw.damageResistances
+    : [];
+  const damageImmunities5e = Array.isArray(raw.damageImmunities5e) ? raw.damageImmunities5e : [];
+  const conditionImmunities5e = Array.isArray(raw.conditionImmunities5e)
+    ? raw.conditionImmunities5e
+    : Array.isArray(raw.conditionImmunities)
+    ? raw.conditionImmunities
+    : [];
+  const naturalArmorFormula5e = raw.naturalArmorFormula5e || undefined;
+  const scalingRacialDice5e = raw.scalingRacialDice5e || undefined;
+  const innateSpells5e = Array.isArray(raw.innateSpells5e) ? raw.innateSpells5e : [];
+
+  const raceData = {
     creatureType: raw.creatureType || 'Humanoid',
     size: raw.size || 'Medium',
     speed: Number(raw.speed) || 30,
@@ -687,7 +813,41 @@ export function hydrateGeneratedRace(raw: any, edition: RuleEdition = '5e'): any
     languages: Array.isArray(raw.languages) ? raw.languages : ['Common'],
     subraces: Array.isArray(raw.subraces) ? raw.subraces : [],
     ageAndLifespan: raw.ageAndLifespan || '',
-    alignmentTendencies: raw.alignmentTendencies || ''
+    alignmentTendencies: raw.alignmentTendencies || '',
+    damageReductionValue: drValue,
+    damageReductionBypass: drBypass,
+    damageReductionScalingProgression: drProgression,
+    damageReductionScaling: drScaling,
+    naturalArmorBonus: natArmorBonus,
+    naturalArmorScalingProgression: natArmorProg,
+    naturalArmorScaling: natArmorScaling,
+    spellResistanceBase: srBase,
+    spellResistanceScalingProgression: srProg,
+    spellResistanceScaling: srScaling,
+    energyResistances,
+    immunities,
+    naturalWeapons,
+    skillAffinities,
+    spellLikeAbilities,
+    damageResistances5e,
+    damageImmunities5e,
+    conditionImmunities5e,
+    naturalArmorFormula5e,
+    scalingRacialDice5e,
+    innateSpells5e
+  };
+
+  return {
+    id,
+    name: raw.name || 'Homebrew Race',
+    category: 'races',
+    edition,
+    source: raw.source || 'AI Oracle Forge',
+    description: raw.description || `${raw.name || 'Homebrew Race'} — ${raceData.size} ${raceData.creatureType}.`,
+    isCustom: true,
+    tags: ['races', edition, raceData.size, raceData.creatureType, 'Homebrew'],
+    raceData,
+    ...raceData
   };
 }
 

@@ -12,6 +12,7 @@ interface ClassStudioProps {
   sourceAuthor: string;
   onSave: (item: CompendiumItem) => void;
   onClose: () => void;
+  editingItem?: CompendiumItem | null;
 }
 
 interface ClassFeatureItem {
@@ -34,55 +35,80 @@ export const ClassStudio: React.FC<ClassStudioProps> = ({
   edition,
   sourceAuthor,
   onSave,
-  onClose
+  onClose,
+  editingItem
 }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [role, setRole] = useState('Frontline Combat Specialist & Tactical Controller');
-  const [hitDie, setHitDie] = useState<'d6' | 'd8' | 'd10' | 'd12'>('d8');
-  const [primaryAbility, setPrimaryAbility] = useState('Strength or Dexterity');
-  const [savingThrows, setSavingThrows] = useState<string[]>(['STR', 'CON']);
+  const cd = editingItem?.classData;
+
+  const [name, setName] = useState(editingItem?.name || '');
+  const [description, setDescription] = useState(editingItem?.description || '');
+  const [role, setRole] = useState(cd?.role || 'Frontline Combat Specialist & Tactical Controller');
+  const [hitDie, setHitDie] = useState<'d6' | 'd8' | 'd10' | 'd12'>((cd?.hitDie as any) || 'd8');
+  const [primaryAbility, setPrimaryAbility] = useState(cd?.primaryAbility || 'Strength or Dexterity');
+  const [savingThrows, setSavingThrows] = useState<string[]>(cd?.savingThrows || ['STR', 'CON']);
   
   // Proficiencies
-  const [armorProf, setArmorProf] = useState('Light armor, Medium armor, Shields');
-  const [weaponProf, setWeaponProf] = useState('Simple weapons, Martial weapons');
-  const [toolProf, setToolProf] = useState("Smith's tools or Herbalism kit");
-  const [skillProf, setSkillProf] = useState('Choose two from Athletics, Acrobatics, Insight, Intimidation, Perception, Survival');
+  const [armorProf, setArmorProf] = useState(Array.isArray(cd?.proficiencies?.armor) ? cd.proficiencies.armor.join(', ') : 'Light armor, Medium armor, Shields');
+  const [weaponProf, setWeaponProf] = useState(Array.isArray(cd?.proficiencies?.weapons) ? cd.proficiencies.weapons.join(', ') : 'Simple weapons, Martial weapons');
+  const [toolProf, setToolProf] = useState(Array.isArray(cd?.proficiencies?.tools) ? cd.proficiencies.tools.join(', ') : "Smith's tools or Herbalism kit");
+  const [skillProf, setSkillProf] = useState(cd?.proficiencies?.skills || 'Choose two from Athletics, Acrobatics, Insight, Intimidation, Perception, Survival');
 
   // Spellcasting
-  const [spellProgression, setSpellProgression] = useState<'None' | 'Full' | 'Half' | 'Third' | 'Pact'>('None');
-  const [spellAbility, setSpellAbility] = useState('Intelligence');
-  const [spellNotes, setSpellNotes] = useState('');
+  const [spellProgression, setSpellProgression] = useState<'None' | 'Full' | 'Half' | 'Third' | 'Pact'>((cd?.spellcasting?.type as any) || 'None');
+  const [spellAbility, setSpellAbility] = useState(cd?.spellcasting?.ability || 'Intelligence');
+  const [spellNotes, setSpellNotes] = useState(cd?.spellcasting?.notes || '');
 
   // Class Features
-  const [features, setFeatures] = useState<ClassFeatureItem[]>([
-    {
-      id: 'f1',
-      level: 1,
-      name: 'Signature Combat Focus',
-      description: 'Gain tactical bonus dice equal to your proficiency bonus to add to weapon attacks or AC.',
-      actionType: 'Bonus Action',
-      uses: 'Proficiency Bonus / Short Rest'
-    },
-    {
-      id: 'f2',
-      level: 2,
-      name: 'Tactical Surge',
-      description: 'Push beyond limits to take an additional Action on your turn.',
-      actionType: 'Action',
-      uses: '1 / Short Rest'
+  const [features, setFeatures] = useState<ClassFeatureItem[]>(() => {
+    if (cd?.featuresByLevel && Array.isArray(cd.featuresByLevel) && cd.featuresByLevel.length > 0) {
+      return cd.featuresByLevel.map((f: any, idx: number) => ({
+        id: f.id || `f${idx + 1}`,
+        level: f.level || 1,
+        name: f.name || 'Feature',
+        description: f.description || '',
+        actionType: f.actionType || 'Bonus Action',
+        uses: f.uses || 'Passive'
+      }));
     }
-  ]);
+    return [
+      {
+        id: 'f1',
+        level: 1,
+        name: 'Signature Combat Focus',
+        description: 'Gain tactical bonus dice equal to your proficiency bonus to add to weapon attacks or AC.',
+        actionType: 'Bonus Action',
+        uses: 'Proficiency Bonus / Short Rest'
+      },
+      {
+        id: 'f2',
+        level: 2,
+        name: 'Tactical Surge',
+        description: 'Push beyond limits to take an additional Action on your turn.',
+        actionType: 'Action',
+        uses: '1 / Short Rest'
+      }
+    ];
+  });
 
   // Subclasses
-  const [subclasses, setSubclasses] = useState<SubclassItem[]>([
-    {
-      id: 'sc1',
-      name: 'Order of the Vanguard',
-      description: 'Specializes in crushing charge attacks and defensive bulwarks.',
-      features: 'Level 3: Shield Wall, Level 7: Unyielding Charge, Level 15: Vanguard Retaliation'
+  const [subclasses, setSubclasses] = useState<SubclassItem[]>(() => {
+    if (cd?.subclassDetails && Array.isArray(cd.subclassDetails) && cd.subclassDetails.length > 0) {
+      return cd.subclassDetails.map((s: any, idx: number) => ({
+        id: s.id || `sc${idx + 1}`,
+        name: s.name || 'Subclass',
+        description: s.description || '',
+        features: Array.isArray(s.features) ? s.features.join(' | ') : (s.features || '')
+      }));
     }
-  ]);
+    return [
+      {
+        id: 'sc1',
+        name: 'Order of the Vanguard',
+        description: 'Specializes in crushing charge attacks and defensive bulwarks.',
+        features: 'Level 3: Shield Wall, Level 7: Unyielding Charge, Level 15: Vanguard Retaliation'
+      }
+    ];
+  });
 
   const [quickBuild, setQuickBuild] = useState('Prioritize primary attack stat (Strength/Dexterity), followed by Constitution for maximum survivability.');
   const [isGenerating, setIsGenerating] = useState(false);
@@ -247,11 +273,11 @@ export const ClassStudio: React.FC<ClassStudioProps> = ({
     };
 
     const newItem: CompendiumItem = {
-      id: `custom-class-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: editingItem?.id || `custom-class-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       name: name.trim(),
       category: 'classes',
       edition,
-      source: sourceAuthor.trim() || 'Custom Homebrew',
+      source: sourceAuthor.trim() || editingItem?.source || 'Custom Homebrew',
       description: description.trim() || `${name} — ${role}. Hit Die: ${hitDie}. Primary: ${primaryAbility}.`,
       isCustom: true,
       tags: ['classes', edition, hitDie, role, 'Homebrew'],
@@ -691,7 +717,7 @@ export const ClassStudio: React.FC<ClassStudioProps> = ({
           className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-stone-950 text-xs font-bold rounded-xl transition shadow-lg shadow-amber-500/20 flex items-center gap-2 cursor-pointer"
         >
           <Swords className="w-4 h-4" />
-          <span>Save Class to Compendium</span>
+          <span>{editingItem ? 'Update Class Entry' : 'Save Class to Compendium'}</span>
         </button>
       </div>
 

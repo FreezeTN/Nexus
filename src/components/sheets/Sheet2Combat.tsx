@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CharacterData, Party } from '../../types';
-import { UserProfile } from '../../lib/firebase';
+import { UserProfile, GameSession } from '../../lib/firebase';
 import { ShadowrunCombatPanel } from '../shadowrun/ShadowrunCombatPanel';
 import { RestModal } from '../combat/RestModal';
 import { EncounterTracker } from '../combat/EncounterTracker';
@@ -23,6 +23,8 @@ interface Sheet2Props {
   allCharacters?: CharacterData[];
   parties?: Party[];
   currentUser?: UserProfile | null;
+  activeSession?: GameSession | null;
+  activeSessionCode?: string | null;
   onOpenPartyManager?: () => void;
   onUpdateCharacter: (updated: CharacterData) => void;
   onAddMonsterToRoster?: (monster: CharacterData) => void;
@@ -36,6 +38,8 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   allCharacters = [],
   parties = [],
   currentUser,
+  activeSession,
+  activeSessionCode,
   onOpenPartyManager,
   onUpdateCharacter,
   onAddMonsterToRoster,
@@ -55,6 +59,9 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
     character,
     allCharacters,
     parties,
+    currentUser,
+    activeSession,
+    activeSessionCode,
     onUpdateCharacter,
     onRoll
   });
@@ -155,6 +162,8 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
           allCharacters={allCharacters}
           parties={parties}
           currentUser={currentUser}
+          activeSession={activeSession}
+          activeSessionCode={activeSessionCode}
           onOpenPartyManager={onOpenPartyManager}
           onUpdateCharacter={onUpdateCharacter}
           onRoll={onRoll}

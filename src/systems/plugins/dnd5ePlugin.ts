@@ -75,7 +75,7 @@ export const dnd5ePlugin: GameSystemPlugin = {
     },
     getDamageFormula(itemOrAttack: GearItem | Attack, char: CharacterData) {
       if ('attackBonus' in itemOrAttack) {
-        return itemOrAttack.damage;
+        return (itemOrAttack as Attack).damage;
       }
       const strMod = getAbilityModifier(char.abilities?.STR?.score || 10);
       const dexMod = getAbilityModifier(char.abilities?.DEX?.score || 10);

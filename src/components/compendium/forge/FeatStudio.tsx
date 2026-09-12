@@ -11,23 +11,27 @@ interface FeatStudioProps {
   sourceAuthor: string;
   onSave: (item: CompendiumItem) => void;
   onClose: () => void;
+  editingItem?: CompendiumItem | null;
 }
 
 export const FeatStudio: React.FC<FeatStudioProps> = ({
   edition,
   sourceAuthor,
   onSave,
-  onClose
+  onClose,
+  editingItem
 }) => {
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
+  const fd = editingItem?.featData as any;
+
+  const [name, setName] = useState(editingItem?.name || '');
+  const [description, setDescription] = useState(editingItem?.description || '');
 
   // Fantasy Feat fields
-  const [category, setCategory] = useState('General');
-  const [prerequisite, setPrerequisite] = useState('');
-  const [actionType, setActionType] = useState('Passive');
-  const [charges, setCharges] = useState('');
-  const [statBonus, setStatBonus] = useState('');
+  const [category, setCategory] = useState(fd?.category || 'General');
+  const [prerequisite, setPrerequisite] = useState(fd?.prerequisite || '');
+  const [actionType, setActionType] = useState(fd?.actionType || 'Passive');
+  const [charges, setCharges] = useState(fd?.charges || '');
+  const [statBonus, setStatBonus] = useState(fd?.statBonus || '');
 
   // PF2e Specific
   const [pf2Level, setPf2Level] = useState(1);
@@ -116,11 +120,11 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
     }
 
     const newItem: CompendiumItem = {
-      id: `custom-feat-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: editingItem?.id || `custom-feat-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: name.trim(),
       category: 'feats',
       edition,
-      source: sourceAuthor.trim() || 'Custom Homebrew',
+      source: sourceAuthor.trim() || editingItem?.source || 'Custom Homebrew',
       description: descSummary,
       isCustom: true,
       tags: itemTags,
@@ -455,7 +459,7 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>Save to Compendium</span>
+          <span>{editingItem ? 'Update Feat Entry' : 'Save to Compendium'}</span>
         </button>
       </div>
 

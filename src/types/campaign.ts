@@ -7,7 +7,10 @@ export type LocationType =
   | 'shrine' 
   | 'ruins' 
   | 'anomaly' 
-  | 'port';
+  | 'port'
+  | 'boss_lair'
+  | 'safehouse'
+  | 'monument';
 
 export type MapPresetSkin = 
   | 'faerun' 
@@ -18,6 +21,15 @@ export type MapPresetSkin =
   | 'arkham' 
   | 'archipelago' 
   | 'custom';
+
+export interface DungeonDetails {
+  floors?: number;
+  bossName?: string;
+  hazards?: string[];
+  roomCount?: number;
+  treasureNotes?: string;
+  trapDetails?: string;
+}
 
 export interface WorldLocation {
   id: string;
@@ -37,6 +49,10 @@ export interface WorldLocation {
   isDiscovered: boolean;
   tags: string[];
   customImageUrl?: string;
+  markerColor?: string;
+  markerIcon?: string;
+  customLoreNotes?: string;
+  dungeonDetails?: DungeonDetails;
 }
 
 export type QuestCategory = 'main' | 'side' | 'personal' | 'faction' | 'bounty' | 'rumor';
@@ -47,6 +63,9 @@ export interface QuestStage {
   text: string;
   completed: boolean;
   optional?: boolean;
+  xpReward?: number;
+  goldReward?: number;
+  itemReward?: string;
 }
 
 export interface QuestReward {
@@ -90,6 +109,13 @@ export interface FactionPerk {
   unlocked: boolean;
 }
 
+export interface FactionReputationLog {
+  id: string;
+  date: string;
+  delta: number;
+  reason: string;
+}
+
 export interface Faction {
   id: string;
   name: string;
@@ -105,6 +131,7 @@ export interface Faction {
   rivalFactionNames: string[];
   secretAgenda?: string;
   notes?: string;
+  reputationHistory?: FactionReputationLog[];
 }
 
 export type TravelPace = 'slow' | 'normal' | 'fast';

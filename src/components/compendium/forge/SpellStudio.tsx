@@ -15,6 +15,7 @@ interface SpellStudioProps {
   onClose: () => void;
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (updated: CharacterData) => void;
+  editingItem?: CompendiumItem | null;
 }
 
 export const SpellStudio: React.FC<SpellStudioProps> = ({
@@ -23,28 +24,31 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
   onSave,
   onClose,
   activeCharacter,
-  onUpdateCharacter
+  onUpdateCharacter,
+  editingItem
 }) => {
+  const sd = editingItem?.spellData as any;
+
   // Shared Name & Description
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [addToSpellbook, setAddToSpellbook] = useState(true);
+  const [name, setName] = useState(editingItem?.name || '');
+  const [description, setDescription] = useState(sd?.description || editingItem?.description || '');
+  const [addToSpellbook, setAddToSpellbook] = useState(editingItem ? false : true);
 
   // Fantasy Fields (5e / 3.5e / PF2e)
-  const [level, setLevel] = useState(1);
-  const [school, setSchool] = useState('Evocation');
-  const [castingTime, setCastingTime] = useState('1 action');
-  const [range, setRange] = useState('60 feet');
-  const [duration, setDuration] = useState('Instantaneous');
-  const [components, setComponents] = useState('V, S');
-  const [materialText, setMaterialText] = useState('');
-  const [isConcentration, setIsConcentration] = useState(false);
-  const [isRitual, setIsRitual] = useState(false);
-  const [damageFormula, setDamageFormula] = useState('');
-  const [damageType, setDamageType] = useState('Fire');
-  const [saveType, setSaveType] = useState('DEX');
-  const [higherLevel, setHigherLevel] = useState('');
-  const [targetClasses, setTargetClasses] = useState('Wizard, Sorcerer');
+  const [level, setLevel] = useState(sd?.level ?? 1);
+  const [school, setSchool] = useState(sd?.school || 'Evocation');
+  const [castingTime, setCastingTime] = useState(sd?.castingTime || '1 action');
+  const [range, setRange] = useState(sd?.range || '60 feet');
+  const [duration, setDuration] = useState(sd?.duration || 'Instantaneous');
+  const [components, setComponents] = useState(sd?.components || 'V, S');
+  const [materialText, setMaterialText] = useState((sd as any)?.materials || (sd as any)?.materialComponents || '');
+  const [isConcentration, setIsConcentration] = useState(!!sd?.concentration);
+  const [isRitual, setIsRitual] = useState(!!sd?.ritual);
+  const [damageFormula, setDamageFormula] = useState(sd?.damage || '');
+  const [damageType, setDamageType] = useState(sd?.damageType || 'Fire');
+  const [saveType, setSaveType] = useState(sd?.saveType || 'DEX');
+  const [higherLevel, setHigherLevel] = useState(sd?.higherLevel || '');
+  const [targetClasses, setTargetClasses] = useState(Array.isArray(sd?.classes) ? sd.classes.join(', ') : 'Wizard, Sorcerer');
 
   // PF2e Specific
   const [pf2Tradition, setPf2Tradition] = useState('Arcane');
@@ -187,11 +191,11 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
     }
 
     const newItem: CompendiumItem = {
-      id: `custom-spell-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: editingItem?.id || `custom-spell-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: name.trim(),
       category: 'spells',
       edition,
-      source: sourceAuthor.trim() || 'Custom Homebrew',
+      source: sourceAuthor.trim() || editingItem?.source || 'Custom Homebrew',
       description: descSummary,
       isCustom: true,
       tags: itemTags,
@@ -792,7 +796,7 @@ export const SpellStudio: React.FC<SpellStudioProps> = ({
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>{addToSpellbook && activeCharacter ? 'Forge & Add to Spellbook' : 'Save Spell to Compendium'}</span>
+          <span>{editingItem ? 'Update Spell Entry' : (addToSpellbook && activeCharacter ? 'Forge & Add to Spellbook' : 'Save Spell to Compendium')}</span>
         </button>
       </div>
 

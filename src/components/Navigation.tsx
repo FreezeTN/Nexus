@@ -31,10 +31,17 @@ export const Navigation: React.FC<NavigationProps> = ({
   activeSession = null
 }) => {
   const { t } = useLanguage();
-  const { workspaceRole, setWorkspaceRole, isStreamlined, isTableMode, toggleTableMode } = useUiMode();
+  const { workspaceRole } = useUiMode();
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
   const isCthulhu = edition === 'cthulhu';
+
+  // If role is player and currently on DM tab, redirect to sheet1
+  useEffect(() => {
+    if (workspaceRole === 'player' && activeTab === 'sheetDm') {
+      onTabChange('sheet1');
+    }
+  }, [workspaceRole, activeTab, onTabChange]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -70,111 +77,162 @@ export const Navigation: React.FC<NavigationProps> = ({
     });
   };
 
-  const allTabs = [
-    {
-      id: 'sheet1' as TabId,
-      title: isShadowrun
-        ? t('nav.sr.attributes', 'Attributes & Augs')
-        : isPathfinder
-        ? t('nav.pf.stats', 'Stats & Feats')
-        : isCthulhu
-        ? t('nav.coc.stats', 'Investigator Stats')
-        : t('nav.stats', 'Stats & Features'),
-      description: isShadowrun
-        ? t('nav.sr.attributesSub', 'Attributes, Condition Tracks, Cyberware & Qualities')
-        : isPathfinder
-        ? t('nav.pf.statsSub', 'Stats, Skills, Ancestry & Class Feats')
-        : isCthulhu
-        ? t('nav.coc.statsSub', 'Characteristics, Skill Percentiles & Half/Fifth Values')
-        : t('nav.statsSub', 'Stats, Skills, Feats, Features'),
-      icon: isShadowrun ? Cpu : ShieldAlert
-    },
-    {
-      id: 'sheet2' as TabId,
-      title: isShadowrun
-        ? t('nav.sr.combat', 'Tactical Combat')
-        : isPathfinder
-        ? t('nav.pf.combat', '3-Action Combat')
-        : isCthulhu
-        ? t('nav.coc.combat', 'Combat & Sanity')
-        : t('nav.combat', 'Combat'),
-      description: isShadowrun
-        ? t('nav.sr.combatSub', 'Initiative, Firearms, Armor & Actions Cheat Sheet')
-        : isPathfinder
-        ? t('nav.pf.combatSub', 'Attacks, 3-Action Economy & Combat Tactics')
-        : isCthulhu
-        ? t('nav.coc.combatSub', 'Sanity Monitor, Firearms, Brawling & Insanity')
-        : t('nav.combatSub', 'Attacks, Actions & Tactics'),
-      icon: Crosshair
-    },
-    ...(isDm && activeSession ? [{
-      id: 'sheetDm' as TabId,
-      title: t('nav.dmOverview', 'DM Overview'),
-      description: t('nav.dmOverviewSub', 'Party Monitor, Base Stats & Live DM Overrides'),
-      icon: Crown,
-      badge: 'DM Only'
-    }] : []),
-    {
-      id: 'sheet3' as TabId,
-      title: isShadowrun
-        ? t('nav.sr.matrix', 'Matrix & Nuyen')
-        : isPathfinder
-        ? t('nav.pf.gear', 'Inventory & Coins')
-        : isCthulhu
-        ? t('nav.coc.gear', 'Possessions & Cash')
-        : t('nav.gear', 'Gear & Wealth'),
-      description: isShadowrun
-        ? t('nav.sr.matrixSub', 'Nuyen Vault, Credsticks, Cyberdecks, Drones & Vehicles')
-        : isPathfinder
-        ? t('nav.pf.gearSub', 'Gear, Platinum/Gold, Bulk & Magic Items')
-        : isCthulhu
-        ? t('nav.coc.gearSub', 'Investigator Equipment, Cash, Assets & Property')
-        : t('nav.gearSub', 'Inventory, Coins, Attunement, Encumbrance'),
-      icon: Package
-    },
-    {
-      id: 'sheet4' as TabId,
-      title: isShadowrun
-        ? t('nav.sr.magic', 'Sorcery & Matrix')
-        : isPathfinder
-        ? t('nav.pf.spells', 'Spell Repertoire')
-        : isCthulhu
-        ? t('nav.coc.spells', 'Occult & Tomes')
-        : t('nav.spells', 'Spells & Casting'),
-      description: isShadowrun
-        ? t('nav.sr.magicSub', 'Spells, Adept Powers, Drain & Complex Forms')
-        : isPathfinder
-        ? t('nav.pf.spellsSub', 'Spell Slots, Focus Spells & Cantrips')
-        : isCthulhu
-        ? t('nav.coc.spellsSub', 'Tomes, Spells, Myths & Rituals')
-        : t('nav.spellsSub', 'Spell Slots, DC, Spellbook & Cantrips'),
-      icon: isShadowrun ? Zap : Wand2,
-      badge: (isSpellcaster || isShadowrun) ? 'Active' : undefined
-    },
-    {
-      id: 'sheet5' as TabId,
-      title: isShadowrun
-        ? t('nav.sr.notes', 'Runner Profile')
-        : isPathfinder
-        ? t('nav.pf.notes', 'Background & Notes')
-        : isCthulhu
-        ? t('nav.coc.notes', 'Backstory & Traumas')
-        : t('nav.notes', 'Description & Notes'),
-      description: isShadowrun
-        ? t('nav.sr.notesSub', 'Street Reputation, SINs, Backstory, Lifestyle & Notes')
-        : isPathfinder
-        ? t('nav.pf.notesSub', 'Ancestry, Background, Traits & Campaign Journal')
-        : isCthulhu
-        ? t('nav.coc.notesSub', 'Personal Description, Ideology, Phobias & Traumas')
-        : t('nav.notesSub', 'Background, Appearance, Allies & Notes'),
-      icon: ScrollText
-    }
-  ];
+  // Base tabs definitions
+  const tabStats = {
+    id: 'sheet1' as TabId,
+    title: isShadowrun
+      ? t('nav.sr.attributes', 'Attributes & Augs')
+      : isPathfinder
+      ? t('nav.pf.stats', 'Stats & Feats')
+      : isCthulhu
+      ? t('nav.coc.stats', 'Investigator Stats')
+      : workspaceRole === 'gm'
+      ? t('nav.statsNpc', 'Stats & Features')
+      : t('nav.stats', 'Stats & Features'),
+    description: isShadowrun
+      ? t('nav.sr.attributesSub', 'Attributes, Condition Tracks, Cyberware & Qualities')
+      : isPathfinder
+      ? t('nav.pf.statsSub', 'Stats, Skills, Ancestry & Class Feats')
+      : isCthulhu
+      ? t('nav.coc.statsSub', 'Characteristics, Skill Percentiles & Half/Fifth Values')
+      : t('nav.statsSub', 'Stats, Skills, Feats, Features'),
+    icon: isShadowrun ? Cpu : ShieldAlert
+  };
 
-  // Filter tabs: if no active character selected, hide character sheet tabs
+  const tabCombat = {
+    id: 'sheet2' as TabId,
+    title: isShadowrun
+      ? t('nav.sr.combat', 'Tactical Combat')
+      : isPathfinder
+      ? t('nav.pf.combat', '3-Action Combat')
+      : isCthulhu
+      ? t('nav.coc.combat', 'Combat & Sanity')
+      : workspaceRole === 'gm'
+      ? t('nav.combatEncounters', 'Encounters & Combat')
+      : t('nav.combat', 'Combat'),
+    description: isShadowrun
+      ? t('nav.sr.combatSub', 'Initiative, Firearms, Armor & Actions Cheat Sheet')
+      : isPathfinder
+      ? t('nav.pf.combatSub', 'Attacks, 3-Action Economy & Combat Tactics')
+      : isCthulhu
+      ? t('nav.coc.combatSub', 'Sanity Monitor, Firearms, Brawling & Insanity')
+      : t('nav.combatSub', 'Attacks, Actions & Tactics'),
+    icon: Crosshair
+  };
+
+  const tabDmOverview = {
+    id: 'sheetDm' as TabId,
+    title: t('nav.dmOverview', 'DM Overview'),
+    description: t('nav.dmOverviewSub', 'Party Monitor, Base Stats & Live DM Overrides'),
+    icon: Crown,
+    badge: 'DM Live'
+  };
+
+  const tabGear = {
+    id: 'sheet3' as TabId,
+    title: isShadowrun
+      ? t('nav.sr.matrix', 'Matrix & Nuyen')
+      : isPathfinder
+      ? t('nav.pf.gear', 'Inventory & Coins')
+      : isCthulhu
+      ? t('nav.coc.gear', 'Possessions & Cash')
+      : workspaceRole === 'gm'
+      ? t('nav.gearLoot', 'Loot & Gear')
+      : t('nav.gear', 'Gear & Wealth'),
+    description: isShadowrun
+      ? t('nav.sr.matrixSub', 'Nuyen Vault, Credsticks, Cyberdecks, Drones & Vehicles')
+      : isPathfinder
+      ? t('nav.pf.gearSub', 'Gear, Platinum/Gold, Bulk & Magic Items')
+      : isCthulhu
+      ? t('nav.coc.gearSub', 'Investigator Equipment, Cash, Assets & Property')
+      : t('nav.gearSub', 'Inventory, Coins, Attunement, Encumbrance'),
+    icon: Package
+  };
+
+  const tabSpells = {
+    id: 'sheet4' as TabId,
+    title: isShadowrun
+      ? t('nav.sr.magic', 'Sorcery & Matrix')
+      : isPathfinder
+      ? t('nav.pf.spells', 'Spell Repertoire')
+      : isCthulhu
+      ? t('nav.coc.spells', 'Occult & Tomes')
+      : t('nav.spells', 'Spells & Casting'),
+    description: isShadowrun
+      ? t('nav.sr.magicSub', 'Spells, Adept Powers, Drain & Complex Forms')
+      : isPathfinder
+      ? t('nav.pf.spellsSub', 'Spell Slots, Focus Spells & Cantrips')
+      : isCthulhu
+      ? t('nav.coc.spellsSub', 'Tomes, Spells, Myths & Rituals')
+      : t('nav.spellsSub', 'Spell Slots, DC, Spellbook & Cantrips'),
+    icon: isShadowrun ? Zap : Wand2,
+    badge: (isSpellcaster || isShadowrun) ? 'Active' : undefined
+  };
+
+  const tabNotes = {
+    id: 'sheet5' as TabId,
+    title: isShadowrun
+      ? t('nav.sr.notes', 'Runner Profile')
+      : isPathfinder
+      ? t('nav.pf.notes', 'Background & Notes')
+      : isCthulhu
+      ? t('nav.coc.notes', 'Backstory & Traumas')
+      : workspaceRole === 'gm'
+      ? t('nav.campaignNotes', 'Campaign Notes')
+      : t('nav.notes', 'Description & Notes'),
+    description: isShadowrun
+      ? t('nav.sr.notesSub', 'Street Reputation, SINs, Backstory, Lifestyle & Notes')
+      : isPathfinder
+      ? t('nav.pf.notesSub', 'Ancestry, Background, Traits & Campaign Journal')
+      : isCthulhu
+      ? t('nav.coc.notesSub', 'Personal Description, Ideology, Phobias & Traumas')
+      : t('nav.notesSub', 'Background, Appearance, Allies & Notes'),
+    icon: ScrollText
+  };
+
+  const tabCompendium = {
+    id: 'sheet7' as TabId,
+    title: t('nav.compendium', 'Bestiary & SRD'),
+    description: t('nav.compendiumSub', 'Monsters, Spells & Magic Items'),
+    icon: Library,
+    badge: 'SRD'
+  };
+
+  const tabGuide = {
+    id: 'sheet6' as TabId,
+    title: t('nav.guide', 'Rules & Guide'),
+    description: t('nav.guideSub', 'User Manual & Reference'),
+    icon: BookOpen
+  };
+
+  interface NavTabItem {
+    id: TabId;
+    title: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+    badge?: string;
+  }
+
+  // Determine active tabs according to workspaceRole
+  let allTabs: NavTabItem[];
+  if (workspaceRole === 'player') {
+    // Player: Optimized for character sheets, dice, spells & inventory. No DM overview tab.
+    allTabs = [tabStats, tabCombat, tabGear, tabSpells, tabNotes];
+  } else if (workspaceRole === 'gm') {
+    // GM: DM Overview is prominent and always accessible, along with Combat/Encounters, Bestiary/Compendium, and Campaign Notes
+    allTabs = [tabDmOverview, tabCombat, tabCompendium, tabNotes, tabStats, tabGear, tabSpells];
+  } else {
+    // Unified: Shows all character and campaign tabs without filtering
+    allTabs = [tabStats, tabCombat, tabDmOverview, tabGear, tabSpells, tabNotes, tabCompendium, tabGuide];
+  }
+
+  // Filter tabs: if no active character selected, in GM mode keep DM Overview and Compendium visible
   const tabs = allTabs.filter(t => {
     if (!hasActiveCharacter) {
-      const characterSheets = ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5', 'sheetDm'];
+      if (workspaceRole === 'gm' && (t.id === 'sheetDm' || t.id === 'sheet7')) {
+        return true;
+      }
+      const characterSheets = ['sheet1', 'sheet2', 'sheet3', 'sheet4', 'sheet5'];
       if (characterSheets.includes(t.id)) return false;
     }
     return true;
@@ -287,39 +345,6 @@ export const Navigation: React.FC<NavigationProps> = ({
         >
           <ChevronRight className="w-4 h-4" />
         </button>
-
-        {/* Table Mode & Workspace Quick-Switcher Pill */}
-        <div className="hidden lg:flex items-center gap-1.5 ml-2 pl-2 border-l border-stone-800/80 shrink-0">
-          <button
-            type="button"
-            onClick={toggleTableMode}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
-              isTableMode
-                ? 'bg-amber-500 border-amber-400 text-stone-950 shadow-amber-500/20'
-                : 'bg-stone-900 border-stone-800 text-amber-300 hover:bg-amber-950/60 hover:border-amber-500/40'
-            }`}
-            title="Launch Distraction-Free Table Mode HUD (Alt+T)"
-          >
-            <span>🎲 Table Mode</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setWorkspaceRole(workspaceRole === 'player' ? 'gm' : workspaceRole === 'gm' ? 'unified' : 'player')}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-sans font-bold border transition flex items-center gap-1.5 cursor-pointer shadow-sm ${
-              workspaceRole === 'player'
-                ? 'bg-amber-950/80 border-amber-500/50 text-amber-300 hover:bg-amber-900/80'
-                : workspaceRole === 'gm'
-                ? 'bg-purple-950/80 border-purple-500/50 text-purple-300 hover:bg-purple-900/80'
-                : 'bg-stone-900 border-stone-800 text-stone-300 hover:bg-stone-850'
-            }`}
-            title="Click to switch workspace role (Player vs. GM vs. Unified)"
-          >
-            {workspaceRole === 'player' && <span>🛡️ Player</span>}
-            {workspaceRole === 'gm' && <span>👑 GM</span>}
-            {workspaceRole === 'unified' && <span>⚡ Unified</span>}
-          </button>
-        </div>
       </div>
     </nav>
   );

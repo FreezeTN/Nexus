@@ -17,6 +17,10 @@ interface AudioOptionsModalProps {
   onOpenUpgradeModal?: () => void;
   onOpenAuthModal?: () => void;
   onOpenUniversalImporterStudio?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
 
 export const AudioOptionsModal: React.FC<AudioOptionsModalProps> = (props) => {

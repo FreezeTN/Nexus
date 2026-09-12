@@ -9,46 +9,54 @@ interface MonsterStudioProps {
   sourceAuthor: string;
   onSave: (item: CompendiumItem) => void;
   onClose: () => void;
+  editingItem?: CompendiumItem | null;
 }
 
 export const MonsterStudio: React.FC<MonsterStudioProps> = ({
   edition,
   sourceAuthor,
   onSave,
-  onClose
+  onClose,
+  editingItem
 }) => {
+  const md = editingItem?.monsterData as any;
+
   // Shared
-  const [name, setName] = useState('');
-  const [portraitUrl, setPortraitUrl] = useState('');
-  const [notes, setNotes] = useState('');
+  const [name, setName] = useState(editingItem?.name || '');
+  const [portraitUrl, setPortraitUrl] = useState(md?.portraitUrl || '');
+  const [notes, setNotes] = useState(() => {
+    if (md?.notes) return md.notes;
+    if (editingItem?.description && !md) return editingItem.description;
+    return '';
+  });
 
   // Fantasy & PF2e Core Stats
-  const [size, setSize] = useState('Medium');
-  const [creatureType, setCreatureType] = useState('Monstrosity');
-  const [alignment, setAlignment] = useState('Neutral Evil');
-  const [cr, setCr] = useState('3');
-  const [ac, setAc] = useState(15);
+  const [size, setSize] = useState(md?.sizeCategory || 'Medium');
+  const [creatureType, setCreatureType] = useState(md?.race || 'Monstrosity');
+  const [alignment, setAlignment] = useState(md?.alignment || 'Neutral Evil');
+  const [cr, setCr] = useState(String(md?.challengeRating || '3'));
+  const [ac, setAc] = useState(md?.armorClass ?? 15);
   const [acType, setAcType] = useState('Natural Armor');
-  const [hp, setHp] = useState(52);
-  const [hitDice, setHitDice] = useState('8d8 + 16');
-  const [speed, setSpeed] = useState('30 ft.');
+  const [hp, setHp] = useState(md?.hpMax ?? 52);
+  const [hitDice, setHitDice] = useState(md?.hitDiceTotal || '8d8 + 16');
+  const [speed, setSpeed] = useState(typeof md?.speed === 'number' ? `${md.speed} ft.` : (md?.speed || '30 ft.'));
 
   // Ability Scores
-  const [str, setStr] = useState(16);
-  const [dex, setDex] = useState(14);
-  const [con, setCon] = useState(15);
-  const [intScore, setIntScore] = useState(10);
-  const [wis, setWis] = useState(12);
-  const [cha, setCha] = useState(8);
+  const [str, setStr] = useState(md?.abilities?.STR?.score ?? 16);
+  const [dex, setDex] = useState(md?.abilities?.DEX?.score ?? 14);
+  const [con, setCon] = useState(md?.abilities?.CON?.score ?? 15);
+  const [intScore, setIntScore] = useState(md?.abilities?.INT?.score ?? 10);
+  const [wis, setWis] = useState(md?.abilities?.WIS?.score ?? 12);
+  const [cha, setCha] = useState(md?.abilities?.CHA?.score ?? 8);
 
   // 3.5e Specifics
-  const [bab, setBab] = useState(4);
-  const [fortSave, setFortSave] = useState(5);
-  const [refSave, setRefSave] = useState(4);
-  const [willSave, setWillSave] = useState(3);
-  const [touchAc, setTouchAc] = useState(12);
-  const [flatFootedAc, setFlatFootedAc] = useState(13);
-  const [spellResist, setSpellResist] = useState('');
+  const [bab, setBab] = useState(md?.baseAttackBonus ?? 4);
+  const [fortSave, setFortSave] = useState(md?.fortitudeSave ?? 5);
+  const [refSave, setRefSave] = useState(md?.reflexSave ?? 4);
+  const [willSave, setWillSave] = useState(md?.willSave ?? 3);
+  const [touchAc, setTouchAc] = useState(md?.touchArmorClass ?? 12);
+  const [flatFootedAc, setFlatFootedAc] = useState(md?.flatFootedArmorClass ?? 13);
+  const [spellResist, setSpellResist] = useState(md?.spellResistance ? String(md.spellResistance) : '');
 
   // PF2e Specifics
   const [pf2Level, setPf2Level] = useState(3);
@@ -100,9 +108,22 @@ export const MonsterStudio: React.FC<MonsterStudioProps> = ({
   const [cocSpellsText, setCocSpellsText] = useState('Dread Curse of Azathoth, Voorish Sign');
 
   // Fantasy Dynamic Action Lists
-  const [actions, setActions] = useState([
-    { id: '1', name: 'Claw Slash', attackBonus: 5, reachRange: '5 ft.', damage: '2d6 + 3', damageType: 'Slashing', notes: 'Target must succeed on a DC 13 STR save or be knocked prone.' }
-  ]);
+  const [actions, setActions] = useState(() => {
+    if (md?.attacks && Array.isArray(md.attacks) && md.attacks.length > 0) {
+      return md.attacks.map((a: any, idx: number) => ({
+        id: a.id || String(idx + 1),
+        name: a.name || 'Attack',
+        attackBonus: a.attackBonus ?? 5,
+        reachRange: a.range || '5 ft.',
+        damage: a.damage || '1d8 + 2',
+        damageType: a.damageType || 'Slashing',
+        notes: a.notes || ''
+      }));
+    }
+    return [
+      { id: '1', name: 'Claw Slash', attackBonus: 5, reachRange: '5 ft.', damage: '2d6 + 3', damageType: 'Slashing', notes: 'Target must succeed on a DC 13 STR save or be knocked prone.' }
+    ];
+  });
 
   const addAction = () => {
     setActions(prev => [...prev, {
@@ -301,11 +322,11 @@ export const MonsterStudio: React.FC<MonsterStudioProps> = ({
     }
 
     const newItem: CompendiumItem = {
-      id: `custom-monster-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: editingItem?.id || `custom-monster-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       name: name.trim(),
       category: 'monsters',
       edition,
-      source: sourceAuthor.trim() || 'Custom Homebrew',
+      source: sourceAuthor.trim() || editingItem?.source || 'Custom Homebrew',
       description: descSummary + (notes ? ` Notes: ${notes}` : ''),
       isCustom: true,
       tags: itemTags,
@@ -597,7 +618,7 @@ export const MonsterStudio: React.FC<MonsterStudioProps> = ({
               <label className="block text-xs font-mono text-stone-300 font-bold mb-1">Size</label>
               <select
                 value={size}
-                onChange={(e) => setSize(e.target.value)}
+                onChange={(e) => setSize(e.target.value as any)}
                 className="w-full px-3 py-2.5 bg-stone-900 border border-stone-700 rounded-xl text-stone-200 text-xs"
               >
                 <option value="Tiny">Tiny</option>
@@ -889,7 +910,7 @@ export const MonsterStudio: React.FC<MonsterStudioProps> = ({
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs transition shadow-lg shadow-amber-950/40 cursor-pointer"
         >
           <Save className="w-4 h-4" />
-          <span>Save Statblock to Compendium</span>
+          <span>{editingItem ? 'Update Monster Entry' : 'Save Statblock to Compendium'}</span>
         </button>
       </div>
     </form>

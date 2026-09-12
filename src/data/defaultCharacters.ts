@@ -558,11 +558,11 @@ export const SAMPLE_CHARACTERS: CharacterData[] = [
     },
 
     inventory: [
-      { id: 'inv-35-1', name: '+1 Dwarven Waraxe', quantity: 1, weight: 8, equipped: true, isMagic: true },
-      { id: 'inv-35-2', 'name': '+1 Full Plate Armor', quantity: 1, weight: 50, equipped: true, isMagic: true },
-      { id: 'inv-35-3', name: 'Heavy Steel Shield', quantity: 1, weight: 15, equipped: true },
-      { id: 'inv-35-4', name: 'Heavy Crossbow & 20 Bolts', quantity: 1, weight: 11, equipped: false },
-      { id: 'inv-35-5', name: 'Backpack & Artisan Tools', quantity: 1, weight: 12, equipped: false }
+      { id: 'inv-35-1', name: '+1 Dwarven Waraxe', quantity: 1, weight: 8, equipped: true, isMagic: true, itemType: 'Weapon', slot: 'Main Hand', weaponStats: { attackBonus: '+1', damage: '1d10+1', damageType: 'Slashing', range: '5 ft Melee', notes: 'Exotic/Martial 1H (Dwarf)' } },
+      { id: 'inv-35-2', name: '+1 Full Plate Armor', quantity: 1, weight: 50, equipped: true, isMagic: true, itemType: 'Armor', slot: 'Armor', armorType: 'Heavy', armorAc: 9, armorCheckPenalty: -5, notes: 'AC +9 (+8 armor, +1 enhancement), Max Dex +1' },
+      { id: 'inv-35-3', name: 'Heavy Steel Shield', quantity: 1, weight: 15, equipped: true, itemType: 'Shield', slot: 'Shield', armorType: 'Shield', acBonus: 2, armorCheckPenalty: -2, notes: 'Shield AC +2' },
+      { id: 'inv-35-4', name: 'Heavy Crossbow & 20 Bolts', quantity: 1, weight: 11, equipped: false, itemType: 'Weapon', slot: 'Two-Handed', weaponStats: { attackBonus: '+0', damage: '1d10', damageType: 'Piercing', range: '120/480 ft', isTwoHanded: true, notes: 'Two-Handed' } },
+      { id: 'inv-35-5', name: 'Backpack & Artisan Tools', quantity: 1, weight: 12, equipped: false, itemType: 'Misc', isContainer: true, containerType: 'backpack', notes: 'Backpack with Mason / Smith Artisan Tools' }
     ],
 
     isSpellcaster: false,

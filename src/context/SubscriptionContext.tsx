@@ -31,6 +31,7 @@ interface SubscriptionContextType {
   hasDmLivePartyHud: boolean;
   hasPriorityAi: boolean;
   hasAmbienceStreaming: boolean;
+  hasHomebrewCloudSync: boolean;
   // Upgrade Modal Triggers
   isUpgradeModalOpen: boolean;
   upgradeReason: string | null;
@@ -134,6 +135,7 @@ export const SubscriptionProvider: React.FC<SubscriptionProviderProps> = ({
     hasDmLivePartyHud: tierConfig.hasDmLivePartyHud,
     hasPriorityAi: tierConfig.hasPriorityAi,
     hasAmbienceStreaming: tierConfig.hasAmbienceStreaming,
+    hasHomebrewCloudSync: isBypassed || tierConfig.hasHomebrewCloudSync,
     isUpgradeModalOpen,
     upgradeReason,
     upgradeRequiredTier,

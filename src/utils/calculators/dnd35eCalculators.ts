@@ -16,15 +16,31 @@ export interface Dnd35eSavesBreakdown {
 
 export interface Dnd35eArmorClassBreakdown {
   totalAc: number;
-  touchAc: number;
-  flatFootedAc: number;
-  dexBonus: number;
+  baseAc: number; // Always 10
   armorBonus: number;
   shieldBonus: number;
-  naturalArmorBonus: number;
+  dexBonus: number;
+  rawDexMod: number;
+  maxDexCap: number;
   sizeModifier: number;
+  naturalArmorBonus: number;
   deflectionBonus: number;
+  miscBonus: number;
   dodgeBonus: number;
+  touchAc: number;
+  flatFootedAc: number;
+  armorName?: string;
+  shieldName?: string;
+  sources: {
+    armor: string[];
+    shield: string[];
+    dex: string[];
+    size: string[];
+    natural: string[];
+    deflection: string[];
+    misc: string[];
+  };
+  explanation: string;
 }
 
 /**
@@ -135,63 +151,317 @@ export function get35eSaves(char: CharacterData): Dnd35eSavesBreakdown {
   const baseRef = calcSave(goodRef);
   const baseWill = calcSave(goodWill);
 
+  // 3.5e Negative Levels: -1 to all saving throws per negative level
+  const negPenalty = char.negativeLevels || 0;
+
+  // 3.5e Cover: Standard Cover (+2 Reflex), Improved Cover (+4 Reflex)
+  let coverReflexBonus = 0;
+  if (char.activeCover === 'standard') {
+    coverReflexBonus = 2;
+  } else if (char.activeCover === 'improved') {
+    coverReflexBonus = 4;
+  }
+
   return {
-    fortitude: { total: baseFort + conMod, base: baseFort, abilityMod: conMod, isGood: goodFort },
-    reflex: { total: baseRef + dexMod, base: baseRef, abilityMod: dexMod, isGood: goodRef },
-    will: { total: baseWill + wisMod, base: baseWill, abilityMod: wisMod, isGood: goodWill }
+    fortitude: { total: baseFort + conMod - negPenalty, base: baseFort, abilityMod: conMod, isGood: goodFort },
+    reflex: { total: baseRef + dexMod + coverReflexBonus - negPenalty, base: baseRef, abilityMod: dexMod, isGood: goodRef },
+    will: { total: baseWill + wisMod - negPenalty, base: baseWill, abilityMod: wisMod, isGood: goodWill }
   };
 }
 
+export function get35eSizeModifier(sizeCategory?: string, race?: string): number {
+  if (sizeCategory) {
+    switch (sizeCategory.toLowerCase()) {
+      case 'fine': return 8;
+      case 'diminutive': return 4;
+      case 'tiny': return 2;
+      case 'small': return 1;
+      case 'medium': return 0;
+      case 'large': return -1;
+      case 'huge': return -2;
+      case 'gargantuan': return -4;
+      case 'colossal': return -8;
+    }
+  }
+  const r = (race || '').toLowerCase();
+  if (r.includes('halfling') || r.includes('gnome') || r.includes('goblin') || r.includes('kobold')) return 1;
+  if (r.includes('giant') || r.includes('ogre') || r.includes('troll') || r.includes('minotaur') || r.includes('centaur')) return -1;
+  return 0;
+}
+
+export function get35eArmorMaxDex(itemName?: string, armorType?: string, explicitMaxDex?: number): number {
+  if (explicitMaxDex !== undefined) return explicitMaxDex;
+  const name = (itemName || '').toLowerCase();
+  if (name.includes('full plate') || name.includes('half-plate') || name.includes('banded mail')) return 1;
+  if (name.includes('splint mail') || name.includes('splint')) return 0;
+  if (name.includes('chainmail')) return 2;
+  if (name.includes('scale mail')) return 3;
+  if (name.includes('breastplate') || name.includes('chain shirt') || name.includes('hide')) return 4;
+  if (name.includes('studded leather')) return 5;
+  if (name.includes('leather')) return 6;
+  if (name.includes('padded')) return 8;
+  if (name.includes('tower shield')) return 2;
+  if (armorType === 'Heavy') return 1;
+  if (armorType === 'Medium') return 3;
+  return 99; // unlimited for light or unarmored
+}
+
 /**
- * Calculates 3.5e Total AC, Touch AC, and Flat-Footed AC
+ * Calculates 3.5e Total AC, Touch AC, and Flat-Footed AC according to classic 3.5e rules:
+ * AC = 10 + Armor + Shield + DEX + Size + Natural Armor + Deflection + Misc
  */
 export function get35eArmorClass(char: CharacterData): Dnd35eArmorClassBreakdown {
+  const baseAc = 10;
   const abilities = getEffectiveAbilities(char);
-  const dexMod = getAbilityModifier(abilities.DEX?.score || 10);
+  const rawDexMod = getAbilityModifier(abilities.DEX?.score || 10);
+  const wisMod = getAbilityModifier(abilities.WIS?.score || 10);
 
-  // Parse inventory for armor, shields, and deflection/natural armor bonuses
+  const sources = {
+    armor: [] as string[],
+    shield: [] as string[],
+    dex: [] as string[],
+    size: [] as string[],
+    natural: [] as string[],
+    deflection: [] as string[],
+    misc: [] as string[]
+  };
+
   const inventory = char.inventory || [];
-  let armorBonus = 0;
-  let shieldBonus = 0;
-  let naturalArmorBonus = 0;
-  let deflectionBonus = 0;
-  let dodgeBonus = 0;
-  let maxDex = 99;
-
-  inventory.forEach(item => {
-    if (!item.equipped || item.stored) return;
-    const bonus = item.acBonus || item.armorAc || 0;
-    if (bonus > 0) {
-      if (item.name?.toLowerCase().includes('shield') || item.armorType === 'Shield') {
-        shieldBonus += bonus;
-      } else {
-        armorBonus += bonus;
-      }
-    }
+  const equipped = inventory.filter(i => {
+    if (!i.equipped || i.stored) return false;
+    const needsAttunement = i.requiresAttunement === true || (i.requiresAttunement !== false && (i.notes || '').toLowerCase().includes('attunement'));
+    if (needsAttunement && !i.attuned) return false;
+    return true;
   });
 
-  const cappedDex = Math.min(dexMod, maxDex);
-  const sizeModifier = 0; // Standard Medium
+  // 1. ARMOR BONUS
+  let armorBonus = 0;
+  let armorName: string | undefined;
+  let maxDexCap = char.maxDexBonusOverride !== undefined ? char.maxDexBonusOverride : 99;
 
-  // 3.5e AC Formulas:
-  // Total AC = 10 + Armor + Shield + DEX + Size + Natural Armor + Deflection + Dodge
-  // Touch AC = 10 + DEX + Size + Deflection + Dodge (No Armor, Shield, Natural Armor)
-  // Flat-Footed AC = 10 + Armor + Shield + Size + Natural Armor + Deflection (No DEX, Dodge)
+  for (const item of equipped) {
+    const isShield = item.armorType === 'Shield' || (item.name || '').toLowerCase().includes('shield');
+    if (isShield) continue;
 
-  const totalAc = 10 + armorBonus + shieldBonus + cappedDex + sizeModifier + naturalArmorBonus + deflectionBonus + dodgeBonus;
-  const touchAc = 10 + cappedDex + sizeModifier + deflectionBonus + dodgeBonus;
-  const flatFootedAc = 10 + armorBonus + shieldBonus + sizeModifier + naturalArmorBonus + deflectionBonus;
+    const isArmor = item.itemType === 'Armor' || item.armorType === 'Light' || item.armorType === 'Medium' || item.armorType === 'Heavy' || item.armorAc !== undefined || (item.name || '').toLowerCase().includes('armor') || (item.name || '').toLowerCase().includes('mail') || (item.name || '').toLowerCase().includes('plate') || (item.name || '').toLowerCase().includes('robe') || (item.name || '').toLowerCase().includes('bracers of armor');
+
+    if (isArmor) {
+      let itemBaseArmor = 0;
+      if (item.armorAc !== undefined) {
+        itemBaseArmor = item.armorAc >= 10 ? item.armorAc - 10 : item.armorAc;
+      }
+      const magicMod = item.acBonus || 0;
+      const totalItemArmor = itemBaseArmor + magicMod;
+
+      // In 3.5e armor bonuses don't stack - take highest
+      if (totalItemArmor > armorBonus) {
+        armorBonus = totalItemArmor;
+        armorName = item.name;
+        sources.armor = [`${item.name} (+${totalItemArmor})`];
+      }
+
+      const itemMaxDex = get35eArmorMaxDex(item.name, item.armorType, item.maxDexBonus);
+      if (itemMaxDex < maxDexCap) {
+        maxDexCap = itemMaxDex;
+      }
+    }
+  }
+
+  // 2. SHIELD BONUS
+  let shieldBonus = 0;
+  let shieldName: string | undefined;
+
+  for (const item of equipped) {
+    const isShield = item.armorType === 'Shield' || (item.name || '').toLowerCase().includes('shield');
+    if (isShield) {
+      let baseShield = 2; // Default Heavy Shield
+      const n = (item.name || '').toLowerCase();
+      if (n.includes('tower')) {
+        baseShield = 4;
+        if (maxDexCap > 2) maxDexCap = 2; // Tower shield restricts max DEX to +2
+      } else if (n.includes('light') || n.includes('buckler')) {
+        baseShield = 1;
+      } else if (item.armorAc !== undefined) {
+        baseShield = item.armorAc >= 10 ? item.armorAc - 10 : item.armorAc;
+      }
+
+      const magicMod = item.acBonus || 0;
+      const totalShield = baseShield + magicMod;
+
+      if (totalShield > shieldBonus) {
+        shieldBonus = totalShield;
+        shieldName = item.name;
+        sources.shield = [`${item.name} (+${totalShield})`];
+      }
+    }
+  }
+
+  // 3. DEX MODIFIER (capped by Armor/Shield Max Dex)
+  let dexBonus = rawDexMod;
+  if (rawDexMod > 0) {
+    dexBonus = Math.min(rawDexMod, maxDexCap);
+    if (maxDexCap < 99) {
+      sources.dex.push(`DEX +${rawDexMod} (Capped at +${maxDexCap})`);
+    } else {
+      sources.dex.push(`DEX +${rawDexMod}`);
+    }
+  } else if (rawDexMod < 0) {
+    sources.dex.push(`DEX ${rawDexMod}`);
+  } else {
+    sources.dex.push(`DEX +0`);
+  }
+
+  // 4. SIZE MODIFIER
+  const sizeModifier = get35eSizeModifier(char.sizeCategory, char.race) + (char.sizeAcBonus || 0);
+  if (sizeModifier !== 0) {
+    sources.size.push(`${char.sizeCategory || char.race || 'Size'} (${sizeModifier > 0 ? '+' + sizeModifier : sizeModifier})`);
+  }
+
+  // 5. NATURAL ARMOR
+  let naturalArmorBonus = char.naturalArmorBonus || 0;
+  if (char.naturalArmorBonus) {
+    sources.natural.push(`Base Natural Armor (+${char.naturalArmorBonus})`);
+  }
+
+  // Wild Shape / Polymorph Natural Armor
+  if (char.wildShapeActive && char.wildShapeForm?.naturalArmorBonus) {
+    naturalArmorBonus += char.wildShapeForm.naturalArmorBonus;
+    sources.natural.push(`Wild Shape (${char.wildShapeForm.name}) (+${char.wildShapeForm.naturalArmorBonus} Nat Armor)`);
+  }
+
+  // Racial Natural Armor check
+  const rLower = (char.race || '').toLowerCase();
+  if (rLower.includes('lizardfolk')) {
+    naturalArmorBonus = Math.max(naturalArmorBonus, 5);
+    sources.natural.push('Lizardfolk Natural Armor (+5)');
+  } else if (rLower.includes('troglodyte')) {
+    naturalArmorBonus = Math.max(naturalArmorBonus, 6);
+    sources.natural.push('Troglodyte Natural Armor (+6)');
+  } else if (rLower.includes('gnoll') || rLower.includes('bugbear') || rLower.includes('kobold')) {
+    naturalArmorBonus = Math.max(naturalArmorBonus, 1);
+    sources.natural.push(`${char.race} Natural Armor (+1)`);
+  }
+
+  for (const item of equipped) {
+    const notesLower = (item.notes || '').toLowerCase();
+    const isNatItem = item.naturalArmorBonus !== undefined || notesLower.includes('natural armor');
+    if (isNatItem) {
+      const bonus = item.naturalArmorBonus || item.acBonus || 1;
+      naturalArmorBonus += bonus;
+      sources.natural.push(`${item.name} (+${bonus} Nat Armor)`);
+    }
+  }
+
+  // 6. DEFLECTION MODIFIER
+  let deflectionBonus = char.deflectionBonus || 0;
+  if (char.deflectionBonus) {
+    sources.deflection.push(`Base Deflection (+${char.deflectionBonus})`);
+  }
+
+  for (const item of equipped) {
+    const n = (item.name || '').toLowerCase();
+    const notesLower = (item.notes || '').toLowerCase();
+    const isDeflection = item.deflectionBonus !== undefined || n.includes('ring of protection') || notesLower.includes('deflection');
+    if (isDeflection) {
+      const bonus = item.deflectionBonus || item.acBonus || 1;
+      // In 3.5e deflection bonuses don't stack - take highest
+      if (bonus > deflectionBonus) {
+        deflectionBonus = bonus;
+        sources.deflection = [`${item.name} (+${bonus} Deflection)`];
+      }
+    }
+  }
+
+  // 7. MISC & DODGE MODIFIERS
+  let dodgeBonus = char.dodgeBonus || 0;
+  let miscBonus = char.miscAcBonus || 0;
+
+  // 3.5e Tactical Cover: Standard/Soft Cover (+4 AC), Improved Cover (+8 AC)
+  if (char.activeCover === 'standard' || char.activeCover === 'soft') {
+    miscBonus += 4;
+    sources.misc.push(`${char.activeCover === 'soft' ? 'Soft' : 'Standard'} Cover (+4 AC)`);
+  } else if (char.activeCover === 'improved') {
+    miscBonus += 8;
+    sources.misc.push('Improved Cover (+8 AC)');
+  }
+
+  if (char.dodgeBonus) {
+    sources.misc.push(`Dodge Bonus (+${char.dodgeBonus})`);
+  }
+  if (char.miscAcBonus) {
+    sources.misc.push(`Misc AC Bonus (+${char.miscAcBonus})`);
+  }
+
+  // Monk AC Bonus in 3.5e: Wis mod + 1 per 5 monk levels if unarmored and unshielded
+  const clsLower = (char.characterClass || '').toLowerCase();
+  if (clsLower.includes('monk') && armorBonus === 0 && shieldBonus === 0) {
+    const monkBonus = Math.max(0, wisMod) + Math.floor((char.level || 1) / 5);
+    if (monkBonus > 0) {
+      miscBonus += monkBonus;
+      sources.misc.push(`Monk AC Bonus (+${monkBonus} WIS/Lvl)`);
+    }
+  }
+
+  // Equipped misc accessory bonuses
+  for (const item of equipped) {
+    const isShield = item.armorType === 'Shield' || (item.name || '').toLowerCase().includes('shield');
+    const isArmor = item.itemType === 'Armor' || item.armorType === 'Light' || item.armorType === 'Medium' || item.armorType === 'Heavy';
+    const isDefl = item.deflectionBonus !== undefined || (item.name || '').toLowerCase().includes('ring of protection');
+    const isNat = item.naturalArmorBonus !== undefined || (item.notes || '').toLowerCase().includes('natural armor');
+
+    if (!isShield && !isArmor && !isDefl && !isNat) {
+      if (item.dodgeBonus) {
+        dodgeBonus += item.dodgeBonus;
+        sources.misc.push(`${item.name} (+${item.dodgeBonus} Dodge)`);
+      } else if (item.acBonus) {
+        miscBonus += item.acBonus;
+        sources.misc.push(`${item.name} (+${item.acBonus})`);
+      }
+    }
+  }
+
+  const totalMisc = miscBonus + dodgeBonus;
+
+  // 8. TOTAL, TOUCH, AND FLAT-FOOTED AC
+  // AC = 10 + Armor + Shield + DEX + Size + Natural Armor + Deflection + Misc
+  const totalAc = baseAc + armorBonus + shieldBonus + dexBonus + sizeModifier + naturalArmorBonus + deflectionBonus + totalMisc;
+
+  // Touch AC = 10 + DEX + Size + Deflection + Dodge + Misc (No Armor, Shield, Natural Armor)
+  const touchAc = baseAc + dexBonus + sizeModifier + deflectionBonus + dodgeBonus + miscBonus + (char.touchAcOverride || 0);
+
+  // Flat-Footed AC = 10 + Armor + Shield + (DEX < 0 ? DEX : 0) + Size + Natural Armor + Deflection + Misc (No DEX bonus, No Dodge)
+  const flatFootedDex = dexBonus < 0 ? dexBonus : 0;
+  const flatFootedAc = baseAc + armorBonus + shieldBonus + flatFootedDex + sizeModifier + naturalArmorBonus + deflectionBonus + miscBonus + (char.flatFootedAcOverride || 0);
+
+  const explanationParts = [
+    'Base 10',
+    armorBonus ? `Armor +${armorBonus}` : null,
+    shieldBonus ? `Shield +${shieldBonus}` : null,
+    `DEX ${dexBonus >= 0 ? '+' + dexBonus : dexBonus}`,
+    sizeModifier ? `Size ${sizeModifier > 0 ? '+' + sizeModifier : sizeModifier}` : null,
+    naturalArmorBonus ? `Natural +${naturalArmorBonus}` : null,
+    deflectionBonus ? `Deflection +${deflectionBonus}` : null,
+    totalMisc ? `Misc +${totalMisc}` : null
+  ].filter(Boolean) as string[];
 
   return {
     totalAc,
-    touchAc,
-    flatFootedAc,
-    dexBonus: cappedDex,
+    baseAc,
     armorBonus,
     shieldBonus,
-    naturalArmorBonus,
+    dexBonus,
+    rawDexMod,
+    maxDexCap,
     sizeModifier,
+    naturalArmorBonus,
     deflectionBonus,
-    dodgeBonus
+    miscBonus: totalMisc,
+    dodgeBonus,
+    touchAc,
+    flatFootedAc,
+    armorName,
+    shieldName,
+    sources,
+    explanation: explanationParts.join(' + ')
   };
 }

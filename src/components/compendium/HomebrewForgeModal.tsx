@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { CompendiumItem, saveCustomCompendiumEntry } from '../../data/compendiumData';
 import { RuleEdition, CharacterData } from '../../types';
 import { SupportedEdition, SYSTEM_DISPLAY_NAMES } from './forge/ForgeTypes';
+import { useSubscription } from '../../context/SubscriptionContext';
 import { SpellStudio } from './forge/SpellStudio';
 import { MonsterStudio } from './forge/MonsterStudio';
 import { FeatStudio } from './forge/FeatStudio';
@@ -16,7 +17,10 @@ import {
   Check,
   FileJson,
   Swords,
-  Users
+  Users,
+  Cloud,
+  Database,
+  Edit3
 } from 'lucide-react';
 
 interface HomebrewForgeModalProps {
@@ -28,6 +32,9 @@ interface HomebrewForgeModalProps {
   activeCharacter?: CharacterData | null;
   onUpdateCharacter?: (updated: CharacterData) => void;
   onAddItemToInventory?: (item: any, targetId?: string) => void;
+  editingItem?: CompendiumItem | null;
+  correspondingEntitiesCount?: number;
+  onSaveEditedItem?: (item: CompendiumItem, syncEntities: boolean) => void;
 }
 
 export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
@@ -38,17 +45,34 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
   onImportCustomItems,
   activeCharacter,
   onUpdateCharacter,
-  onAddItemToInventory
+  onAddItemToInventory,
+  editingItem,
+  correspondingEntitiesCount = 0,
+  onSaveEditedItem
 }) => {
+  const { currentUser, tier, hasHomebrewCloudSync, openUpgradeModal } = useSubscription();
+
   const [systemEdition, setSystemEdition] = useState<SupportedEdition>(() => {
+    if (editingItem?.edition && ['5e', '3.5e', 'pathfinder', 'shadowrun', 'cthulhu'].includes(editingItem.edition)) {
+      return editingItem.edition as SupportedEdition;
+    }
     if (['5e', '3.5e', 'pathfinder', 'shadowrun', 'cthulhu'].includes(initialSystem)) {
       return initialSystem as SupportedEdition;
     }
     return '5e';
   });
 
-  const [activeTab, setActiveTab] = useState<'classes' | 'races' | 'spells' | 'monsters' | 'feats' | 'items' | 'packs'>('classes');
-  const [sourceAuthor, setSourceAuthor] = useState('Custom DM');
+  const [activeTab, setActiveTab] = useState<'classes' | 'races' | 'spells' | 'monsters' | 'feats' | 'items' | 'packs'>(() => {
+    if (editingItem) {
+      if (editingItem.category === 'features') return 'feats';
+      if (['classes', 'races', 'spells', 'monsters', 'feats', 'items'].includes(editingItem.category)) {
+        return editingItem.category as any;
+      }
+    }
+    return 'classes';
+  });
+  const [sourceAuthor, setSourceAuthor] = useState(editingItem?.source || 'Custom DM');
+  const [syncEntities, setSyncEntities] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
@@ -71,10 +95,24 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleSavedItem = (newItem: CompendiumItem) => {
-    saveCustomCompendiumEntry(newItem);
-    onSaved(newItem);
-    showToast(`✨ Successfully forged and indexed "${newItem.name}"!`);
+  const handleSavedItem = (savedItem: CompendiumItem) => {
+    saveCustomCompendiumEntry(savedItem, {
+      userId: currentUser?.uid,
+      userTier: tier,
+      userProfile: currentUser
+    });
+    if (editingItem && onSaveEditedItem) {
+      onSaveEditedItem(savedItem, syncEntities);
+    } else {
+      onSaved(savedItem);
+    }
+    showToast(
+      editingItem
+        ? `✨ Updated "${savedItem.name}" in compendium${syncEntities && correspondingEntitiesCount > 0 ? ` and synchronized ${correspondingEntitiesCount} entity/entities!` : '!'}`
+        : (hasHomebrewCloudSync
+            ? `✨ Forged "${savedItem.name}" & synced to Cloud Database!`
+            : `✨ Forged "${savedItem.name}" & saved to local cache!`)
+    );
   };
 
   // Export Custom Compendium Pack
@@ -117,7 +155,11 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
         }
         if (itemsToImport.length > 0) {
           itemsToImport.forEach(item => {
-            saveCustomCompendiumEntry(item);
+            saveCustomCompendiumEntry(item, {
+              userId: currentUser?.uid,
+              userTier: tier,
+              userProfile: currentUser
+            });
           });
           if (onImportCustomItems) {
             onImportCustomItems(itemsToImport);
@@ -149,17 +191,24 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
     packs: '📦 Import & Export'
   };
 
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) {
+      if (window.confirm('Are you sure you want to close the Homebrew Forge? Any active draft in progress is safely preserved in local storage.')) {
+        onClose();
+      }
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-fade-in"
       id="homebrew-forge-modal"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          onClose();
-        }
-      }}
+      onClick={handleBackdropClick}
     >
-      <div className="bg-stone-950 border-2 border-amber-500/50 rounded-3xl max-w-5xl w-full shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]">
+      <div
+        className="bg-stone-950 border-2 border-amber-500/50 rounded-3xl max-w-5xl w-full shadow-2xl overflow-hidden my-auto flex flex-col max-h-[92vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Header Bar */}
         <div className="p-5 bg-linear-to-r from-stone-950 via-amber-950/40 to-stone-950 border-b border-stone-800 flex items-center justify-between shrink-0 flex-wrap gap-3">
@@ -175,6 +224,25 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
                 <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded-full bg-amber-500 text-stone-950 shadow">
                   TRPG Multi-System
                 </span>
+                <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-950/80 border border-emerald-500/50 text-emerald-300 shadow hidden md:inline-flex items-center gap-1">
+                  🛡️ Draft Persistence Active
+                </span>
+                {hasHomebrewCloudSync ? (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                    <Cloud className="w-2.5 h-2.5 text-amber-400" />
+                    <span>Cloud Sync Active</span>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openUpgradeModal('Upgrade to Hero or Guild Master tier to enable automatic Cloud Database Sync for your custom homebrew items, spells, and monsters!', 'hero')}
+                    className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full bg-stone-900 border border-stone-800 hover:border-amber-500/40 text-stone-400 hover:text-amber-300 transition cursor-pointer"
+                    title="Homebrew is saved in local browser cache. Click to unlock cloud sync across devices."
+                  >
+                    <Database className="w-2.5 h-2.5 text-stone-400" />
+                    <span>Local Cache Mode</span>
+                  </button>
+                )}
               </div>
               <p className="text-xs text-stone-400 font-sans mt-0.5">
                 Design custom entities tailored to <span className="text-amber-300 font-bold">{SYSTEM_DISPLAY_NAMES[systemEdition]}</span> with 1-click compendium indexing.
@@ -302,8 +370,8 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
           </button>
         </div>
 
-        {/* Source Author Banner */}
-        <div className="px-6 py-2 bg-stone-900/40 border-b border-stone-800/60 flex items-center justify-between text-xs font-mono text-stone-400">
+        {/* Source Author Banner & Edit Status */}
+        <div className="px-6 py-2 bg-stone-900/40 border-b border-stone-800/60 flex items-center justify-between text-xs font-mono text-stone-400 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <span>Author Attribution:</span>
             <input
@@ -314,10 +382,47 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               placeholder="e.g. Campaign Master"
             />
           </div>
-          <div className="text-[11px] text-amber-400/80 hidden sm:block">
-            Target System: <strong className="text-amber-300">{SYSTEM_DISPLAY_NAMES[systemEdition]}</strong>
+          <div className="flex items-center gap-3">
+            {editingItem && (
+              <span className="text-[11px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
+                <Edit3 className="w-3 h-3" />
+                Editing Mode
+              </span>
+            )}
+            <div className="text-[11px] text-amber-400/80 hidden sm:block">
+              Target System: <strong className="text-amber-300">{SYSTEM_DISPLAY_NAMES[systemEdition]}</strong>
+            </div>
           </div>
         </div>
+
+        {/* Editing & Entity Sync Notification Bar */}
+        {editingItem && (
+          <div className="px-6 py-2.5 bg-amber-950/20 border-b border-amber-500/30 flex items-center justify-between flex-wrap gap-2 text-xs font-mono text-amber-300">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-stone-200">Updating Entry:</span>
+              <span className="text-amber-400 font-bold">{editingItem.name}</span>
+              <span className="text-stone-400 text-[10px] uppercase">({editingItem.category})</span>
+            </div>
+
+            {correspondingEntitiesCount > 0 ? (
+              <label className="flex items-center gap-2 cursor-pointer bg-stone-900/90 border border-amber-500/40 hover:border-amber-400 px-3 py-1 rounded-xl text-[11px] text-stone-200 shadow transition">
+                <input
+                  type="checkbox"
+                  checked={syncEntities}
+                  onChange={(e) => setSyncEntities(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-amber-500 w-3.5 h-3.5 cursor-pointer"
+                />
+                <span>
+                  Synchronize with <strong className="text-amber-300">{correspondingEntitiesCount}</strong> linked campaign entity/entities
+                </span>
+              </label>
+            ) : (
+              <span className="text-[11px] text-stone-400">
+                Compendium entry will be updated in cache and search indices
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Modal Body / Active Studio */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
@@ -335,6 +440,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               sourceAuthor={sourceAuthor}
               onSave={handleSavedItem}
               onClose={onClose}
+              editingItem={editingItem}
             />
           )}
 
@@ -345,6 +451,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               sourceAuthor={sourceAuthor}
               onSave={handleSavedItem}
               onClose={onClose}
+              editingItem={editingItem}
             />
           )}
 
@@ -357,6 +464,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               onClose={onClose}
               activeCharacter={activeCharacter}
               onUpdateCharacter={onUpdateCharacter}
+              editingItem={editingItem}
             />
           )}
 
@@ -367,6 +475,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               sourceAuthor={sourceAuthor}
               onSave={handleSavedItem}
               onClose={onClose}
+              editingItem={editingItem}
             />
           )}
 
@@ -377,6 +486,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               sourceAuthor={sourceAuthor}
               onSave={handleSavedItem}
               onClose={onClose}
+              editingItem={editingItem}
             />
           )}
 
@@ -390,6 +500,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
               activeCharacter={activeCharacter}
               onUpdateCharacter={onUpdateCharacter}
               onAddItemToInventory={onAddItemToInventory}
+              editingItem={editingItem}
             />
           )}
 
