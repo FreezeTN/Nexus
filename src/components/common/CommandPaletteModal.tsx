@@ -27,7 +27,8 @@ import {
   Flag,
   ShieldCheck,
   History,
-  RotateCcw
+  RotateCcw,
+  LayoutTemplate
 } from 'lucide-react';
 import { CharacterData } from '../../types';
 import { systemRegistry } from '../../systems';
@@ -96,7 +97,7 @@ export function CommandPaletteModal({
   onRollDice
 }: CommandPaletteModalProps) {
   const { t } = useLanguage();
-  const { isTableMode, toggleTableMode } = useUiMode();
+  const { isTableMode, toggleTableMode, startTour } = useUiMode();
   const [query, setQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -190,7 +191,7 @@ export function CommandPaletteModal({
         title: isTableMode ? 'Exit Table Mode (Return to Full Workspace)' : 'Launch Table Mode / Focused Play HUD (Alt+T)',
         category: 'Actions',
         description: 'Distraction-free tabletop play HUD with vital HP controls, attack rolls, spell slots & live scratchpad',
-        icon: <Dices className="w-4 h-4 text-amber-400" />,
+        icon: <LayoutTemplate className="w-4 h-4 text-amber-400" />,
         action: () => {
           onClose();
           toggleTableMode();
@@ -392,6 +393,17 @@ export function CommandPaletteModal({
         action: () => {
           onClose();
           if (onOpenDeveloperSdk) onOpenDeveloperSdk();
+        }
+      },
+      {
+        id: 'action-guided-tour',
+        title: 'Interactive Guided Tour & Workspace Setup',
+        category: 'Actions',
+        description: 'Personalize roles, atmospheric theme, audio, HUD docks, and review tabletop workflow',
+        icon: <Sparkles className="w-4 h-4 text-amber-400" />,
+        action: () => {
+          onClose();
+          startTour();
         }
       },
       {

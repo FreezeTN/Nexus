@@ -15,6 +15,7 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
   onUpdateCharacter
 }) => {
   const { t } = useLanguage();
+  const [warning, setWarning] = React.useState<string | null>(null);
   
   // Use the advanced 5e attunement rules calculator
   const attunementBreakdown = getMaxAttunementSlots(character);
@@ -45,10 +46,12 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
 
     // Prevent attuning beyond max slots
     if (nextAttunedState && slotsUsed >= maxSlots) {
-      alert(`Attunement limit reached (${slotsUsed}/${maxSlots} slots occupied). You must unattune an existing item before attuning a new one!`);
+      setWarning(`Attunement limit reached (${slotsUsed}/${maxSlots} slots occupied). You must unattune an existing item before attuning "${targetItem.name}"!`);
+      setTimeout(() => setWarning(null), 5000);
       return;
     }
 
+    setWarning(null);
     const updatedInventory = inventory.map(item => {
       if (item.id === itemId) {
         return {
@@ -96,6 +99,19 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
             <span className="font-mono text-purple-300 bg-purple-900/60 px-2 py-0.5 rounded border border-purple-700/50">
               {maxSlots} Max Attunement Slots
             </span>
+          </div>
+        )}
+
+        {warning && (
+          <div className="bg-rose-950/80 border border-rose-600/70 text-rose-200 px-3 py-2 rounded-xl flex items-center gap-2 text-xs animate-pulse">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            <span className="flex-1 font-medium">{warning}</span>
+            <button
+              onClick={() => setWarning(null)}
+              className="text-rose-400 hover:text-rose-200 font-bold ml-2 text-xs"
+            >
+              ✕
+            </button>
           </div>
         )}
 

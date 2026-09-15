@@ -921,6 +921,46 @@ export const OFFICIAL_35E_PRESTIGE_CLASSES: PrestigeClassPrerequisite[] = [
       ],
       requiredFeats: ['Combat Reflexes', 'Dodge', 'Mobility']
     }
+  },
+  {
+    name: 'Dwarven Defender',
+    source: 'DMG p. 186',
+    requirements: {
+      minBab: 7,
+      requiredFeats: ['Dodge', 'Endurance', 'Toughness'],
+      special: 'Race: Dwarf. Alignment: Any Lawful'
+    }
+  },
+  {
+    name: 'Archmage',
+    source: 'DMG p. 178',
+    requirements: {
+      requiredSkills: [
+        { skillName: 'Knowledge (Arcana)', minRanks: 15 },
+        { skillName: 'Spellcraft', minRanks: 15 }
+      ],
+      requiredFeats: ['Skill Focus', 'Spell Focus'],
+      requiredSpellsOrCasterLevel: 'Ability to cast 7th-level arcane spells and knowledge of spells from five schools'
+    }
+  },
+  {
+    name: 'Thaumaturgist',
+    source: 'DMG p. 196',
+    requirements: {
+      requiredFeats: ['Augment Summoning'],
+      requiredSpellsOrCasterLevel: 'Ability to cast Lesser Planar Ally'
+    }
+  },
+  {
+    name: 'Hierophant',
+    source: 'DMG p. 188',
+    requirements: {
+      requiredSkills: [
+        { skillName: 'Knowledge (Religion)', minRanks: 15 }
+      ],
+      requiredFeats: ['Any Metamagic feat'],
+      requiredSpellsOrCasterLevel: 'Ability to cast 7th-level divine spells'
+    }
   }
 ];
 
@@ -1162,5 +1202,299 @@ export function validate35eActionAvailability(
       }
       return { allowed: true, reason: "5-foot step available (no AoO provoked)." };
   }
+}
+
+// ============================================================================
+// 12. D&D 3.5e CLASS ALIGNMENT RESTRICTION VALIDATOR (RAW PHB)
+// ============================================================================
+
+export interface ClassAlignmentValidation {
+  isValid: boolean;
+  requiredDesc: string;
+  warningMessage?: string;
+  allowedAlignments: string[];
+}
+
+/**
+ * Validates 3.5e base class alignment restrictions per official Player's Handbook rules.
+ */
+export function validate35eClassAlignment(
+  characterClass: string,
+  alignment: string
+): ClassAlignmentValidation {
+  const cls = (characterClass || '').trim().toLowerCase();
+  const align = (alignment || '').trim().toLowerCase();
+
+  if (!cls || !align) {
+    return { isValid: true, requiredDesc: 'Any', allowedAlignments: [] };
+  }
+
+  // Paladin: Lawful Good only (PHB p. 44)
+  if (cls.includes('paladin')) {
+    const isLG = align === 'lawful good';
+    return {
+      isValid: isLG,
+      requiredDesc: 'Lawful Good',
+      allowedAlignments: ['Lawful Good'],
+      warningMessage: isLG
+        ? undefined
+        : '3.5e RAW (PHB p. 44): Paladins must be Lawful Good. Straying from Lawful Good causes the loss of all divine spells, Smite Evil, Divine Grace, and paladin abilities until atonement.'
+    };
+  }
+
+  // Monk: Any Lawful (PHB p. 40)
+  if (cls.includes('monk')) {
+    const isLawful = align.includes('lawful');
+    return {
+      isValid: isLawful,
+      requiredDesc: 'Any Lawful (LG, LN, LE)',
+      allowedAlignments: ['Lawful Good', 'Lawful Neutral', 'Lawful Evil'],
+      warningMessage: isLawful
+        ? undefined
+        : '3.5e RAW (PHB p. 40): Monks must maintain a disciplined Lawful alignment. A monk who ceases to be lawful cannot advance further in monk levels.'
+    };
+  }
+
+  // Barbarian: Any Non-Lawful (PHB p. 25)
+  if (cls.includes('barbarian')) {
+    const isLawful = align.includes('lawful');
+    return {
+      isValid: !isLawful,
+      requiredDesc: 'Any Non-Lawful',
+      allowedAlignments: ['Neutral Good', 'Chaotic Good', 'True Neutral', 'Chaotic Neutral', 'Neutral Evil', 'Chaotic Evil', 'Unaligned'],
+      warningMessage: !isLawful
+        ? undefined
+        : '3.5e RAW (PHB p. 25): Barbarians must be Non-Lawful. A barbarian who becomes Lawful loses the ability to Rage and cannot gain new barbarian levels.'
+    };
+  }
+
+  // Bard: Any Non-Lawful (PHB p. 29)
+  if (cls.includes('bard')) {
+    const isLawful = align.includes('lawful');
+    return {
+      isValid: !isLawful,
+      requiredDesc: 'Any Non-Lawful',
+      allowedAlignments: ['Neutral Good', 'Chaotic Good', 'True Neutral', 'Chaotic Neutral', 'Neutral Evil', 'Chaotic Evil', 'Unaligned'],
+      warningMessage: !isLawful
+        ? undefined
+        : '3.5e RAW (PHB p. 29): Bards must be Non-Lawful. A bard who becomes Lawful cannot gain further levels as a bard, though existing abilities are retained.'
+    };
+  }
+
+  // Druid: Partially Neutral (PHB p. 35 - must contain Neutral component)
+  if (cls.includes('druid')) {
+    const isNeutral = align.includes('neutral') || align === 'true neutral' || align === 'unaligned';
+    return {
+      isValid: isNeutral,
+      requiredDesc: 'Any Neutral (NG, LN, TN, CN, NE)',
+      allowedAlignments: ['Neutral Good', 'Lawful Neutral', 'True Neutral', 'Chaotic Neutral', 'Neutral Evil'],
+      warningMessage: isNeutral
+        ? undefined
+        : '3.5e RAW (PHB p. 35): Druids must maintain at least one neutral alignment component (NG, LN, TN, CN, NE) to preserve natural balance. Straying from neutrality strips all spells and Wild Shape.'
+    };
+  }
+
+  return { isValid: true, requiredDesc: 'Any', allowedAlignments: [] };
+}
+
+// ============================================================================
+// 13. D&D 3.5e RACIAL FAVORED CLASSES & MULTICLASS XP PENALTIES (PHB p. 60)
+// ============================================================================
+
+export const RACIAL_FAVORED_CLASSES_35E: Record<string, string> = {
+  'dwarf': 'Fighter',
+  'elf': 'Wizard',
+  'gnome': 'Bard',
+  'half-elf': 'Any (Highest Level Class)',
+  'half-orc': 'Barbarian',
+  'halfling': 'Rogue',
+  'human': 'Any (Highest Level Class)'
+};
+
+export interface MulticlassXpPenaltyResult {
+  hasPenalty: boolean;
+  penaltyPercent: number;
+  favoredClass: string;
+  isPrestigeClassImmune: boolean;
+  explanation: string;
+}
+
+/**
+ * Calculates official 3.5e Multiclass XP Penalties per Player's Handbook p. 60.
+ * A -20% penalty applies to XP gained for each non-favored class that differs from the highest class by more than 1 level.
+ * Prestige classes are immune to multiclass XP penalties (DMG p. 176).
+ */
+export function calculate35eMulticlassXpPenalty(char: CharacterData): MulticlassXpPenaltyResult {
+  if (char.edition !== '3.5e' || !char.optionalRules?.useMulticlassing || !char.optionalRules?.secondaryClass) {
+    return {
+      hasPenalty: false,
+      penaltyPercent: 0,
+      favoredClass: 'None',
+      isPrestigeClassImmune: false,
+      explanation: 'Single-class or non-3.5e character.'
+    };
+  }
+
+  const raceLower = (char.race || '').toLowerCase();
+  let favored = 'Any (Highest Level Class)';
+
+  for (const [r, fc] of Object.entries(RACIAL_FAVORED_CLASSES_35E)) {
+    if (raceLower.includes(r)) {
+      favored = fc;
+      break;
+    }
+  }
+
+  const primaryClass = char.characterClass || 'Fighter';
+  const secondaryClass = char.optionalRules.secondaryClass;
+  const secondaryLevel = char.optionalRules.secondaryLevel || 1;
+  const primaryLevel = Math.max(1, char.level - secondaryLevel);
+
+  // Check if secondary class is a prestige class (prestige classes are immune to XP penalties per DMG p. 176)
+  const isSecondaryPrestige = OFFICIAL_35E_PRESTIGE_CLASSES.some(
+    pc => pc.name.toLowerCase() === secondaryClass.toLowerCase()
+  );
+
+  if (isSecondaryPrestige) {
+    return {
+      hasPenalty: false,
+      penaltyPercent: 0,
+      favoredClass: favored,
+      isPrestigeClassImmune: true,
+      explanation: `${secondaryClass} is a Prestige Class. Per DMG p. 176, prestige classes never incur multiclass XP penalties.`
+    };
+  }
+
+  // If human or half-elf, favored class is the highest-level class
+  let effectiveFavored = favored;
+  if (favored.includes('Any')) {
+    effectiveFavored = primaryLevel >= secondaryLevel ? primaryClass : secondaryClass;
+  }
+
+  const primaryIsFavored = primaryClass.toLowerCase().includes(effectiveFavored.toLowerCase()) || effectiveFavored.toLowerCase().includes(primaryClass.toLowerCase());
+  const secondaryIsFavored = secondaryClass.toLowerCase().includes(effectiveFavored.toLowerCase()) || effectiveFavored.toLowerCase().includes(secondaryClass.toLowerCase());
+
+  // Compare levels between non-favored classes
+  const levelDiff = Math.abs(primaryLevel - secondaryLevel);
+
+  if (!primaryIsFavored && !secondaryIsFavored && levelDiff > 1) {
+    return {
+      hasPenalty: true,
+      penaltyPercent: 20,
+      favoredClass: effectiveFavored,
+      isPrestigeClassImmune: false,
+      explanation: `3.5e RAW (PHB p. 60): Classes differ by ${levelDiff} levels and neither is your favored class (${effectiveFavored}). You suffer a -20% XP penalty on all earned experience.`
+    };
+  }
+
+  if (levelDiff <= 1) {
+    return {
+      hasPenalty: false,
+      penaltyPercent: 0,
+      favoredClass: effectiveFavored,
+      isPrestigeClassImmune: false,
+      explanation: `Classes are within 1 level of each other (${primaryLevel} / ${secondaryLevel}). No XP penalty applies.`
+    };
+  }
+
+  return {
+    hasPenalty: false,
+    penaltyPercent: 0,
+    favoredClass: effectiveFavored,
+    isPrestigeClassImmune: false,
+    explanation: `One of your classes is your favored class (${effectiveFavored}), which is exempt from XP penalties.`
+  };
+}
+
+// ============================================================================
+// 14. D&D 3.5e INAPPROPRIATELY SIZED WEAPON PENALTIES (PHB p. 113)
+// ============================================================================
+
+export const SIZE_CATEGORY_ORDER = [
+  'Fine',
+  'Diminutive',
+  'Tiny',
+  'Small',
+  'Medium',
+  'Large',
+  'Huge',
+  'Gargantuan',
+  'Colossal'
+];
+
+const SIZE_ORDER_35E: Record<string, number> = {
+  'fine': 0,
+  'diminutive': 1,
+  'tiny': 2,
+  'small': 3,
+  'medium': 4,
+  'large': 5,
+  'huge': 6,
+  'gargantuan': 7,
+  'colossal': 8
+};
+
+export interface WeaponSizePenaltyResult {
+  penalty: number;
+  attackPenalty: number;
+  stepsDiff: number;
+  stepsDifference: number;
+  handsRequiredShift: string;
+  isUsable: boolean;
+  explanation: string;
+}
+
+/**
+ * Calculates attack penalty and handedness shift when wielding an inappropriately sized weapon in 3.5e (PHB p. 113).
+ */
+export function calculate35eWeaponSizePenalty(
+  creatureSize: string = 'Medium',
+  weaponSize: string = 'Medium'
+): WeaponSizePenaltyResult {
+  const cRank = SIZE_ORDER_35E[creatureSize.toLowerCase()] ?? 4;
+  const wRank = SIZE_ORDER_35E[weaponSize.toLowerCase()] ?? 4;
+  const diff = wRank - cRank; // positive = weapon is larger than creature
+
+  if (diff === 0) {
+    return {
+      penalty: 0,
+      attackPenalty: 0,
+      stepsDiff: 0,
+      stepsDifference: 0,
+      handsRequiredShift: 'Normal for weapon',
+      isUsable: true,
+      explanation: 'Weapon matches creature size category.'
+    };
+  }
+
+  const steps = Math.abs(diff);
+  const penalty = -2 * steps;
+
+  // More than 1 step difference in size typically renders the weapon too large to wield or too small to use effectively
+  if (steps > 1) {
+    return {
+      penalty,
+      attackPenalty: penalty,
+      stepsDiff: steps,
+      stepsDifference: steps,
+      handsRequiredShift: diff > 0 ? 'Too large to wield' : 'Too small to wield effectively',
+      isUsable: false,
+      explanation: `Weapon is ${steps} size categories ${diff > 0 ? 'larger' : 'smaller'} than wielder. Impracticable to wield in standard combat.`
+    };
+  }
+
+  const shift = diff > 0
+    ? 'Handedness increases by 1 step (Light -> One-Handed, One-Handed -> Two-Handed)'
+    : 'Handedness decreases by 1 step (Two-Handed -> One-Handed, One-Handed -> Light)';
+
+  return {
+    penalty,
+    attackPenalty: penalty,
+    stepsDiff: steps,
+    stepsDifference: steps,
+    handsRequiredShift: shift,
+    isUsable: true,
+    explanation: `3.5e RAW (PHB p. 113): ${penalty} attack roll penalty for wielding a ${weaponSize} weapon as a ${creatureSize} creature. ${shift}.`
+  };
 }
 

@@ -55,3 +55,48 @@ export function getPassivePerception(char: CharacterData): number {
   return basePassive;
 }
 
+export function getPassiveInvestigation(char: CharacterData): number {
+  const effectiveLevel = getCombinedLevel(char);
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const investigationSkill = char.skills.find(s => s.name === 'Investigation');
+  let basePassive = 10;
+
+  if (investigationSkill) {
+    basePassive = 10 + getSkillBonus(investigationSkill, effectiveAbilities, effectiveLevel, char);
+  } else {
+    const intMod = getAbilityModifier(effectiveAbilities.INT?.score || 10);
+    basePassive = 10 + intMod;
+  }
+  return basePassive;
+}
+
+export function getPassiveInsight(char: CharacterData): number {
+  const effectiveLevel = getCombinedLevel(char);
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const insightSkill = char.skills.find(s => s.name === 'Insight');
+  let basePassive = 10;
+
+  if (insightSkill) {
+    basePassive = 10 + getSkillBonus(insightSkill, effectiveAbilities, effectiveLevel, char);
+  } else {
+    const wisMod = getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+    basePassive = 10 + wisMod;
+  }
+  return basePassive;
+}
+
+export interface PassiveSensesSuite {
+  passivePerception: number;
+  passiveInvestigation: number;
+  passiveInsight: number;
+}
+
+export function getPassiveSenses(char: CharacterData): PassiveSensesSuite {
+  return {
+    passivePerception: getPassivePerception(char),
+    passiveInvestigation: getPassiveInvestigation(char),
+    passiveInsight: getPassiveInsight(char)
+  };
+}
+
+

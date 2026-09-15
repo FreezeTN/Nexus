@@ -171,6 +171,19 @@ export interface HybridHeritageData {
   isClassicSRD?: boolean;
   classicSRDId?: string;
   dragonVariety?: string;
+
+  // 3.5e Half-Breed Template System (Base Creature + Template inheritance)
+  isTemplateMode?: boolean;
+  templateId?: string;
+  templateName?: string;
+  baseRaceId?: string;
+  baseRaceName?: string;
+  levelAdjustment?: number;
+  conflictsResolved?: Record<string, 'base' | 'template' | 'suppress'>;
+  retainedBaseTraits?: string[];
+  gainedTemplateTraits?: string[];
+  skillPointsRuleNotice?: string;
+  precedenceSummary?: string[];
 }
 
 export interface OptionalRulesConfig {
@@ -195,6 +208,7 @@ export interface OptionalRulesConfig {
   hasPowerfulBuild?: boolean;       // Powerful Build / Little Giant: Counts as 1 size category larger for carrying capacity, push, drag, and lift
   useHalfBreedSystem?: boolean;     // Half-Breed / Hybrid Heritage Ancestry rules (Alpine DM / Homebrew 5e)
   useClassicSRDHalfBreed?: boolean; // Classic SRD Half-Breeds (5e & 3.5e SRD)
+  useHalfBreedTemplate35e?: boolean;// 3.5e Half-Breed Template System (Base Creature + Template Inheritance)
   usePhysicalDiceMode?: boolean;    // Physical Dice Mode: Prompts to input physical dice roll results rather than virtual rolling
   disableAutoXpGain?: boolean;      // Disable Automatic EXP Gain (For groups using manual EXP systems, physical paper logs, or external campaign tracking)
   useManualXpMode?: boolean;        // Manual Tabletop EXP Mode (Turns off automated encounter XP distribution to character sheets)
@@ -257,6 +271,7 @@ export interface Attack {
   isKeen?: boolean; // Keen / Improved Critical (doubles threat range: 20 -> 19-20, 19-20 -> 17-20, 18-20 -> 15-20)
   bypassMaterial?: 'normal' | 'magic' | 'silver' | 'cold_iron' | 'adamantine'; // Material for 3.5e DR bypass
   alignmentBypass?: 'none' | 'good' | 'evil' | 'lawful' | 'chaotic'; // Alignment bypass for 3.5e DR
+  weaponSize?: 'Fine' | 'Diminutive' | 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan' | 'Colossal'; // Weapon size category (3.5e PHB p. 113)
 }
 
 export interface ClassFeature {
@@ -489,6 +504,7 @@ export interface CharacterData {
   level: number;
   background: string;
   alignment: string;
+  deity?: string; // Patron deity (Cleric, Paladin, etc.) or Otherworldly Patron (Warlock)
   experiencePoints: number;
   playerClassDetails?: string;
 
@@ -736,7 +752,11 @@ export interface CharacterData {
   hitDiceCurrent: number;
   armorClass: number;
   initiativeBonus: number;
-  speed: number; // feet
+  speed: number; // feet (walking speed)
+  speedFly?: number; // Fly speed in feet
+  speedSwim?: number; // Swim speed in feet
+  speedClimb?: number; // Climb speed in feet
+  speedBurrow?: number; // Burrow speed in feet
   inspiration: boolean;
 
   // Death Saves

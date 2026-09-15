@@ -154,11 +154,13 @@ export function get35eSaves(char: CharacterData): Dnd35eSavesBreakdown {
   // 3.5e Negative Levels: -1 to all saving throws per negative level
   const negPenalty = char.negativeLevels || 0;
 
-  // 3.5e Cover: Standard Cover (+2 Reflex), Improved Cover (+4 Reflex)
+  // 3.5e Cover: Standard Cover (+2 Reflex), Improved Cover (+4 Reflex), Total Cover (Blocks line of effect / +4 Reflex)
   let coverReflexBonus = 0;
   if (char.activeCover === 'standard') {
     coverReflexBonus = 2;
   } else if (char.activeCover === 'improved') {
+    coverReflexBonus = 4;
+  } else if (char.activeCover === 'total') {
     coverReflexBonus = 4;
   }
 
@@ -376,13 +378,15 @@ export function get35eArmorClass(char: CharacterData): Dnd35eArmorClassBreakdown
   let dodgeBonus = char.dodgeBonus || 0;
   let miscBonus = char.miscAcBonus || 0;
 
-  // 3.5e Tactical Cover: Standard/Soft Cover (+4 AC), Improved Cover (+8 AC)
+  // 3.5e Tactical Cover: Standard/Soft Cover (+4 AC), Improved Cover (+8 AC), Total Cover (Untargetable)
   if (char.activeCover === 'standard' || char.activeCover === 'soft') {
     miscBonus += 4;
     sources.misc.push(`${char.activeCover === 'soft' ? 'Soft' : 'Standard'} Cover (+4 AC)`);
   } else if (char.activeCover === 'improved') {
     miscBonus += 8;
     sources.misc.push('Improved Cover (+8 AC)');
+  } else if (char.activeCover === 'total') {
+    sources.misc.push('Total Cover (Untargetable / Cannot be attacked directly)');
   }
 
   if (char.dodgeBonus) {

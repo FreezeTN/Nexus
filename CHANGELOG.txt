@@ -474,6 +474,42 @@ MILESTONE 28: HALF-BREED LINEAGE STUDIO, SCALING RACIAL DEFENSES, DRAFT RESILIEN
 * Senses Normalization & Vision Parsing:
   - Removed redundant Darkvision checkboxes in favor of an intelligent vision parser that detects Darkvision, Low-Light Vision, Blindsight, and Tremorsense directly from the senses definition with quick-insertion pills.
 
+--------------------------------------------------------------------------------
+MILESTONE 29: WORKSPACE STREAMLINING, REDUNDANCY ELIMINATION & CONTEXT-AWARE VITALS (v0.9.9)
+--------------------------------------------------------------------------------
+* Level Progression & Advancement Consolidation (`src/components/Header.tsx`, `src/components/sheets/sheet1/CharacterHeaderSummary.tsx`):
+  - Refactored the top header's level indicator into a clean, read-only status badge.
+  - Centralized interactive level progression, dual-class XP allocation, and leveling wizard exclusively to the primary "Character Advancement" button on Sheet 1, eliminating duplicate modal launchers from the same screen view.
+
+* Unified Rest & Recovery Action Center (`src/components/Header.tsx`, `src/components/sheets/Sheet2Combat.tsx`, `src/components/sheets/sheet2/CombatDefensesPanel.tsx`):
+  - Pinned Short Rest and Long Rest action triggers exclusively to the persistent top header bar.
+  - Eliminated redundant rest buttons from the Sheet 2 combat defense panel and the floating quick-play dock, establishing a single authoritative location for resting.
+
+* Floating Quick-Play Dock Cleanup (`src/components/common/FloatingQuickPlayDock.tsx`):
+  - Removed redundant Table Mode toggle and rest action buttons from the floating quick-action dock.
+  - Streamlined the dock to focus strictly on rapid d20 rolls, quick combat navigation, and quick HP damage/heal adjustments.
+
+* Context-Aware Combat Vitals De-duplication (`src/components/QuickStatsBar.tsx`, `src/App.tsx`):
+  - Added active-tab awareness to `QuickStatsBar` to automatically hide the hit point status widget and +/- HP adjuster when actively viewing Sheet 2 (Combat & Defenses).
+  - Preserves persistent Armor Class, Initiative, Speed, Proficiency Bonus/BAB, Inspiration, Passive Senses, and Spell Slot trackers while eliminating duplicate side-by-side HP blocks.
+
+* Dedicated Table Mode Iconography (`src/components/SidebarDock.tsx`, `src/components/common/CommandPaletteModal.tsx`):
+  - Assigned a dedicated `LayoutTemplate` icon to Table Mode in both collapsed and expanded sidebar docks, as well as the Command Palette (`Ctrl+K`).
+  - Clearly distinguishes the distraction-free tabletop play HUD from the Physical Tabletop Dice modal (`Dices`).
+
+* QuickStatsBar Layout Order Optimization (`src/components/QuickStatsBar.tsx`):
+  - Reordered the 5e stats bar to place the Passive Senses suite (Perception, Investigation, Insight) alongside core defense metrics, immediately followed by the Inspiration Token toggle.
+
+* Interactive Guided Tour & Workspace Setup Suite (`src/components/common/GuidedTourModal.tsx`, `src/components/common/CommandPaletteModal.tsx`, `src/components/Header.tsx`):
+  - Overhauled the Guided Tour into a 6-step interactive onboarding and live customization experience:
+    - Step 1: Role Persona & Interface Density (Player vs DM vs Unified workspace; Focus Mode vs Master Mode).
+    - Step 2: Atmospheric Themes & Accents (Live preview and immediate application of 6 atmospheric tabletop themes and custom accent highlights).
+    - Step 3: Combat Vitals & Rest Automation (Context-aware vitals explanation, HP delta calculation, automated Temp HP absorption, Short & Long Rest rules, Concentration prompts).
+    - Step 4: Audio Synthesizer & Dice Rolling (Procedural Web Audio synthesizer master toggle, volume slider, instant "Test Dice Sound" roll button, and Physical Tabletop Dice explanation).
+    - Step 5: Persistent HUD Docks & Power Hotkeys (On/Off toggles for QuickStatsBar, Floating Quick-Play Dock, and Bottom Dice Tray; complete hotkeys cheat sheet).
+    - Step 6: Summary & Launch (Customized configuration recap, startup auto-launch preferences, and one-click workspace entrance).
+  - Integrated Guided Tour trigger into the Universal Command Palette (`Ctrl+K` -> "Interactive Guided Tour & Workspace Setup") alongside the persistent header launcher.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

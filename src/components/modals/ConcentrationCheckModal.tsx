@@ -47,6 +47,18 @@ export const ConcentrationCheckModal: React.FC<ConcentrationCheckModalProps> = (
   const appliesCombatCasting = useCombatCasting || distractionType === 'defensive_casting' || distractionType === 'grappled_pinned';
   const bonusInfo = get35eConcentrationBonus(character, appliesCombatCasting);
 
+  const DISTRACTION_LABELS: Record<ConcentrationDistractionType, string> = {
+    defensive_casting: 'Defensive Casting',
+    damaged_during: 'Damaged While Casting',
+    continuous_damage: 'Continuous Damage',
+    vigorous_motion: 'Vigorous Motion',
+    violent_motion: 'Violent Motion',
+    entangled: 'Entangled',
+    grappled_pinned: 'Grappled / Pinned',
+    weather_wind: 'High Wind',
+    weather_storm: 'Storm / Tempest'
+  };
+
   const handleRoll = () => {
     const res = roll35eConcentrationCheck(
       character,
@@ -60,7 +72,7 @@ export const ConcentrationCheckModal: React.FC<ConcentrationCheckModalProps> = (
     setLastResult(res);
 
     if (onRoll) {
-      onRoll(`Concentration Check vs DC ${res.dc} (${distractionType})`, 20, 1, res.bonus, 'normal');
+      onRoll(`Concentration Check vs DC ${res.dc} (${DISTRACTION_LABELS[distractionType] || 'Defensive'})`, 20, 1, res.bonus, 'normal');
     }
   };
 

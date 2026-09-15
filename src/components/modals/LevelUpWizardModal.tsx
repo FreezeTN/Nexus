@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CharacterData, AbilityName, Feat, ClassFeature } from '../../types';
 import { getClassHitDie, DND_5E_LEVEL_TABLE } from '../../data/levelProgressionData';
 import { getAbilityModifier, formatModifier, getProficiencyBonus } from '../../utils/dndCalculations';
+import { getSubclassesForSystemClass } from '../modals/newCharacter/newCharacterData';
 import { playDiceSound, playLevelUpSound } from '../../utils/soundEffects';
 import {
   Sparkles,
@@ -120,11 +121,8 @@ export const LevelUpWizardModal: React.FC<LevelUpWizardModalProps> = ({
   const [selectedFeat, setSelectedFeat] = useState<string>(SRD_FEATS[0].name);
 
   // Subclass state
-  const classKey = character.characterClass.toLowerCase().trim();
-  const availableSubclasses = Object.keys(SUBCLASS_OPTIONS).find(k => classKey.includes(k))
-    ? SUBCLASS_OPTIONS[Object.keys(SUBCLASS_OPTIONS).find(k => classKey.includes(k))!]
-    : ['Standard Archetype', 'Custom Specialist'];
-  const [selectedSubclass, setSelectedSubclass] = useState<string>(character.subclass || availableSubclasses[0]);
+  const availableSubclasses = getSubclassesForSystemClass(character.edition, character.characterClass);
+  const [selectedSubclass, setSelectedSubclass] = useState<string>(character.subclass || availableSubclasses[0] || 'General / Standard Archetype');
 
   const hitDieMeta = getClassHitDie(character.characterClass);
   const conMod = getAbilityModifier(character.abilities.CON.score);

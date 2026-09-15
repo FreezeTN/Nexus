@@ -149,7 +149,8 @@ export async function extractTextFromPdf(file: File | Blob, fileName = 'Document
     }
 
     const cleanText = combinedText.trim();
-    if (cleanText.length > 0 || totalPages > 0) {
+    // If client extracted substantial text, return it. Otherwise attempt server extraction.
+    if (cleanText.length > 100) {
       const isScanned = cleanText.length < totalPages * 30;
       return {
         fileName,
@@ -158,7 +159,7 @@ export async function extractTextFromPdf(file: File | Blob, fileName = 'Document
         fullText: cleanText,
         pageTexts,
         isScanned,
-        samplePreview: cleanText.substring(0, 1200) || '(No embedded digital text found - document may be scanned images)',
+        samplePreview: cleanText.substring(0, 1200),
         headings,
       };
     }
@@ -166,9 +167,9 @@ export async function extractTextFromPdf(file: File | Blob, fileName = 'Document
     console.warn('Client-side pdfjs extraction encountered an issue, trying server fallback:', clientErr);
   }
 
-  // Fallback to server-side parser
+  // Fallback to server-side parser (runs node-based parser which is robust)
   const serverResult = await extractViaServer(file, fileName);
-  if (serverResult) {
+  if (serverResult && (serverResult.fullText.length > 0 || serverResult.totalPages > 0)) {
     return serverResult;
   }
 

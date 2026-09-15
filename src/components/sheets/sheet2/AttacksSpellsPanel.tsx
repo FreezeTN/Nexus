@@ -19,7 +19,13 @@ import {
   get35eIterativeAttacks,
   format35eIterativeString,
   get35eEffectiveThreatRange,
-  get35eCriticalMultiplier
+  get35eCriticalMultiplier,
+  adjust35eOffhandDamageFormula,
+  adjust5eOffhandDamageFormula,
+  getEffectiveAbilities,
+  getAbilityModifier,
+  calculate35eWeaponSizePenalty,
+  SIZE_CATEGORY_ORDER
 } from '../../../utils/dndCalculations';
 import {
   Swords,
@@ -63,6 +69,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   onOpenSummonCompanion
 }) => {
   const { t } = useLanguage();
+  const is35e = character.edition === '3.5e';
   const [cheatCategory, setCheatCategory] = useState<'All' | 'Action' | 'Bonus Action' | 'Reaction' | 'Maneuver' | 'Condition'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCheatSheet, setShowCheatSheet] = useState(false);
@@ -82,6 +89,8 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   const [attackDamageType, setAttackDamageType] = useState('Slashing');
   const [attackRange, setAttackRange] = useState('5 ft Melee');
   const [attackNotes, setAttackNotes] = useState('');
+  const [attackIsOffhand, setAttackIsOffhand] = useState(false);
+  const [attackWeaponSize, setAttackWeaponSize] = useState<string>('Medium');
   const [attackAdditionalDamage, setAttackAdditionalDamage] = useState<WeaponDamageRow[]>([]);
 
   const effectiveMaxHp = getEffectiveMaxHp(character);
@@ -101,6 +110,8 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
       damageType: finalType,
       range: attackRange,
       notes: attackNotes,
+      isOffhand: attackIsOffhand,
+      weaponSize: is35e ? (attackWeaponSize as any) : undefined,
       additionalDamageRows: validExtra.length > 0 ? validExtra : undefined
     };
     onUpdateCharacter({
@@ -112,8 +123,17 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
     setAttackDamageType('Slashing');
     setAttackRange('5 ft Melee');
     setAttackNotes('');
+    setAttackIsOffhand(false);
+    setAttackWeaponSize('Medium');
     setAttackAdditionalDamage([]);
     setShowAddAttackModal(false);
+  };
+
+  const handleToggleOffhand = (id: string) => {
+    onUpdateCharacter({
+      ...character,
+      attacks: character.attacks.map(a => a.id === id ? { ...a, isOffhand: !a.isOffhand } : a)
+    });
   };
 
   const handleDeleteAttack = (id: string) => {
@@ -232,23 +252,23 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
           storageKey="sheet2_attacks"
           headerExtra={
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setShow35eTwfModal(true)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 rounded-lg text-xs font-bold transition shadow"
+                title={character.edition === '3.5e'
+                  ? "Two-Weapon Fighting dual-wielding penalties and attack sequence"
+                  : "Two-Weapon Fighting off-hand bonus action attack sequence"}
+              >
+                <Swords className="w-3.5 h-3.5 text-amber-400" /> Dual-Wield (TWF)
+              </button>
               {character.edition === '3.5e' && (
-                <>
-                  <button
-                    onClick={() => setShow35eTwfModal(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 rounded-lg text-xs font-bold transition shadow"
-                    title="Two-Weapon Fighting dual-wielding penalties and attack sequence"
-                  >
-                    <Swords className="w-3.5 h-3.5 text-amber-400" /> Dual-Wield (TWF)
-                  </button>
-                  <button
-                    onClick={() => setShow35eAoOModal(true)}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 rounded-lg text-xs font-bold transition shadow"
-                    title="Attacks of Opportunity budget and provocation triggers"
-                  >
-                    <Zap className="w-3.5 h-3.5 text-amber-400" /> AoO Strike
-                  </button>
-                </>
+                <button
+                  onClick={() => setShow35eAoOModal(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 rounded-lg text-xs font-bold transition shadow"
+                  title="Attacks of Opportunity budget and provocation triggers"
+                >
+                  <Zap className="w-3.5 h-3.5 text-amber-400" /> AoO Strike
+                </button>
               )}
               <button
                 onClick={() => setShowCheatSheet(true)}
@@ -283,8 +303,24 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                   const meta = getDamageTypeMeta(atk.damageType);
                   const is35e = character.edition === '3.5e';
                   const bab = getCharacterBab(character);
-                  const iterativeAttacks = is35e ? get35eIterativeAttacks(atk.attackBonus, bab) : [];
+                  const sizePenaltyInfo = is35e && atk.weaponSize
+                    ? calculate35eWeaponSizePenalty(character.sizeCategory || 'Medium', atk.weaponSize)
+                    : null;
+                  const netAttackBonus = atk.attackBonus + (sizePenaltyInfo?.penalty || 0);
+
+                  const iterativeAttacks = is35e ? get35eIterativeAttacks(netAttackBonus, bab) : [];
                   const hasIteratives = iterativeAttacks.length > 1;
+
+                  const has5eTwfStyle = !is35e && Boolean(
+                    character.classFeatures?.some(f => f.name.toLowerCase().includes('two-weapon')) ||
+                    character.feats?.some(f => f.name.toLowerCase().includes('two-weapon fighting')) ||
+                    (character as any).fightingStyle?.toLowerCase().includes('two-weapon')
+                  );
+                  const abilities = getEffectiveAbilities(character);
+                  const strMod = getAbilityModifier(abilities?.STR?.score || 10);
+                  const effectiveDamage = atk.isOffhand
+                    ? (is35e ? adjust35eOffhandDamageFormula(atk.damage, strMod) : adjust5eOffhandDamageFormula(atk.damage, has5eTwfStyle))
+                    : atk.damage;
 
                   return (
                     <div
@@ -315,6 +351,46 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                                   {atk.range}
                                 </span>
                               )}
+                              {is35e && atk.weaponSize && (
+                                <span
+                                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 shrink-0 ${
+                                    sizePenaltyInfo && sizePenaltyInfo.penalty < 0
+                                      ? 'bg-rose-950/80 text-rose-300 border-rose-600/70 font-bold'
+                                      : 'bg-stone-900 text-stone-300 border-stone-800'
+                                  }`}
+                                  title={
+                                    sizePenaltyInfo && sizePenaltyInfo.penalty < 0
+                                      ? `Weapon Size: ${atk.weaponSize} (${sizePenaltyInfo.penalty} attack penalty due to ${sizePenaltyInfo.stepsDiff} step difference from ${character.sizeCategory || 'Medium'} wielder)`
+                                      : `Weapon Size: ${atk.weaponSize} (Appropriate size for ${character.sizeCategory || 'Medium'} wielder)`
+                                  }
+                                >
+                                  <span>Size: {atk.weaponSize}</span>
+                                  {sizePenaltyInfo && sizePenaltyInfo.penalty < 0 && (
+                                    <span className="text-rose-400 font-bold font-mono">{sizePenaltyInfo.penalty}</span>
+                                  )}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleOffhand(atk.id)}
+                                className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 transition shrink-0 ${
+                                  atk.isOffhand
+                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                    : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-300 hover:border-stone-700'
+                                }`}
+                                title={is35e
+                                  ? "Toggle Off-Hand (applies ½ STR damage modifier in 3.5e)"
+                                  : "Toggle Off-Hand (suppresses positive ability modifier to damage in 5e unless TWF style is active)"}
+                              >
+                                <Swords className="w-2.5 h-2.5" />
+                                <span>
+                                  {atk.isOffhand
+                                    ? (is35e
+                                        ? 'Off-Hand (½ STR)'
+                                        : (has5eTwfStyle ? 'Off-Hand (TWF Style)' : 'Off-Hand (No Mod)'))
+                                    : 'Off-Hand: Off'}
+                                </span>
+                              </button>
                             </div>
                           </div>
 
@@ -346,7 +422,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                                 <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                 <span>Full Attack:</span>
                                 <span className="text-amber-100 font-extrabold">
-                                  {format35eIterativeString(atk.attackBonus, bab)}
+                                  {format35eIterativeString(netAttackBonus, bab)}
                                 </span>
                               </div>
                               <button
@@ -396,7 +472,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                                     onClick={() => {
                                       setCritModalAttack(atk);
                                       setCritModalThreatRoll(threat.minThreat);
-                                      setCritModalAttackBonus(atk.attackBonus);
+                                      setCritModalAttackBonus(netAttackBonus);
                                     }}
                                     className="px-1.5 py-0.5 bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-300 rounded text-[9px] font-bold transition flex items-center gap-1"
                                     title="Open 3.5e Critical Confirmation Roll & Damage Multiplier Calculator"
@@ -414,21 +490,27 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                       <div className="flex flex-col gap-1.5 pt-2 border-t border-stone-900 w-full min-w-0">
                         <div className="flex items-center gap-2 w-full min-w-0">
                           <button
-                            onClick={() => onRoll(`${atk.name} Attack Roll`, 20, 1, atk.attackBonus, 'normal')}
+                            onClick={() => onRoll(
+                              `${atk.name}${sizePenaltyInfo && sizePenaltyInfo.penalty < 0 ? ` (incl. ${sizePenaltyInfo.penalty} size penalty)` : ''} Attack Roll`,
+                              20,
+                              1,
+                              netAttackBonus,
+                              'normal'
+                            )}
                             className="flex-1 min-w-0 py-1.5 px-2 bg-stone-900 hover:bg-amber-600 text-amber-200 hover:text-stone-950 rounded-lg font-mono font-bold text-xs transition border border-stone-700 hover:border-amber-500 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] overflow-hidden"
-                            title={`Roll Attack: d20 + ${atk.attackBonus}`}
+                            title={`Roll Attack: d20 + ${netAttackBonus}${sizePenaltyInfo && sizePenaltyInfo.penalty < 0 ? ` (base +${atk.attackBonus}, ${sizePenaltyInfo.penalty} weapon size penalty)` : ''}`}
                           >
                             <Crosshair className="w-3.5 h-3.5 shrink-0" />
-                            <span className="truncate">Attack ({formatModifier(atk.attackBonus)})</span>
+                            <span className="truncate">Attack ({formatModifier(netAttackBonus)})</span>
                           </button>
 
                           <button
-                            onClick={() => onRollDamage(`${atk.name} Damage (${atk.damageType})`, atk.damage)}
+                            onClick={() => onRollDamage(`${atk.name}${atk.isOffhand ? ' (Off-Hand)' : ''} Damage (${atk.damageType})`, effectiveDamage)}
                             className="flex-1 min-w-0 py-1.5 px-2 bg-rose-950/80 hover:bg-rose-900 text-rose-200 rounded-lg font-mono font-bold text-xs transition border border-rose-600/50 hover:border-rose-400 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] overflow-hidden"
-                            title={`Roll Damage: ${atk.damage} (${atk.damageType})`}
+                            title={`Roll Damage: ${effectiveDamage} (${atk.damageType})${atk.isOffhand ? (is35e ? ' - ½ STR applied' : (has5eTwfStyle ? ' - TWF Style applied' : ' - Ability mod suppressed')) : ''}`}
                           >
                             <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                            <span className="truncate">Dmg ({atk.damage})</span>
+                            <span className="truncate">Dmg ({effectiveDamage})</span>
                           </button>
                         </div>
 
@@ -632,6 +714,58 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                   />
                 </div>
               </div>
+
+              <div className="flex items-center gap-2.5 p-2.5 bg-stone-950/60 rounded-xl border border-stone-800">
+                <input
+                  type="checkbox"
+                  id="attack-is-offhand"
+                  checked={attackIsOffhand}
+                  onChange={(e) => setAttackIsOffhand(e.target.checked)}
+                  className="rounded text-amber-500 focus:ring-0 bg-stone-900 border-stone-700"
+                />
+                <label htmlFor="attack-is-offhand" className="cursor-pointer text-stone-200 font-medium select-none">
+                  Designate as Off-Hand Weapon ({character.edition === '3.5e' ? '½ STR damage bonus' : 'Suppresses ability modifier to damage unless TWF style'})
+                </label>
+              </div>
+
+              {is35e && (
+                <div className="p-2.5 bg-stone-950/60 rounded-xl border border-stone-800 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-stone-300 font-semibold text-xs">
+                      Weapon Size Category (PHB p. 113)
+                    </label>
+                    <span className="text-[11px] text-stone-400 font-mono">
+                      Wielder: <strong className="text-amber-300">{character.sizeCategory || 'Medium'}</strong>
+                    </span>
+                  </div>
+                  <select
+                    value={attackWeaponSize}
+                    onChange={(e) => setAttackWeaponSize(e.target.value)}
+                    className="w-full bg-stone-900 border border-stone-700 rounded-lg p-1.5 text-stone-100 font-mono text-xs cursor-pointer"
+                  >
+                    {SIZE_CATEGORY_ORDER.map(sz => (
+                      <option key={sz} value={sz}>
+                        {sz} {sz === (character.sizeCategory || 'Medium') ? '(Matches Wielder Size)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {(() => {
+                    const penalty = calculate35eWeaponSizePenalty(character.sizeCategory || 'Medium', attackWeaponSize);
+                    if (penalty.penalty < 0) {
+                      return (
+                        <p className="text-[11px] text-amber-300 font-mono">
+                          ⚠️ {penalty.penalty} cumulative attack penalty ({penalty.stepsDiff} size step difference from {character.sizeCategory || 'Medium'} wielder)
+                        </p>
+                      );
+                    }
+                    return (
+                      <p className="text-[11px] text-emerald-400 font-mono">
+                        ✓ No size penalty (properly sized for {character.sizeCategory || 'Medium'} creature)
+                      </p>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Additional Damage Rows in Add Attack Modal */}
               <div className="bg-stone-950/60 p-2.5 rounded-xl border border-stone-800 space-y-2">

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { CharacterData, Party } from '../../types';
 import { UserProfile, GameSession } from '../../lib/firebase';
 import { ShadowrunCombatPanel } from '../shadowrun/ShadowrunCombatPanel';
-import { RestModal } from '../combat/RestModal';
 import { EncounterTracker } from '../combat/EncounterTracker';
 import { AttackResolver } from '../combat/AttackResolver';
 import { useEncounterState } from '../combat/encounter/useEncounterState';
@@ -47,7 +46,6 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   onRollDamage,
   onOpenGenerators
 }) => {
-  const [showRestModal, setShowRestModal] = useState(false);
   const [showTransformationModal, setShowTransformationModal] = useState(false);
   const [showCompanionModal, setShowCompanionModal] = useState(false);
   const [showMaxHpInspector, setShowMaxHpInspector] = useState(false);
@@ -147,7 +145,6 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
           setShowMaxHpInspector={setShowMaxHpInspector}
           setShowTransformationModal={setShowTransformationModal}
           setShowCompanionModal={setShowCompanionModal}
-          setShowRestModal={setShowRestModal}
           setShowModifierInspector={(target) => {
             if (target) setInspectedTarget(target);
             setShowModifierInspector(true);
@@ -202,14 +199,6 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
       )}
 
       {/* MODALS */}
-      {showRestModal && (
-        <RestModal
-          character={character}
-          onUpdateCharacter={onUpdateCharacter}
-          onClose={() => setShowRestModal(false)}
-        />
-      )}
-
       {showMaxHpInspector && (
         <MaxHpInspectorModal
           character={character}

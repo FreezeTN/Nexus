@@ -331,6 +331,20 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     } else if (isMonk && wisMod > 0) {
       explanationParts.push(`WIS Unarmored (+${wisMod})`);
       baseAc += wisMod;
+    } else {
+      const subclassLower = (char.subclass || '').toLowerCase();
+      const isDraconicSorcerer = subclassLower.includes('draconic') || featuresStr.includes('draconic resilience');
+      const hasMageArmor = (char.conditions || []).some(c => c.toLowerCase().includes('mage armor'));
+
+      if (isDraconicSorcerer) {
+        baseAc = 13;
+        explanationParts = ['Draconic Resilience Base (13)'];
+        if (dexMod !== 0) explanationParts.push(`DEX (${dexMod >= 0 ? '+' + dexMod : dexMod})`);
+      } else if (hasMageArmor) {
+        baseAc = 13;
+        explanationParts = ['Mage Armor Base (13)'];
+        if (dexMod !== 0) explanationParts.push(`DEX (${dexMod >= 0 ? '+' + dexMod : dexMod})`);
+      }
     }
   }
 
@@ -390,7 +404,7 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     }
   }
 
-  // Tactical Cover bonus for 5e (PHB p. 196: Half Cover = +2 AC, Three-Quarters Cover = +5 AC)
+  // Tactical Cover bonus for 5e (PHB p. 196: Half Cover = +2 AC, Three-Quarters Cover = +5 AC, Total Cover = Untargetable)
   let coverBonus = 0;
   if (is5e) {
     if (char.activeCover === 'standard' || char.activeCover === 'soft') {
@@ -399,6 +413,8 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
     } else if (char.activeCover === 'improved') {
       coverBonus = 5;
       explanationParts.push('3/4 Cover (+5)');
+    } else if (char.activeCover === 'total') {
+      explanationParts.push('Total Cover (Untargetable)');
     }
   }
 
@@ -1543,6 +1559,10 @@ export interface SpeedDetails {
   reasons: string[];
   armorPenalty: number;
   isDwarf: boolean;
+  speedFly?: number;
+  speedSwim?: number;
+  speedClimb?: number;
+  speedBurrow?: number;
 }
 
 export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
@@ -1600,6 +1620,15 @@ export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
 
   const speedPenalty = baseSpeed - effectiveSpeed;
 
+  const equippedFly = (char.inventory || []).filter(i => i.equipped && !i.stored).reduce((max, i) => Math.max(max, i.flySpeed || 0), 0);
+  const equippedSwim = (char.inventory || []).filter(i => i.equipped && !i.stored).reduce((max, i) => Math.max(max, i.swimSpeed || 0), 0);
+  const equippedClimb = (char.inventory || []).filter(i => i.equipped && !i.stored).reduce((max, i) => Math.max(max, i.climbSpeed || 0), 0);
+
+  const speedFly = char.speedFly || (equippedFly > 0 ? equippedFly : undefined);
+  const speedSwim = char.speedSwim || (equippedSwim > 0 ? equippedSwim : undefined);
+  const speedClimb = char.speedClimb || (equippedClimb > 0 ? equippedClimb : undefined);
+  const speedBurrow = char.speedBurrow;
+
   return {
     baseSpeed,
     effectiveSpeed,
@@ -1608,7 +1637,11 @@ export function getEffectiveSpeed(char: CharacterData): SpeedDetails {
     status: effects.speedZero ? 'Speed 0 (Condition)' : encumbrance.status,
     reasons,
     armorPenalty,
-    isDwarf
+    isDwarf,
+    speedFly,
+    speedSwim,
+    speedClimb,
+    speedBurrow
   };
 }
 
@@ -2129,11 +2162,27 @@ export function is35eAcpSkill(skillName: string): boolean {
   return DND35E_ACP_SKILLS.some((s) => s.toLowerCase() === clean);
 }
 
+export function getSizeHideModifier(sizeCategory?: string): number {
+  switch (sizeCategory) {
+    case 'Fine': return 16;
+    case 'Diminutive': return 12;
+    case 'Tiny': return 8;
+    case 'Small': return 4;
+    case 'Medium': return 0;
+    case 'Large': return -4;
+    case 'Huge': return -8;
+    case 'Gargantuan': return -12;
+    case 'Colossal': return -16;
+    default: return 0;
+  }
+}
+
 export function get35eSkillBonus(
   skill: Skill,
   abilities: AbilityScores,
   allSkills?: Skill[],
-  totalAcp: number = 0
+  totalAcp: number = 0,
+  sizeCategory?: string
 ): number {
   const abilityMod = getAbilityModifier(abilities[skill.ability]?.score || 10);
   const ranks = skill.ranks || 0;
@@ -2148,7 +2197,12 @@ export function get35eSkillBonus(
     acpPenalty = isSwim ? totalAcp * 2 : totalAcp;
   }
 
-  return ranks + abilityMod + misc + synergy + acpPenalty;
+  let sizeBonus = 0;
+  if (sizeCategory && (skill.name || '').trim().toLowerCase() === 'hide') {
+    sizeBonus = getSizeHideModifier(sizeCategory);
+  }
+
+  return ranks + abilityMod + misc + synergy + acpPenalty + sizeBonus;
 }
 
 export interface Save35eBreakdown {
@@ -2250,6 +2304,8 @@ export function get35eSaveBreakdown(
   if (char.activeCover === 'standard') {
     coverReflexBonus = 2;
   } else if (char.activeCover === 'improved') {
+    coverReflexBonus = 4;
+  } else if (char.activeCover === 'total') {
     coverReflexBonus = 4;
   }
 
@@ -2395,7 +2451,13 @@ export const DND35E_SKILL_SYNERGIES: SkillSynergyRule[] = [
   { sourceSkill: 'Escape Artist', requiredRanks: 5, targetSkill: 'Use Rope', bonus: 2, conditionDesc: 'bindings' },
   { sourceSkill: 'Use Rope', requiredRanks: 5, targetSkill: 'Climb', bonus: 2, conditionDesc: 'with ropes' },
   { sourceSkill: 'Use Rope', requiredRanks: 5, targetSkill: 'Escape Artist', bonus: 2, conditionDesc: 'bound with rope' },
-  { sourceSkill: 'Knowledge (Religion)', requiredRanks: 5, targetSkill: 'Turn Undead', bonus: 2, conditionDesc: 'turning check' }
+  { sourceSkill: 'Knowledge (Religion)', requiredRanks: 5, targetSkill: 'Turn Undead', bonus: 2, conditionDesc: 'turning check' },
+  { sourceSkill: 'Decipher Script', requiredRanks: 5, targetSkill: 'Use Magic Device', bonus: 2, conditionDesc: 'involving scrolls' },
+  { sourceSkill: 'Knowledge (Architecture and Engineering)', requiredRanks: 5, targetSkill: 'Search', bonus: 2, conditionDesc: 'secret doors and compartments' },
+  { sourceSkill: 'Knowledge (The Planes)', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'on other planes' },
+  { sourceSkill: 'Knowledge (History)', requiredRanks: 5, targetSkill: 'Bardic Knowledge', bonus: 2, conditionDesc: 'bardic knowledge checks' },
+  { sourceSkill: 'Autohypnosis', requiredRanks: 5, targetSkill: 'Concentration', bonus: 2, conditionDesc: 'resisting distractions' },
+  { sourceSkill: 'Knowledge (Psionics)', requiredRanks: 5, targetSkill: 'Psicraft', bonus: 2 }
 ];
 
 export const DND35E_CORE_CLASS_SKILLS: Record<string, string[]> = {
@@ -4055,6 +4117,24 @@ export function adjust35eOffhandDamageFormula(baseDamage: string, strModifier: n
   return `${baseDamage} ${sign} ${Math.abs(offhandStrMod)} (½ STR)`.trim();
 }
 
+/**
+ * Adjusts damage formula for 5e Two-Weapon Fighting (PHB p. 195).
+ * Suppresses positive ability modifier from damage unless character has Two-Weapon Fighting style.
+ * Negative modifiers are preserved according to 5e rules.
+ */
+export function adjust5eOffhandDamageFormula(baseDamage: string, hasFightingStyle: boolean = false): string {
+  if (hasFightingStyle) return baseDamage;
+  // If base damage has a positive flat bonus (e.g. "+ 3", "+3", "+ 4 slashing"), strip the positive ability modifier
+  const match = baseDamage.match(/^([0-9]+d[0-9]+)\s*(?:\+\s*([0-9]+))?(.*)$/i);
+  if (match) {
+    const dice = match[1];
+    const rest = (match[3] || '').trim();
+    // Only dice and rest of string (like damage type) without the positive modifier
+    return rest ? `${dice} ${rest}` : dice;
+  }
+  return baseDamage.replace(/\+\s*\d+/, '').trim();
+}
+
 // ----------------------------------------------------
 // D&D 3.5e CONCEALMENT, MISS CHANCE & BLIND-FIGHT
 // ----------------------------------------------------
@@ -4451,6 +4531,14 @@ export function calculate35eMinLevelXpBuffer(character: CharacterData): {
     canAfford: (xpCost: number) => expendableXp >= xpCost
   };
 }
+
+export {
+  validate35eClassAlignment,
+  calculate35eMulticlassXpPenalty,
+  calculate35eWeaponSizePenalty,
+  SIZE_CATEGORY_ORDER
+} from './dnd35eAdvancedMechanics';
+export type { WeaponSizePenaltyResult } from './dnd35eAdvancedMechanics';
 
 
 

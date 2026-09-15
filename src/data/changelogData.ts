@@ -14,6 +14,43 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.9',
+    date: 'Today',
+    title: 'Workspace Streamlining, Redundancy Elimination & Context-Aware Vitals',
+    badge: 'UI & UX Streamline',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🎯 Level Advancement & Progression Consolidation',
+        detail: 'Converted the top header level indicator into a clean, read-only status badge. Centralized interactive character advancement, multiclass XP allocation, and leveling wizard exclusively to the primary "Character Advancement" button on Sheet 1.'
+      },
+      {
+        category: '☕ Unified Rest & Recovery Action Center',
+        detail: 'Pinned Short Rest and Long Rest actions exclusively to the persistent top header bar, eliminating redundant duplicate rest modal launcher buttons across the combat sheet and floating quick-play dock.'
+      },
+      {
+        category: '⚡ Floating Quick-Play Dock Cleanup',
+        detail: 'Streamlined the floating quick-action dock by removing redundant Table Mode and Rest buttons, keeping the quick bar dedicated to rapid d20 rolls, quick combat navigation, and on-the-fly HP management.'
+      },
+      {
+        category: '🩺 Context-Aware Combat Vitals De-duplication',
+        detail: 'The persistent QuickStatsBar now automatically hides the quick HP status orb and adjustment controls when actively viewing Sheet 2 (Combat & Defenses) to prevent duplicate side-by-side HP blocks, while keeping AC, Initiative, Speed, Proficiency Bonus/BAB, Inspiration, Passive Senses, and Spell Slots intact.'
+      },
+      {
+        category: '🖼️ Table Mode HUD Iconography & Visual Clarity',
+        detail: 'Assigned a dedicated LayoutTemplate icon to Table Mode across collapsed/expanded sidebar docks and the Command Palette (Ctrl+K), establishing a clear visual distinction between the tabletop play HUD and the Physical Dice modal.'
+      },
+      {
+        category: '👁️ QuickStatsBar Flow & Passive Senses Reordering',
+        detail: 'Reordered the 5e QuickStatsBar so the Passive Senses suite (Perception, Investigation, Insight) sits alongside core defense metrics, followed by the Inspiration Token toggle.'
+      },
+      {
+        category: '🧭 Interactive Guided Tour & Workspace Setup Suite',
+        detail: 'Extended the Guided Tour into a 6-step interactive onboarding and customization suite with direct on-screen controls: configure Role Personas (Player / GM / Unified), toggle Density Modes (Focus vs Master), test & apply Ambient Themes and custom accent colors in real time, adjust procedural audio synthesizer volume with instant test rolls, toggle persistent HUD companion docks, and access full keyboard hotkey cheat sheets.'
+      }
+    ]
+  },
+  {
     version: 'v0.9.8',
     date: 'Today',
     title: 'Half-Breed Lineage Studio, Scaling Racial Defenses & Modal Draft Persistence',

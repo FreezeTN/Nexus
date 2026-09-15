@@ -44,6 +44,7 @@ import { useLayoutCustomization } from '../../../utils/layoutCustomization';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import {
   Shield,
+  ShieldAlert,
   Heart,
   Zap,
   Footprints,
@@ -77,7 +78,6 @@ interface CombatDefensesPanelProps {
   setShowMaxHpInspector: (val: boolean) => void;
   setShowTransformationModal: (val: boolean) => void;
   setShowCompanionModal?: (val: boolean) => void;
-  setShowRestModal: (val: boolean) => void;
   setShowModifierInspector?: (target?: any) => void;
 }
 
@@ -88,7 +88,6 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   setShowMaxHpInspector,
   setShowTransformationModal,
   setShowCompanionModal,
-  setShowRestModal,
   setShowModifierInspector
 }) => {
   const { t } = useLanguage();
@@ -104,6 +103,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   const [show35eMountedModal, setShow35eMountedModal] = useState(false);
   const [show35eWildShapeModal, setShow35eWildShapeModal] = useState(false);
   const [show35eEnvironmentalModal, setShow35eEnvironmentalModal] = useState(false);
+  const [isTacticalPanelExpanded, setIsTacticalPanelExpanded] = useState(true);
   const effectiveMaxHp = getEffectiveMaxHp(character);
   const speedInfo = getEffectiveSpeed(character);
   const ac35 = get35eArmorClass(character);
@@ -326,6 +326,12 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 const currentHp = character.hpCurrent ?? effectiveMaxHp;
                 const hpPct = Math.max(0, Math.min(100, Math.round((currentHp / safeMax) * 100)));
 
+                const hitDieMatch = (character.hitDiceTotal || '').match(/(\d+)d(\d+)/i);
+                const maxHitDice = hitDieMatch ? parseInt(hitDieMatch[1]) : (character.level || 1);
+                const dieSides = hitDieMatch ? parseInt(hitDieMatch[2]) : 8;
+                const conScore = character.abilities?.CON?.score ?? 10;
+                const conMod = Math.floor((conScore - 10) / 2);
+
                 let barGradient = 'from-emerald-600 via-emerald-500 to-emerald-400';
                 if (hpPct < 25) {
                   barGradient = 'from-rose-700 via-rose-600 to-rose-500';
@@ -404,8 +410,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                       </div>
                     </div>
 
-                    {/* Sub-row: Temp HP, Nonlethal (3.5e), and Rest & Hit Dice */}
-                    <div className={`grid ${character.edition === '3.5e' ? 'grid-cols-3' : 'grid-cols-2'} gap-2 pt-1 text-xs font-mono`}>
+                    {/* Sub-row: Temp HP, Nonlethal (3.5e), Hit Dice Tracker, and Rest */}
+                    <div className={`grid ${character.edition === '3.5e' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} gap-2 pt-1 text-xs font-mono`}>
                       <div className="bg-stone-900/90 p-1.5 rounded-lg border border-stone-800 text-center">
                         <div className="text-[9px] text-stone-400 font-sans uppercase font-bold">Temp HP</div>
                         <div className="flex items-center justify-center gap-1 mt-0.5">
@@ -435,14 +441,76 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         </div>
                       )}
 
-                      <button
-                        type="button"
-                        onClick={() => setShowRestModal(true)}
-                        className="bg-amber-950/70 hover:bg-amber-900 border border-amber-600/50 p-1.5 rounded-lg text-amber-200 font-sans font-bold flex flex-col items-center justify-center gap-0.5 transition shadow-sm cursor-pointer"
-                      >
-                        <Moon className="w-3.5 h-3.5 text-amber-400" />
-                        <span className="text-[10px] leading-tight">{t('rest.title', 'Rest & Hit Dice')}</span>
-                      </button>
+                      {/* Hit Dice Tracker Card */}
+                      {character.edition === '3.5e' ? (
+                        <div className="bg-stone-900/90 p-1.5 rounded-lg border border-stone-800 text-center flex flex-col justify-between">
+                          <div className="text-[9px] text-stone-400 font-sans uppercase font-bold">Hit Dice (HD)</div>
+                          <div className="font-mono text-xs font-bold text-amber-300">
+                            {character.hitDiceTotal || `${character.level || 1} HD`}
+                          </div>
+                          <div className="text-[8.5px] text-stone-500 font-mono">
+                            {conMod >= 0 ? `+${conMod * (character.level || 1)} CON` : `${conMod * (character.level || 1)} CON`}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-stone-900/90 p-1 rounded-lg border border-stone-800 text-center flex flex-col justify-between">
+                          <div className="flex items-center justify-between text-[9px] text-stone-400 font-sans uppercase font-bold px-1">
+                            <span>Hit Dice</span>
+                            <span className="text-amber-400">d{dieSides}</span>
+                          </div>
+                          <div className="flex items-center justify-center gap-1 my-0.5">
+                            <button
+                              type="button"
+                              onClick={() => onUpdateCharacter({
+                                ...character,
+                                hitDiceCurrent: Math.max(0, character.hitDiceCurrent - 1)
+                              })}
+                              disabled={character.hitDiceCurrent <= 0}
+                              className="w-4 h-4 bg-stone-800 hover:bg-stone-700 disabled:opacity-30 rounded text-[10px] text-stone-200 flex items-center justify-center font-mono cursor-pointer"
+                              title="Spend 1 Hit Die"
+                            >
+                              -
+                            </button>
+                            <span className="font-mono text-xs font-extrabold text-amber-300 px-0.5">
+                              {character.hitDiceCurrent} <span className="text-stone-500 font-normal">/ {maxHitDice}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => onUpdateCharacter({
+                                ...character,
+                                hitDiceCurrent: Math.min(maxHitDice, character.hitDiceCurrent + 1)
+                              })}
+                              disabled={character.hitDiceCurrent >= maxHitDice}
+                              className="w-4 h-4 bg-stone-800 hover:bg-stone-700 disabled:opacity-30 rounded text-[10px] text-stone-200 flex items-center justify-center font-mono cursor-pointer"
+                              title="Regain 1 Hit Die"
+                            >
+                              +
+                            </button>
+                          </div>
+                          {onRoll && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (character.hitDiceCurrent <= 0) return;
+                                const roll = Math.floor(Math.random() * dieSides) + 1;
+                                const healAmount = Math.max(1, roll + conMod);
+                                const newHp = Math.min(effectiveMaxHp, (character.hpCurrent ?? 0) + healAmount);
+                                onRoll(`Hit Die Healing (1d${dieSides} + ${conMod} CON)`, dieSides, 1, conMod, 'normal');
+                                onUpdateCharacter({
+                                  ...character,
+                                  hitDiceCurrent: character.hitDiceCurrent - 1,
+                                  hpCurrent: newHp
+                                });
+                              }}
+                              disabled={character.hitDiceCurrent <= 0 || (character.hpCurrent ?? 0) >= effectiveMaxHp}
+                              className="text-[8.5px] bg-amber-950/80 hover:bg-amber-900 disabled:opacity-30 text-amber-200 border border-amber-700/40 rounded px-1 py-0.5 transition cursor-pointer font-bold"
+                              title="Roll 1 Hit Die (1dDie + CON) & Heal HP"
+                            >
+                              Roll 1 HD
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -730,18 +798,18 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
                   <Shield className="w-4 h-4 text-amber-500" /> {t('defenses.armorClass', 'Defense Stats')}
                 </span>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {setShowModifierInspector && (
                     <button
                       onClick={() => setShowModifierInspector('ac')}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-600/40 hover:border-amber-500 transition flex items-center gap-1"
+                      className="text-[10px] text-amber-400 hover:text-amber-300 font-mono font-bold bg-stone-950 px-2 py-0.5 rounded border border-amber-600/40 hover:border-amber-500 transition flex items-center gap-1 cursor-pointer"
                       title="Inspect Universal Stacking Modifier Engine"
                     >
                       <Layers className="w-3 h-3 text-amber-400" />
                       <span>Modifier Engine</span>
                     </button>
                   )}
-                  <span className="text-xs text-stone-400 font-mono">
+                  <span className="text-[10px] text-stone-400 font-mono bg-stone-950 px-2 py-0.5 rounded border border-stone-800">
                     {character.edition === '3.5e' ? '3.5e Rules' : '5e Rules'}
                   </span>
                 </div>
@@ -751,21 +819,27 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
               {character.edition === '3.5e' ? (
                 <div className="space-y-2.5">
                   {/* Top quick stats: Initiative, BAB, Grapple/SR, Speed, AoO */}
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center font-mono">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-center font-mono">
                     {/* Initiative */}
                     {(() => {
                       const initBonus = calculateInitiativeBonus(character);
                       return (
-                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                          <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">{t('stats.initiative', 'Initiative')}</span>
-                          <button
-                            onClick={() => onRoll('Initiative Roll', 20, 1, initBonus, 'normal')}
-                            className="text-xl font-serif font-extrabold text-emerald-300 hover:text-emerald-200 transition my-0.5"
-                            title={`Roll Initiative (${formatModifier(initBonus)})`}
-                          >
-                            {formatModifier(initBonus)}
-                          </button>
-                          <span className="text-[8px] text-stone-500">Init Mod</span>
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] transition hover:border-stone-700">
+                          <div className="h-4 w-full flex items-center justify-center">
+                            <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">{t('stats.initiative', 'Initiative')}</span>
+                          </div>
+                          <div className="h-7 w-full flex items-center justify-center">
+                            <button
+                              onClick={() => onRoll('Initiative Roll', 20, 1, initBonus, 'normal')}
+                              className="text-lg font-serif font-extrabold text-emerald-300 hover:text-emerald-200 transition leading-none cursor-pointer"
+                              title={`Roll Initiative (${formatModifier(initBonus)})`}
+                            >
+                              {formatModifier(initBonus)}
+                            </button>
+                          </div>
+                          <div className="h-3.5 w-full flex items-center justify-center">
+                            <span className="text-[8px] text-stone-500 font-mono truncate">Init Mod</span>
+                          </div>
                         </div>
                       );
                     })()}
@@ -773,30 +847,35 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     {/* Base Attack Bonus (BAB) */}
                     {(() => {
                       const bab = getCharacterBab(character);
+                      const progression = format35eBabProgression(bab);
                       return (
-                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center relative group">
-                          <div className="flex items-center justify-between w-full px-1">
-                            <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">Base Atk (BAB)</span>
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] relative group hover:border-stone-700 transition">
+                          <div className="h-4 w-full flex items-center justify-center relative px-1">
+                            <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">Base Atk</span>
                             <button
                               type="button"
                               onClick={() => setShow35eBabModal(true)}
-                              className="text-stone-500 hover:text-amber-400 transition"
+                              className="absolute right-0 top-0 text-stone-500 hover:text-amber-400 transition p-0.5 cursor-pointer"
                               title="Edit Base Attack Bonus (BAB) & Iterative Attacks"
                             >
                               <Pencil className="w-2.5 h-2.5" />
                             </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setShow35eBabModal(true)}
-                            className="text-lg font-serif font-extrabold text-amber-300 hover:text-amber-200 transition my-0.5"
-                            title="Base Attack Bonus. Click to customize."
-                          >
-                            {formatModifier(bab)}
-                          </button>
-                          <span className="text-[8px] text-amber-400/80 font-mono truncate max-w-full" title={`Full Attack: ${format35eBabProgression(bab)}`}>
-                            {format35eBabProgression(bab)}
-                          </span>
+                          <div className="h-7 w-full flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => setShow35eBabModal(true)}
+                              className="text-lg font-serif font-extrabold text-amber-300 hover:text-amber-200 transition leading-none cursor-pointer"
+                              title="Base Attack Bonus. Click to customize."
+                            >
+                              {formatModifier(bab)}
+                            </button>
+                          </div>
+                          <div className="h-3.5 w-full flex items-center justify-center">
+                            <span className="text-[8px] text-amber-400/80 font-mono truncate max-w-full px-0.5" title={`Attack Progression: ${progression}`}>
+                              {bab >= 6 ? progression : 'Single Atk'}
+                            </span>
+                          </div>
                         </div>
                       );
                     })()}
@@ -805,67 +884,85 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     {(() => {
                       const grappleMod = get35eGrapple(character);
                       return (
-                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                          <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">Grapple / SR</span>
-                          <button
-                            type="button"
-                            onClick={() => onRoll('Grapple Check', 20, 1, grappleMod, 'normal')}
-                            className="text-base font-serif font-extrabold text-amber-300 hover:text-amber-200 transition my-0.5"
-                            title={`Click to roll Grapple Check: d20 + ${grappleMod}`}
-                          >
-                            {formatModifier(grappleMod)}
-                            {character.spellResist ? <span className="text-xs text-cyan-300 font-normal font-mono ml-1">SR {character.spellResist}</span> : null}
-                          </button>
-                          <span className="text-[8px] text-stone-500 truncate">BAB + STR + Size</span>
+                        <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] transition hover:border-stone-700">
+                          <div className="h-4 w-full flex items-center justify-center">
+                            <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">Grapple / SR</span>
+                          </div>
+                          <div className="h-7 w-full flex items-center justify-center">
+                            <button
+                              type="button"
+                              onClick={() => onRoll('Grapple Check', 20, 1, grappleMod, 'normal')}
+                              className="text-lg font-serif font-extrabold text-amber-300 hover:text-amber-200 transition leading-none cursor-pointer flex items-center gap-1"
+                              title={`Click to roll Grapple Check: d20 + ${grappleMod}${character.spellResist ? ` | Spell Resistance: ${character.spellResist}` : ''}`}
+                            >
+                              <span>{formatModifier(grappleMod)}</span>
+                              {character.spellResist ? <span className="text-[10px] text-cyan-300 font-normal font-mono">SR{character.spellResist}</span> : null}
+                            </button>
+                          </div>
+                          <div className="h-3.5 w-full flex items-center justify-center">
+                            <span className="text-[8px] text-stone-500 font-mono truncate px-0.5" title="BAB + STR mod + Size mod">BAB+STR+Size</span>
+                          </div>
                         </div>
                       );
                     })()}
 
                     {/* Speed */}
-                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                      <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">{t('stats.speed', 'Speed')}</span>
-                      <span className="text-lg font-serif font-extrabold text-sky-300 my-0.5 flex items-center gap-1">
-                        <Footprints className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                        {speedInfo.effectiveSpeed} <span className="text-[10px] font-normal">ft</span>
-                      </span>
-                      <span className="text-[8px] text-stone-500 truncate max-w-full" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
-                        {speedInfo.reasons?.join('; ') || speedInfo.status || 'Base speed'}
-                      </span>
+                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] transition hover:border-stone-700">
+                      <div className="h-4 w-full flex items-center justify-center">
+                        <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">{t('stats.speed', 'Speed')}</span>
+                      </div>
+                      <div className="h-7 w-full flex items-center justify-center">
+                        <span className="text-lg font-serif font-extrabold text-sky-300 leading-none flex items-center gap-1">
+                          <Footprints className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                          <span>{speedInfo.effectiveSpeed}</span>
+                          <span className="text-[10px] font-normal font-mono text-stone-400">ft</span>
+                        </span>
+                      </div>
+                      <div className="h-3.5 w-full flex items-center justify-center">
+                        <span className="text-[8px] text-stone-500 font-mono truncate px-0.5" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
+                          {speedInfo.reasons?.join('; ') || speedInfo.status || 'Normal'}
+                        </span>
+                      </div>
                     </div>
 
                     {/* 3.5e Attacks of Opportunity (AoO) Pool */}
-                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                      <div className="flex items-center justify-between w-full px-1">
-                        <span className="text-[9px] text-stone-400 font-sans uppercase font-bold">AoO Pool</span>
+                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] relative group hover:border-stone-700 transition">
+                      <div className="h-4 w-full flex items-center justify-center relative px-1">
+                        <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">AoO Pool</span>
                         <button
                           type="button"
                           onClick={() => setShow35eAoOModal(true)}
-                          className="text-stone-500 hover:text-red-400 transition"
+                          className="absolute right-0 top-0 text-stone-500 hover:text-red-400 transition p-0.5 cursor-pointer"
                           title="Open 3.5e Attack of Opportunity Tracker"
                         >
                           <Pencil className="w-2.5 h-2.5" />
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShow35eAoOModal(true)}
-                        className="text-lg font-serif font-extrabold text-red-400 hover:text-red-300 transition my-0.5 flex items-baseline gap-1"
-                        title="Remaining AoOs this combat round. Click to manage."
-                      >
-                        {aooInfo.currentAoO}
-                        <span className="text-[10px] font-mono text-stone-500">/{aooInfo.maxAoO}</span>
-                      </button>
-                      <span className="text-[8px] text-red-400/80 truncate font-mono">
-                        {aooInfo.threatReachFt}ft {aooInfo.hasCombatReflexes ? 'Reflexes' : 'Threat'}
-                      </span>
+                      <div className="h-7 w-full flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={() => setShow35eAoOModal(true)}
+                          className="text-lg font-serif font-extrabold text-red-400 hover:text-red-300 transition leading-none cursor-pointer flex items-baseline gap-0.5"
+                          title="Remaining AoOs this combat round. Click to manage."
+                        >
+                          <span>{aooInfo.currentAoO}</span>
+                          <span className="text-[10px] font-mono text-stone-500">/{aooInfo.maxAoO}</span>
+                        </button>
+                      </div>
+                      <div className="h-3.5 w-full flex items-center justify-center">
+                        <span className="text-[8px] text-red-400/80 font-mono truncate px-0.5">
+                          {aooInfo.threatReachFt}ft {aooInfo.hasCombatReflexes ? 'Reflex' : 'Threat'}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
-                  {/* 3.5e Official AC Equation Breakdown */}
-                  <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-600/40 text-stone-200 shadow-md">
-                    <div className="flex items-center justify-between border-b border-stone-800/80 pb-1.5 mb-2">
+                  {/* 3.5e Official AC Equation & Tri-Stat Breakdown */}
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-600/40 text-stone-200 shadow-md space-y-2">
+                    {/* Header Bar */}
+                    <div className="flex items-center justify-between border-b border-stone-800/80 pb-1.5">
                       <div className="flex items-center gap-1.5">
-                        <div className="bg-stone-900 border border-stone-700 px-2 py-0.5 rounded text-[10px] font-black tracking-wider text-amber-300 font-sans uppercase flex items-center gap-1">
+                        <div className="bg-stone-900 border border-stone-700/80 px-2 py-0.5 rounded text-[10px] font-black tracking-wider text-amber-300 font-sans uppercase flex items-center gap-1">
                           <Shield className="w-3 h-3 text-amber-400" />
                           <span>AC</span>
                           <span className="text-stone-400 font-normal text-[8.5px]">ARMOR CLASS</span>
@@ -873,7 +970,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                       </div>
                       <button
                         onClick={() => setShow35eAcModal(true)}
-                        className="text-[9.5px] text-amber-400 hover:text-amber-300 font-mono bg-stone-900 px-2 py-0.5 rounded border border-amber-700/50 flex items-center gap-1 transition shadow-sm hover:bg-stone-800"
+                        className="text-[9.5px] text-amber-400 hover:text-amber-300 font-mono bg-stone-900 px-2 py-0.5 rounded border border-amber-700/50 flex items-center gap-1 transition shadow-sm hover:bg-stone-800 cursor-pointer"
                         title="Customize 3.5e AC Modifiers (Natural Armor, Deflection, Size, Dodge, Misc)"
                       >
                         <Pencil className="w-2.5 h-2.5" />
@@ -881,109 +978,206 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                       </button>
                     </div>
 
-                    {/* Equation Row */}
-                    <div className="overflow-x-auto pb-1">
-                      <div className="flex items-center justify-between gap-1 text-center font-mono text-xs">
-                        {/* TOTAL AC */}
-                        <div className="flex flex-col items-center bg-stone-900 border border-amber-500 rounded p-1 min-w-[48px] shadow-sm">
-                          <span className="text-base font-extrabold text-amber-300 font-serif leading-none">{ac35.totalAc}</span>
-                          <span className="text-[7.5px] text-stone-400 font-sans uppercase font-bold mt-1">TOTAL</span>
-                        </div>
+                    {/* Tri-Stat AC Overview: Total AC, Touch AC, Flat-Footed AC */}
+                    {(() => {
+                      const isTotalCover = character.activeCover === 'total';
+                      return (
+                        <>
+                          <div className="grid grid-cols-3 gap-1.5 font-mono text-center">
+                            {/* Total AC */}
+                            <div className={`border rounded-lg p-1.5 flex flex-col items-center justify-center shadow-inner transition ${
+                              isTotalCover
+                                ? 'bg-cyan-950/40 border-cyan-500/70 shadow-cyan-950/40'
+                                : 'bg-stone-900/90 border-amber-500/70'
+                            }`}>
+                              <span className={`text-[8px] font-sans uppercase font-bold tracking-wider flex items-center gap-0.5 ${
+                                isTotalCover ? 'text-cyan-300' : 'text-amber-400'
+                              }`}>
+                                {isTotalCover && <ShieldAlert className="w-2.5 h-2.5 text-cyan-400" />}
+                                Total AC
+                              </span>
+                              {isTotalCover ? (
+                                <span className="text-sm font-serif font-black text-cyan-300 leading-none my-1 tracking-wider uppercase">
+                                  BLOCKED
+                                </span>
+                              ) : (
+                                <span className="text-2xl font-serif font-black text-amber-300 leading-none my-0.5">{ac35.totalAc}</span>
+                              )}
+                              <span className={`text-[7.5px] font-mono ${isTotalCover ? 'text-cyan-400/90 font-semibold' : 'text-stone-400'}`}>
+                                {isTotalCover ? `Untargetable (${ac35.totalAc})` : 'Full Defense'}
+                              </span>
+                            </div>
 
-                        <span className="text-stone-400 font-bold text-xs">=</span>
+                            {/* Touch AC */}
+                            <div className={`border rounded-lg p-1.5 flex flex-col items-center justify-center transition ${
+                              isTotalCover
+                                ? 'bg-cyan-950/20 border-cyan-800/50'
+                                : 'bg-stone-900/60 border-stone-800 hover:border-stone-700'
+                            }`}>
+                              <span className={`text-[8px] font-sans uppercase font-bold tracking-wider ${
+                                isTotalCover ? 'text-cyan-400/80' : 'text-stone-400'
+                              }`}>Touch AC</span>
+                              {isTotalCover ? (
+                                <span className="text-sm font-serif font-extrabold text-cyan-300/80 leading-none my-1 tracking-wider uppercase">
+                                  BLOCKED
+                                </span>
+                              ) : (
+                                <span className="text-xl font-serif font-extrabold text-amber-200/90 leading-none my-0.5">{ac35.touchAc}</span>
+                              )}
+                              <span className="text-[7.5px] text-stone-500 font-mono truncate max-w-full" title={isTotalCover ? 'No Line of Effect' : 'Ignores Armor, Shield & Natural Armor'}>
+                                {isTotalCover ? 'No Line of Effect' : 'No Armor/Nat'}
+                              </span>
+                            </div>
 
+                            {/* Flat-Footed AC */}
+                            <div className={`border rounded-lg p-1.5 flex flex-col items-center justify-center transition ${
+                              isTotalCover
+                                ? 'bg-cyan-950/20 border-cyan-800/50'
+                                : 'bg-stone-900/60 border-stone-800 hover:border-stone-700'
+                            }`}>
+                              <span className={`text-[8px] font-sans uppercase font-bold tracking-wider ${
+                                isTotalCover ? 'text-cyan-400/80' : 'text-stone-400'
+                              }`}>Flat-Footed</span>
+                              {isTotalCover ? (
+                                <span className="text-sm font-serif font-extrabold text-cyan-300/80 leading-none my-1 tracking-wider uppercase">
+                                  BLOCKED
+                                </span>
+                              ) : (
+                                <span className="text-xl font-serif font-extrabold text-amber-200/90 leading-none my-0.5">{ac35.flatFootedAc}</span>
+                              )}
+                              <span className="text-[7.5px] text-stone-500 font-mono truncate max-w-full" title={isTotalCover ? 'Cannot Be Targeted' : 'Ignores DEX bonus & Dodge'}>
+                                {isTotalCover ? 'Cannot Target' : 'No Dex/Dodge'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Total Cover Banner Alert */}
+                          {isTotalCover && (
+                            <div className="bg-cyan-950/40 border border-cyan-700/60 rounded-lg p-2 flex items-center justify-between text-xs font-mono text-cyan-200 shadow-sm">
+                              <div className="flex items-center gap-2 min-w-0 pr-2">
+                                <ShieldAlert className="w-4 h-4 text-cyan-400 shrink-0" />
+                                <div className="text-left min-w-0">
+                                  <div className="font-bold font-sans text-cyan-300 text-[10px] uppercase tracking-wider">
+                                    Total Cover Active (PHB p. 150)
+                                  </div>
+                                  <div className="text-[8.5px] text-cyan-300/80 font-sans leading-snug">
+                                    Obstruction blocks line of effect. Direct melee, ranged, and targeted attacks cannot target this creature. Base AC ({ac35.totalAc}) applies if cover is bypassed.
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[9px] font-bold bg-cyan-900/80 border border-cyan-500/60 px-1.5 py-0.5 rounded text-cyan-200 shrink-0 uppercase tracking-wider">
+                                Untargetable
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+
+                    {/* Modifier Equation Breakdown - Mathematical 8-Column Grid (No Overflow/Scrollbar) */}
+                    <div className="bg-stone-900/50 border border-stone-800/80 rounded-lg p-1.5">
+                      <div className="flex items-center justify-between text-[8px] text-stone-400 font-mono mb-1 px-0.5">
+                        <span className="font-semibold uppercase tracking-wider text-stone-400">Modifier Breakdown</span>
+                        <span className="text-stone-500">10 Base + Modifiers = {ac35.totalAc}</span>
+                      </div>
+                      <div className="grid grid-cols-8 gap-1 text-center font-mono">
                         {/* BASE 10 */}
-                        <div className="flex flex-col items-center px-0.5">
-                          <span className="text-xs font-extrabold text-stone-300">10</span>
-                          <span className="text-[7.5px] text-stone-500 font-sans uppercase mt-0.5">BASE</span>
+                        <div className="flex flex-col items-center bg-stone-950/80 border border-stone-800/90 rounded py-1 px-0.5">
+                          <span className="text-xs font-extrabold text-stone-200 leading-none">10</span>
+                          <span className="text-[7px] text-stone-500 font-sans uppercase font-bold mt-0.5">BASE</span>
                         </div>
 
-                        <span className="text-stone-500 font-bold text-[10px]">+</span>
-
-                        {/* ARMOR BONUS */}
-                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.armor.join(', ') || 'Armor Bonus'}>
-                          <span className="text-xs font-bold text-sky-300 leading-none">{ac35.armorBonus}</span>
-                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">ARMOR</span>
+                        {/* ARMOR */}
+                        <div
+                          className={`flex flex-col items-center rounded py-1 px-0.5 border ${
+                            ac35.armorBonus > 0 ? 'bg-sky-950/40 border-sky-800/60 text-sky-300' : 'bg-stone-950/80 border-stone-800/90 text-stone-400'
+                          }`}
+                          title={ac35.sources.armor.join(', ') || 'Armor Bonus'}
+                        >
+                          <span className="text-xs font-bold leading-none">{ac35.armorBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase font-bold mt-0.5">ARMOR</span>
                         </div>
 
-                        <span className="text-stone-500 font-bold text-[10px]">+</span>
-
-                        {/* SHIELD BONUS */}
-                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.shield.join(', ') || 'Shield Bonus'}>
-                          <span className="text-xs font-bold text-indigo-300 leading-none">{ac35.shieldBonus}</span>
-                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">SHIELD</span>
+                        {/* SHIELD */}
+                        <div
+                          className={`flex flex-col items-center rounded py-1 px-0.5 border ${
+                            ac35.shieldBonus > 0 ? 'bg-indigo-950/40 border-indigo-800/60 text-indigo-300' : 'bg-stone-950/80 border-stone-800/90 text-stone-400'
+                          }`}
+                          title={ac35.sources.shield.join(', ') || 'Shield Bonus'}
+                        >
+                          <span className="text-xs font-bold leading-none">{ac35.shieldBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase font-bold mt-0.5">SHIELD</span>
                         </div>
 
-                        <span className="text-stone-500 font-bold text-[10px]">+</span>
-
-                        {/* DEX MODIFIER */}
-                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.dex.join(', ') || 'Dexterity Modifier'}>
-                          <span className="text-xs font-bold text-emerald-300 leading-none">{ac35.dexBonus >= 0 ? `+${ac35.dexBonus}` : ac35.dexBonus}</span>
-                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">DEX</span>
+                        {/* DEX */}
+                        <div
+                          className={`flex flex-col items-center rounded py-1 px-0.5 border ${
+                            ac35.dexBonus !== 0 ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300' : 'bg-stone-950/80 border-stone-800/90 text-stone-400'
+                          }`}
+                          title={ac35.sources.dex.join(', ') || 'Dexterity Modifier'}
+                        >
+                          <span className="text-xs font-bold leading-none">{ac35.dexBonus >= 0 ? `+${ac35.dexBonus}` : ac35.dexBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase font-bold mt-0.5">DEX</span>
                         </div>
 
-                        <span className="text-stone-500 font-bold text-[10px]">+</span>
-
-                        {/* SIZE MODIFIER */}
-                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.size.join(', ') || 'Size Modifier'}>
-                          <span className="text-xs font-bold text-yellow-300 leading-none">{ac35.sizeModifier >= 0 ? `+${ac35.sizeModifier}` : ac35.sizeModifier}</span>
-                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">SIZE</span>
+                        {/* SIZE */}
+                        <div
+                          className={`flex flex-col items-center rounded py-1 px-0.5 border ${
+                            ac35.sizeModifier !== 0 ? 'bg-yellow-950/40 border-yellow-800/60 text-yellow-300' : 'bg-stone-950/80 border-stone-800/90 text-stone-400'
+                          }`}
+                          title={ac35.sources.size.join(', ') || 'Size Modifier'}
+                        >
+                          <span className="text-xs font-bold leading-none">{ac35.sizeModifier >= 0 ? `+${ac35.sizeModifier}` : ac35.sizeModifier}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase font-bold mt-0.5">SIZE</span>
                         </div>
 
-                        <span className="text-stone-500 font-bold text-[10px]">+</span>
-
-                        {/* NATURAL ARMOR */}
-                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.natural.join(', ') || 'Natural Armor'}>
-                          <span className="text-xs font-bold text-amber-300 leading-none">{ac35.naturalArmorBonus}</span>
-                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">NATURAL</span>
+                        {/* NATURAL */}
+                        <div
+                          className={`flex flex-col items-center rounded py-1 px-0.5 border ${
+                            ac35.naturalArmorBonus > 0 ? 'bg-amber-950/40 border-amber-800/60 text-amber-300' : 'bg-stone-950/80 border-stone-800/90 text-stone-400'
+                          }`}
+                          title={ac35.sources.natural.join(', ') || 'Natural Armor'}
+                        >
+                          <span className="text-xs font-bold leading-none">{ac35.naturalArmorBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase font-bold mt-0.5">NAT</span>
                         </div>
 
-                        <span className="text-stone-500 font-bold text-[10px]">+</span>
-
-                        {/* DEFLECTION MODIFIER */}
-                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.deflection.join(', ') || 'Deflection Modifier'}>
-                          <span className="text-xs font-bold text-cyan-300 leading-none">{ac35.deflectionBonus}</span>
-                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">DEFLECT</span>
+                        {/* DEFLECTION */}
+                        <div
+                          className={`flex flex-col items-center rounded py-1 px-0.5 border ${
+                            ac35.deflectionBonus > 0 ? 'bg-cyan-950/40 border-cyan-800/60 text-cyan-300' : 'bg-stone-950/80 border-stone-800/90 text-stone-400'
+                          }`}
+                          title={ac35.sources.deflection.join(', ') || 'Deflection Modifier'}
+                        >
+                          <span className="text-xs font-bold leading-none">{ac35.deflectionBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase font-bold mt-0.5">DEFL</span>
                         </div>
 
-                        <span className="text-stone-500 font-bold text-[10px]">+</span>
-
-                        {/* MISC MODIFIER */}
-                        <div className="flex flex-col items-center bg-stone-900/90 border border-stone-800 rounded p-1 min-w-[40px]" title={ac35.sources.misc.join(', ') || 'Misc Modifier (Dodge, Insight, etc.)'}>
-                          <span className="text-xs font-bold text-purple-300 leading-none">{ac35.miscBonus}</span>
-                          <span className="text-[7px] text-stone-400 font-sans uppercase leading-tight mt-0.5">MISC</span>
+                        {/* MISC */}
+                        <div
+                          className={`flex flex-col items-center rounded py-1 px-0.5 border ${
+                            ac35.miscBonus > 0 ? 'bg-purple-950/40 border-purple-800/60 text-purple-300' : 'bg-stone-950/80 border-stone-800/90 text-stone-400'
+                          }`}
+                          title={ac35.sources.misc.join(', ') || 'Misc Modifier (Dodge, Insight, etc.)'}
+                        >
+                          <span className="text-xs font-bold leading-none">{ac35.miscBonus}</span>
+                          <span className="text-[7px] text-stone-400 font-sans uppercase font-bold mt-0.5">MISC</span>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Touch & Flat-Footed subrow */}
-                    <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-stone-800/90 text-xs font-mono text-center">
-                      <div className="bg-stone-900/80 p-1.5 rounded border border-stone-800 flex items-center justify-between px-2.5">
-                        <div className="text-left">
-                          <div className="text-[8.5px] text-stone-400 font-sans uppercase font-semibold">Touch AC</div>
-                          <div className="text-[7.5px] text-stone-500">Ignores Armor/Shield/Nat</div>
-                        </div>
-                        <div className="font-bold text-amber-300 text-base">{ac35.touchAc}</div>
-                      </div>
-                      <div className="bg-stone-900/80 p-1.5 rounded border border-stone-800 flex items-center justify-between px-2.5">
-                        <div className="text-left">
-                          <div className="text-[8.5px] text-stone-400 font-sans uppercase font-semibold">Flat-Footed AC</div>
-                          <div className="text-[7.5px] text-stone-500">Ignores DEX / Dodge</div>
-                        </div>
-                        <div className="font-bold text-amber-300 text-base">{ac35.flatFootedAc}</div>
                       </div>
                     </div>
 
                     {/* 3.5e Armor Check Penalty (ACP) Breakdown */}
-                    <div className="bg-stone-900/80 p-1.5 rounded border border-stone-800 flex items-center justify-between px-2.5 mt-2 text-xs font-mono">
-                      <div className="text-left">
-                        <div className="text-[8.5px] text-stone-400 font-sans uppercase font-semibold">Armor Check Penalty (ACP)</div>
-                        <div className="text-[7.5px] text-stone-500 truncate max-w-[220px]" title={acp35.breakdown.join('; ')}>
+                    <div className="bg-stone-900/70 p-2 rounded-lg border border-stone-800 flex items-center justify-between px-2.5 text-xs font-mono">
+                      <div className="text-left min-w-0 pr-2">
+                        <div className="text-[8.5px] text-stone-400 font-sans uppercase font-bold">Armor Check Penalty (ACP)</div>
+                        <div className="text-[7.5px] text-stone-500 truncate" title={acp35.breakdown.join('; ')}>
                           {acp35.breakdown.length > 0 ? acp35.breakdown.join(' • ') : 'No check penalty active'}
                         </div>
                       </div>
-                      <div className={`font-bold text-sm ${acp35.totalAcp < 0 ? 'text-amber-400' : 'text-stone-400'}`}>
-                        {acp35.totalAcp}
+                      <div className={`font-mono font-bold text-xs px-2 py-0.5 rounded border shrink-0 ${
+                        acp35.totalAcp < 0 ? 'bg-amber-950/50 border-amber-800/60 text-amber-400' : 'bg-stone-950 border-stone-800 text-stone-400'
+                      }`}>
+                        {acp35.totalAcp} ACP
                       </div>
                     </div>
                   </div>
@@ -993,45 +1187,88 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
                         <Shield className="w-3 h-3 text-amber-400" />
-                        <span>Tactical Cover & Line of Sight (PHB p. 150)</span>
+                        <span>Tactical Cover (PHB p. 150)</span>
                       </span>
-                      <span className="font-mono text-stone-400">
-                        {character.activeCover === 'standard' && '+4 AC, +2 Reflex Save'}
-                        {character.activeCover === 'improved' && '+8 AC, +4 Ref, +10 Hide, Improved Evasion'}
-                        {character.activeCover === 'total' && 'Cannot be targeted by direct attacks/spells'}
-                        {(!character.activeCover || character.activeCover === 'none') && 'No active cover'}
-                      </span>
+                      <div>
+                        {character.activeCover === 'standard' && (
+                          <span className="text-[9px] font-mono text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-700/60">+4 AC • +2 Ref</span>
+                        )}
+                        {character.activeCover === 'improved' && (
+                          <span className="text-[9px] font-mono text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-700/60">+8 AC • +4 Ref • Evasion</span>
+                        )}
+                        {character.activeCover === 'total' && (
+                          <span className="text-[9px] font-mono font-bold text-cyan-300 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/80 flex items-center gap-1 shadow-sm">
+                            <ShieldAlert className="w-3 h-3 text-cyan-400" /> Untargetable (Attacks Blocked)
+                          </span>
+                        )}
+                        {(!character.activeCover || character.activeCover === 'none') && (
+                          <span className="text-[9px] font-mono text-stone-500 bg-stone-900 px-1.5 py-0.5 rounded border border-stone-800">None</span>
+                        )}
+                      </div>
                     </div>
                     <div className="grid grid-cols-4 gap-1.5">
-                      {(['none', 'standard', 'improved', 'total'] as const).map((cov) => {
-                        const isActive = (character.activeCover || 'none') === cov;
-                        const label = cov === 'none' ? 'No Cover' : cov === 'standard' ? 'Standard (+4)' : cov === 'improved' ? 'Improved (+8)' : 'Total Cover';
+                      {[
+                        { id: 'none', label: 'No Cover', sub: 'Normal', activeClass: 'bg-stone-800 text-stone-200 border-stone-600' },
+                        { id: 'standard', label: 'Standard', sub: '+4 AC • +2 Ref', activeClass: 'bg-amber-950 text-amber-200 border-amber-500 shadow-sm' },
+                        { id: 'improved', label: 'Improved', sub: '+8 AC • +4 Ref', activeClass: 'bg-amber-950 text-amber-200 border-amber-500 shadow-sm' },
+                        { id: 'total', label: 'Total Cover', sub: 'Untargetable', activeClass: 'bg-cyan-950 text-cyan-200 border-cyan-400 shadow-sm shadow-cyan-950' },
+                      ].map((cov) => {
+                        const isActive = (character.activeCover || 'none') === cov.id;
                         return (
                           <button
-                            key={cov}
+                            key={cov.id}
                             type="button"
-                            onClick={() => onUpdateCharacter({ ...character, activeCover: cov })}
-                            className={`py-1 px-1.5 rounded-lg text-[10px] font-bold font-mono transition text-center truncate cursor-pointer ${
+                            onClick={() => onUpdateCharacter({ ...character, activeCover: cov.id as any })}
+                            className={`h-9 px-1 rounded-lg text-center cursor-pointer flex flex-col items-center justify-center transition border ${
                               isActive
-                                ? 'bg-amber-950 text-amber-200 border border-amber-500 shadow'
-                                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                                ? cov.activeClass
+                                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border-stone-800'
                             }`}
                           >
-                            {label}
+                            <span className="text-[10px] font-bold font-sans leading-tight">{cov.label}</span>
+                            <span className={`text-[7.5px] font-mono leading-tight mt-0.5 ${isActive ? 'opacity-90 font-semibold' : 'text-stone-500'}`}>
+                              {cov.sub}
+                            </span>
                           </button>
                         );
                       })}
                     </div>
                   </div>
+
+                  {/* 3.5e Senses & Vision Display */}
+                  <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex items-center justify-between text-xs font-mono px-3">
+                    <div className="flex items-center gap-1.5 text-stone-400 font-sans text-[10px] uppercase font-bold">
+                      <Moon className="w-3 h-3 text-indigo-400" />
+                      <span>Senses & Vision</span>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-300">
+                      {character.senses || 'Normal Vision'}
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2 text-center font-mono">
                   {/* AC */}
-                  <div className="bg-stone-950 p-2.5 rounded-xl border border-amber-500/30 flex flex-col items-center justify-center relative group">
-                    <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('defenses.armorClass', 'Armor Class')}</span>
-                    <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{character.armorClass}</span>
+                  <div className={`bg-stone-950 p-2.5 rounded-xl border flex flex-col items-center justify-center relative group ${
+                    character.activeCover === 'total' ? 'border-cyan-500/70 bg-cyan-950/20 shadow-sm' : 'border-amber-500/30'
+                  }`}>
+                    <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">
+                      {character.activeCover === 'total' ? 'Cover AC (PHB p. 196)' : t('defenses.armorClass', 'Armor Class')}
+                    </span>
+                    {character.activeCover === 'total' ? (
+                      <div className="flex flex-col items-center my-0.5">
+                        <span className="text-base font-serif font-black text-cyan-300 leading-none my-0.5 flex items-center gap-1 uppercase">
+                          <ShieldAlert className="w-3.5 h-3.5 text-cyan-400" /> BLOCKED
+                        </span>
+                        <span className="text-[8px] text-cyan-400/90 font-mono">Untargetable ({character.armorClass})</span>
+                      </div>
+                    ) : (
+                      <span className="text-2xl font-serif font-extrabold text-amber-300 my-0.5">{character.armorClass}</span>
+                    )}
                     <span className="text-[9px] text-stone-500 truncate max-w-full">
-                      {getArmorClassBreakdown(character).explanation || `Base ${getArmorClassBreakdown(character).baseAc}`}
+                      {character.activeCover === 'total'
+                        ? 'Immune to direct attacks & targeted spells'
+                        : getArmorClassBreakdown(character).explanation || `Base ${getArmorClassBreakdown(character).baseAc}`}
                     </span>
                   </div>
 
@@ -1066,39 +1303,64 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   </div>
 
                   {/* 5e Tactical Cover & Line of Sight Selector (PHB p. 196) */}
-                  <div className="bg-stone-950 px-2.5 py-2 rounded-xl border border-stone-800 space-y-1.5 col-span-3">
+                  <div className="bg-stone-950 px-3 py-2 rounded-xl border border-stone-800 space-y-1.5 col-span-3">
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
                         <Shield className="w-3 h-3 text-amber-400" />
                         <span>Tactical Cover (5e PHB p. 196)</span>
                       </span>
-                      <span className="font-mono text-stone-400">
-                        {character.activeCover === 'standard' && '+2 AC & Dex Saves (Half Cover)'}
-                        {character.activeCover === 'improved' && '+5 AC & Dex Saves (Three-Quarters Cover)'}
-                        {character.activeCover === 'total' && 'Cannot be targeted directly (Total Cover)'}
-                        {(!character.activeCover || character.activeCover === 'none') && 'No active cover'}
-                      </span>
+                      <div>
+                        {character.activeCover === 'standard' && (
+                          <span className="text-[9px] font-mono text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-700/60">+2 AC & Dex Saves</span>
+                        )}
+                        {character.activeCover === 'improved' && (
+                          <span className="text-[9px] font-mono text-amber-300 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-700/60">+5 AC & Dex Saves</span>
+                        )}
+                        {character.activeCover === 'total' && (
+                          <span className="text-[9px] font-mono font-bold text-cyan-300 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-500/80 flex items-center gap-1 shadow-sm">
+                            <ShieldAlert className="w-3 h-3 text-cyan-400" /> Untargetable (Attacks Blocked)
+                          </span>
+                        )}
+                        {(!character.activeCover || character.activeCover === 'none') && (
+                          <span className="text-[9px] font-mono text-stone-500 bg-stone-900 px-1.5 py-0.5 rounded border border-stone-800">None</span>
+                        )}
+                      </div>
                     </div>
                     <div className="grid grid-cols-4 gap-1.5">
-                      {(['none', 'standard', 'improved', 'total'] as const).map((cov) => {
-                        const isActive = (character.activeCover || 'none') === cov;
-                        const label = cov === 'none' ? 'No Cover' : cov === 'standard' ? 'Half (+2)' : cov === 'improved' ? '3/4 (+5)' : 'Total Cover';
+                      {[
+                        { id: 'none', label: 'No Cover', sub: 'Normal', activeClass: 'bg-stone-800 text-stone-200 border-stone-600' },
+                        { id: 'standard', label: 'Half Cover', sub: '+2 AC & Dex', activeClass: 'bg-amber-950 text-amber-200 border-amber-500 shadow-sm' },
+                        { id: 'improved', label: '3/4 Cover', sub: '+5 AC & Dex', activeClass: 'bg-amber-950 text-amber-200 border-amber-500 shadow-sm' },
+                        { id: 'total', label: 'Total Cover', sub: 'Untargetable', activeClass: 'bg-cyan-950 text-cyan-200 border-cyan-400 shadow-sm shadow-cyan-950' },
+                      ].map((cov) => {
+                        const isActive = (character.activeCover || 'none') === cov.id;
                         return (
                           <button
-                            key={cov}
+                            key={cov.id}
                             type="button"
-                            onClick={() => onUpdateCharacter({ ...character, activeCover: cov })}
-                            className={`py-1 px-1.5 rounded-lg text-[10px] font-bold font-mono transition text-center truncate cursor-pointer ${
+                            onClick={() => onUpdateCharacter({ ...character, activeCover: cov.id as any })}
+                            className={`h-9 px-1 rounded-lg text-center cursor-pointer flex flex-col items-center justify-center transition border ${
                               isActive
-                                ? 'bg-amber-950 text-amber-200 border border-amber-500 shadow'
-                                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border border-stone-800'
+                                ? cov.activeClass
+                                : 'bg-stone-900 text-stone-400 hover:text-stone-200 border-stone-800'
                             }`}
                           >
-                            {label}
+                            <span className="text-[10px] font-bold font-sans leading-tight">{cov.label}</span>
+                            <span className={`text-[7.5px] font-mono leading-tight mt-0.5 ${isActive ? 'opacity-90 font-semibold' : 'text-stone-500'}`}>
+                              {cov.sub}
+                            </span>
                           </button>
                         );
                       })}
                     </div>
+                    {character.activeCover === 'total' && (
+                      <div className="bg-cyan-950/30 border border-cyan-700/50 rounded-lg p-1.5 flex items-center gap-2 text-xs font-mono text-cyan-200">
+                        <ShieldAlert className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                        <span className="text-[8.5px] text-cyan-300/90 font-sans">
+                          <strong>Total Cover Active:</strong> Obstruction completely conceals character. Direct melee, ranged, and targeted attacks cannot target this creature (PHB p. 196).
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* 5e Passive Senses & Defenses */}
@@ -1115,9 +1377,35 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     const insightBonus = effectiveWisMod + (insightSkill?.expertise ? profBonus * 2 : insightSkill?.proficient ? profBonus : 0);
                     const passiveInsight = 10 + insightBonus;
 
+                    // Resolve Darkvision and special senses accurately:
                     const raceLower = (character.race || '').toLowerCase();
-                    const racialDarkvision = ['elf', 'dwarf', 'gnome', 'tiefling', 'orc', 'half-orc', 'half-elf', 'drow'].some((r) => raceLower.includes(r));
-                    const darkvisionFt = racialDarkvision ? '60 ft.' : 'None';
+                    const sensesLower = (character.senses || '').toLowerCase();
+
+                    let darkvisionFt = 'None';
+
+                    // 1. Check explicit character.senses field
+                    if (sensesLower.includes('darkvision')) {
+                      const match = sensesLower.match(/darkvision\s*(\d+)\s*ft/);
+                      darkvisionFt = match ? `${match[1]} ft.` : '60 ft.';
+                    } else if (character.hybridHeritage?.enabled) {
+                      // Hybrid / Half-Breed system
+                      if (character.hybridHeritage.hasDarkvision === false) {
+                        darkvisionFt = sensesLower.includes('low-light') ? 'Low-Light' : 'None';
+                      } else if (character.hybridHeritage.hasDarkvision) {
+                        darkvisionFt = '60 ft.';
+                      }
+                    } else {
+                      // Standard race fallback
+                      if (raceLower.includes('drow') || raceLower.includes('svirfneblin') || raceLower.includes('deep gnome')) {
+                        darkvisionFt = '120 ft.';
+                      } else if (['elf', 'dwarf', 'gnome', 'tiefling', 'orc', 'half-orc', 'half-elf', 'aasimar', 'tabaxi'].some((r) => raceLower.includes(r))) {
+                        darkvisionFt = '60 ft.';
+                      }
+                    }
+
+                    if (darkvisionFt === 'None' && sensesLower.includes('low-light')) {
+                      darkvisionFt = 'Low-Light';
+                    }
 
                     return (
                       <div className="col-span-3 grid grid-cols-3 gap-2 text-center font-mono">
@@ -1137,7 +1425,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
 
                         <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
                           <div className="text-[9px] text-stone-400 font-sans uppercase font-bold flex items-center justify-center gap-1">
-                            <Moon className="w-2.5 h-2.5 text-indigo-400" /> Darkvision
+                            <Moon className="w-2.5 h-2.5 text-indigo-400" /> Senses / Darkvision
                           </div>
                           <div className="text-xs font-bold text-indigo-300 mt-0.5">{darkvisionFt}</div>
                         </div>
@@ -1148,13 +1436,15 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
               )}
 
               {/* Damage Mitigation: Resistances, Immunities & Damage Reduction (DR) */}
-              <div className="grid grid-cols-3 gap-2 text-center font-mono">
+              <div className="grid grid-cols-3 gap-1.5 text-center font-mono">
                 {/* Resistances (50% damage) */}
-                <div className="bg-stone-950 p-1.5 rounded-xl border border-amber-900/40 flex flex-col justify-between min-h-[46px]">
-                  <span className="text-[9px] font-sans uppercase font-bold text-amber-400/90 tracking-wider">
-                    Resist (½)
-                  </span>
-                  <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
+                <div className="bg-stone-950 p-2 rounded-xl border border-amber-900/30 hover:border-amber-700/50 transition flex flex-col justify-between items-center h-[64px]">
+                  <div className="h-4 w-full flex items-center justify-center">
+                    <span className="text-[9px] font-sans uppercase font-bold text-amber-400/90 tracking-wider">
+                      Resist (½)
+                    </span>
+                  </div>
+                  <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-1">
                     {resistances.length > 0 ? (
                       resistances.map((r, idx) => (
                         <span
@@ -1166,17 +1456,19 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         </span>
                       ))
                     ) : (
-                      <span className="text-stone-500 italic text-[10px]">None</span>
+                      <span className="text-stone-600 font-mono text-[10px]">None</span>
                     )}
                   </div>
                 </div>
 
                 {/* Immunities (0 damage) */}
-                <div className="bg-stone-950 p-1.5 rounded-xl border border-emerald-900/40 flex flex-col justify-between min-h-[46px]">
-                  <span className="text-[9px] font-sans uppercase font-bold text-emerald-400/90 tracking-wider">
-                    Immune (0)
-                  </span>
-                  <div className="flex flex-wrap items-center justify-center gap-1 my-auto pt-0.5">
+                <div className="bg-stone-950 p-2 rounded-xl border border-emerald-900/30 hover:border-emerald-700/50 transition flex flex-col justify-between items-center h-[64px]">
+                  <div className="h-4 w-full flex items-center justify-center">
+                    <span className="text-[9px] font-sans uppercase font-bold text-emerald-400/90 tracking-wider">
+                      Immune (0)
+                    </span>
+                  </div>
+                  <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-1">
                     {immunities.length > 0 ? (
                       immunities.map((i, idx) => (
                         <span
@@ -1188,7 +1480,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         </span>
                       ))
                     ) : (
-                      <span className="text-stone-500 italic text-[10px]">None</span>
+                      <span className="text-stone-600 font-mono text-[10px]">None</span>
                     )}
                   </div>
                 </div>
@@ -1198,27 +1490,29 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   <button
                     type="button"
                     onClick={() => setShow35eDrModal(true)}
-                    className="bg-stone-950 p-1.5 rounded-xl border border-sky-900/40 hover:border-sky-500/70 transition flex flex-col justify-between min-h-[46px] group cursor-pointer text-center"
+                    className="bg-stone-950 p-2 rounded-xl border border-sky-900/30 hover:border-sky-500/60 transition flex flex-col justify-between items-center h-[64px] group cursor-pointer text-center"
                     title="Click to configure 3.5e DR, Energy Resistances, and test Damage Mitigation"
                   >
-                    <div className="flex items-center justify-between w-full">
+                    <div className="h-4 w-full flex items-center justify-center relative px-1">
                       <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
                         Damage Red.
                       </span>
-                      <Pencil className="w-2.5 h-2.5 text-stone-500 group-hover:text-sky-300 transition" />
+                      <Pencil className="w-2.5 h-2.5 text-stone-500 group-hover:text-sky-300 transition absolute right-0 top-0 p-0.5" />
                     </div>
-                    <div className="my-auto flex items-center justify-center gap-1 pt-0.5">
+                    <div className="flex-1 w-full flex items-center justify-center">
                       <span className="text-xs font-serif font-extrabold text-sky-300">
                         DR {character.damageReductionValue || 0}/{character.damageReductionBypass || '-'}
                       </span>
                     </div>
                   </button>
                 ) : (
-                  <div className="bg-stone-950 p-1.5 rounded-xl border border-sky-900/40 flex flex-col justify-between min-h-[46px]">
-                    <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
-                      Damage Red.
-                    </span>
-                    <div className="my-auto flex items-center justify-center gap-1 pt-0.5">
+                  <div className="bg-stone-950 p-2 rounded-xl border border-sky-900/30 flex flex-col justify-between items-center h-[64px]">
+                    <div className="h-4 w-full flex items-center justify-center">
+                      <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
+                        Damage Red.
+                      </span>
+                    </div>
+                    <div className="flex-1 w-full flex items-center justify-center gap-1">
                       <span className="text-sm font-serif font-extrabold text-sky-300">
                         {drInfo.totalDR !== 0 ? Math.abs(drInfo.totalDR) : '0'}
                       </span>
@@ -1335,15 +1629,31 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
 
                   {/* 3.5e Tactical Engines & Advanced Mechanics Suite Grid */}
                   <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
-                    <div className="text-[10px] font-bold text-stone-300 uppercase tracking-wider px-0.5 flex items-center justify-between">
+                    <div 
+                      onClick={() => setIsTacticalPanelExpanded(!isTacticalPanelExpanded)}
+                      className="text-[10px] font-bold text-stone-300 uppercase tracking-wider px-0.5 flex items-center justify-between cursor-pointer select-none hover:text-amber-200 transition"
+                      title={isTacticalPanelExpanded ? 'Click to collapse Tactical Engines' : 'Click to expand Tactical Engines'}
+                    >
                       <span className="flex items-center gap-1.5">
                         <Layers className="w-3.5 h-3.5 text-amber-400" />
                         <span>Tactical Engines & Mechanics</span>
+                        <span className="text-[9px] bg-stone-900 border border-stone-800 text-stone-400 px-1.5 py-0.2 rounded font-mono">
+                          8 tools
+                        </span>
                       </span>
-                      <span className="text-[9px] text-amber-500 font-mono font-bold">3.5e RAW</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] text-amber-500 font-mono font-bold">3.5e RAW</span>
+                        <button
+                          type="button"
+                          className="text-stone-400 hover:text-stone-200"
+                        >
+                          {isTacticalPanelExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-1.5 font-mono">
+                    {isTacticalPanelExpanded && (
+                      <div className="grid grid-cols-2 gap-1.5 font-mono animate-in fade-in duration-150">
                       {/* Combat Maneuvers */}
                       <button
                         type="button"
@@ -1512,6 +1822,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         </span>
                       </button>
                     </div>
+                    )}
                   </div>
                 </div>
               ) : (

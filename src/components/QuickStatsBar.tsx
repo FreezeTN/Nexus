@@ -7,12 +7,12 @@ import {
   Award,
   Eye,
   Brain,
-  UserCheck,
   Pencil
 } from 'lucide-react';
 import { CharacterData, RuleEdition } from '../types';
 import { HpOrb, getHpColorClass } from './HpOrb';
 import { MaxHpInspectorModal } from './modals/MaxHpInspectorModal';
+import { RuleBadge } from './common/RuleBadge';
 import { useLanguage } from '../i18n/LanguageContext';
 import {
   getEffectiveMaxHp,
@@ -20,6 +20,8 @@ import {
   getEffectiveSpeed,
   getProficiencyBonus,
   getPassivePerception,
+  getPassiveInvestigation,
+  getPassiveInsight,
   formatModifier,
   getCharacterBab,
   format35eBabProgression
@@ -28,17 +30,17 @@ import {
 interface QuickStatsBarProps {
   activeCharacter: CharacterData;
   edition?: RuleEdition;
+  activeTab?: string;
   onUpdateCharacter: (updated: CharacterData) => void;
   onRollInitiative: () => void;
-  onOpenLevelUp?: () => void;
 }
 
 export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
   activeCharacter,
   edition,
+  activeTab,
   onUpdateCharacter,
   onRollInitiative,
-  onOpenLevelUp,
 }) => {
   const { t } = useLanguage();
   const [hpDelta, setHpDelta] = useState<string>('');
@@ -48,6 +50,8 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
   const currentEdition = edition || activeCharacter.edition || '5e';
   const profBonus = getProficiencyBonus(activeCharacter.level);
   const passivePerception = getPassivePerception(activeCharacter);
+  const passiveInvestigation = getPassiveInvestigation(activeCharacter);
+  const passiveInsight = getPassiveInsight(activeCharacter);
   const speedInfo = getEffectiveSpeed(activeCharacter);
 
   const handleApplyHpChange = (mode: 'heal' | 'damage') => {
@@ -83,57 +87,59 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
   return (
     <div className="bg-stone-950/80 border border-stone-800 rounded-xl py-2.5 px-4 shadow-md">
       <div className="w-full mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-        {/* Quick HP Status */}
-        <div className="flex items-center gap-3 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
-          <HpOrb hpCurrent={activeCharacter.hpCurrent} hpMax={effectiveMaxHp} size="sm" showLabel={false} />
-          <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.hitPoints', 'Hit Points')}</div>
-            <div className="font-mono text-sm font-bold flex items-center gap-1">
-              <span className={getHpColorClass((activeCharacter.hpCurrent / Math.max(1, effectiveMaxHp)) * 100)}>
-                {activeCharacter.hpCurrent}
-              </span>
-              <span className="text-stone-500 font-normal">/</span>
-              <button
-                onClick={() => setShowMaxHpInspector(true)}
-                className="text-stone-200 hover:text-amber-300 font-mono font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer bg-stone-900/60 hover:bg-stone-800 px-1.5 py-0.5 rounded border border-stone-800 transition"
-                title="Click to inspect Max HP breakdown (Base, Feats, Equipped Items, Spells/Drain)"
-              >
-                <span>{effectiveMaxHp}</span>
-                <Pencil className="w-2.5 h-2.5 text-amber-400 opacity-70 hover:opacity-100" />
-              </button>
-              {activeCharacter.hpTemp > 0 && (
-                <span className="text-cyan-400 text-xs ml-1 font-semibold">
-                  (+{activeCharacter.hpTemp} {t('stats.temp', 'Temp')})
+        {/* Quick HP Status (Hidden when viewing Sheet 2 Combat to eliminate duplicate HP controls) */}
+        {activeTab !== 'sheet2' && (
+          <div className="flex items-center gap-3 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
+            <HpOrb hpCurrent={activeCharacter.hpCurrent} hpMax={effectiveMaxHp} size="sm" showLabel={false} />
+            <div>
+              <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.hitPoints', 'Hit Points')}</div>
+              <div className="font-mono text-sm font-bold flex items-center gap-1">
+                <span className={getHpColorClass((activeCharacter.hpCurrent / Math.max(1, effectiveMaxHp)) * 100)}>
+                  {activeCharacter.hpCurrent}
                 </span>
-              )}
+                <span className="text-stone-500 font-normal">/</span>
+                <button
+                  onClick={() => setShowMaxHpInspector(true)}
+                  className="text-stone-200 hover:text-amber-300 font-mono font-bold hover:underline inline-flex items-center gap-0.5 cursor-pointer bg-stone-900/60 hover:bg-stone-800 px-1.5 py-0.5 rounded border border-stone-800 transition"
+                  title="Click to inspect Max HP breakdown (Base, Feats, Equipped Items, Spells/Drain)"
+                >
+                  <span>{effectiveMaxHp}</span>
+                  <Pencil className="w-2.5 h-2.5 text-amber-400 opacity-70 hover:opacity-100" />
+                </button>
+                {activeCharacter.hpTemp > 0 && (
+                  <span className="text-cyan-400 text-xs ml-1 font-semibold">
+                    (+{activeCharacter.hpTemp} {t('stats.temp', 'Temp')})
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Quick HP Adjust Controls */}
+            <div className="flex items-center gap-1 border-l border-stone-800 pl-2">
+              <input
+                type="number"
+                value={hpDelta}
+                onChange={(e) => setHpDelta(e.target.value)}
+                placeholder="0"
+                className="w-12 bg-stone-800 border border-stone-700 text-center font-mono rounded text-xs py-0.5"
+              />
+              <button
+                onClick={() => handleApplyHpChange('heal')}
+                className="px-1.5 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-bold rounded text-[10px]"
+                title={t('stats.healHp', 'Heal HP')}
+              >
+                +
+              </button>
+              <button
+                onClick={() => handleApplyHpChange('damage')}
+                className="px-1.5 py-0.5 bg-rose-800 hover:bg-rose-700 text-rose-100 font-bold rounded text-[10px]"
+                title={t('stats.damageHp', 'Damage HP')}
+              >
+                -
+              </button>
             </div>
           </div>
-
-          {/* Quick HP Adjust Controls */}
-          <div className="flex items-center gap-1 border-l border-stone-800 pl-2">
-            <input
-              type="number"
-              value={hpDelta}
-              onChange={(e) => setHpDelta(e.target.value)}
-              placeholder="0"
-              className="w-12 bg-stone-800 border border-stone-700 text-center font-mono rounded text-xs py-0.5"
-            />
-            <button
-              onClick={() => handleApplyHpChange('heal')}
-              className="px-1.5 py-0.5 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-bold rounded text-[10px]"
-              title={t('stats.healHp', 'Heal HP')}
-            >
-              +
-            </button>
-            <button
-              onClick={() => handleApplyHpChange('damage')}
-              className="px-1.5 py-0.5 bg-rose-800 hover:bg-rose-700 text-rose-100 font-bold rounded text-[10px]"
-              title={t('stats.damageHp', 'Damage HP')}
-            >
-              -
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Armor Class */}
         <div
@@ -142,7 +148,10 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
         >
           <Shield className="w-4 h-4 text-amber-500" />
           <div>
-            <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.armorClass', 'Armor Class')}</div>
+            <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
+              <span>{t('stats.armorClass', 'Armor Class')}</span>
+              <RuleBadge ruleId="ac" size="xs" iconOnly placement="bottom" />
+            </div>
             <div className="font-mono text-sm font-extrabold text-amber-200">
               {activeCharacter.armorClass}
             </div>
@@ -150,21 +159,22 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
         </div>
 
         {/* Initiative */}
-        <button
+        <div
           onClick={onRollInitiative}
-          className="flex items-center gap-2 bg-stone-900 hover:bg-stone-800 px-3 py-1.5 rounded-xl border border-stone-800 hover:border-amber-500/50 transition cursor-pointer"
+          className="flex items-center gap-2 bg-stone-900 hover:bg-stone-800/80 px-3 py-1.5 rounded-xl border border-stone-800 transition cursor-pointer group"
           title="Click to Roll Initiative!"
         >
-          <Zap className="w-4 h-4 text-yellow-400" />
+          <Zap className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform shrink-0" />
           <div className="text-left">
-            <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
-              {t('stats.initiative', 'Initiative')} <Sparkles className="w-2.5 h-2.5 text-amber-400" />
+            <div className="text-[10px] uppercase font-bold text-stone-400 group-hover:text-stone-300 flex items-center gap-1">
+              <span>{t('stats.initiative', 'Initiative')}</span>
+              <RuleBadge ruleId="initiative" size="xs" iconOnly placement="bottom" />
             </div>
             <div className="font-mono text-sm font-extrabold text-yellow-300">
               {formatModifier(activeCharacter.initiativeBonus)}
             </div>
           </div>
-        </button>
+        </div>
 
         {/* Speed */}
         <div
@@ -183,6 +193,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           <div>
             <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
               <span>{t('stats.speed', 'Speed')}</span>
+              <RuleBadge ruleId="speed" size="xs" iconOnly placement="bottom" />
               {speedInfo.isModified && (
                 <span className="text-[8px] bg-amber-500/30 text-amber-300 border border-amber-500/50 px-1 rounded font-mono font-bold uppercase">
                   {t('stats.penalized', 'Penalized')}
@@ -199,6 +210,15 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
                 </span>
               )}
             </div>
+            {/* Additional Movement Modes */}
+            {(speedInfo.speedFly || speedInfo.speedSwim || speedInfo.speedClimb || speedInfo.speedBurrow) && (
+              <div className="flex items-center gap-1.5 text-[9px] font-mono text-stone-400 mt-0.5">
+                {speedInfo.speedFly && <span className="text-sky-300">Fly {speedInfo.speedFly}ft</span>}
+                {speedInfo.speedSwim && <span className="text-cyan-300">Swim {speedInfo.speedSwim}ft</span>}
+                {speedInfo.speedClimb && <span className="text-emerald-300">Climb {speedInfo.speedClimb}ft</span>}
+                {speedInfo.speedBurrow && <span className="text-amber-300">Burrow {speedInfo.speedBurrow}ft</span>}
+              </div>
+            )}
           </div>
         </div>
 
@@ -210,7 +230,10 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
               <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
                 <Award className="w-4 h-4 text-amber-400" />
                 <div>
-                  <div className="text-[10px] uppercase font-bold text-stone-400">Base Attack (BAB)</div>
+                  <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
+                    <span>Base Attack (BAB)</span>
+                    <RuleBadge ruleId="bab" size="xs" iconOnly placement="bottom" />
+                  </div>
                   <div className="font-mono text-sm font-bold text-amber-300 flex items-center gap-1.5">
                     <span>{formatModifier(bab)}</span>
                     {bab >= 6 && (
@@ -227,7 +250,10 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
             <Award className="w-4 h-4 text-purple-400" />
             <div>
-              <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.profBonus', 'Prof. Bonus')}</div>
+              <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
+                <span>{t('stats.profBonus', 'Prof. Bonus')}</span>
+                <RuleBadge ruleId="proficiencyBonus" size="xs" iconOnly placement="bottom" />
+              </div>
               <div className="font-mono text-sm font-bold text-purple-300">
                 +{profBonus}
               </div>
@@ -235,17 +261,49 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           </div>
         ) : null}
 
-        {/* Passive Perception (5e only) */}
+        {/* Passive Senses Suite (5e only) */}
         {(currentEdition === '5e' || !currentEdition) && (
           <div className="flex items-center gap-2 bg-stone-900 px-3 py-1.5 rounded-xl border border-stone-800">
             <Eye className="w-4 h-4 text-teal-400" />
             <div>
-              <div className="text-[10px] uppercase font-bold text-stone-400">{t('stats.passiveWis', 'Passive Wis')}</div>
-              <div className="font-mono text-sm font-bold text-teal-200">
-                {passivePerception}
+              <div className="text-[10px] uppercase font-bold text-stone-400">Passive Senses</div>
+              <div className="font-mono text-xs font-bold flex items-center gap-2">
+                <span title="Passive Perception (Wisdom)" className="text-stone-300">
+                  Prc <strong className="text-teal-300 font-extrabold">{passivePerception}</strong>
+                </span>
+                <span className="text-stone-700">|</span>
+                <span title="Passive Investigation (Intelligence)" className="text-stone-300">
+                  Inv <strong className="text-cyan-300 font-extrabold">{passiveInvestigation}</strong>
+                </span>
+                <span className="text-stone-700">|</span>
+                <span title="Passive Insight (Wisdom)" className="text-stone-300">
+                  Ins <strong className="text-emerald-300 font-extrabold">{passiveInsight}</strong>
+                </span>
               </div>
             </div>
           </div>
+        )}
+
+        {/* 5e Inspiration Token Toggle */}
+        {(currentEdition === '5e' || !currentEdition) && (
+          <button
+            type="button"
+            onClick={() => onUpdateCharacter({ ...activeCharacter, inspiration: !activeCharacter.inspiration })}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition cursor-pointer ${
+              activeCharacter.inspiration
+                ? 'bg-amber-500/20 border-amber-500/80 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+                : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-300 hover:border-stone-700'
+            }`}
+            title="Inspiration Token (Click to toggle). Spend inspiration to gain Advantage on an attack roll, saving throw, or ability check."
+          >
+            <Sparkles className={`w-4 h-4 ${activeCharacter.inspiration ? 'text-amber-400 fill-amber-400/30' : 'text-stone-500'}`} />
+            <div className="text-left">
+              <div className="text-[10px] uppercase font-bold tracking-wider">Inspiration</div>
+              <div className="font-mono text-xs font-bold">
+                {activeCharacter.inspiration ? '★ Inspired' : 'None'}
+              </div>
+            </div>
+          </button>
         )}
 
         {/* Sanity Quick Status (Call of Cthulhu) */}
@@ -297,39 +355,6 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
               </div>
             </div>
           </div>
-        )}
-
-        {/* Level & Level-Up Wizard Button (D&D / Class-based TRPGs only) */}
-        {onOpenLevelUp && currentEdition !== 'cthulhu' && currentEdition !== 'shadowrun' && (
-          <button
-            onClick={onOpenLevelUp}
-            className="flex items-center gap-1.5 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-stone-950 px-3 py-1.5 rounded-xl font-bold transition shadow-md cursor-pointer border border-amber-400/40"
-            title="Open Level-Up Progression Wizard (HP, ASI/Feat, Class Features, Subclass)"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-stone-950" />
-            <div className="text-left font-mono">
-              <div className="text-[9px] uppercase leading-none text-stone-950/80 font-extrabold">Level {activeCharacter.level || 1}</div>
-              <div className="text-xs leading-none font-black text-stone-950">Level Up</div>
-            </div>
-          </button>
-        )}
-
-        {/* Inspiration Toggle (5e only) */}
-        {(currentEdition === '5e' || !currentEdition) && (
-          <button
-            onClick={() => onUpdateCharacter({ ...activeCharacter, inspiration: !activeCharacter.inspiration })}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition ${
-              activeCharacter.inspiration
-                ? 'bg-amber-900/60 border-amber-500 text-amber-200 shadow-md'
-                : 'bg-stone-900 border-stone-800 text-stone-500 hover:text-stone-300'
-            }`}
-          >
-            <UserCheck className="w-4 h-4" />
-            <div className="text-left">
-              <div className="text-[10px] uppercase font-bold">{t('stats.inspiration', 'Inspiration')}</div>
-              <div className="font-bold text-xs">{activeCharacter.inspiration ? t('common.active', 'ACTIVE') : t('common.none', 'NONE')}</div>
-            </div>
-          </button>
         )}
       </div>
 

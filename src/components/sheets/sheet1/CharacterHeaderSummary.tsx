@@ -22,7 +22,8 @@ import {
   Bookmark,
   Layers,
   RefreshCw,
-  Copy
+  Copy,
+  Sparkles
 } from 'lucide-react';
 import { XpCraftAndSpellLedgerModal } from '../../modals/XpCraftAndSpellLedgerModal';
 
@@ -275,8 +276,10 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
                 >
                   <Dna className="w-3 h-3 text-amber-400" />
                   <span>
-                    {(character.hybridHeritage?.enabled || character.optionalRules?.useHalfBreedSystem || character.optionalRules?.useClassicSRDHalfBreed)
-                      ? (character.hybridHeritage?.isClassicSRD || character.optionalRules?.useClassicSRDHalfBreed)
+                    {(character.hybridHeritage?.enabled || character.optionalRules?.useHalfBreedSystem || character.optionalRules?.useClassicSRDHalfBreed || character.optionalRules?.useHalfBreedTemplate35e)
+                      ? character.hybridHeritage?.isTemplateMode
+                        ? `Half-Breed Template (${character.hybridHeritage.templateName || 'Template'} + ${character.hybridHeritage.baseRaceName || character.race})`
+                        : (character.hybridHeritage?.isClassicSRD || character.optionalRules?.useClassicSRDHalfBreed)
                         ? `Half-Breed (${character.race})`
                         : `Half-Breed (${character.hybridHeritage?.primaryParent || 'Parent 1'} / ${character.hybridHeritage?.secondaryParent || 'Parent 2'})`
                       : 'Configure Half-Breed Ancestry'}
@@ -300,6 +303,12 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
               </span>
               <span><strong>Background:</strong> {character.background}</span>
               <span><strong>Alignment:</strong> {character.alignment}</span>
+              {character.deity && (
+                <span><strong>{character.edition === '3.5e' ? 'Deity' : 'Deity / Patron'}:</strong> {character.deity}</span>
+              )}
+              <span>
+                <strong>Senses:</strong> <span className="text-amber-300 font-medium">{character.senses || 'Normal Vision'}</span>
+              </span>
 
               {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass ? (
                 <div className="flex flex-wrap items-center gap-2 font-mono text-xs w-full mt-1 pt-2 border-t border-stone-800/80">

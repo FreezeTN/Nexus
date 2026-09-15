@@ -13,7 +13,8 @@ import {
   check35eSkillRankCap,
   DND35E_SKILL_SYNERGIES,
   calculate35eTotalArmorCheckPenalty,
-  DND35E_ACP_SKILLS
+  DND35E_ACP_SKILLS,
+  getSizeHideModifier
 } from '../../../utils/dndCalculations';
 import {
   Shield,
@@ -143,7 +144,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
           const defaultBaseSP = ['Rogue'].includes(character.characterClass) ? 8 : ['Bard', 'Ranger'].includes(character.characterClass) ? 6 : ['Barbarian', 'Druid', 'Monk'].includes(character.characterClass) ? 4 : 2;
           const baseSP = character.classBaseSkillPoints ?? defaultBaseSP;
           const intMod = getAbilityModifier(character.abilities.INT?.score || 10);
-          const isHuman = character.race.toLowerCase().includes('human');
+          const isHuman = character.race.toLowerCase().includes('human') || (character.hybridHeritage?.isTemplateMode && character.hybridHeritage?.baseRaceId === 'human');
 
           const lvl1SP = Math.max(4, (baseSP + intMod) * 4) + (isHuman ? 4 : 0);
           const addLvlSP = (character.level - 1) * (Math.max(1, baseSP + intMod) + (isHuman ? 1 : 0));
@@ -211,6 +212,14 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                 <span>Class Max: <strong className="text-amber-300">{maxClassRanks} Ranks</strong> (1 SP/Rank)</span>
                 <span>Cross Max: <strong className="text-stone-300">{maxCrossRanks} Ranks</strong> (2 SP/Rank)</span>
               </div>
+
+              {/* 3.5e Half-Breed Template Notice if active */}
+              {character.hybridHeritage?.isTemplateMode && (
+                <div className="pt-1 border-t border-stone-800/80 text-[10px] text-amber-300/90 font-mono flex items-center justify-between">
+                  <span>🧬 Half-Breed Template:</span>
+                  <span className="text-stone-400">Template racial skill points waived (Class progression active)</span>
+                </div>
+              )}
 
               {/* Active Synergies summary banner if any 5+ rank skills exist */}
               {skillsGrantingSynergies.length > 0 && (
@@ -295,7 +304,9 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                 const synergyInfo = get35eSkillSynergyBonus(skill.name, character.skills);
                 const isAcpSkill = DND35E_ACP_SKILLS.includes(skill.name);
                 const isSwim = skill.name.toLowerCase() === 'swim';
-                const skillBonus = get35eSkillBonus(skill, character.abilities, character.skills, acpInfo.totalAcp);
+                const isHide = skill.name.toLowerCase() === 'hide';
+                const hideSizeMod = isHide ? getSizeHideModifier(character.sizeCategory) : 0;
+                const skillBonus = get35eSkillBonus(skill, character.abilities, character.skills, acpInfo.totalAcp, character.sizeCategory);
                 const abilityMod = getAbilityModifier(character.abilities[skill.ability]?.score || 10);
                 const capInfo = check35eSkillRankCap(skill, character.level);
 
@@ -350,6 +361,16 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                           title={isSwim ? `${acpInfo.totalAcp * 2} ACP (Double penalty for Swim in 3.5e)` : `${acpInfo.totalAcp} Armor Check Penalty`}
                         >
                           {isSwim ? `${acpInfo.totalAcp * 2} ACP` : `${acpInfo.totalAcp} ACP`}
+                        </span>
+                      )}
+
+                      {/* Size Modifier Badge for Hide */}
+                      {isHide && hideSizeMod !== 0 && (
+                        <span
+                          className="px-1.5 py-0.2 bg-blue-950 border border-blue-600/60 text-blue-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
+                          title={`${formatModifier(hideSizeMod)} Size Modifier to Hide (${character.sizeCategory || 'Medium'})`}
+                        >
+                          {formatModifier(hideSizeMod)} Size
                         </span>
                       )}
 

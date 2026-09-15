@@ -7,7 +7,6 @@ import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../data/monst
 import { getXpProgressDetails } from '../data/levelProgressionData';
 import { revertTransformation } from '../data/transformationData';
 import { HpOrb, getHpColorClass } from './HpOrb';
-import { LevelProgressionModal } from './modals/LevelProgressionModal';
 import { MaxHpInspectorModal } from './modals/MaxHpInspectorModal';
 import { RestModal } from './combat/RestModal';
 import {
@@ -141,12 +140,11 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab
 }) => {
   const { t } = useLanguage();
-  const { startTour } = useUiMode();
+  const { startTour, isTableMode, toggleTableMode } = useUiMode();
   const showCharacterHeader = !!(currentUser && activeCharacter && activeTab !== 'menu');
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false);
   const [showPwaModal, setShowPwaModal] = useState<boolean>(false);
-  const [showLevelModal, setShowLevelModal] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
   const [hpDelta, setHpDelta] = useState<string>('');
@@ -658,12 +656,12 @@ export const Header: React.FC<HeaderProps> = ({
                 })()
               )}
 
-              {/* 60-Second Guided Tour Launcher */}
+              {/* Interactive Guided Tour & Workspace Setup Launcher */}
               <button
                 type="button"
                 onClick={startTour}
                 className="px-2.5 py-1.5 bg-stone-800/90 hover:bg-stone-700 text-stone-300 hover:text-amber-200 border border-stone-700 hover:border-amber-500/40 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer whitespace-nowrap"
-                title="Launch 60-Second Guided Tour"
+                title="Interactive Tour & Workspace Setup"
               >
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 <span className="hidden lg:inline">Tour</span>
@@ -692,12 +690,11 @@ export const Header: React.FC<HeaderProps> = ({
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => setShowLevelModal(true)}
-                className="bg-stone-800/90 hover:bg-stone-700/90 border border-amber-600/50 hover:border-amber-400 px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 text-xs text-stone-100 shadow-md group"
-                title="Click to open Level Progression, Dual-Class Active Class Selector & Advancement Table"
+              <div
+                className="bg-stone-800/80 px-3 py-1.5 rounded-lg border border-stone-700 flex items-center gap-1.5 text-xs text-stone-100 shadow-sm"
+                title="Character Level"
               >
-                <TrendingUp className="w-4 h-4 text-amber-400 group-hover:scale-110 transition" />
+                <TrendingUp className="w-4 h-4 text-amber-400" />
                 <span className="text-amber-300 font-bold">{t('common.level', 'Level')}:</span>
                 {activeCharacter.optionalRules?.useMulticlassing && activeCharacter.optionalRules?.secondaryClass ? (
                   <div className="flex items-center gap-1.5 font-sans">
@@ -724,7 +721,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {t('header.levelUp', 'LEVEL UP!')}
                   </span>
                 )}
-              </button>
+              </div>
 
               {/* Character Rest Action Group */}
               <div className="flex items-center gap-1.5">
@@ -894,15 +891,6 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>,
         document.body
-      )}
-
-      {/* Level Progression & Character Advancement Modal */}
-      {showLevelModal && activeCharacter && (
-        <LevelProgressionModal
-          character={activeCharacter}
-          onClose={() => setShowLevelModal(false)}
-          onUpdateCharacter={onUpdateCharacter}
-        />
       )}
     </header>
   );

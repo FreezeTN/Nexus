@@ -37,8 +37,10 @@ import { GlobalDiceOverlay } from './components/dice/GlobalDiceOverlay';
 import { ThemeProvider } from './context/ThemeContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import { TableModeHud } from './components/tableMode/TableModeHud';
-import { ModalProvider, ModalContainer, useModal } from './modals';
+import { FloatingQuickPlayDock } from './components/common/FloatingQuickPlayDock';
+import { ModalProvider, ModalContainer } from './modals';
 import { DuplicateCharacterModal } from './components/modals/DuplicateCharacterModal';
+import { useLayoutCustomization } from './utils/layoutCustomization';
 
 // Modular Manager Hooks
 import {
@@ -111,6 +113,7 @@ function AppWorkspace() {
   const { matchesHotkey } = useHotkeys();
   const { toggleUiMode, startTour, isTableMode, toggleTableMode, setIsTableMode } = useUiMode();
   const { announceLiveMessage } = useAccessibility();
+  const { isVisible } = useLayoutCustomization();
 
   // 1. Authentication Manager
   const { currentUser, setCurrentUser } = useAuthManager();
@@ -390,7 +393,7 @@ function AppWorkspace() {
         return;
       }
 
-      if (matchesHotkey(e, 'quickSearch')) {
+      if (matchesHotkey(e, 'quickSearch') || matchesHotkey(e, 'commandPalette') || ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k')) {
         e.preventDefault();
         setShowCommandPalette(prev => !prev);
         return;
@@ -748,9 +751,9 @@ function AppWorkspace() {
                 <QuickStatsBar
                   activeCharacter={activeCharacter}
                   edition={currentSystemTheme}
+                  activeTab={activeTab}
                   onUpdateCharacter={handleUpdateCharacter}
                   onRollInitiative={handleRollInitiative}
-                  onOpenLevelUp={handleOpenLevelUpWizard}
                 />
               )}
 
@@ -912,16 +915,31 @@ function AppWorkspace() {
       </div>
 
       {/* Floating Interactive Dice Roller */}
-      <DiceRoller
-        rollLogs={rollLogs}
-        onRoll={handleRoll}
-        onClearLogs={() => setRollLogs([])}
-        activeRollResult={activeRollResult}
-        onOpenAudioModal={handleOpenAudioModal}
-        isPhysicalDiceMode={isPhysicalDiceMode}
-        onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
-        onOpenUpgradeModal={handleOpenUpgradeModal}
-      />
+      {isVisible('ui_diceTray') && (
+        <DiceRoller
+          rollLogs={rollLogs}
+          onRoll={handleRoll}
+          onClearLogs={() => setRollLogs([])}
+          activeRollResult={activeRollResult}
+          onOpenAudioModal={handleOpenAudioModal}
+          isPhysicalDiceMode={isPhysicalDiceMode}
+          onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
+          onOpenUpgradeModal={handleOpenUpgradeModal}
+        />
+      )}
+
+      {/* Floating Quick-Action Play Dock (Active Table HUD) */}
+      {isVisible('ui_floatingQuickDock') && activeCharacter && activeTab !== 'menu' && !isTableMode && (
+        <FloatingQuickPlayDock
+          character={activeCharacter}
+          edition={currentSystemTheme}
+          onUpdateCharacter={handleUpdateCharacter}
+          onRollDice={(formula) => handleRoll('Quick Dock Roll', 20, 1, 0, 'normal')}
+          onRollInitiative={handleRollInitiative}
+          onOpenCommandPalette={() => setShowCommandPalette(true)}
+          onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
+        />
+      )}
 
       {/* Physical Tabletop Dice Modal */}
       {physicalRollRequest && (

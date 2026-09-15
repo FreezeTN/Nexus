@@ -4,6 +4,7 @@ import { RuleEdition } from '../types';
 import { UserProfile, GameSession } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useUiMode } from '../context/UiModeContext';
+import { useLayoutCustomization } from '../utils/layoutCustomization';
 
 export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
 
@@ -32,6 +33,7 @@ export const Navigation: React.FC<NavigationProps> = ({
 }) => {
   const { t } = useLanguage();
   const { workspaceRole } = useUiMode();
+  const { isVisible } = useLayoutCustomization();
   const isShadowrun = edition === 'shadowrun';
   const isPathfinder = edition === 'pathfinder';
   const isCthulhu = edition === 'cthulhu';
@@ -226,8 +228,14 @@ export const Navigation: React.FC<NavigationProps> = ({
     allTabs = [tabStats, tabCombat, tabDmOverview, tabGear, tabSpells, tabNotes, tabCompendium, tabGuide];
   }
 
-  // Filter tabs: if no active character selected, in GM mode keep DM Overview and Compendium visible
+  // Filter tabs: respect user layout toggles, role restrictions, and active character state
   const tabs = allTabs.filter(t => {
+    // Check user layout preferences for this tab
+    const layoutKey = `nav_${t.id}`;
+    if (!isVisible(layoutKey)) {
+      return false;
+    }
+
     if (!hasActiveCharacter) {
       if (workspaceRole === 'gm' && (t.id === 'sheetDm' || t.id === 'sheet7')) {
         return true;

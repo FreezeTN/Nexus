@@ -781,3 +781,804 @@ export function buildHybridFeature(
 • Physical Traits: Size (${sizeCategory}), Base Speed (${speedFeet} ft), Darkvision (${hasDarkvision ? '60 ft' : 'None'}).`
   };
 }
+
+// ============================================================================
+// D&D 3.5E HALF-BREED TEMPLATES SYSTEM (Base Creature + Inherited Template)
+// Rule hierarchy:
+// 1. Specific rule stated by Half-Breed Template
+// 2. Specific rule stated by Base Creature
+// 3. General Half-Breed rules (cumulative bonuses, duplicate higher-value wins, racial SP waived with class levels)
+// 4. General rules of D&D 3.5e
+// ============================================================================
+
+export interface BaseCreature35e {
+  id: string;
+  name: string;
+  size: 'Small' | 'Medium' | 'Large';
+  speed: number;
+  speedNotes?: string;
+  abilities: {
+    STR?: number;
+    DEX?: number;
+    CON?: number;
+    INT?: number;
+    WIS?: number;
+    CHA?: number;
+  };
+  naturalArmor: number;
+  darkvisionFeet?: number;
+  hasLowLightVision?: boolean;
+  traits: Array<{
+    name: string;
+    description: string;
+    conflictKey?: string; // e.g. "size_build"
+  }>;
+  source: string;
+  description: string;
+}
+
+export interface HalfBreedTemplate35e {
+  id: string;
+  name: string;
+  edition: '3.5e';
+  source: string;
+  levelAdjustment: number;
+  typeChange: string;
+  abilityModifiers: {
+    STR?: number;
+    DEX?: number;
+    CON?: number;
+    INT?: number;
+    WIS?: number;
+    CHA?: number;
+  };
+  naturalArmorBonus: number;
+  sizeChange?: 'increase_1' | 'decrease_1' | 'same';
+  speedModifier?: number; // Added to base land speed
+  flySpeedMultiplier?: number; // e.g. 2 for 2x land speed
+  fixedFlySpeed?: number; // e.g. 30 ft
+  flyManeuverability?: 'poor' | 'average' | 'good' | 'perfect';
+  darkvisionFeet?: number;
+  hasLowLightVision?: boolean;
+  hasBlindsight?: boolean;
+  blindsightFeet?: number;
+  damageImmunities?: string[];
+  conditionImmunities?: string[];
+  energyResistances?: Record<string, number>;
+  damageReduction?: { value: number; bypass: string; minHD?: number };
+  spellResistanceFormula?: string;
+  savingThrowBonuses?: Array<{ save: string; bonus: number; condition: string }>;
+  naturalAttacks?: Array<{
+    name: string;
+    damageDice: string; // for medium size
+    damageType: string;
+    notes?: string;
+  }>;
+  traits: Array<{
+    name: string;
+    description: string;
+    conflictKey?: string;
+  }>;
+  racialSkillPointsText: string;
+  hasDragonVarieties?: boolean;
+  description: string;
+}
+
+export const BASE_CREATURES_35E: BaseCreature35e[] = [
+  {
+    id: 'dwarf',
+    name: 'Dwarf',
+    size: 'Medium',
+    speed: 20,
+    speedNotes: '20 ft. (Speed never reduced by wearing medium or heavy armor or carrying a medium or heavy load)',
+    abilities: { CON: 2, CHA: -2 },
+    naturalArmor: 0,
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    source: '3.5e Player’s Handbook I, pp. 14–15',
+    description: 'Dwarves are known for their skill in warfare, ability to withstand physical punishment, and knowledge of stone and mineral crafts.',
+    traits: [
+      { name: 'Darkvision (60 ft)', description: 'Can see up to 60 feet in the dark in black and white.' },
+      { name: 'Stonecunning', description: '+2 racial bonus on Search checks to notice unusual stonework (sliding walls, stonework traps, new construction, unsafe stone surfaces). Automatically gets a Search check if passing within 10 ft.' },
+      { name: 'Weapon Familiarity', description: 'Treat Dwarven Waraxes and Dwarven Urgroshes as martial weapons rather than exotic weapons.' },
+      { name: 'Stability', description: '+4 bonus on ability checks made to resist being bull rushed or tripped when standing firmly on the ground.' },
+      { name: 'Hardiness vs. Poison', description: '+2 racial bonus on saving throws against poison.' },
+      { name: 'Hardiness vs. Spells', description: '+2 racial bonus on saving throws against spells and spell-like effects.' },
+      { name: 'Combat Training vs. Orcs & Goblins', description: '+1 racial bonus on attack rolls against orcs and goblinoids.' },
+      { name: 'Dodge vs. Giants', description: '+4 dodge bonus to Armor Class against monsters of the giant type.' },
+      { name: 'Appraise & Craft (Stone/Metal)', description: '+2 racial bonus on Appraise and Craft checks related to stone or metal items.' }
+    ]
+  },
+  {
+    id: 'elf',
+    name: 'Elf',
+    size: 'Medium',
+    speed: 30,
+    abilities: { DEX: 2, CON: -2 },
+    naturalArmor: 0,
+    darkvisionFeet: 0,
+    hasLowLightVision: true,
+    source: '3.5e Player’s Handbook I, pp. 15–16',
+    description: 'Elves are graceful, keen-eyed, and intrinsically connected to magic, nature, and the fine arts of archery and bladecraft.',
+    traits: [
+      { name: 'Low-Light Vision', description: 'Can see twice as far as a human in starlight, moonlight, torchlight, and similar poor illumination.' },
+      { name: 'Immunity to Sleep', description: 'Immune to magic sleep spells and effects.' },
+      { name: 'Enchantment Resistance', description: '+2 racial bonus on saving throws against enchantment spells or effects.' },
+      { name: 'Martial Weapon Proficiency', description: 'Proficient with longsword, rapier, longbow, and shortbow.' },
+      { name: 'Keen Senses', description: '+2 racial bonus on Listen, Search, and Spot checks. Merely passing within 5 feet of a secret or concealed door entitles an elf to a Search check.' }
+    ]
+  },
+  {
+    id: 'human',
+    name: 'Human',
+    size: 'Medium',
+    speed: 30,
+    abilities: {},
+    naturalArmor: 0,
+    darkvisionFeet: 0,
+    hasLowLightVision: false,
+    source: '3.5e Player’s Handbook I, pp. 12–14',
+    description: 'Humans are the most adaptable, flexible, and ambitious of the common races, excelling in any chosen discipline.',
+    traits: [
+      { name: 'Bonus Feat (1st Level)', description: 'Gains 1 extra feat at 1st level.' },
+      { name: 'Skilled Versatility', description: '4 extra skill points at 1st level and 1 extra skill point at each additional level.' }
+    ]
+  },
+  {
+    id: 'halfling',
+    name: 'Halfling',
+    size: 'Small',
+    speed: 20,
+    abilities: { DEX: 2, STR: -2 },
+    naturalArmor: 0,
+    darkvisionFeet: 0,
+    hasLowLightVision: false,
+    source: '3.5e Player’s Handbook I, pp. 19–20',
+    description: 'Halflings are clever, capable opportunists who rely on stealth, nimbleness, and unerring hand-eye coordination.',
+    traits: [
+      { name: 'Small Size', description: '+1 bonus to Armor Class, +1 bonus on attack rolls, +4 bonus on Hide checks, -4 on grapple checks.' },
+      { name: 'Athletic & Stealthy', description: '+2 racial bonus on Climb, Jump, Listen, and Move Silently checks.' },
+      { name: 'Halfling Luck', description: '+1 racial bonus on all saving throws.' },
+      { name: 'Fearless', description: '+2 morale bonus on saving throws against fear.' },
+      { name: 'Thrown Weapon Master', description: '+1 racial bonus on attack rolls with thrown weapons and slings.' }
+    ]
+  },
+  {
+    id: 'gnome',
+    name: 'Gnome',
+    size: 'Small',
+    speed: 20,
+    abilities: { CON: 2, STR: -2 },
+    naturalArmor: 0,
+    darkvisionFeet: 0,
+    hasLowLightVision: true,
+    source: '3.5e Player’s Handbook I, pp. 16–18',
+    description: 'Gnomes are inquisitive, jovial, and cunning inventors and illusionists who thrive underground and in wooded burrows.',
+    traits: [
+      { name: 'Small Size', description: '+1 bonus to Armor Class, +1 bonus on attack rolls, +4 bonus on Hide checks, -4 on grapple checks.' },
+      { name: 'Low-Light Vision', description: 'Can see twice as far as a human in starlight, moonlight, torchlight, and similar illumination.' },
+      { name: 'Illusion Mastery', description: '+2 racial bonus on saving throws against illusions; +1 to difficulty class for all illusion spells cast.' },
+      { name: 'Combat Training vs. Kobolds & Goblins', description: '+1 racial bonus on attack rolls against kobolds and goblinoids.' },
+      { name: 'Dodge vs. Giants', description: '+4 dodge bonus to Armor Class against monsters of the giant type.' },
+      { name: 'Keen Hearing & Alchemy', description: '+2 racial bonus on Listen checks and Craft (alchemy) checks.' },
+      { name: 'Speak with Animals (SLA)', description: 'Once per day speak with burrowing mammals (badger, fox, rabbit, etc.) for 1 minute.' }
+    ]
+  },
+  {
+    id: 'half-elf',
+    name: 'Half-Elf',
+    size: 'Medium',
+    speed: 30,
+    abilities: {},
+    naturalArmor: 0,
+    darkvisionFeet: 0,
+    hasLowLightVision: true,
+    source: '3.5e Player’s Handbook I, pp. 18–19',
+    description: 'Half-elves combine human curiosity and ambition with elven grace, keen senses, and a natural affinity for diplomacy.',
+    traits: [
+      { name: 'Low-Light Vision', description: 'Can see twice as far as a human in starlight and poor illumination.' },
+      { name: 'Immunity to Sleep', description: 'Immune to magic sleep spells and effects.' },
+      { name: 'Enchantment Resistance', description: '+2 racial bonus on saving throws against enchantment spells or effects.' },
+      { name: 'Perceptive', description: '+1 racial bonus on Listen, Search, and Spot checks.' },
+      { name: 'Diplomatic', description: '+2 racial bonus on Diplomacy and Gather Information checks.' },
+      { name: 'Elven Blood', description: 'For all effects related to race, a half-elf is considered an elf.' }
+    ]
+  },
+  {
+    id: 'half-orc',
+    name: 'Half-Orc',
+    size: 'Medium',
+    speed: 30,
+    abilities: { STR: 2, INT: -2, CHA: -2 },
+    naturalArmor: 0,
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    source: '3.5e Player’s Handbook I, pp. 22–23',
+    description: 'Half-orcs inherit formidable strength, stubborn endurance, and darkvision from their orc ancestors.',
+    traits: [
+      { name: 'Darkvision (60 ft)', description: 'Can see up to 60 feet in total darkness in black and white.' },
+      { name: 'Orc Blood', description: 'For all effects related to race, a half-orc is considered an orc.' }
+    ]
+  },
+  {
+    id: 'orc',
+    name: 'Orc',
+    size: 'Medium',
+    speed: 30,
+    abilities: { STR: 4, DEX: -2, INT: -2, WIS: -2, CHA: -2 },
+    naturalArmor: 0,
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    source: '3.5e Monster Manual I, p. 203',
+    description: 'Savage and muscular humanoids driven by predatory instinct and relentless brute combat superiority.',
+    traits: [
+      { name: 'Darkvision (60 ft)', description: 'Can see up to 60 feet in total darkness in black and white.' },
+      { name: 'Light Sensitivity', description: 'Dazzled (-1 penalty on attack rolls, Search checks, and Spot checks) in bright sunlight or within daylight spell.' }
+    ]
+  },
+  {
+    id: 'goblin',
+    name: 'Goblin',
+    size: 'Small',
+    speed: 30,
+    abilities: { STR: -2, DEX: 2, CHA: -2 },
+    naturalArmor: 0,
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    source: '3.5e Monster Manual I, p. 133',
+    description: 'Small, wily humanoids known for uncanny stealth, pack tactics, and expert riding skills.',
+    traits: [
+      { name: 'Small Size', description: '+1 bonus to Armor Class, +1 bonus on attack rolls, +4 bonus on Hide checks, -4 on grapple checks.' },
+      { name: 'Darkvision (60 ft)', description: 'Can see up to 60 feet in total darkness in black and white.' },
+      { name: 'Rider & Stalker', description: '+4 racial bonus on Move Silently and Ride checks.' }
+    ]
+  },
+  {
+    id: 'kobold',
+    name: 'Kobold',
+    size: 'Small',
+    speed: 30,
+    abilities: { STR: -4, DEX: 2, CON: -2 },
+    naturalArmor: 1,
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    source: '3.5e Monster Manual I, p. 161',
+    description: 'Reptilian humanoids with draconic reverence, natural armor, and expert trapmaking ability.',
+    traits: [
+      { name: 'Small Size', description: '+1 bonus to Armor Class, +1 bonus on attack rolls, +4 bonus on Hide checks, -4 on grapple checks.' },
+      { name: 'Natural Armor (+1 AC)', description: '+1 natural armor bonus to Armor Class.' },
+      { name: 'Darkvision (60 ft)', description: 'Can see up to 60 feet in total darkness in black and white.' },
+      { name: 'Light Sensitivity', description: 'Dazzled in bright sunlight or daylight spell.' },
+      { name: 'Crafty Miner', description: '+2 racial bonus on Craft (trapmaking), Profession (miner), and Search checks.' },
+      { name: 'Slight Build', description: 'Can squeeze through spaces as if one size smaller (Tiny) whenever advantageous.', conflictKey: 'size_build' }
+    ]
+  },
+  {
+    id: 'ogre',
+    name: 'Ogre',
+    size: 'Large',
+    speed: 40,
+    abilities: { STR: 10, DEX: -2, CON: 4, INT: -4, CHA: -4 },
+    naturalArmor: 5,
+    darkvisionFeet: 60,
+    hasLowLightVision: true,
+    source: '3.5e Monster Manual I, p. 199',
+    description: 'Towering brutes possessing colossal strength, thick hide, and massive reach.',
+    traits: [
+      { name: 'Large Size', description: '-1 penalty to Armor Class, -1 penalty on attack rolls, +4 bonus on grapple checks, 10 ft space and 10 ft reach.' },
+      { name: 'Natural Armor (+5 AC)', description: '+5 natural armor bonus to Armor Class.' },
+      { name: 'Darkvision (60 ft) & Low-Light', description: 'Possesses 60 ft Darkvision and Low-Light vision.' }
+    ]
+  },
+  {
+    id: 'lizardfolk',
+    name: 'Lizardfolk',
+    size: 'Medium',
+    speed: 30,
+    abilities: { STR: 2, CON: 2, INT: -2 },
+    naturalArmor: 5,
+    darkvisionFeet: 0,
+    hasLowLightVision: false,
+    source: '3.5e Monster Manual I, p. 169',
+    description: 'Semi-aquatic reptilian humanoids protected by dense scaly hide with deadly natural claws and bite.',
+    traits: [
+      { name: 'Natural Armor (+5 AC)', description: '+5 natural armor bonus to Armor Class.' },
+      { name: 'Natural Weapons (Claws & Bite)', description: '2 Claws (1d4 damage) and 1 Bite (1d4 damage).' },
+      { name: 'Hold Breath', description: 'Can hold breath for a number of rounds equal to 4 × Constitution score before risking drowning.' },
+      { name: 'Acrobatic Swimmer', description: '+4 racial bonus on Jump, Swim, and Balance checks.' }
+    ]
+  }
+];
+
+export const HALF_BREED_TEMPLATES_35E: HalfBreedTemplate35e[] = [
+  {
+    id: 'half-dragon',
+    name: 'Half-Dragon',
+    edition: '3.5e',
+    source: 'Monster Manual I, pp. 146–147',
+    levelAdjustment: 3,
+    typeChange: 'Dragon (Augmented Humanoid)',
+    abilityModifiers: { STR: 8, CON: 2, INT: 2, CHA: 2 },
+    naturalArmorBonus: 4,
+    sizeChange: 'same',
+    darkvisionFeet: 60,
+    hasLowLightVision: true,
+    damageImmunities: ['Sleep', 'Paralysis'],
+    conditionImmunities: ['Sleep', 'Paralyzed'],
+    naturalAttacks: [
+      { name: 'Claw (Primary)', damageDice: '1d4', damageType: 'Slashing', notes: '2 natural claw attacks (1d4 for Medium, 1d6 for Large)' },
+      { name: 'Bite (Secondary)', damageDice: '1d6', damageType: 'Piercing/Slashing', notes: 'Natural bite attack (1d6 for Medium, 1d8 for Large)' }
+    ],
+    traits: [
+      {
+        name: 'Draconic Breath Weapon (6d8)',
+        description: 'Once per day, exhale destructive elemental energy dealing 6d8 damage (Reflex save DC 10 + 1/2 HD + CON modifier for half). Shape and energy type depend on dragon ancestor.'
+      },
+      {
+        name: 'Dragon Ancestor Immunity',
+        description: 'Completely immune to energy damage of the type associated with the dragon ancestor (e.g. Fire for Red/Gold, Cold for White/Silver, Acid for Black/Copper/Green, Electricity for Blue/Bronze).'
+      },
+      {
+        name: 'Draconic Immunities',
+        description: 'Immune to all sleep spells and effects, as well as all paralysis effects.'
+      },
+      {
+        name: 'Wings & Flight (Large+ only)',
+        description: 'If the base creature is Large or larger, it grows wings and gains a fly speed equal to its base land speed (maximum 30 ft, average maneuverability).'
+      }
+    ],
+    racialSkillPointsText: 'Gains (6 + INT mod) × (Racial HD + 3) racial skill points ONLY if the character has 0 class levels. If character has 1+ class levels, racial skill points are ignored in favor of class progression.',
+    hasDragonVarieties: true,
+    description: 'Created through magical rituals or draconic crossbreeding, half-dragons inherit scaly hides, deadly breath weapons, formidable natural weapons, and immense physical strength.'
+  },
+  {
+    id: 'half-celestial',
+    name: 'Half-Celestial',
+    edition: '3.5e',
+    source: 'Monster Manual I, pp. 144–146',
+    levelAdjustment: 4,
+    typeChange: 'Outsider (Native)',
+    abilityModifiers: { STR: 4, DEX: 2, CON: 4, INT: 2, WIS: 4, CHA: 4 },
+    naturalArmorBonus: 1,
+    sizeChange: 'same',
+    flySpeedMultiplier: 2, // Double base land speed, max 60 ft
+    flyManeuverability: 'good',
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    damageImmunities: ['Disease'],
+    conditionImmunities: ['Diseased'],
+    energyResistances: { Acid: 10, Cold: 10, Electricity: 10 },
+    damageReduction: { value: 5, bypass: 'Magic', minHD: 8 },
+    spellResistanceFormula: 'HD + 10 (max 35)',
+    savingThrowBonuses: [
+      { save: 'Fortitude', bonus: 4, condition: 'against poison' }
+    ],
+    traits: [
+      {
+        name: 'Feathered Wings & Flight',
+        description: 'Magnificent feathered wings grant a fly speed equal to double the base creature’s land speed (up to a maximum of 60 ft) with good maneuverability.'
+      },
+      {
+        name: 'Smite Evil (1/day)',
+        description: 'Once per day, the half-celestial can make a normal melee attack to deal extra damage equal to its HD (or character level) against an evil foe, adding its Charisma bonus to the attack roll.'
+      },
+      {
+        name: 'Daylight (SLA)',
+        description: 'Can cast Daylight at will as a spell-like ability (caster level equal to character level).'
+      },
+      {
+        name: 'Holy Defenses & Resistances',
+        description: 'Immunity to disease. +4 on Fortitude saves against poison. Resistance to Acid 10, Cold 10, Electricity 10. Spell Resistance equal to HD + 10 (max 35). DR 5/magic (HD 8-11) or DR 10/magic (HD 12+).'
+      }
+    ],
+    racialSkillPointsText: 'Gains (8 + INT mod) × (Racial HD + 3) racial skill points ONLY if the character has 0 class levels. Waived if the character has class levels.',
+    description: 'Blessed mortals bearing celestial lineage, marked by radiant beauty, feathered angel wings, shining metallic hair, and divine protective wards.'
+  },
+  {
+    id: 'half-fiend',
+    name: 'Half-Fiend',
+    edition: '3.5e',
+    source: 'Monster Manual I, pp. 147–149',
+    levelAdjustment: 4,
+    typeChange: 'Outsider (Native)',
+    abilityModifiers: { STR: 4, DEX: 4, CON: 2, INT: 4, CHA: 2 },
+    naturalArmorBonus: 1,
+    sizeChange: 'same',
+    fixedFlySpeed: 30,
+    flyManeuverability: 'average',
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    damageImmunities: ['Poison'],
+    conditionImmunities: ['Poisoned'],
+    energyResistances: { Acid: 10, Cold: 10, Electricity: 10, Fire: 10 },
+    damageReduction: { value: 5, bypass: 'Magic', minHD: 8 },
+    spellResistanceFormula: 'HD + 10 (max 35)',
+    naturalAttacks: [
+      { name: 'Claw (Primary)', damageDice: '1d4', damageType: 'Slashing', notes: '2 natural claw attacks (1d4 for Medium)' },
+      { name: 'Bite (Secondary)', damageDice: '1d6', damageType: 'Piercing', notes: 'Natural bite attack (1d6 for Medium)' }
+    ],
+    traits: [
+      {
+        name: 'Bat Wings & Flight',
+        description: 'Leathery bat-like wings grant a fly speed equal to the base creature’s land speed (standard 30 ft) with average maneuverability.'
+      },
+      {
+        name: 'Smite Good (1/day)',
+        description: 'Once per day, make a melee attack against a good creature to add Charisma modifier to attack roll and +1 damage per HD.'
+      },
+      {
+        name: 'Infernal Immunities & Resistances',
+        description: 'Immunity to poison. Resistance to Acid 10, Cold 10, Electricity 10, Fire 10. Spell Resistance equal to HD + 10 (max 35). DR 5/magic (HD 8-11) or DR 10/magic (HD 12+).'
+      },
+      {
+        name: 'Darkness (3/day SLA)',
+        description: 'Can cast Darkness 3 times per day as a spell-like ability (caster level equal to character level).'
+      }
+    ],
+    racialSkillPointsText: 'Gains (8 + INT mod) × (Racial HD + 3) racial skill points ONLY if the character has 0 class levels. Waived if character has class levels.',
+    description: 'Offspring of mortals and demonic or devilish fiends, bearing bat wings, horns, cloven hooves or fangs, and dark magical resistances.'
+  },
+  {
+    id: 'half-ogre',
+    name: 'Half-Ogre',
+    edition: '3.5e',
+    source: 'Savage Species, pp. 217–218 / Dragon Magazine #313',
+    levelAdjustment: 2,
+    typeChange: 'Giant (Augmented Humanoid)',
+    abilityModifiers: { STR: 6, DEX: -2, CON: 2, INT: -2, CHA: -2 },
+    naturalArmorBonus: 4,
+    sizeChange: 'increase_1', // Medium becomes Large!
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    traits: [
+      {
+        name: 'Large Size Growth',
+        description: 'Size increases by one category (Medium becomes Large). Gains 10 ft space and 10 ft natural reach, -1 penalty to AC and attack rolls, and +4 bonus on grapple checks.',
+        conflictKey: 'size_build'
+      },
+      {
+        name: 'Giant Blood',
+        description: 'Considered a creature of the Giant type for all spells, magic items, and racial effects.'
+      }
+    ],
+    racialSkillPointsText: 'Gains (2 + INT mod) × (Racial HD + 3) racial skill points ONLY if the character has 0 class levels. Waived if character has class levels.',
+    description: 'Towering crossbreeds standing 8 to 9 feet tall with bulging musculature, dense bones, and devastating reach.'
+  },
+  {
+    id: 'half-troll',
+    name: 'Half-Troll',
+    edition: '3.5e',
+    source: 'Fiend Folio, pp. 92–94',
+    levelAdjustment: 4,
+    typeChange: 'Giant (Augmented Humanoid)',
+    abilityModifiers: { STR: 6, DEX: 2, CON: 6, INT: -4, CHA: -2 },
+    naturalArmorBonus: 4,
+    sizeChange: 'same',
+    darkvisionFeet: 60,
+    hasLowLightVision: false,
+    naturalAttacks: [
+      { name: 'Claw (Primary)', damageDice: '1d4', damageType: 'Slashing', notes: '2 natural claw attacks (1d4 for Medium)' },
+      { name: 'Bite (Secondary)', damageDice: '1d6', damageType: 'Piercing', notes: 'Natural bite attack (1d6 for Medium)' }
+    ],
+    traits: [
+      {
+        name: 'Fast Healing 5',
+        description: 'Regains 5 hit points at the start of each of its turns. Fire and acid deal normal damage that cannot be regenerated.'
+      },
+      {
+        name: 'Scent',
+        description: 'Can detect approaching enemies, sniff out hidden foes, and track by sense of smell within 30 ft (60 ft upwind).'
+      }
+    ],
+    racialSkillPointsText: 'Gains (2 + INT mod) × (Racial HD + 3) racial skill points ONLY if the character has 0 class levels. Waived if character has class levels.',
+    description: 'Horrific hybrid bearing mottled green hide, long claws, and astonishing rapid tissue regeneration.'
+  },
+  {
+    id: 'half-fey',
+    name: 'Half-Fey',
+    edition: '3.5e',
+    source: 'Fiend Folio, pp. 89–91',
+    levelAdjustment: 2,
+    typeChange: 'Fey (Augmented Humanoid)',
+    abilityModifiers: { STR: -2, DEX: 2, CON: 2, INT: 2, WIS: 4, CHA: 4 },
+    naturalArmorBonus: 0,
+    sizeChange: 'same',
+    flySpeedMultiplier: 2, // Double base land speed, up to 60 ft
+    flyManeuverability: 'good',
+    darkvisionFeet: 0,
+    hasLowLightVision: true,
+    damageImmunities: ['Sleep'],
+    conditionImmunities: ['Sleep'],
+    damageReduction: { value: 5, bypass: 'Cold Iron', minHD: 12 },
+    savingThrowBonuses: [
+      { save: 'Will', bonus: 2, condition: 'against enchantment spells and effects' }
+    ],
+    traits: [
+      {
+        name: 'Insect or Butterfly Wings & Flight',
+        description: 'Shimmering gossamer wings grant a fly speed equal to double the base creature’s land speed (max 60 ft) with good maneuverability.'
+      },
+      {
+        name: 'Fey Immunities & Senses',
+        description: 'Immune to magic sleep effects. +2 racial bonus on saving throws against enchantment spells or effects. Low-Light Vision.'
+      },
+      {
+        name: 'Charm Person (SLA)',
+        description: 'Can cast Charm Person at will (DC 11 + CHA modifier).'
+      }
+    ],
+    racialSkillPointsText: 'Gains (6 + INT mod) × (Racial HD + 3) racial skill points ONLY if the character has 0 class levels. Waived if character has class levels.',
+    description: 'Enchanting woodland beings with luminous gossamer wings, mercurial emotions, and alluring nature magic.'
+  },
+  {
+    id: 'half-golem',
+    name: 'Half-Golem (Iron)',
+    edition: '3.5e',
+    source: 'Monster Manual II, pp. 209–213',
+    levelAdjustment: 3,
+    typeChange: 'Construct (Augmented Humanoid)',
+    abilityModifiers: { STR: 12, DEX: -2, CON: 0, INT: -4, CHA: -4 },
+    naturalArmorBonus: 11,
+    sizeChange: 'same',
+    darkvisionFeet: 60,
+    hasLowLightVision: true,
+    damageImmunities: ['Poison', 'Sleep', 'Paralysis', 'Stunning', 'Disease'],
+    conditionImmunities: ['Poisoned', 'Sleep', 'Paralyzed', 'Stunned', 'Diseased'],
+    damageReduction: { value: 15, bypass: 'Adamantine' },
+    traits: [
+      {
+        name: 'Construct Resilience',
+        description: 'Immunity to all mind-affecting effects (charms, compulsions, phantasms, patterns, and morale effects). Immune to poison, sleep effects, paralysis, stunning, disease, death effects, and necromancy effects. Not subject to critical hits, nonlethal damage, ability damage, ability drain, or energy drain.'
+      },
+      {
+        name: 'Iron Slam Attack',
+        description: 'Gains a powerful slam attack dealing 1d10 bludgeoning damage (for Medium size).'
+      }
+    ],
+    racialSkillPointsText: 'Gains 0 racial skill points. Skill points are determined exclusively by class levels.',
+    description: 'A tragic cyborg-like graft of living flesh and relentless enchanted iron plating, trading agility and intellect for immense physical resistance.'
+  }
+];
+
+/**
+ * Merges a 3.5e Base Creature and a Half-Breed Template according to the exact rules:
+ * - Numerical bonuses stack additively
+ * - Duplicate traits take the higher value
+ * - Core stats (size and speed) are anchored to base creature unless template modifies them
+ * - Template racial skill points waived if character has 1+ class levels
+ * - Returns composite attributes, trait lists, and precedence breakdown log.
+ */
+export function resolve35eHalfBreedTemplate(
+  base: BaseCreature35e,
+  template: HalfBreedTemplate35e,
+  characterLevel: number = 1,
+  hasClassLevels: boolean = true,
+  dragonVariety?: string,
+  conflictChoices?: Record<string, 'base' | 'template' | 'suppress'>
+): {
+  compositeName: string;
+  size: 'Small' | 'Medium' | 'Large';
+  speed: number;
+  speedNotes: string;
+  flySpeed?: number;
+  flyManeuverability?: string;
+  abilities: { STR: number; DEX: number; CON: number; INT: number; WIS: number; CHA: number };
+  abilityBreakdowns: Record<string, { base: number; template: number; net: number }>;
+  naturalArmor: number;
+  naturalArmorBreakdown: { base: number; template: number; total: number };
+  darkvisionFeet: number;
+  hasLowLightVision: boolean;
+  hasBlindsight: boolean;
+  blindsightFeet?: number;
+  damageImmunities: string[];
+  conditionImmunities: string[];
+  energyResistances: Record<string, number>;
+  damageReduction?: { value: number; bypass: string };
+  spellResistanceText?: string;
+  retainedBaseTraits: Array<{ name: string; description: string }>;
+  gainedTemplateTraits: Array<{ name: string; description: string }>;
+  conflicts: Array<{ key: string; baseName: string; templateName: string; resolution: string }>;
+  skillPointsNotice: string;
+  precedenceLog: string[];
+  levelAdjustment: number;
+} {
+  const precedenceLog: string[] = [];
+
+  // 1. Composite Race Title
+  let templateNameClean = template.name;
+  if (template.hasDragonVarieties && dragonVariety) {
+    templateNameClean = `Half-${dragonVariety} Dragon`;
+  }
+  const compositeName = `${templateNameClean} ${base.name}`;
+  precedenceLog.push(`[Rule 1 - Template Title]: Created composite designation "${compositeName}".`);
+
+  // 2. Core Stats (Size & Speed)
+  let resolvedSize = base.size;
+  if (template.sizeChange === 'increase_1') {
+    resolvedSize = base.size === 'Small' ? 'Medium' : 'Large';
+    precedenceLog.push(`[Rule 1 - Template Override]: Template specifies size increase: ${base.size} -> ${resolvedSize}.`);
+  } else if (template.sizeChange === 'decrease_1') {
+    resolvedSize = base.size === 'Large' ? 'Medium' : 'Small';
+    precedenceLog.push(`[Rule 1 - Template Override]: Template specifies size decrease: ${base.size} -> ${resolvedSize}.`);
+  } else {
+    precedenceLog.push(`[Rule 2 - Base Creature]: Size inherited from ${base.name} (${base.size}).`);
+  }
+
+  const baseSpeed = base.speed;
+  const speedBonus = template.speedModifier || 0;
+  const netSpeed = baseSpeed + speedBonus;
+  let speedNotes = base.speedNotes || `${netSpeed} ft. land speed`;
+  if (speedBonus !== 0) {
+    precedenceLog.push(`[Rule 1 - Template Override]: Land speed modified by ${speedBonus > 0 ? `+${speedBonus}` : speedBonus} ft (${netSpeed} ft total).`);
+  } else {
+    precedenceLog.push(`[Rule 2 - Base Creature]: Base land speed inherited from ${base.name} (${baseSpeed} ft).`);
+  }
+
+  // Fly speed
+  let flySpeed: number | undefined;
+  let flyManeuverability: string | undefined;
+  if (template.fixedFlySpeed) {
+    flySpeed = template.fixedFlySpeed;
+    flyManeuverability = template.flyManeuverability || 'average';
+    precedenceLog.push(`[Rule 1 - Template]: Gains fixed fly speed of ${flySpeed} ft (${flyManeuverability}).`);
+  } else if (template.flySpeedMultiplier) {
+    flySpeed = Math.min(60, netSpeed * template.flySpeedMultiplier);
+    flyManeuverability = template.flyManeuverability || 'good';
+    precedenceLog.push(`[Rule 1 - Template]: Gains fly speed (${template.flySpeedMultiplier}× base speed = ${flySpeed} ft, ${flyManeuverability}).`);
+  } else if (template.id === 'half-dragon' && resolvedSize === 'Large') {
+    flySpeed = Math.min(30, netSpeed);
+    flyManeuverability = 'average';
+    precedenceLog.push(`[Rule 1 - Template]: Large half-dragon grows wings (Fly speed ${flySpeed} ft, average).`);
+  }
+
+  // 3. Ability Modifiers (Cumulative)
+  const stats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const;
+  const abilities: Record<string, number> = { STR: 0, DEX: 0, CON: 0, INT: 0, WIS: 0, CHA: 0 };
+  const abilityBreakdowns: Record<string, { base: number; template: number; net: number }> = {};
+
+  for (const s of stats) {
+    const baseMod = base.abilities[s] || 0;
+    const tplMod = template.abilityModifiers[s] || 0;
+    const net = baseMod + tplMod;
+    abilities[s] = net;
+    abilityBreakdowns[s] = { base: baseMod, template: tplMod, net };
+  }
+  precedenceLog.push(`[Rule 3 - General Half-Breed]: Cumulative ability adjustments: STR ${abilities.STR >= 0 ? `+${abilities.STR}` : abilities.STR}, DEX ${abilities.DEX >= 0 ? `+${abilities.DEX}` : abilities.DEX}, CON ${abilities.CON >= 0 ? `+${abilities.CON}` : abilities.CON}, INT ${abilities.INT >= 0 ? `+${abilities.INT}` : abilities.INT}, WIS ${abilities.WIS >= 0 ? `+${abilities.WIS}` : abilities.WIS}, CHA ${abilities.CHA >= 0 ? `+${abilities.CHA}` : abilities.CHA}.`);
+
+  // 4. Natural Armor (Cumulative)
+  const baseNat = base.naturalArmor || 0;
+  const tplNat = template.naturalArmorBonus || 0;
+  const totalNat = baseNat + tplNat;
+  const naturalArmorBreakdown = { base: baseNat, template: tplNat, total: totalNat };
+  precedenceLog.push(`[Rule 3 - General Half-Breed]: Natural armor is cumulative: Base (${baseNat}) + Template (+${tplNat}) = +${totalNat} Natural Armor bonus to AC.`);
+
+  // 5. Duplicate Senses (Higher Value Wins)
+  const baseDV = base.darkvisionFeet || 0;
+  const tplDV = template.darkvisionFeet || 0;
+  const resolvedDV = Math.max(baseDV, tplDV);
+  if (baseDV > 0 && tplDV > 0) {
+    precedenceLog.push(`[Rule 3 - Duplicate Higher Wins]: Darkvision: Base ${baseDV} ft vs Template ${tplDV} ft -> ${resolvedDV} ft.`);
+  } else if (resolvedDV > 0) {
+    precedenceLog.push(`[Rule 3]: Darkvision out to ${resolvedDV} ft.`);
+  }
+
+  const resolvedLowLight = Boolean(base.hasLowLightVision || template.hasLowLightVision);
+  if (resolvedLowLight) {
+    precedenceLog.push(`[Rule 3]: Retains / gains Low-Light Vision.`);
+  }
+
+  const hasBlindsight = Boolean(template.hasBlindsight);
+  const blindsightFeet = template.blindsightFeet;
+
+  // 6. Immunities & Resistances
+  const damageImmunities = Array.from(new Set([...(template.damageImmunities || [])]));
+  const conditionImmunities = Array.from(new Set([...(template.conditionImmunities || [])]));
+  const energyResistances: Record<string, number> = { ...(template.energyResistances || {}) };
+
+  if (template.id === 'half-dragon' && dragonVariety) {
+    const dragonElementMap: Record<string, string> = {
+      Black: 'Acid', Copper: 'Acid', Green: 'Acid',
+      Blue: 'Electricity', Bronze: 'Electricity',
+      Brass: 'Fire', Gold: 'Fire', Red: 'Fire',
+      Silver: 'Cold', White: 'Cold'
+    };
+    const elem = dragonElementMap[dragonVariety] || 'Fire';
+    if (!damageImmunities.includes(elem)) {
+      damageImmunities.push(elem);
+    }
+    precedenceLog.push(`[Rule 1 - Template]: Immunity to ${elem} from ${dragonVariety} dragon ancestor.`);
+  }
+
+  // 7. Damage Reduction & Spell Resistance
+  let damageReduction = template.damageReduction;
+  if (damageReduction && damageReduction.minHD && characterLevel < damageReduction.minHD) {
+    damageReduction = undefined; // Not high enough level yet
+  }
+  const spellResistanceText = template.spellResistanceFormula
+    ? `${characterLevel + 10} (Formula: HD + 10)`
+    : undefined;
+
+  // 8. Conflicting Abilities Resolution (e.g. Slight Build vs Large / Powerful Build)
+  const conflicts: Array<{ key: string; baseName: string; templateName: string; resolution: string }> = [];
+  const baseConflictTraits = base.traits.filter(t => t.conflictKey);
+  const tplConflictTraits = template.traits.filter(t => t.conflictKey);
+
+  for (const bt of baseConflictTraits) {
+    const matchingTpl = tplConflictTraits.find(t => t.conflictKey === bt.conflictKey);
+    if (matchingTpl) {
+      const choice = conflictChoices?.[bt.conflictKey!] || 'suppress';
+      let resolutionText = '';
+      if (choice === 'base') {
+        resolutionText = `Player selected ${bt.name} from Base Creature; ${matchingTpl.name} ignored.`;
+      } else if (choice === 'template') {
+        resolutionText = `Player selected ${matchingTpl.name} from Template; ${bt.name} ignored.`;
+      } else {
+        resolutionText = `Mutually exclusive traits (${bt.name} vs. ${matchingTpl.name}) both suppressed per general rule.`;
+      }
+      conflicts.push({
+        key: bt.conflictKey!,
+        baseName: bt.name,
+        templateName: matchingTpl.name,
+        resolution: resolutionText
+      });
+      precedenceLog.push(`[Rule 3 - Conflicting Abilities]: ${resolutionText}`);
+    }
+  }
+
+  // Filter base traits
+  const retainedBaseTraits = base.traits.filter(t => {
+    const conflict = conflicts.find(c => c.baseName === t.name);
+    if (conflict && (conflictChoices?.[conflict.key] === 'suppress' || conflictChoices?.[conflict.key] === 'template')) {
+      return false;
+    }
+    return true;
+  });
+
+  // Filter template traits
+  const gainedTemplateTraits = template.traits.filter(t => {
+    const conflict = conflicts.find(c => c.templateName === t.name);
+    if (conflict && (conflictChoices?.[conflict.key] === 'suppress' || conflictChoices?.[conflict.key] === 'base')) {
+      return false;
+    }
+    return true;
+  });
+
+  // 9. Racial Skill Points Rule
+  let skillPointsNotice = '';
+  if (hasClassLevels) {
+    skillPointsNotice = `Character has 1+ class levels (Level ${characterLevel}). Per 3.5e Half-Breed rules, all template racial skill points are ignored; skill points are determined solely by class progression.`;
+    precedenceLog.push(`[Rule 3 - Racial Skill Points]: Character has class levels; template racial skill points suppressed.`);
+  } else {
+    skillPointsNotice = `Character has 0 class levels: Template racial skill points apply: ${template.racialSkillPointsText}`;
+    precedenceLog.push(`[Rule 3 - Racial Skill Points]: Character has 0 class levels; template racial skill points granted.`);
+  }
+
+  return {
+    compositeName,
+    size: resolvedSize,
+    speed: netSpeed,
+    speedNotes,
+    flySpeed,
+    flyManeuverability,
+    abilities: abilities as any,
+    abilityBreakdowns,
+    naturalArmor: totalNat,
+    naturalArmorBreakdown,
+    darkvisionFeet: resolvedDV,
+    hasLowLightVision: resolvedLowLight,
+    hasBlindsight,
+    blindsightFeet,
+    damageImmunities,
+    conditionImmunities,
+    energyResistances,
+    damageReduction,
+    spellResistanceText,
+    retainedBaseTraits,
+    gainedTemplateTraits,
+    conflicts,
+    skillPointsNotice,
+    precedenceLog,
+    levelAdjustment: template.levelAdjustment
+  };
+}
+

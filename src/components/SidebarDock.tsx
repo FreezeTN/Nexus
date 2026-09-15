@@ -18,6 +18,7 @@ import {
   PanelLeftOpen,
   Bot,
   Dices,
+  LayoutTemplate,
   Compass,
   MapPin,
   Zap,
@@ -400,7 +401,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                 }`}
                 title="Toggle Distraction-Free Table Mode HUD (Alt+T)"
               >
-                <Dices className={`w-3.5 h-3.5 ${isTableMode ? 'text-stone-950' : 'text-amber-400'}`} />
+                <LayoutTemplate className={`w-3.5 h-3.5 ${isTableMode ? 'text-stone-950' : 'text-amber-400'}`} />
               </button>
 
               {/* Physical Dice Toggle */}
@@ -794,7 +795,7 @@ export const SidebarDock: React.FC<SidebarDockProps> = ({
                 }`}
                 title="Toggle Distraction-Free Table Mode HUD (Alt+T)"
               >
-                <Dices className={`w-3.5 h-3.5 ${isTableMode ? 'text-stone-950' : 'text-amber-400'} shrink-0`} />
+                <LayoutTemplate className={`w-3.5 h-3.5 ${isTableMode ? 'text-stone-950' : 'text-amber-400'} shrink-0`} />
                 <span className="truncate">Table Mode</span>
               </button>
             </div>

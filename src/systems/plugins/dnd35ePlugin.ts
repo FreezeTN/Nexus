@@ -1,7 +1,7 @@
 import { GameSystemPlugin } from '../types';
 import { getAbilityModifier } from '../../utils/calculators/abilityCalculators';
 import { get35eBaseAttackBonus, get35eArmorClass } from '../../utils/calculators/dnd35eCalculators';
-import { getEffectiveMaxHp } from '../../utils/dndCalculations';
+import { getEffectiveMaxHp, getSizeACModifier } from '../../utils/dndCalculations';
 import { CharacterData, GearItem, Attack } from '../../types';
 
 export const dnd35ePlugin: GameSystemPlugin = {
@@ -72,7 +72,8 @@ export const dnd35ePlugin: GameSystemPlugin = {
       if (notes.toLowerCase().includes('ranged')) {
         statMod = dexMod;
       }
-      return bab + statMod;
+      const sizeMod = getSizeACModifier(char.sizeCategory);
+      return bab + statMod + sizeMod;
     },
     getDamageFormula(itemOrAttack: GearItem | Attack, char: CharacterData) {
       if ('attackBonus' in itemOrAttack) {

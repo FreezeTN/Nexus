@@ -26,17 +26,143 @@ export const RestModal: React.FC<RestModalProps> = ({
   const [applySpellRecovery, setApplySpellRecovery] = useState<boolean>(true);
   const [restLog, setRestLog] = useState<string | null>(null);
 
+  const is35e = character.edition === '3.5e';
   const effectiveMaxHp = getEffectiveMaxHp(character);
 
   // Parse Hit Die string (e.g. "5d10" -> count: 5, sides: 10)
-  const hitDieMatch = character.hitDiceTotal.match(/(\d+)d(\d+)/i);
-  const maxHitDice = hitDieMatch ? parseInt(hitDieMatch[1]) : character.level;
+  const hitDieMatch = (character.hitDiceTotal || '').match(/(\d+)d(\d+)/i);
+  const maxHitDice = hitDieMatch ? parseInt(hitDieMatch[1]) : (character.level || 1);
   const dieSides = hitDieMatch ? parseInt(hitDieMatch[2]) : 8;
 
   const conScore = character.abilities?.CON?.score ?? 10;
   const conMod = Math.floor((conScore - 10) / 2);
 
-  // Execute Short Rest
+  // 3.5e Natural Healing: 8 Hours (PHB p. 146)
+  const handlePerform35eNaturalHealing8h = () => {
+    if (isCharacterDead(character) || (character.hpCurrent ?? 0) <= -10) {
+      setRestLog(`💀 ${character.name} is dead under D&D 3.5e RAW (≤ -10 HP). Natural rest cannot restore life.`);
+      return;
+    }
+
+    const level = Math.max(1, character.level || 1);
+    const hpRecovery = level; // 1 HP per character level per 8 hours
+    const nonlethalCleared = Math.min(character.nonlethalDamage || 0, 8 * level);
+    const newNonlethal = Math.max(0, (character.nonlethalDamage || 0) - nonlethalCleared);
+    const newHp = Math.min(effectiveMaxHp, (character.hpCurrent ?? 0) + hpRecovery);
+
+    // Ability Damage: 1 point recovered per affected ability score
+    const updatedAbilityDamage: Partial<Record<string, number>> = {};
+    let abilityDamageRecoveredCount = 0;
+    if (character.abilityDamage) {
+      Object.entries(character.abilityDamage).forEach(([ability, val]) => {
+        if (typeof val === 'number' && val > 0) {
+          const newVal = Math.max(0, val - 1);
+          if (newVal > 0) {
+            updatedAbilityDamage[ability] = newVal;
+          }
+          abilityDamageRecoveredCount += Math.min(1, val);
+        }
+      });
+    }
+
+    // Recover Spell Slots / Prepared Spells
+    const updatedSpellSlots = (character.spellSlots || []).map(slot => ({
+      ...slot,
+      current: slot.max
+    }));
+
+    // Recharge Daily Class Features
+    const updatedFeatures = (character.classFeatures || []).map(feat => {
+      if (feat.usesMax) {
+        return { ...feat, usesRemaining: feat.usesMax };
+      }
+      return feat;
+    });
+
+    let conditions = character.conditions || [];
+    let isStabilized35e = character.isStabilized35e;
+    if (newHp > 0) {
+      conditions = conditions.filter(c => c !== 'Unconscious' && c !== 'Dying');
+      isStabilized35e = false;
+    }
+
+    onUpdateCharacter({
+      ...character,
+      hpCurrent: newHp,
+      nonlethalDamage: newNonlethal,
+      abilityDamage: updatedAbilityDamage,
+      spellSlots: updatedSpellSlots,
+      classFeatures: updatedFeatures,
+      conditions,
+      isStabilized35e
+    });
+
+    playHealSound();
+    setRestLog(`8-Hour Rest Completed (3.5e RAW)! Regained +${hpRecovery} HP (1 HP/lvl), cleared ${nonlethalCleared} nonlethal dmg, restored ${abilityDamageRecoveredCount} ability damage points, and refreshed spell slots for preparation.`);
+  };
+
+  // 3.5e Complete Bed Rest: 24 Hours (PHB p. 146)
+  const handlePerform35eBedRest24h = () => {
+    if (isCharacterDead(character) || (character.hpCurrent ?? 0) <= -10) {
+      setRestLog(`💀 ${character.name} is dead under D&D 3.5e RAW (≤ -10 HP). Natural rest cannot restore life.`);
+      return;
+    }
+
+    const level = Math.max(1, character.level || 1);
+    const hpRecovery = level * 2; // 2 HP per character level per 24 hours of bed rest
+    const nonlethalCleared = character.nonlethalDamage || 0;
+    const newHp = Math.min(effectiveMaxHp, (character.hpCurrent ?? 0) + hpRecovery);
+
+    // Ability Damage: 2 points recovered per affected ability score
+    const updatedAbilityDamage: Partial<Record<string, number>> = {};
+    let abilityDamageRecoveredCount = 0;
+    if (character.abilityDamage) {
+      Object.entries(character.abilityDamage).forEach(([ability, val]) => {
+        if (typeof val === 'number' && val > 0) {
+          const newVal = Math.max(0, val - 2);
+          if (newVal > 0) {
+            updatedAbilityDamage[ability] = newVal;
+          }
+          abilityDamageRecoveredCount += Math.min(2, val);
+        }
+      });
+    }
+
+    const updatedSpellSlots = (character.spellSlots || []).map(slot => ({
+      ...slot,
+      current: slot.max
+    }));
+
+    const updatedFeatures = (character.classFeatures || []).map(feat => {
+      if (feat.usesMax) {
+        return { ...feat, usesRemaining: feat.usesMax };
+      }
+      return feat;
+    });
+
+    let conditions = character.conditions || [];
+    let isStabilized35e = character.isStabilized35e;
+    if (newHp > 0) {
+      conditions = conditions.filter(c => c !== 'Unconscious' && c !== 'Dying');
+      isStabilized35e = false;
+    }
+
+    onUpdateCharacter({
+      ...character,
+      hpCurrent: newHp,
+      nonlethalDamage: 0,
+      abilityDamage: updatedAbilityDamage,
+      spellSlots: updatedSpellSlots,
+      classFeatures: updatedFeatures,
+      conditions,
+      isStabilized35e
+    });
+
+    playHealSound();
+    setRestLog(`24-Hour Bed Rest Completed (3.5e RAW)! Regained +${hpRecovery} HP (2 HP/lvl), completely healed nonlethal dmg, restored ${abilityDamageRecoveredCount} ability damage points, and refreshed spell slots.`);
+  };
+
+  // Execute 5e Short Rest
   const handlePerformShortRest = () => {
     if (isCharacterDead(character)) {
       setRestLog(`💀 ${character.name} is DEAD! Resting cannot restore HP or bring a dead character back to life.`);
@@ -181,9 +307,11 @@ export const RestModal: React.FC<RestModalProps> = ({
         <div className="flex items-center justify-between border-b border-stone-800 pb-3">
           <div className="flex items-center gap-2">
             <Flame className="w-5 h-5 text-amber-500" />
-            <h2 className="text-lg font-serif font-bold text-stone-100">{t('rest.title', 'Rest & Recovery Engine')}</h2>
+            <h2 className="text-lg font-serif font-bold text-stone-100">
+              {is35e ? 'Natural Healing & Rest (3.5e RAW)' : t('rest.title', 'Rest & Recovery Engine')}
+            </h2>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-100">
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-100 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -193,118 +321,216 @@ export const RestModal: React.FC<RestModalProps> = ({
           <button
             type="button"
             onClick={() => { setRestType('short'); setRestLog(null); }}
-            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
               restType === 'short'
                 ? 'bg-amber-600 text-stone-950 shadow-md'
                 : 'text-stone-400 hover:text-stone-200'
             }`}
           >
             <Flame className="w-4 h-4" />
-            <span>{t('rest.shortRest', 'Short Rest')} (1h)</span>
+            <span>{is35e ? '8-Hour Rest (Natural)' : `${t('rest.shortRest', 'Short Rest')} (1h)`}</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setRestType('long'); setRestLog(null); }}
-            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold transition cursor-pointer ${
               restType === 'long'
                 ? 'bg-indigo-600 text-stone-100 shadow-md'
                 : 'text-stone-400 hover:text-stone-200'
             }`}
           >
             <Moon className="w-4 h-4" />
-            <span>{t('rest.longRest', 'Long Rest')} (8h)</span>
+            <span>{is35e ? '24-Hour Bed Rest' : `${t('rest.longRest', 'Long Rest')} (8h)`}</span>
           </button>
         </div>
 
-        {/* Short Rest Panel */}
-        {restType === 'short' && (
-          <div className="space-y-4">
-            <div className="bg-stone-950 p-3.5 rounded-xl border border-stone-800 space-y-2 text-xs">
-              <div className="flex justify-between items-center text-stone-300">
-                <span>Hit Die Type: <strong className="text-amber-300">d{dieSides}</strong></span>
-                <span>CON Modifier: <strong className="text-emerald-400">{conMod >= 0 ? `+${conMod}` : conMod}</strong></span>
+        {/* 3.5E REST PANELS */}
+        {is35e ? (
+          restType === 'short' ? (
+            /* 3.5e 8-Hour Rest Panel */
+            <div className="space-y-4">
+              <div className="bg-stone-950 p-3.5 rounded-xl border border-stone-800 space-y-2 text-xs text-stone-300">
+                <div className="font-bold text-amber-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-amber-400" /> 8-Hour Rest RAW (PHB p. 146):
+                  </span>
+                  <span className="text-[10px] font-mono bg-amber-950 text-amber-300 border border-amber-600/50 px-2 py-0.5 rounded">
+                    Night's Rest
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
+                  <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                    <span className="text-stone-400 block text-[10px] uppercase">HP Recovered</span>
+                    <span className="text-sm font-bold text-emerald-400">+{Math.max(1, character.level || 1)} HP</span>
+                    <span className="text-[9px] text-stone-500 block">1 HP per character level</span>
+                  </div>
+                  <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                    <span className="text-stone-400 block text-[10px] uppercase">Ability Damage</span>
+                    <span className="text-sm font-bold text-amber-300">1 pt / stat</span>
+                    <span className="text-[9px] text-stone-500 block">Restores temp damage</span>
+                  </div>
+                  <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                    <span className="text-stone-400 block text-[10px] uppercase">Nonlethal Cleared</span>
+                    <span className="text-sm font-bold text-sky-400">-{8 * Math.max(1, character.level || 1)} HP</span>
+                    <span className="text-[9px] text-stone-500 block">1 pt / hr / character level</span>
+                  </div>
+                  <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                    <span className="text-stone-400 block text-[10px] uppercase">Spells & Features</span>
+                    <span className="text-sm font-bold text-purple-300">Refreshed</span>
+                    <span className="text-[9px] text-stone-500 block">Ready for preparation</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-stone-400 pt-1 border-t border-stone-800">
+                  Current HP: <strong className="text-rose-400 font-mono">{character.hpCurrent ?? effectiveMaxHp} / {effectiveMaxHp}</strong> • Nonlethal: <strong className="text-amber-400 font-mono">{character.nonlethalDamage || 0}</strong>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-stone-300">
-                <span>Current HP: <strong className="text-rose-400">{character.hpCurrent} / {effectiveMaxHp}</strong></span>
-                <span>Hit Dice Left: <strong className="text-amber-400">{character.hitDiceCurrent} / {maxHitDice}</strong></span>
-              </div>
-            </div>
 
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-stone-300">
-                Hit Dice to Spend:
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  min="1"
-                  max={Math.max(1, character.hitDiceCurrent)}
-                  value={diceToSpend}
-                  onChange={(e) => setDiceToSpend(Math.max(1, parseInt(e.target.value) || 1))}
-                  className="w-20 bg-stone-950 border border-stone-700 rounded-xl p-2 text-stone-100 font-mono text-center text-sm font-bold"
-                />
+              <button
+                type="button"
+                onClick={handlePerform35eNaturalHealing8h}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold text-xs py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              >
+                <Moon className="w-4 h-4" />
+                <span>Perform 8-Hour Rest & Natural Healing</span>
+              </button>
+            </div>
+          ) : (
+            /* 3.5e 24-Hour Bed Rest Panel */
+            <div className="space-y-4">
+              <div className="bg-stone-950 p-3.5 rounded-xl border border-stone-800 space-y-2 text-xs text-stone-300">
+                <div className="font-bold text-indigo-300 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-400" /> Complete Bed Rest RAW (24 Hours):
+                  </span>
+                  <span className="text-[10px] font-mono bg-indigo-950 text-indigo-300 border border-indigo-600/50 px-2 py-0.5 rounded">
+                    Full Day Rest
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1 font-mono">
+                  <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                    <span className="text-stone-400 block text-[10px] uppercase">HP Recovered</span>
+                    <span className="text-sm font-bold text-emerald-400">+{Math.max(1, character.level || 1) * 2} HP</span>
+                    <span className="text-[9px] text-stone-500 block">2 HP per character level (Double)</span>
+                  </div>
+                  <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                    <span className="text-stone-400 block text-[10px] uppercase">Ability Damage</span>
+                    <span className="text-sm font-bold text-amber-300">2 pts / stat</span>
+                    <span className="text-[9px] text-stone-500 block">2 points per damaged ability</span>
+                  </div>
+                  <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800 col-span-2">
+                    <span className="text-stone-400 block text-[10px] uppercase">Nonlethal Damage</span>
+                    <span className="text-sm font-bold text-sky-400">Completely Cleared (0)</span>
+                  </div>
+                </div>
+                <div className="text-[11px] text-stone-400 pt-1 border-t border-stone-800">
+                  Current HP: <strong className="text-rose-400 font-mono">{character.hpCurrent ?? effectiveMaxHp} / {effectiveMaxHp}</strong> • Nonlethal: <strong className="text-amber-400 font-mono">{character.nonlethalDamage || 0}</strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handlePerform35eBedRest24h}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-stone-100 font-bold text-xs py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+              >
+                <Moon className="w-4 h-4" />
+                <span>Perform 24-Hour Bed Rest (Double Healing)</span>
+              </button>
+            </div>
+          )
+        ) : (
+          /* 5E REST PANELS */
+          <>
+            {/* Short Rest Panel */}
+            {restType === 'short' && (
+              <div className="space-y-4">
+                <div className="bg-stone-950 p-3.5 rounded-xl border border-stone-800 space-y-2 text-xs">
+                  <div className="flex justify-between items-center text-stone-300">
+                    <span>Hit Die Type: <strong className="text-amber-300">d{dieSides}</strong></span>
+                    <span>CON Modifier: <strong className="text-emerald-400">{conMod >= 0 ? `+${conMod}` : conMod}</strong></span>
+                  </div>
+                  <div className="flex justify-between items-center text-stone-300">
+                    <span>Current HP: <strong className="text-rose-400">{character.hpCurrent} / {effectiveMaxHp}</strong></span>
+                    <span>Hit Dice Left: <strong className="text-amber-400">{character.hitDiceCurrent} / {maxHitDice}</strong></span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-stone-300">
+                    Hit Dice to Spend:
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="number"
+                      min="1"
+                      max={Math.max(1, character.hitDiceCurrent)}
+                      value={diceToSpend}
+                      onChange={(e) => setDiceToSpend(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-20 bg-stone-950 border border-stone-700 rounded-xl p-2 text-stone-100 font-mono text-center text-sm font-bold"
+                    />
+                    <button
+                      onClick={() => setDiceToSpend(character.hitDiceCurrent)}
+                      className="text-xs bg-stone-800 hover:bg-stone-700 text-stone-200 px-3 py-2 rounded-xl transition font-mono cursor-pointer"
+                    >
+                      Spend All ({character.hitDiceCurrent})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Class Spell Recovery Indicator */}
+                {['warlock', 'wizard', 'druid', 'sorcerer'].some(c => (character.characterClass || '').toLowerCase().includes(c)) && (
+                  <label className="flex items-center gap-2 p-2 bg-purple-950/40 border border-purple-800/50 rounded-xl cursor-pointer text-xs text-purple-200 font-semibold">
+                    <input
+                      type="checkbox"
+                      checked={applySpellRecovery}
+                      onChange={(e) => setApplySpellRecovery(e.target.checked)}
+                      className="w-4 h-4 rounded bg-stone-900 border-stone-700 text-purple-500 focus:ring-purple-500"
+                    />
+                    <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                    <span>
+                      {(character.characterClass || '').toLowerCase().includes('warlock')
+                        ? 'Restore Warlock Pact Magic Spell Slots'
+                        : 'Apply Arcane / Natural Recovery (+ Spell Slots)'}
+                    </span>
+                  </label>
+                )}
+
                 <button
-                  onClick={() => setDiceToSpend(character.hitDiceCurrent)}
-                  className="text-xs bg-stone-800 hover:bg-stone-700 text-stone-200 px-3 py-2 rounded-xl transition font-mono"
+                  onClick={handlePerformShortRest}
+                  disabled={character.hitDiceCurrent <= 0}
+                  className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-stone-950 font-bold text-xs py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
                 >
-                  Spend All ({character.hitDiceCurrent})
+                  <Dices className="w-4 h-4" />
+                  <span>Spend {diceToSpend} Hit Die & Recover HP</span>
                 </button>
               </div>
-            </div>
-
-            {/* Class Spell Recovery Indicator */}
-            {['warlock', 'wizard', 'druid', 'sorcerer'].some(c => (character.characterClass || '').toLowerCase().includes(c)) && (
-              <label className="flex items-center gap-2 p-2 bg-purple-950/40 border border-purple-800/50 rounded-xl cursor-pointer text-xs text-purple-200 font-semibold">
-                <input
-                  type="checkbox"
-                  checked={applySpellRecovery}
-                  onChange={(e) => setApplySpellRecovery(e.target.checked)}
-                  className="w-4 h-4 rounded bg-stone-900 border-stone-700 text-purple-500 focus:ring-purple-500"
-                />
-                <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
-                <span>
-                  {(character.characterClass || '').toLowerCase().includes('warlock')
-                    ? 'Restore Warlock Pact Magic Spell Slots'
-                    : 'Apply Arcane / Natural Recovery (+ Spell Slots)'}
-                </span>
-              </label>
             )}
 
-            <button
-              onClick={handlePerformShortRest}
-              disabled={character.hitDiceCurrent <= 0}
-              className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-40 text-stone-950 font-bold text-xs py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
-            >
-              <Dices className="w-4 h-4" />
-              <span>Spend {diceToSpend} Hit Die & Recover HP</span>
-            </button>
-          </div>
-        )}
+            {/* Long Rest Panel */}
+            {restType === 'long' && (
+              <div className="space-y-4">
+                <div className="bg-stone-950 p-3.5 rounded-xl border border-stone-800 space-y-2 text-xs text-stone-300">
+                  <div className="font-bold text-indigo-300 flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4" /> Long Rest Benefits (8 Hours):
+                  </div>
+                  <ul className="list-disc list-inside space-y-1 text-stone-300 text-[11px]">
+                    <li>Restore HP to maximum (<strong className="text-rose-400">{effectiveMaxHp} HP</strong>).</li>
+                    <li>Restore Hit Dice count by +{Math.max(1, Math.floor(maxHitDice / 2))} (up to {maxHitDice}).</li>
+                    <li>Fully restore all Spell Slots & Class Feature charges.</li>
+                    <li>Reset Death Save successes/failures and clear 1 Exhaustion level.</li>
+                  </ul>
+                </div>
 
-        {/* Long Rest Panel */}
-        {restType === 'long' && (
-          <div className="space-y-4">
-            <div className="bg-stone-950 p-3.5 rounded-xl border border-stone-800 space-y-2 text-xs text-stone-300">
-              <div className="font-bold text-indigo-300 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4" /> Long Rest Benefits (8 Hours):
+                <button
+                  onClick={handlePerformLongRest}
+                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-stone-100 font-bold text-xs py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg cursor-pointer"
+                >
+                  <Moon className="w-4 h-4" />
+                  <span>Perform Full Long Rest</span>
+                </button>
               </div>
-              <ul className="list-disc list-inside space-y-1 text-stone-300 text-[11px]">
-                <li>Restore HP to maximum (<strong className="text-rose-400">{effectiveMaxHp} HP</strong>).</li>
-                <li>Restore Hit Dice count by +{Math.max(1, Math.floor(maxHitDice / 2))} (up to {maxHitDice}).</li>
-                <li>Fully restore all Spell Slots & Class Feature charges.</li>
-                <li>Reset Death Save successes/failures and clear 1 Exhaustion level.</li>
-              </ul>
-            </div>
-
-            <button
-              onClick={handlePerformLongRest}
-              className="w-full bg-indigo-600 hover:bg-indigo-500 text-stone-100 font-bold text-xs py-3 rounded-xl transition flex items-center justify-center gap-2 shadow-lg"
-            >
-              <Moon className="w-4 h-4" />
-              <span>Perform Full Long Rest</span>
-            </button>
-          </div>
+            )}
+          </>
         )}
 
         {/* Result Log */}

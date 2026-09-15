@@ -3,10 +3,17 @@ import { systemRegistry } from '../../../systems';
 import { loadCustomCompendiumEntries } from '../../../data/compendiumData';
 
 export function getRacesForSystem(edition: RuleEdition): string[] {
+  const systemRaces = RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e'];
+  const baseRaces: string[] = [...systemRaces];
+
   const plugin = systemRegistry.getSystem(edition);
-  const baseRaces: string[] = plugin?.data?.races && plugin.data.races.length > 0
-    ? [...plugin.data.races]
-    : [...(RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e'])];
+  if (plugin?.data?.races) {
+    for (const pr of plugin.data.races) {
+      if (!baseRaces.includes(pr)) {
+        baseRaces.push(pr);
+      }
+    }
+  }
 
   try {
     const customEntries = loadCustomCompendiumEntries();
@@ -27,10 +34,17 @@ export function getRacesForSystem(edition: RuleEdition): string[] {
 }
 
 export function getClassesForSystem(edition: RuleEdition): string[] {
+  const systemClasses = CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e'];
+  const baseClasses: string[] = [...systemClasses];
+
   const plugin = systemRegistry.getSystem(edition);
-  const baseClasses: string[] = plugin?.data?.classes && plugin.data.classes.length > 0
-    ? [...plugin.data.classes]
-    : [...(CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e'])];
+  if (plugin?.data?.classes) {
+    for (const pc of plugin.data.classes) {
+      if (!baseClasses.includes(pc)) {
+        baseClasses.push(pc);
+      }
+    }
+  }
 
   try {
     const customEntries = loadCustomCompendiumEntries();
@@ -52,15 +66,28 @@ export function getClassesForSystem(edition: RuleEdition): string[] {
 
 export function getSubclassesForSystemClass(edition: RuleEdition, clsName: string): string[] {
   const mapObj = SUBCLASS_MAP_BY_SYSTEM[edition] || SUBCLASS_MAP_BY_SYSTEM['5e'];
+  if (!clsName) return ['General / Standard Archetype'];
+
+  // 1. Exact match
   if (mapObj[clsName] && mapObj[clsName].length > 0) {
     return mapObj[clsName];
   }
 
-  // Check if it's a custom class in compendium
+  // 2. Case-insensitive / normalized match against mapObj keys
+  const lowerCls = clsName.toLowerCase().trim();
+  const matchedKey = Object.keys(mapObj).find(k => {
+    const kLow = k.toLowerCase();
+    return kLow === lowerCls || lowerCls.includes(kLow) || kLow.includes(lowerCls);
+  });
+  if (matchedKey && mapObj[matchedKey] && mapObj[matchedKey].length > 0) {
+    return mapObj[matchedKey];
+  }
+
+  // 3. Check if it's a custom class in compendium
   try {
     const customEntries = loadCustomCompendiumEntries();
     const customClass = customEntries.find(
-      e => e.category === 'classes' && e.name.toLowerCase() === clsName.toLowerCase()
+      e => e.category === 'classes' && e.name.toLowerCase() === lowerCls
     );
     if (customClass?.classData?.subclasses && customClass.classData.subclasses.length > 0) {
       return customClass.classData.subclasses;
@@ -72,17 +99,37 @@ export function getSubclassesForSystemClass(edition: RuleEdition, clsName: strin
     // ignore
   }
 
-  return ['General'];
+  return ['General / Standard Archetype'];
 }
 
 export const RACE_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {
   '5e': [
-    'Human', 'Elf', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)', 'Dwarf', 'Hill Dwarf', 'Mountain Dwarf',
-    'Halfling', 'Lightfoot Halfling', 'Stout Halfling', 'Dragonborn', 'Gnome', 'Rock Gnome', 'Forest Gnome',
-    'Half-Elf', 'Half-Orc', 'Tiefling', 'Aasimar', 'Genasi', 'Goliath', 'Tabaxi', 'Warforged', 'Orc', 'Goblin', 'Kobold'
+    'Human',
+    'Elf', 'High Elf', 'Wood Elf', 'Dark Elf (Drow)', 'Eladrin',
+    'Dwarf', 'Hill Dwarf', 'Mountain Dwarf',
+    'Halfling', 'Lightfoot Halfling', 'Stout Halfling',
+    'Dragonborn',
+    'Gnome', 'Forest Gnome', 'Rock Gnome', 'Deep Gnome',
+    'Half-Elf',
+    'Half-Orc',
+    'Tiefling',
+    'Aasimar',
+    'Genasi',
+    'Goliath',
+    'Tabaxi',
+    'Warforged',
+    'Orc',
+    'Goblin',
+    'Kobold'
   ],
   '3.5e': [
-    'Human', 'High Elf', 'Wood Elf', 'Hill Dwarf', 'Mountain Dwarf', 'Lightfoot Halfling', 'Rock Gnome', 'Half-Elf', 'Half-Orc'
+    'Human',
+    'Dwarf', 'Hill Dwarf', 'Mountain Dwarf', 'Deep Dwarf',
+    'Elf', 'High Elf', 'Wood Elf', 'Gray Elf', 'Wild Elf', 'Drow (Dark Elf)',
+    'Gnome', 'Rock Gnome', 'Forest Gnome', 'Deep Gnome (Svirfneblin)',
+    'Half-Elf',
+    'Half-Orc',
+    'Halfling', 'Lightfoot Halfling', 'Deep Halfling', 'Tallfellow Halfling'
   ],
   'shadowrun': [
     'Human', 'Elf', 'Dwarf', 'Ork', 'Troll', 'Nightling', 'Dryad', 'Fomorian', 'Minotaur', 'Cyclops', 'Nartaki'
@@ -102,7 +149,7 @@ export const CLASS_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {
     'Fighter', 'Wizard', 'Rogue', 'Cleric', 'Paladin', 'Ranger', 'Barbarian', 'Bard', 'Druid', 'Monk', 'Sorcerer', 'Warlock', 'Artificer'
   ],
   '3.5e': [
-    'Fighter', 'Wizard', 'Rogue', 'Cleric', 'Paladin', 'Ranger', 'Barbarian', 'Bard', 'Druid', 'Monk', 'Sorcerer'
+    'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Wizard'
   ],
   'shadowrun': [
     'Street Samurai', 'Decker', 'Rigger', 'Physical Adept', 'Spellcasting Mage', 'Shaman', 'Face', 'Technomancer', 'Weapons Specialist', 'Bounty Hunter', 'Corporate Agent'
@@ -117,32 +164,48 @@ export const CLASS_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {
 
 export const SUBCLASS_MAP_BY_SYSTEM: Record<RuleEdition, Record<string, string[]>> = {
   '5e': {
-    Fighter: ['Champion', 'Battle Master', 'Eldritch Knight', 'Arcane Archer', 'Cavalier', 'Samurai', 'Rune Knight', 'Psi Warrior'],
-    Wizard: ['School of Evocation', 'School of Abjuration', 'School of Conjuration', 'School of Divination', 'School of Enchantment', 'School of Illusion', 'School of Necromancy', 'School of Transmutation', 'Bladesinging', 'War Magic'],
-    Rogue: ['Thief', 'Assassin', 'Arcane Trickster', 'Swashbuckler', 'Inquisitive', 'Mastermind', 'Phantom', 'Soulknife'],
-    Cleric: ['Life Domain', 'Light Domain', 'Trickery Domain', 'War Domain', 'Tempest Domain', 'Nature Domain', 'Knowledge Domain', 'Forge Domain', 'Order Domain', 'Peace Domain', 'Twilight Domain', 'Death Domain'],
-    Paladin: ['Oath of Devotion', 'Oath of the Ancients', 'Oath of Vengeance', 'Oath of Conquest', 'Oath of Redemption', 'Oath of Glory', 'Oathbreaker'],
-    Ranger: ['Hunter', 'Beast Master', 'Gloom Stalker', 'Horizon Walker', 'Monster Slayer', 'Fey Wanderer', 'Swarmkeeper'],
-    Barbarian: ['Path of the Berserker', 'Path of the Totem Warrior', 'Path of the Ancestral Guardian', 'Path of the Storm Herald', 'Path of Zealot', 'Path of Wild Magic', 'Path of the Beast'],
-    Bard: ['College of Lore', 'College of Valor', 'College of Glamour', 'College of Swords', 'College of Whispers', 'College of Eloquence', 'College of Creation'],
+    Fighter: ['Champion', 'Battle Master', 'Eldritch Knight', 'Arcane Archer', 'Cavalier', 'Samurai', 'Rune Knight', 'Psi Warrior', 'Echo Knight'],
+    Wizard: ['School of Evocation', 'School of Abjuration', 'School of Conjuration', 'School of Divination', 'School of Enchantment', 'School of Illusion', 'School of Necromancy', 'School of Transmutation', 'Bladesinging', 'War Magic', 'Order of Scribes', 'Chronurgy Magic'],
+    Rogue: ['Thief', 'Assassin', 'Arcane Trickster', 'Swashbuckler', 'Inquisitive', 'Mastermind', 'Phantom', 'Soulknife', 'Scout'],
+    Cleric: ['Life Domain', 'Light Domain', 'Trickery Domain', 'War Domain', 'Tempest Domain', 'Nature Domain', 'Knowledge Domain', 'Forge Domain', 'Order Domain', 'Peace Domain', 'Twilight Domain', 'Death Domain', 'Grave Domain', 'Arcana Domain'],
+    Paladin: ['Oath of Devotion', 'Oath of the Ancients', 'Oath of Vengeance', 'Oath of Conquest', 'Oath of Redemption', 'Oath of Glory', 'Oath of the Watchers', 'Oathbreaker', 'Oath of the Crown'],
+    Ranger: ['Hunter', 'Beast Master', 'Gloom Stalker', 'Horizon Walker', 'Monster Slayer', 'Fey Wanderer', 'Swarmkeeper', 'Drakewarden'],
+    Barbarian: ['Path of the Berserker', 'Path of the Totem Warrior', 'Path of the Ancestral Guardian', 'Path of the Storm Herald', 'Path of Zealot', 'Path of Wild Magic', 'Path of the Beast', 'Path of the Battlerager'],
+    Bard: ['College of Lore', 'College of Valor', 'College of Glamour', 'College of Swords', 'College of Whispers', 'College of Eloquence', 'College of Creation', 'College of Spirits'],
     Druid: ['Circle of the Land', 'Circle of the Moon', 'Circle of Dreams', 'Circle of the Shepherd', 'Circle of Spores', 'Circle of Stars', 'Circle of Wildfire'],
-    Monk: ['Way of the Open Hand', 'Way of Shadow', 'Way of the Four Elements', 'Way of Kensei', 'Way of the Long Death', 'Way of Sun Soul', 'Way of Mercy', 'Way of Astral Self'],
-    Sorcerer: ['Draconic Bloodline', 'Wild Magic', 'Divine Soul', 'Shadow Magic', 'Storm Sorcery', 'Aberrant Mind', 'Clockwork Soul'],
-    Warlock: ['The Fiend', 'The Archfey', 'The Great Old One', 'The Celestial', 'The Hexblade', 'The Fathomless', 'The Genie'],
+    Monk: ['Way of the Open Hand', 'Way of Shadow', 'Way of the Four Elements', 'Way of Kensei', 'Way of the Long Death', 'Way of Sun Soul', 'Way of Mercy', 'Way of Astral Self', 'Way of the Drunken Master', 'Way of the Ascendant Dragon'],
+    Sorcerer: ['Draconic Bloodline', 'Wild Magic', 'Divine Soul', 'Shadow Magic', 'Storm Sorcery', 'Aberrant Mind', 'Clockwork Soul', 'Lunar Sorcery'],
+    Warlock: ['The Fiend', 'The Archfey', 'The Great Old One', 'The Celestial', 'The Hexblade', 'The Fathomless', 'The Genie', 'The Undead', 'The Undying'],
     Artificer: ['Alchemist', 'Armorer', 'Artillerist', 'Battle Smith']
   },
   '3.5e': {
-    Fighter: ['Weapon Master', 'Eldritch Knight', 'Dungeoneer', 'Armor Specialist', 'Duelist'],
-    Wizard: ['Specialist Abjurer', 'Specialist Conjurer', 'Specialist Diviner', 'Specialist Enchanter', 'Specialist Evoker', 'Specialist Illusionist', 'Specialist Necromancer', 'Specialist Transmuter', 'Archmage'],
-    Rogue: ['Shadowdancer', 'Assassin', 'Thief-Acrobat', 'Master Infiltrator'],
-    Cleric: ['Radiant Servant', 'War Priest', 'Divine Champion', 'Hierophant'],
-    Paladin: ['Defender of the Faith', 'Sacred Exorcist', 'Knight Hospitaler'],
-    Ranger: ['Arcane Archer', 'Deepwarden', 'Horizon Walker'],
-    Barbarian: ['Frenzied Berserker', 'Bear Warrior', 'Eye of Gruumsh'],
-    Bard: ['Virtuoso', 'Fochlucan Lyrist', 'Sublime Chord'],
-    Druid: ['Master of Many Forms', 'Hierophant', 'Planar Shepherd'],
-    Monk: ['Sacred Fist', 'Tattooed Monk', 'Drunken Master'],
-    Sorcerer: ['Dragon Disciple', 'Elemental Savant', 'Archmage']
+    Barbarian: ['Berserker (Whirling Frenzy)', 'Bear Totem', 'Eagle Totem', 'Wolf Totem', 'Lion Totem', 'Dragon Totem'],
+    Bard: ['Virtuoso Performer', 'Spellsinger & Orator', 'Battlechanter & Skald', 'Jester & Trickster', 'Lorekeeper & Chronicler'],
+    Cleric: ['War & Strength Domain', 'Sun & Glory Domain', 'Healing & Good Domain', 'Protection & Law Domain', 'Magic & Knowledge Domain', 'Trickery & Luck Domain', 'Destruction & Death Domain', 'Travel & Chaos Domain', 'Elemental Domain'],
+    Druid: ['Wild Shape Specialist', 'Elemental Spellcaster', 'Beastmaster (Animal Companion Focus)', 'Healer of the Grove', 'Planar Shepherd Tradition'],
+    Fighter: ['Weapon Master & Specialist', 'Two-Weapon Combat Specialist', 'Archery & Ranged Specialist', 'Shield & Armor Master (Phalanx)', 'Tactical Crusher (Trip/Disarm)', 'Mounted Knight & Cavalier'],
+    Monk: ['Iron Palm Tradition', 'Cobra Strike Style', 'Drunken Master Tradition', 'Invisible Fist (Shadow Discipline)', 'Ki Blast & Mystic Fist'],
+    Paladin: ['Knight of the Chalice (Fiendslayer)', 'Undead Hunter & Slayer', 'Defender of the Weak', 'Holy Liberator (Chaotic Good Order)', 'Paladin of Tyranny'],
+    Ranger: ['Archery Combat Style (Rapid Shot)', 'Two-Weapon Combat Style (TWF)', 'Urban Ranger', 'Planar Tracker', 'Beast Companion Specialist'],
+    Rogue: ['Master Infiltrator & Burglar', 'Assassin & Shadow Striker', 'Trapfinder & Dungeoneer', 'Acrobat & Tumbler', 'Cutpurse & Poisoner'],
+    Sorcerer: ['Draconic Heritage', 'Fiendish Ancestry', 'Celestial Bloodline', 'Elemental Heritage', 'Arcane Bloodline', 'Fey-Touched'],
+    Wizard: ['Specialist Abjurer (Abjuration)', 'Specialist Conjurer (Conjuration)', 'Specialist Diviner (Divination)', 'Specialist Enchanter (Enchantment)', 'Specialist Evoker (Evocation)', 'Specialist Illusionist (Illusion)', 'Specialist Necromancer (Necromancy)', 'Specialist Transmuter (Transmutation)', 'Generalist Wizard'],
+    // 3.5e Prestige Classes specializations
+    Assassin: ['Death Attack Specialist', 'Master Poisoner', 'Shadow Infiltrator'],
+    Shadowdancer: ['Shadow Master', 'Shadow Jump Specialist', 'Illusion Dancer'],
+    Archmage: ['High Arcana Master', 'Arcane Fire Specialist', 'Spell-Like Ability Master'],
+    'Dragon Disciple': ['Red Dragon Ancestry', 'Gold Dragon Ancestry', 'Black Dragon Ancestry', 'Silver Dragon Ancestry', 'Blue Dragon Ancestry'],
+    'Arcane Archer': ['Imbue Arrow Master', 'Seeker Shot Specialist', 'Hail of Arrows'],
+    Duelist: ['Canny Defense Master', 'Precise Strike Specialist', 'Acrobatic Parry'],
+    'Dwarven Defender': ['Defensive Stance Champion', 'Immovable Bulwark', 'Trap Sense Guardian'],
+    Hierophant: ['Divine Reach Specialist', 'Faith Healing Adept', 'Spell Power Master'],
+    'Horizon Walker': ['Terrain Master', 'Planar Traveler', 'Dimension Stride Specialist'],
+    'Mystic Theurge': ['Dual-Caster Synthesis', 'Spell Reservoir Specialist', 'Arcane-Divine Synergy'],
+    Loremaster: ['Secret Lore Scholar', 'Arcane Discovery', 'True Knowledge Adept'],
+    Blackguard: ['Fiendish Servant Master', 'Sneak Attack Smiter', 'Unholy Desecrator'],
+    'Red Wizard': ['Circle Leader', 'Specialist Focus', 'Spell Power Specialist'],
+    Thaumaturgist: ['Planar Ally Master', 'Augmented Summoner', 'Contingent Conjurer'],
+    'Eldritch Knight': ['Arcane Spellsword', 'Armored Warmage', 'Eldritch Tactician']
   },
   'shadowrun': {
     'Street Samurai': ['Cyberware Muscle', 'Bioware Reflexes', 'Blade Master', 'Tank Samurai', 'Dual Pistoleer'],

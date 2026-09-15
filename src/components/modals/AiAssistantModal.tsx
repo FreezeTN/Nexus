@@ -295,9 +295,33 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
     const fileSize = (file as File).size;
     setAttachedFile(file);
 
+    const readFileAsBase64 = (f: File): Promise<string> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          const base64 = result ? (result.includes(',') ? result.split(',')[1] : result) : '';
+          resolve(base64);
+        };
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(f);
+      });
+    };
+
     if (isPdf) {
       setIsPdfExtracting(true);
       setPdfExtractStatus(`Indexing ${fileName} (${formatFileSize(fileSize)})...`);
+
+      // Read base64 binary so Gemini has direct multimodal access to the PDF
+      let pdfBase64 = '';
+      if (fileSize <= 20 * 1024 * 1024) {
+        try {
+          pdfBase64 = await readFileAsBase64(file as File);
+        } catch (b64Err) {
+          console.warn('Could not read PDF as base64:', b64Err);
+        }
+      }
+
       try {
         const extracted = await extractTextFromPdf(file, fileName);
         setExtractedPdf(extracted);
@@ -305,7 +329,7 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
         setPdfPageRange('');
         setPdfKeyword('');
         setAttachedAttachment({
-          data: '',
+          data: pdfBase64,
           mimeType: 'application/pdf',
           name: fileName,
           fileSize,
@@ -340,7 +364,7 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
         }
 
         setAttachedAttachment({
-          data: '',
+          data: pdfBase64,
           mimeType: 'application/pdf',
           name: fileName,
           fileSize,
@@ -585,7 +609,7 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
             : resolvedPdf.fullText;
         }
 
-        const userInstruction = textToSend || 'Extract all monsters, statblocks, characters, spells, and items from this PDF compendium with full structured stats.';
+        const userInstruction = textToSend || 'Extract all races, classes, monsters, statblocks, characters, spells, and items from this PDF compendium with full structured stats.';
 
         queryMessage = `[ATTACHED COMPENDIUM: "${resolvedPdf.fileName}" | ${resolvedPdf.totalPages} Pages | Rule System: ${ruleEdition}]
 
@@ -597,17 +621,20 @@ USER REQUEST:
 ${userInstruction}
 
 INSTRUCTIONS FOR THE ORACLE:
-1. Extract and present all relevant monsters, creatures, statblocks, items, or spells found in the compendium text above.
-2. For every extracted entity, provide complete game stats (HP, AC, Ability Scores, CR, Actions, Special Abilities, Spells) following ${ruleEdition.toUpperCase()} rules.
-3. Crucially, format all extracted creatures, items, and spells with code blocks or JSON so the Nexus importer can provide 1-click import cards for each entity!`;
+1. Carefully inspect the user's request and the compendium text above. Extract and create the exact entities requested (such as Races, Classes, Monster Classes, Subclasses, Monsters, Statblocks, Items, Spells, Feats, or Lore).
+2. For every extracted entity, provide complete, accurate game statistics, traits, abilities, and mechanics following ${ruleEdition.toUpperCase()} rules.
+3. Crucially, format all extracted entities (races, classes, monsters, characters, items, spells) using JSON code blocks (e.g. \`\`\`json ... \`\`\`) matching the Nexus schema so the Nexus importer can provide 1-Click Import action buttons (Import as Race, Import as Class, Import as Monster, etc.)!`;
       } else if (resolvedPdf && (!resolvedPdf.fullText || resolvedPdf.isScanned)) {
         // Fallback for scanned PDF without embedded text
-        const userInstruction = textToSend || 'Extract all monsters, statblocks, characters, spells, and items from this PDF compendium with full structured stats.';
-        queryMessage = `[ATTACHED COMPENDIUM: "${resolvedPdf.fileName}" | ${resolvedPdf.totalPages} Pages | Scanned PDF]\n\n${userInstruction}\n\nPlease generate and extract the monsters, creatures, and statblocks corresponding to this compendium title for ${ruleEdition.toUpperCase()}. Provide complete game statistics and JSON code blocks for 1-click import.`;
-      } else if (currentAttachmentToSend && currentAttachmentToSend.data && currentAttachmentToSend.mimeType.startsWith('image/')) {
+        const userInstruction = textToSend || 'Extract all races, classes, monsters, statblocks, characters, spells, and items from this PDF compendium with full structured stats.';
+        queryMessage = `[ATTACHED COMPENDIUM: "${resolvedPdf.fileName}" | ${resolvedPdf.totalPages} Pages | Scanned PDF]\n\nUSER REQUEST:\n${userInstruction}\n\nPlease inspect the attached document, extract the requested entities (races, classes, monster classes, monsters, statblocks, items, spells), and provide complete game statistics and structured JSON code blocks for 1-click import into the Nexus Hub following ${ruleEdition.toUpperCase()} rules.`;
+      }
+
+      // If we have binary data for the attachment (image or PDF document), pass it directly to Gemini
+      if (currentAttachmentToSend && currentAttachmentToSend.data) {
         directImagePayload = {
           data: currentAttachmentToSend.data,
-          mimeType: currentAttachmentToSend.mimeType,
+          mimeType: currentAttachmentToSend.mimeType || 'application/pdf',
         };
       }
 

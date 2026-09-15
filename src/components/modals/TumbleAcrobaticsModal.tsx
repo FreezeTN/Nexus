@@ -42,8 +42,14 @@ export const TumbleAcrobaticsModal: React.FC<TumbleAcrobaticsModalProps> = ({
     const res = roll35eTumbleCheck(character, objective, { additionalOpponents, acceleratedSpeed });
     setLastResult(res);
 
+    const objectiveLabel = objective === 'through_enemy_space'
+      ? 'Through Enemy Space'
+      : objective === 'free_fall'
+      ? 'Soft Landing'
+      : 'Avoid AoO';
+
     if (onRoll) {
-      onRoll(`Tumble Check vs DC ${res.dc} (${objective})`, 20, 1, res.bonus, 'normal');
+      onRoll(`Tumble Check vs DC ${res.dc} (${objectiveLabel})`, 20, 1, res.bonus, 'normal');
     }
   };
 

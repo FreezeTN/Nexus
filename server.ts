@@ -7,8 +7,6 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import * as pdfParseModule from "pdf-parse";
 
-const pdfParse = (pdfParseModule as any).default || pdfParseModule;
-
 dotenv.config();
 
 function getGeminiClient(customApiKey?: string): GoogleGenAI {
@@ -211,14 +209,15 @@ async function buildSanitizedChatContents(
         const base64Data = msg.image.data.includes(",") ? msg.image.data.split(",")[1] : msg.image.data;
         // If large file (> 10MB) or PDF, try files API
         const isPdf = msg.image.mimeType === "application/pdf";
-        if (base64Data.length > 10 * 1024 * 1024 || isPdf) {
+        const isLarge = base64Data.length > 15 * 1024 * 1024;
+        if (isLarge) {
           const uploaded = await uploadBase64ToGeminiFiles(ai, base64Data, msg.image.mimeType || "image/png");
           if (uploaded) {
             turnParts.push({ fileData: uploaded });
           } else {
             turnParts.push({
               inlineData: {
-                mimeType: msg.image.mimeType || "image/png",
+                mimeType: msg.image.mimeType || (isPdf ? "application/pdf" : "image/png"),
                 data: base64Data,
               },
             });
@@ -226,7 +225,7 @@ async function buildSanitizedChatContents(
         } else {
           turnParts.push({
             inlineData: {
-              mimeType: msg.image.mimeType || "image/png",
+              mimeType: msg.image.mimeType || (isPdf ? "application/pdf" : "image/png"),
               data: base64Data,
             },
           });
@@ -268,15 +267,16 @@ async function buildSanitizedChatContents(
     const base64Data = currentImage.data.includes(",") ? currentImage.data.split(",")[1] : currentImage.data;
     const isPdf = currentImage.mimeType === "application/pdf";
 
-    // For files > 10MB or PDF documents, prefer uploading via Gemini Files API
-    if (base64Data.length > 10 * 1024 * 1024 || isPdf) {
-      const uploaded = await uploadBase64ToGeminiFiles(ai, base64Data, currentImage.mimeType || "application/pdf");
+    // For files > 15MB, prefer uploading via Gemini Files API; otherwise use fast direct inlineData
+    const isLarge = base64Data.length > 15 * 1024 * 1024;
+    if (isLarge) {
+      const uploaded = await uploadBase64ToGeminiFiles(ai, base64Data, currentImage.mimeType || (isPdf ? "application/pdf" : "image/png"));
       if (uploaded) {
         currentParts.push({ fileData: uploaded });
       } else {
         currentParts.push({
           inlineData: {
-            mimeType: currentImage.mimeType || "application/pdf",
+            mimeType: currentImage.mimeType || (isPdf ? "application/pdf" : "image/png"),
             data: base64Data,
           },
         });
@@ -284,7 +284,7 @@ async function buildSanitizedChatContents(
     } else {
       currentParts.push({
         inlineData: {
-          mimeType: currentImage.mimeType || "image/png",
+          mimeType: currentImage.mimeType || (isPdf ? "application/pdf" : "image/png"),
           data: base64Data,
         },
       });
@@ -332,10 +332,56 @@ async function startServer() {
         }
 
         console.log(`[PDF Parser] Parsing PDF "${fileName}" (${(buffer.length / (1024 * 1024)).toFixed(2)} MB)...`);
-        const pdfData = await pdfParse(buffer);
+        
+        let totalPages = 1;
+        let fullText = "";
+        const pageTexts: Array<{ pageNumber: number; text: string }> = [];
 
-        const totalPages = pdfData.numpages || 1;
-        const fullText = (pdfData.text || "").trim();
+        const mod: any = pdfParseModule;
+        const PDFParserClass = mod.PDFParse || mod.default?.PDFParse;
+
+        if (typeof PDFParserClass === "function") {
+          const parser = new PDFParserClass({ data: buffer });
+          try {
+            const result = await parser.getText();
+            totalPages = result.total || (Array.isArray(result.pages) ? result.pages.length : 1);
+            fullText = (result.text || "").trim();
+            if (Array.isArray(result.pages) && result.pages.length > 0) {
+              for (let i = 0; i < result.pages.length; i++) {
+                const p = result.pages[i];
+                const text = (p.text || "").trim();
+                if (text) {
+                  pageTexts.push({
+                    pageNumber: p.num || (i + 1),
+                    text,
+                  });
+                }
+              }
+            }
+          } finally {
+            try {
+              await parser.destroy();
+            } catch {}
+          }
+        } else if (typeof mod === "function" || typeof mod.default === "function") {
+          const fn = typeof mod === "function" ? mod : mod.default;
+          const pdfData = await fn(buffer);
+          totalPages = pdfData.numpages || 1;
+          fullText = (pdfData.text || "").trim();
+        } else {
+          throw new Error("No compatible PDF parser engine found");
+        }
+
+        // Split approximate page blocks if pageTexts was not populated by page parser
+        if (pageTexts.length === 0 && fullText.length > 0) {
+          const roughPageLength = Math.max(800, Math.floor(fullText.length / Math.max(1, totalPages)));
+          for (let i = 0; i < totalPages; i++) {
+            const slice = fullText.substring(i * roughPageLength, (i + 1) * roughPageLength).trim();
+            if (slice) {
+              pageTexts.push({ pageNumber: i + 1, text: slice });
+            }
+          }
+        }
 
         // Extract creature & chapter headings
         const headings: string[] = [];
@@ -351,16 +397,6 @@ async function startServer() {
             if (!headings.includes(trimmed) && headings.length < 60) {
               headings.push(trimmed);
             }
-          }
-        }
-
-        // Split approximate page blocks
-        const pageTexts: Array<{ pageNumber: number; text: string }> = [];
-        const roughPageLength = Math.max(800, Math.floor(fullText.length / totalPages));
-        for (let i = 0; i < totalPages; i++) {
-          const slice = fullText.substring(i * roughPageLength, (i + 1) * roughPageLength).trim();
-          if (slice) {
-            pageTexts.push({ pageNumber: i + 1, text: slice });
           }
         }
 

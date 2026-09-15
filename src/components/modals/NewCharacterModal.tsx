@@ -3,12 +3,26 @@ import { CharacterData, ClassFeature, RuleEdition, Skill } from '../../types';
 import { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST } from '../../utils/dndCalculations';
 import { UserPlus, Sparkles, X, Store, Layers, Skull, Dices, Shuffle, Settings, Zap, Crosshair, Scale, Swords, Dna, Bookmark, Shield, AlertCircle, RefreshCw } from 'lucide-react';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
-import { PARENT_RACE_CATALOG, getHybridName, buildHybridFeature, CLASSIC_SRD_HALF_BREEDS, getClassicSRDHalfBreedsForEdition, buildClassicSRDFeature, ClassicSRDHalfBreed, DRAGON_VARIETIES_35E, DRAGON_VARIETIES_5E } from '../../data/halfBreedData';
+import {
+  PARENT_RACE_CATALOG,
+  getHybridName,
+  buildHybridFeature,
+  CLASSIC_SRD_HALF_BREEDS,
+  getClassicSRDHalfBreedsForEdition,
+  buildClassicSRDFeature,
+  ClassicSRDHalfBreed,
+  DRAGON_VARIETIES_35E,
+  DRAGON_VARIETIES_5E,
+  BASE_CREATURES_35E,
+  HALF_BREED_TEMPLATES_35E,
+  resolve35eHalfBreedTemplate
+} from '../../data/halfBreedData';
 import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
 import {
   findRaceInCompendiumOrSRD,
   calculateRaceBonusesAndDefenses,
   applyRaceToCharacter,
+  applyHalfBreedTemplate35eToCharacter,
   CalculatedRaceStats
 } from '../../utils/raceApplication';
 import {
@@ -147,6 +161,12 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   const [useClassicSRDHalfBreed, setUseClassicSRDHalfBreed] = useState(false);
   const [selectedClassicSRDId, setSelectedClassicSRDId] = useState<string>(initialSrdId);
   const [dragonVariety, setDragonVariety] = useState<string>('Red');
+
+  // 3.5e Half-Breed Template State (Base Creature + Inherited Template)
+  const [useHalfBreedTemplate35e, setUseHalfBreedTemplate35e] = useState(false);
+  const [selectedBase35eId, setSelectedBase35eId] = useState<string>('dwarf');
+  const [selectedTemplate35eId, setSelectedTemplate35eId] = useState<string>('half-dragon');
+  const [templateDragonVariety35e, setTemplateDragonVariety35e] = useState<string>('Red');
 
   // Portrait URL & HP Calculation Mode
   const [portraitUrl, setPortraitUrl] = useState('');
@@ -450,8 +470,36 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       }
     }
 
+    if (useHalfBreedTemplate35e && edition === '3.5e') {
+      const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
+      const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+      const resolvedT = resolve35eHalfBreedTemplate(bCreature, tTemplate, level, true, templateDragonVariety35e);
+      return {
+        id: `template-${bCreature.id}-${tTemplate.id}`,
+        name: resolvedT.compositeName,
+        edition,
+        raceData: {
+          name: resolvedT.compositeName,
+          size: resolvedT.size,
+          speed: resolvedT.speed,
+          darkvision: resolvedT.darkvisionFeet > 0 ? resolvedT.darkvisionFeet : false,
+          senses: (() => {
+            const parts: string[] = [];
+            if (resolvedT.darkvisionFeet > 0) parts.push(`Darkvision ${resolvedT.darkvisionFeet} ft.`);
+            if (resolvedT.hasLowLightVision) parts.push('Low-Light Vision');
+            if (resolvedT.hasBlindsight && resolvedT.blindsightFeet) parts.push(`Blindsight ${resolvedT.blindsightFeet} ft.`);
+            return parts.join(', ') || 'Normal';
+          })(),
+          traits: [
+            ...resolvedT.retainedBaseTraits.map(t => ({ name: `[Base] ${t.name}`, description: t.description })),
+            ...resolvedT.gainedTemplateTraits.map(t => ({ name: `[Template] ${t.name}`, description: t.description }))
+          ]
+        }
+      };
+    }
+
     return findRaceInCompendiumOrSRD(race, edition);
-  }, [useHalfBreedSystem, primaryParent, secondaryParent, customHybridName, useClassicSRDHalfBreed, selectedClassicSRDId, dragonVariety, race, edition]);
+  }, [useHalfBreedSystem, primaryParent, secondaryParent, customHybridName, useClassicSRDHalfBreed, selectedClassicSRDId, dragonVariety, useHalfBreedTemplate35e, selectedBase35eId, selectedTemplate35eId, templateDragonVariety35e, race, edition]);
 
   // Calculate live racial stats (bonuses, DR, natural armor, energy resistances, immunities)
   const calculatedRaceStats = useMemo(() => {
@@ -523,6 +571,12 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         }
         hybridFeature = buildClassicSRDFeature(selectedSRD, dragonVariety);
         charSpeed = selectedSRD.speed;
+      } else if (useHalfBreedTemplate35e && edition === '3.5e') {
+        const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
+        const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+        const resolvedT = resolve35eHalfBreedTemplate(bCreature, tTemplate, level, true, templateDragonVariety35e);
+        finalRaceName = resolvedT.compositeName;
+        charSpeed = resolvedT.speed;
       }
     } else if (edition === 'shadowrun') {
       charSpeed = agi * 2 + 10;
@@ -604,6 +658,22 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         speedFeet: selectedSRD.speed,
         sizeCategory: selectedSRD.size,
         hasDarkvision: selectedSRD.hasDarkvision
+      } : (edition === '3.5e' && useHalfBreedTemplate35e) ? {
+        enabled: true,
+        isTemplateMode: true,
+        baseRaceId: selectedBase35eId,
+        templateId: selectedTemplate35eId,
+        dragonVariety: selectedTemplate35eId.includes('dragon') ? templateDragonVariety35e : undefined,
+        primaryParent: (BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0]).name,
+        secondaryParent: (HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0]).name,
+        customHybridName: finalRaceName,
+        speedFeet: charSpeed,
+        sizeCategory: (BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0]).size,
+        hasDarkvision: (() => {
+          const b = BASE_CREATURES_35E.find(bc => bc.id === selectedBase35eId) || BASE_CREATURES_35E[0];
+          const t = HALF_BREED_TEMPLATES_35E.find(tpl => tpl.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+          return resolve35eHalfBreedTemplate(b, t, level, true, templateDragonVariety35e).darkvisionFeet > 0;
+        })()
       } : undefined,
 
       optionalRules: {
@@ -623,6 +693,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         useArmorAsDRUA109,
         useHalfBreedSystem: (edition === '5e' || edition === '3.5e') && useHalfBreedSystem,
         useClassicSRDHalfBreed: (edition === '5e' || edition === '3.5e') && useClassicSRDHalfBreed,
+        useHalfBreedTemplate35e: edition === '3.5e' && useHalfBreedTemplate35e,
         strictEssenceCap,
         glitchRules,
         directMatrixDamage,
@@ -779,12 +850,22 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
     const syncedChar = syncClassFeaturesForCharacter(newChar, characterClass, level, edition);
     // Apply resolved race traits, defenses, damage reductions, resistances, immunities, and ability bonuses
-    const finalChar = resolvedRaceItem
-      ? applyRaceToCharacter(syncedChar, resolvedRaceItem, {
-          applyAbilities: applyRacialBonuses,
-          isNewCharacterCreation: true
-        })
-      : syncedChar;
+    let finalChar: CharacterData;
+    if (edition === '3.5e' && useHalfBreedTemplate35e) {
+      const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
+      const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+      finalChar = applyHalfBreedTemplate35eToCharacter(syncedChar, bCreature, tTemplate, {
+        dragonVariety: templateDragonVariety35e,
+        applyAbilities: applyRacialBonuses
+      });
+    } else {
+      finalChar = resolvedRaceItem
+        ? applyRaceToCharacter(syncedChar, resolvedRaceItem, {
+            applyAbilities: applyRacialBonuses,
+            isNewCharacterCreation: true
+          })
+        : syncedChar;
+    }
 
     try {
       localStorage.removeItem(DRAFT_STORAGE_KEY);
@@ -928,7 +1009,10 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                         onChange={(e) => {
                           const checked = e.target.checked;
                           setUseHalfBreedSystem(checked);
-                          if (checked) setUseClassicSRDHalfBreed(false);
+                          if (checked) {
+                            setUseClassicSRDHalfBreed(false);
+                            setUseHalfBreedTemplate35e(false);
+                          }
                         }}
                         className="accent-amber-500 w-3.5 h-3.5 rounded"
                       />
@@ -945,6 +1029,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                           setUseClassicSRDHalfBreed(checked);
                           if (checked) {
                             setUseHalfBreedSystem(false);
+                            setUseHalfBreedTemplate35e(false);
                             const srdList = getClassicSRDHalfBreedsForEdition(edition);
                             if (srdList.length > 0) setSelectedClassicSRDId(srdList[0].id);
                           }
@@ -954,11 +1039,31 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                       <Sparkles className="w-3 h-3 text-amber-400" />
                       <span>Classic Half-Breeds (SRD)</span>
                     </label>
+
+                    {edition === '3.5e' && (
+                      <label className="flex items-center gap-1.5 cursor-pointer text-amber-300 hover:text-amber-200 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-500/40 px-2 py-0.5 rounded-md transition">
+                        <input
+                          type="checkbox"
+                          checked={useHalfBreedTemplate35e}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setUseHalfBreedTemplate35e(checked);
+                            if (checked) {
+                              setUseHalfBreedSystem(false);
+                              setUseClassicSRDHalfBreed(false);
+                            }
+                          }}
+                          className="accent-amber-500 w-3.5 h-3.5 rounded"
+                        />
+                        <Layers className="w-3 h-3 text-amber-400" />
+                        <span>Half-Breed Template (3.5e)</span>
+                      </label>
+                    )}
                   </div>
                 )}
               </div>
 
-              {(!useHalfBreedSystem && !useClassicSRDHalfBreed) || (edition !== '5e' && edition !== '3.5e') ? (
+              {(!useHalfBreedSystem && !useClassicSRDHalfBreed && !useHalfBreedTemplate35e) || (edition !== '5e' && edition !== '3.5e') ? (
                 <select
                   value={race}
                   onChange={(e) => setRace(e.target.value)}
@@ -1135,6 +1240,111 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                           <span className="text-amber-400 font-bold block text-[11px]">Racial Traits ({srdHB.source}):</span>
                           <div className="bg-stone-900/60 p-2 rounded border border-stone-800 whitespace-pre-wrap text-[11px] text-stone-300 leading-relaxed font-sans">
                             {dynamicFeature.description.split('\n\nRacial Traits:\n')[1] || dynamicFeature.description}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 3.5e Half-Breed Template UI */}
+              {edition === '3.5e' && useHalfBreedTemplate35e && (
+                <div className="bg-stone-900/95 border border-amber-600/50 p-3 rounded-xl space-y-3 shadow-lg">
+                  <div className="text-xs text-amber-300 font-serif font-bold flex items-center justify-between border-b border-stone-800 pb-2">
+                    <span className="flex items-center gap-1.5">
+                      <Layers className="w-4 h-4 text-amber-400 animate-pulse" />
+                      3.5e Inherited Template (Base Creature + Template)
+                    </span>
+                    <span className="text-[10px] bg-amber-950 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded font-mono font-bold">
+                      CUMULATIVE STATS
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">Base Creature *</label>
+                      <select
+                        value={selectedBase35eId}
+                        onChange={(e) => setSelectedBase35eId(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-bold focus:outline-none focus:border-amber-500 text-xs"
+                      >
+                        {BASE_CREATURES_35E.map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.size}, {b.speed}ft)
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-stone-300 font-bold mb-1">Half-Breed Template *</label>
+                      <select
+                        value={selectedTemplate35eId}
+                        onChange={(e) => setSelectedTemplate35eId(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-bold focus:outline-none focus:border-amber-500 text-xs"
+                      >
+                        {HALF_BREED_TEMPLATES_35E.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} (LA +{t.levelAdjustment})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {selectedTemplate35eId.includes('dragon') && (
+                    <div className="bg-stone-950 border border-amber-600/40 p-2.5 rounded-lg space-y-1.5">
+                      <label className="block text-amber-300 font-bold text-xs">
+                        🐉 Select Dragon Ancestry / Variety *
+                      </label>
+                      <select
+                        value={templateDragonVariety35e}
+                        onChange={(e) => setTemplateDragonVariety35e(e.target.value)}
+                        className="w-full bg-stone-900 border border-stone-700 rounded p-2 text-stone-100 font-bold text-xs focus:outline-none focus:border-amber-500"
+                      >
+                        {DRAGON_VARIETIES_35E.map(dv => (
+                          <option key={dv.variety} value={dv.variety}>
+                            {dv.variety} Dragon — {dv.immunityOrResistance} | Breath: {dv.breathWeapon}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Inspector card showing resolved traits and stacking */}
+                  {(() => {
+                    const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
+                    const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+                    const resolved = resolve35eHalfBreedTemplate(bCreature, tTemplate, level, true, templateDragonVariety35e);
+
+                    const abilityKeys: (keyof typeof resolved.abilities)[] = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+                    const nonZeroAbilities = abilityKeys.filter(k => (resolved.abilities[k] || 0) !== 0);
+
+                    return (
+                      <div className="bg-stone-950 border border-amber-900/50 p-3 rounded-lg space-y-2 text-[11px] text-stone-300">
+                        <div className="flex items-center justify-between border-b border-stone-800 pb-1.5">
+                          <span className="font-bold text-amber-200 text-xs">{resolved.compositeName}</span>
+                          <span className="font-mono text-[10px] bg-amber-950 text-amber-300 border border-amber-600/40 px-2 py-0.5 rounded font-bold">
+                            {resolved.size} | {resolved.speed}ft {resolved.flySpeed ? `/ Fly ${resolved.flySpeed}ft` : ''} | LA +{resolved.levelAdjustment}
+                          </span>
+                        </div>
+
+                        {nonZeroAbilities.length > 0 && (
+                          <div className="bg-stone-900/80 p-2 rounded border border-amber-900/40 text-amber-300 font-mono text-[11px]">
+                            <strong>Cumulative Modifiers (Base + Template):</strong>{' '}
+                            {nonZeroAbilities.map(k => `${String(k)} ${resolved.abilities[k] > 0 ? '+' : ''}${resolved.abilities[k]}`).join(', ')}
+                            {resolved.naturalArmor > 0 && ` | Nat Armor +${resolved.naturalArmor}`}
+                          </div>
+                        )}
+
+                        <div className="p-2 bg-stone-900/60 rounded border border-stone-800 text-[10px] text-stone-400 space-y-1">
+                          <div>
+                            <strong className="text-amber-300">Skill Points Rule:</strong> Racial skill points from template are waived because class levels ({level}) are present.
+                          </div>
+                          <div>
+                            <strong className="text-stone-300">Senses:</strong> {resolved.darkvisionFeet > 0 ? `Darkvision ${resolved.darkvisionFeet}ft` : 'Normal Vision'}
+                            {resolved.hasLowLightVision ? ', Low-Light Vision' : ''}
                           </div>
                         </div>
                       </div>

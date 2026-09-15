@@ -10,7 +10,13 @@ import {
   parseSlashProgression
 } from './homebrewValidator';
 import { recalculateCharacterAC } from './dndCalculations';
-import { CLASSIC_SRD_HALF_BREEDS, ClassicSRDHalfBreed } from '../data/halfBreedData';
+import {
+  CLASSIC_SRD_HALF_BREEDS,
+  ClassicSRDHalfBreed,
+  BaseCreature35e,
+  HalfBreedTemplate35e,
+  resolve35eHalfBreedTemplate
+} from '../data/halfBreedData';
 
 export interface CalculatedRaceStats {
   raceName: string;
@@ -748,3 +754,193 @@ export function recalculateScalingRaceStats(
 
   return recalculateCharacterAC(updated);
 }
+
+/**
+ * Applies a 3.5e Half-Breed Template to a character based on their Base Creature.
+ * Implements the official + supplementary Half-Breed inheritance logic:
+ * - Base Creature traits & physical characteristics are retained.
+ * - Template abilities and traits are gained.
+ * - Numerical bonuses to abilities, natural armor, and saves stack cumulatively.
+ * - Duplicate traits take the higher value.
+ * - Conflicting traits are resolved via DM/player choice or suppressed.
+ * - Racial skill points from templates are waived if the character has class levels.
+ * - Level Adjustment and precedence logs are tracked.
+ */
+export function applyHalfBreedTemplate35eToCharacter(
+  character: CharacterData,
+  baseCreature: BaseCreature35e,
+  template: HalfBreedTemplate35e,
+  options?: {
+    dragonVariety?: string;
+    conflictChoices?: Record<string, 'base' | 'template' | 'suppress'>;
+    applyAbilities?: boolean;
+    customRaceName?: string;
+  }
+): CharacterData {
+  if (!character) return character;
+
+  const charLevel = character.level || 1;
+  const hasClassLevels = charLevel >= 1 || !!character.characterClass;
+
+  const resolved = resolve35eHalfBreedTemplate(
+    baseCreature,
+    template,
+    charLevel,
+    hasClassLevels,
+    options?.dragonVariety,
+    options?.conflictChoices
+  );
+
+  const finalRaceName = options?.customRaceName?.trim() || resolved.compositeName;
+
+  // 1. Ability Scores (Cumulative bonuses)
+  const updatedAbilities: Record<string, any> = { ...(character.abilities || {}) };
+  if (options?.applyAbilities !== false) {
+    const stats = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const;
+    for (const s of stats) {
+      const netModifier = resolved.abilities[s] || 0;
+      if (netModifier !== 0) {
+        const currentScore = updatedAbilities[s]?.score ?? 10;
+        updatedAbilities[s] = {
+          ...(updatedAbilities[s] || {}),
+          score: Math.max(1, currentScore + netModifier)
+        };
+      }
+    }
+  }
+
+  // 2. Natural Armor
+  const naturalArmorBonus = resolved.naturalArmor;
+
+  // 3. Senses
+  const senseParts: string[] = [];
+  if (resolved.darkvisionFeet > 0) {
+    senseParts.push(`Darkvision ${resolved.darkvisionFeet} ft.`);
+  }
+  if (resolved.hasLowLightVision) {
+    senseParts.push('Low-Light Vision');
+  }
+  if (resolved.hasBlindsight && resolved.blindsightFeet) {
+    senseParts.push(`Blindsight ${resolved.blindsightFeet} ft.`);
+  }
+  const senses = senseParts.join(', ') || 'Normal';
+
+  // 4. Immunities & Resistances
+  const mergedDamageImmunities = Array.from(
+    new Set([...(character.damageImmunities || []), ...resolved.damageImmunities])
+  );
+  const mergedConditionImmunities = Array.from(
+    new Set([...(character.conditionImmunities || []), ...resolved.conditionImmunities])
+  );
+  const resolvedEnergyRes: Record<string, number> = { ...(character.energyResistances || {}) };
+  for (const [eType, eVal] of Object.entries(resolved.energyResistances)) {
+    resolvedEnergyRes[eType] = Math.max(resolvedEnergyRes[eType] || 0, eVal);
+  }
+
+  // 5. DR & SR
+  const damageReductionValue = resolved.damageReduction?.value || character.damageReductionValue;
+  const damageReductionBypass = resolved.damageReduction?.bypass || character.damageReductionBypass;
+  const spellResist = resolved.spellResistanceText ? (charLevel + 10) : character.spellResist;
+
+  // 6. Features & Traits
+  const currentFeatures = Array.isArray(character.classFeatures) ? character.classFeatures : [];
+  // Strip previous racial and template features to avoid duplicate stacks
+  const cleanFeatures = currentFeatures.filter(
+    f => !f.source?.includes('Base Creature:') &&
+         !f.source?.includes('Template:') &&
+         !f.source?.includes('Half-Breed') &&
+         !f.source?.includes('Racial Trait')
+  );
+
+  const newFeatures: ClassFeature[] = [
+    {
+      id: `feat-hb-composite-${Date.now()}`,
+      name: `Half-Breed Template: ${finalRaceName}`,
+      source: 'Half-Breed Rules (Base Creature + Inherited Template)',
+      description: `[Base Creature: ${baseCreature.name} | Template: ${template.name} (ECL LA +${template.levelAdjustment})]
+• Size & Movement: ${resolved.size}, Land Speed ${resolved.speed} ft${resolved.flySpeed ? `, Fly Speed ${resolved.flySpeed} ft (${resolved.flyManeuverability})` : ''}
+• Natural Armor Bonus: +${resolved.naturalArmor} AC (${resolved.naturalArmorBreakdown.base} Base + ${resolved.naturalArmorBreakdown.template} Template)
+• Inherited Senses: ${senses}
+• Skill Points Status: ${resolved.skillPointsNotice}
+• Order of Precedence:\n${resolved.precedenceLog.join('\n')}`
+    },
+    ...resolved.retainedBaseTraits.map(t => ({
+      id: `feat-base-${t.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`,
+      name: `[Base Heritage] ${t.name}`,
+      source: `Base Creature: ${baseCreature.name}`,
+      description: t.description
+    })),
+    ...resolved.gainedTemplateTraits.map(t => ({
+      id: `feat-tpl-${t.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}-${Math.random().toString(36).substr(2, 3)}`,
+      name: `[Template] ${t.name}`,
+      source: `Template: ${template.name}`,
+      description: t.description
+    }))
+  ];
+
+  // 7. Natural Attacks
+  const currentAttacks = Array.isArray(character.customAttacks) ? [...character.customAttacks] : [];
+  if (Array.isArray(template.naturalAttacks)) {
+    for (const na of template.naturalAttacks) {
+      const exists = currentAttacks.some(a => a.name.toLowerCase() === na.name.toLowerCase());
+      if (!exists) {
+        currentAttacks.push({
+          id: 'att-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          name: na.name,
+          attackBonus: 0,
+          damageDice: na.damageDice,
+          damageType: na.damageType,
+          range: 'Melee (5 ft.)',
+          notes: na.notes || `${template.name} Natural Weapon`
+        });
+      }
+    }
+  }
+
+  const updatedChar: CharacterData = {
+    ...character,
+    race: finalRaceName,
+    abilities: updatedAbilities as any,
+    speed: resolved.speed,
+    sizeCategory: resolved.size,
+    senses,
+    naturalArmorBonus,
+    damageReductionValue,
+    damageReductionBypass,
+    spellResist,
+    damageImmunities: mergedDamageImmunities,
+    conditionImmunities: mergedConditionImmunities,
+    energyResistances: resolvedEnergyRes,
+    classFeatures: [...cleanFeatures, ...newFeatures],
+    customAttacks: currentAttacks,
+    hybridHeritage: {
+      enabled: true,
+      isTemplateMode: true,
+      isClassicSRD: false,
+      templateId: template.id,
+      templateName: template.name,
+      baseRaceId: baseCreature.id,
+      baseRaceName: baseCreature.name,
+      primaryParent: baseCreature.name,
+      secondaryParent: template.name,
+      customHybridName: finalRaceName,
+      dragonVariety: options?.dragonVariety,
+      speedFeet: resolved.speed,
+      sizeCategory: resolved.size,
+      hasDarkvision: resolved.darkvisionFeet > 0,
+      levelAdjustment: template.levelAdjustment,
+      retainedBaseTraits: resolved.retainedBaseTraits.map(t => t.name),
+      gainedTemplateTraits: resolved.gainedTemplateTraits.map(t => t.name),
+      skillPointsRuleNotice: resolved.skillPointsNotice,
+      precedenceSummary: resolved.precedenceLog,
+      conflictsResolved: options?.conflictChoices
+    },
+    optionalRules: {
+      ...(character.optionalRules || {}),
+      useHalfBreedTemplate35e: true
+    }
+  };
+
+  return recalculateCharacterAC(updatedChar);
+}
+

@@ -72,8 +72,8 @@ const SHEET_METADATA: Record<SheetCategory, { title: string; subtitle: string; i
     badgeColor: 'bg-teal-950/70 text-teal-300 border-teal-600/40'
   },
   global: {
-    title: 'Global App UI',
-    subtitle: 'Persistent quick stats bar and overlay tools',
+    title: 'Global App UI & Sheets',
+    subtitle: 'Floating play dock, interactive dice tray, quick stats bar, and sheet navigation tabs',
     icon: <Globe className="w-4 h-4 text-indigo-400" />,
     badgeColor: 'bg-indigo-950/70 text-indigo-300 border-indigo-600/40'
   }

@@ -78,6 +78,7 @@ import {
   playDeathSound
 } from '../../utils/soundEffects';
 import { useUiMode } from '../../context/UiModeContext';
+import { useLayoutCustomization } from '../../utils/layoutCustomization';
 
 interface OptionsModalProps {
   isOpen: boolean;
@@ -129,6 +130,7 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
     isTableMode,
     toggleTableMode
   } = useUiMode();
+  const { isVisible, toggleFeature } = useLayoutCustomization();
   const [activeCategory, setActiveCategory] = useState<'themes' | 'sound' | 'app' | 'layout' | 'a11y' | 'character' | 'hotkeys' | 'subscription' | 'credits'>(initialCategory);
   const [muted, setMuted] = useState<boolean>(!isSoundEnabled());
   const [volume, setVolumeState] = useState<number>(() => Math.round(getMasterVolume() * 100));
@@ -639,6 +641,44 @@ export const OptionsModal: React.FC<OptionsModalProps> = ({
                       }`}
                     >
                       {isTableMode ? 'Active' : 'Launch'}
+                    </button>
+                  </div>
+
+                  {/* Floating Quick-Action Play Dock toggle */}
+                  <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-stone-200 block">⚡ Floating Quick-Action Play Dock</span>
+                      <span className="text-[10px] text-stone-400">Bottom floating HUD for rapid HP adjustments, d20 advantage/disadvantage rolls, initiative & rest.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleFeature('ui_floatingQuickDock')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition cursor-pointer border ${
+                        isVisible('ui_floatingQuickDock')
+                          ? 'bg-amber-500 text-stone-950 border-amber-400'
+                          : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+                      }`}
+                    >
+                      {isVisible('ui_floatingQuickDock') ? 'Enabled' : 'Disabled'}
+                    </button>
+                  </div>
+
+                  {/* Floating Interactive Dice Tray toggle */}
+                  <div className="pt-2 border-t border-stone-800/80 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-semibold text-stone-200 block">🎲 Interactive Dice Roller Tray</span>
+                      <span className="text-[10px] text-stone-400">Expandable floating bottom-corner dice roller with 3D rolls, multi-die pooling, and roll log.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleFeature('ui_diceTray')}
+                      className={`px-3 py-1 rounded-lg text-xs font-bold font-mono transition cursor-pointer border ${
+                        isVisible('ui_diceTray')
+                          ? 'bg-amber-500 text-stone-950 border-amber-400'
+                          : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-200'
+                      }`}
+                    >
+                      {isVisible('ui_diceTray') ? 'Enabled' : 'Disabled'}
                     </button>
                   </div>
                 </div>

@@ -5,6 +5,7 @@ import {
   get35eIterativeAttacks,
   calculate35eTwoWeaponPenalties,
   adjust35eOffhandDamageFormula,
+  adjust5eOffhandDamageFormula,
   formatModifier,
   getEffectiveAbilities,
   getAbilityModifier,
@@ -68,7 +69,7 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
   const [missChanceType, setMissChanceType] = useState<MissChanceType>('none');
   const hasBlindFight = Boolean(character.feats?.some((f) => f.name.toLowerCase().includes('blind-fight')));
 
-  // Active Feat Overrides / Local Controls
+  // Active Feat Overrides / Local Controls (3.5e)
   const [hasTWF, setHasTWF] = useState<boolean>(
     Boolean(character.hasTwoWeaponFighting || character.feats?.some((f) => f.name.toLowerCase().includes('two-weapon fighting') && !f.name.toLowerCase().includes('improved') && !f.name.toLowerCase().includes('greater')))
   );
@@ -77,6 +78,18 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
   );
   const [hasGTWF, setHasGTWF] = useState<boolean>(
     Boolean(character.hasGreaterTwoWeaponFighting || character.feats?.some((f) => f.name.toLowerCase().includes('greater two-weapon fighting')))
+  );
+
+  // Active Feat / Feature Overrides (5e)
+  const [has5eTwfStyle, setHas5eTwfStyle] = useState<boolean>(
+    Boolean(
+      character.classFeatures?.some((f) => f.name.toLowerCase().includes('two-weapon')) ||
+      character.feats?.some((f) => f.name.toLowerCase().includes('two-weapon fighting')) ||
+      (character as any).fightingStyle?.toLowerCase().includes('two-weapon')
+    )
+  );
+  const [has5eDualWielder, setHas5eDualWielder] = useState<boolean>(
+    Boolean(character.feats?.some((f) => f.name.toLowerCase().includes('dual wielder')))
   );
 
   const mainWeapon = attacks.find((a) => a.id === mainWeaponId) || attacks[0] || {
@@ -97,7 +110,7 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
     range: 'Melee'
   };
 
-  // Penalties
+  // 3.5e Penalties
   let mainPenalty = -6;
   let offPenalty = -10;
   if (isOffhandLight) {
@@ -119,6 +132,44 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
   // Generate iterative steps
   const steps: TwfStep[] = useMemo(() => {
     const list: TwfStep[] = [];
+
+    if (!is35e) {
+      // 5e Two-Weapon Fighting (PHB p. 195)
+      // Detect Extra Attack count in 5e
+      const hasExtraAttack2 = character.classFeatures?.some((f) => f.name.toLowerCase().includes('extra attack (2)') || f.name.toLowerCase().includes('extra attack 2'));
+      const hasExtraAttack1 = character.classFeatures?.some((f) => f.name.toLowerCase().includes('extra attack'));
+      const mainHandAttackCount = hasExtraAttack2 ? 3 : (hasExtraAttack1 ? 2 : 1);
+
+      for (let i = 0; i < mainHandAttackCount; i++) {
+        list.push({
+          id: `main-${i + 1}`,
+          hand: 'Main Hand',
+          weapon: mainWeapon,
+          bonus: (mainWeapon.attackBonus || 0) + flankBonus,
+          damageFormula: mainWeapon.damage || '1d8',
+          notes: mainHandAttackCount > 1
+            ? `Attack #${i + 1} of ${mainHandAttackCount} (Action)`
+            : 'Main Hand Attack (Action)'
+        });
+      }
+
+      // Bonus Action Off-Hand Attack
+      const offDamage = adjust5eOffhandDamageFormula(offWeapon.damage || '1d6', has5eTwfStyle);
+      list.push({
+        id: 'off-1',
+        hand: 'Off-Hand',
+        weapon: offWeapon,
+        bonus: (offWeapon.attackBonus || 0) + flankBonus,
+        damageFormula: offDamage,
+        notes: has5eTwfStyle
+          ? 'Off-Hand Bonus Action (TWF Style adds ability mod to dmg)'
+          : 'Off-Hand Bonus Action (No ability mod to dmg without TWF Style)'
+      });
+
+      return list;
+    }
+
+    // 3.5e Full Attack Iteratives
     const mainIteratives = get35eIterativeAttacks(mainWeapon.attackBonus || 0, bab);
 
     // Main hand attacks
@@ -173,7 +224,7 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
     }
 
     return list;
-  }, [bab, mainWeapon, offWeapon, mainPenalty, offPenalty, flankBonus, hasITWF, hasGTWF, isFlanking, strMod]);
+  }, [is35e, character.classFeatures, bab, mainWeapon, offWeapon, mainPenalty, offPenalty, flankBonus, hasITWF, hasGTWF, isFlanking, strMod, has5eTwfStyle]);
 
   // Roll results
   const [rollLogs, setRollLogs] = useState<Array<{
@@ -250,13 +301,15 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-stone-100 flex items-center gap-2">
-                Two-Weapon Fighting (TWF) Full Attack
+                Two-Weapon Fighting (TWF) {is35e ? 'Full Attack' : 'Attack Sequence'}
                 <span className="text-[10px] uppercase font-mono px-2 py-0.5 bg-amber-950/80 border border-amber-800/60 text-amber-300 rounded-full font-bold">
-                  3.5e Engine
+                  {is35e ? '3.5e Engine' : '5e Engine'}
                 </span>
               </h2>
               <p className="text-xs text-stone-400">
-                Off-hand penalties, iterative dual attacks & ½ Strength damage scaling
+                {is35e
+                  ? 'Off-hand penalties, iterative dual attacks & ½ Strength damage scaling'
+                  : 'Action Attack(s) + Bonus Action Off-Hand Attack (Suppresses ability mod without TWF style)'}
               </p>
             </div>
           </div>
@@ -294,15 +347,19 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
                 <label className="text-[11px] font-bold text-stone-300 uppercase tracking-wider block">
                   Off-Hand Weapon
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-amber-300 font-bold">
-                  <input
-                    type="checkbox"
-                    checked={isOffhandLight}
-                    onChange={(e) => setIsOffhandLight(e.target.checked)}
-                    className="rounded text-amber-500 focus:ring-0 bg-stone-900 border-stone-700"
-                  />
-                  <span>Light Weapon (+2 bonus)</span>
-                </label>
+                {is35e ? (
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] text-amber-300 font-bold">
+                    <input
+                      type="checkbox"
+                      checked={isOffhandLight}
+                      onChange={(e) => setIsOffhandLight(e.target.checked)}
+                      className="rounded text-amber-500 focus:ring-0 bg-stone-900 border-stone-700"
+                    />
+                    <span>Light Weapon (+2 bonus)</span>
+                  </label>
+                ) : (
+                  <span className="text-[10px] text-amber-400 font-mono">Bonus Action</span>
+                )}
               </div>
               <select
                 value={offWeaponId}
@@ -318,41 +375,72 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
             </div>
           </div>
 
-          {/* Feat Toggles & Penalty Badge */}
+          {/* Feat Toggles & Penalty/Status Badge */}
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-800/80">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
-                <input
-                  type="checkbox"
-                  checked={hasTWF}
-                  onChange={(e) => setHasTWF(e.target.checked)}
-                  className="rounded text-amber-500"
-                />
-                <span className="font-bold">Two-Weapon Fighting Feat</span>
-              </label>
-              <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
-                <input
-                  type="checkbox"
-                  checked={hasITWF}
-                  onChange={(e) => setHasITWF(e.target.checked)}
-                  className="rounded text-amber-500"
-                />
-                <span className="font-bold">Improved TWF (BAB 6+)</span>
-              </label>
-              <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
-                <input
-                  type="checkbox"
-                  checked={hasGTWF}
-                  onChange={(e) => setHasGTWF(e.target.checked)}
-                  className="rounded text-amber-500"
-                />
-                <span className="font-bold">Greater TWF (BAB 11+)</span>
-              </label>
-            </div>
+            {is35e ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
+                    <input
+                      type="checkbox"
+                      checked={hasTWF}
+                      onChange={(e) => setHasTWF(e.target.checked)}
+                      className="rounded text-amber-500"
+                    />
+                    <span className="font-bold">Two-Weapon Fighting Feat</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
+                    <input
+                      type="checkbox"
+                      checked={hasITWF}
+                      onChange={(e) => setHasITWF(e.target.checked)}
+                      className="rounded text-amber-500"
+                    />
+                    <span className="font-bold">Improved TWF (BAB 6+)</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
+                    <input
+                      type="checkbox"
+                      checked={hasGTWF}
+                      onChange={(e) => setHasGTWF(e.target.checked)}
+                      className="rounded text-amber-500"
+                    />
+                    <span className="font-bold">Greater TWF (BAB 11+)</span>
+                  </label>
+                </div>
 
-            <div className="px-3 py-1 bg-amber-950/70 border border-amber-600/50 rounded-lg text-xs font-mono font-bold text-amber-300">
-              Penalties: Main {formatModifier(mainPenalty)} / Off {formatModifier(offPenalty)}
-            </div>
+                <div className="px-3 py-1 bg-amber-950/70 border border-amber-600/50 rounded-lg text-xs font-mono font-bold text-amber-300">
+                  Penalties: Main {formatModifier(mainPenalty)} / Off {formatModifier(offPenalty)}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
+                    <input
+                      type="checkbox"
+                      checked={has5eTwfStyle}
+                      onChange={(e) => setHas5eTwfStyle(e.target.checked)}
+                      className="rounded text-amber-500"
+                    />
+                    <span className="font-bold">Two-Weapon Fighting Style (Add Ability Mod to Off-Hand Dmg)</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 px-2.5 py-1 bg-stone-900 border border-stone-800 rounded-lg cursor-pointer text-stone-300 hover:text-stone-100">
+                    <input
+                      type="checkbox"
+                      checked={has5eDualWielder}
+                      onChange={(e) => setHas5eDualWielder(e.target.checked)}
+                      className="rounded text-amber-500"
+                    />
+                    <span className="font-bold">Dual Wielder Feat (+1 AC, non-light weapons)</span>
+                  </label>
+                </div>
+
+                <div className="px-3 py-1 bg-stone-900 border border-stone-700 rounded-lg text-xs font-mono font-bold text-amber-300">
+                  {has5eTwfStyle ? 'Off-Hand: +Ability Mod to Dmg' : 'Off-Hand: Dice Only (No Mod)'}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Tactical Modifiers: Flanking & Miss Chance */}

@@ -41,8 +41,19 @@ export type LayoutFeatureId =
   | 'sr_combat'
   | 'sr_matrix'
   | 'sr_spells'
-  // Global UI
-  | 'ui_quickStatsBar';
+  // Sheet Navigation Tabs Customization
+  | 'nav_sheet1'
+  | 'nav_sheet2'
+  | 'nav_sheet3'
+  | 'nav_sheet4'
+  | 'nav_sheet5'
+  | 'nav_sheet6'
+  | 'nav_sheet7'
+  | 'nav_sheetDm'
+  // Global UI & Overlays
+  | 'ui_quickStatsBar'
+  | 'ui_floatingQuickDock'
+  | 'ui_diceTray';
 
 export type SheetCategory = 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'shadowrun' | 'global';
 
@@ -380,7 +391,7 @@ export const ALL_LAYOUT_FEATURES: LayoutFeatureDef[] = [
     editions: ['shadowrun']
   },
 
-  // Global UI
+  // Global UI & Overlays
   {
     id: 'ui_quickStatsBar',
     name: 'Quick Stats Header Bar',
@@ -389,6 +400,108 @@ export const ALL_LAYOUT_FEATURES: LayoutFeatureDef[] = [
     description: 'Persistent top quick-glance bar showing HP, AC, Speed, Passive Perception, and Spell Save DC.',
     defaultEnabled: true,
     category: 'Navigation & Headers',
+    editions: ['all']
+  },
+  {
+    id: 'ui_floatingQuickDock',
+    name: 'Floating Quick-Action Play Dock',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Ergonomic floating table HUD providing instant HP adjustments, d20 rolls, initiative triggers, short/long rest, and command palette access.',
+    defaultEnabled: true,
+    category: 'Floating Controls',
+    editions: ['all']
+  },
+  {
+    id: 'ui_diceTray',
+    name: 'Interactive Floating Dice Roller Tray',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Corner expandable dice tray with 3D dice rolling, multi-dice pooling, roll history log, and secret GM roll toggles.',
+    defaultEnabled: true,
+    category: 'Floating Controls',
+    editions: ['all']
+  },
+
+  // Character & Campaign Sheet Navigation Tabs
+  {
+    id: 'nav_sheet1',
+    name: 'Sheet 1: Stats & Features Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for character attributes, ability scores, proficiencies, feats, and core class features.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
+    editions: ['all']
+  },
+  {
+    id: 'nav_sheet2',
+    name: 'Sheet 2: Combat & Encounters Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for combat actions, weapon attacks, armor class, death saves, and tactical combat maneuvers.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
+    editions: ['all']
+  },
+  {
+    id: 'nav_sheet3',
+    name: 'Sheet 3: Gear & Wealth Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for currency vault, inventory containers, equipment weights, attunement, and carrying capacity.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
+    editions: ['all']
+  },
+  {
+    id: 'nav_sheet4',
+    name: 'Sheet 4: Spells & Spellbook Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for spell slot tracks, spell save DC, prepared spells list, and ritual spellbook.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
+    editions: ['all']
+  },
+  {
+    id: 'nav_sheet5',
+    name: 'Sheet 5: Description & Notes Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for character backstory, roleplay traits, appearance, allies, factions, and campaign notes.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
+    editions: ['all']
+  },
+  {
+    id: 'nav_sheet6',
+    name: 'Rules & User Guide Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for the built-in system rules reference manual, conditions cheat sheet, and game mechanics guide.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
+    editions: ['all']
+  },
+  {
+    id: 'nav_sheet7',
+    name: 'Bestiary & SRD Compendium Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for searchable monster bestiary, magic items library, and official spells SRD compendium.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
+    editions: ['all']
+  },
+  {
+    id: 'nav_sheetDm',
+    name: 'DM / GM Party Overview Tab',
+    sheet: 'global',
+    sheetLabel: 'Global UI',
+    description: 'Tab link for real-time multiplayer party overview, party passive perception/HP monitors, and live DM overrides.',
+    defaultEnabled: true,
+    category: 'Sheet Tabs Visibility',
     editions: ['all']
   }
 ];

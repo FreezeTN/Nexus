@@ -907,6 +907,82 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
       itemObj.entities.forEach((e: any) => processEntityObject(e));
       return;
     }
+    if (Array.isArray(itemObj.races)) {
+      itemObj.races.forEach((r: any) => processEntityObject({ ...r, type: 'race' }));
+      return;
+    }
+    if (Array.isArray(itemObj.species)) {
+      itemObj.species.forEach((r: any) => processEntityObject({ ...r, type: 'race' }));
+      return;
+    }
+    if (Array.isArray(itemObj.classes)) {
+      itemObj.classes.forEach((c: any) => processEntityObject({ ...c, type: 'class' }));
+      return;
+    }
+    if (Array.isArray(itemObj.monsterClasses)) {
+      itemObj.monsterClasses.forEach((c: any) => processEntityObject({ ...c, type: 'class' }));
+      return;
+    }
+
+    // Handle single nested objects like { race: { ... }, monsterClass: { ... } }
+    if (itemObj.race || itemObj.species || itemObj.class || itemObj.monsterClass) {
+      let hasUnwrapped = false;
+      if (itemObj.race && typeof itemObj.race === 'object') {
+        processEntityObject({ ...itemObj.race, type: 'race' });
+        hasUnwrapped = true;
+      }
+      if (itemObj.species && typeof itemObj.species === 'object') {
+        processEntityObject({ ...itemObj.species, type: 'race' });
+        hasUnwrapped = true;
+      }
+      if (itemObj.class && typeof itemObj.class === 'object') {
+        processEntityObject({ ...itemObj.class, type: 'class' });
+        hasUnwrapped = true;
+      }
+      if (itemObj.monsterClass && typeof itemObj.monsterClass === 'object') {
+        processEntityObject({ ...itemObj.monsterClass, type: 'class' });
+        hasUnwrapped = true;
+      }
+      if (hasUnwrapped) return;
+    }
+
+    // Check if it's a homebrew class
+    if (
+      itemObj.type === 'class' ||
+      itemObj.type === 'monster_class' ||
+      itemObj.hitDie !== undefined ||
+      itemObj.featuresByLevel ||
+      (itemObj.savingThrows && itemObj.subclasses && !itemObj.abilities) ||
+      (itemObj.className && itemObj.features)
+    ) {
+      detected.push({
+        id: `det_class_${Date.now()}_${detected.length}`,
+        type: 'class',
+        name: itemObj.name || itemObj.className || 'Homebrew Class',
+        subtitle: `Class (${itemObj.hitDie || 'd8'}) • ${itemObj.primaryAbility || 'Core'}`,
+        summary: itemObj.description || itemObj.role || (itemObj.featuresByLevel ? `${itemObj.featuresByLevel.length} class features` : undefined),
+        rawJson: itemObj,
+      });
+      return;
+    }
+    // Check if it's a homebrew race
+    if (
+      itemObj.type === 'race' ||
+      itemObj.type === 'species' ||
+      itemObj.creatureType !== undefined ||
+      itemObj.abilityBonuses ||
+      (itemObj.traits && itemObj.speed !== undefined && !itemObj.hpMax)
+    ) {
+      detected.push({
+        id: `det_race_${Date.now()}_${detected.length}`,
+        type: 'race',
+        name: itemObj.name || itemObj.raceName || 'Homebrew Race',
+        subtitle: `Race / Lineage • ${itemObj.size || 'Medium'} ${itemObj.creatureType || 'Humanoid'}`,
+        summary: itemObj.description || itemObj.abilityBonusesStr || (itemObj.traits ? `${itemObj.traits.length} racial traits` : undefined),
+        rawJson: itemObj,
+      });
+      return;
+    }
 
     // Check if it's a monster
     if (
@@ -939,28 +1015,6 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
           itemObj.backstory ||
           itemObj.personalityTraits ||
           (itemObj.inventory ? `${itemObj.inventory.length} items in shop stock` : undefined),
-        rawJson: itemObj,
-      });
-    }
-    // Check if it's a homebrew class
-    else if (itemObj.hitDie !== undefined || itemObj.featuresByLevel || (itemObj.savingThrows && itemObj.subclasses && !itemObj.abilities)) {
-      detected.push({
-        id: `det_class_${Date.now()}_${detected.length}`,
-        type: 'class',
-        name: itemObj.name || 'Homebrew Class',
-        subtitle: `Class (${itemObj.hitDie || 'd8'}) • ${itemObj.primaryAbility || 'Core'}`,
-        summary: itemObj.description || itemObj.role || (itemObj.featuresByLevel ? `${itemObj.featuresByLevel.length} class features` : undefined),
-        rawJson: itemObj,
-      });
-    }
-    // Check if it's a homebrew race
-    else if (itemObj.creatureType !== undefined || itemObj.abilityBonuses || (itemObj.traits && itemObj.speed !== undefined && !itemObj.hpMax)) {
-      detected.push({
-        id: `det_race_${Date.now()}_${detected.length}`,
-        type: 'race',
-        name: itemObj.name || 'Homebrew Race',
-        subtitle: `Race / Lineage • ${itemObj.size || 'Medium'} ${itemObj.creatureType || 'Humanoid'}`,
-        summary: itemObj.description || itemObj.abilityBonusesStr || (itemObj.traits ? `${itemObj.traits.length} racial traits` : undefined),
         rawJson: itemObj,
       });
     }

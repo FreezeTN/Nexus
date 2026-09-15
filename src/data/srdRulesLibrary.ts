@@ -486,7 +486,103 @@ export const OFFICIAL_5E_CLASS_FEATURES: (ClassFeature & { className: string; re
   // Artificer
   { id: 'cf5e-art-1', className: 'Artificer', reqLevel: 1, name: 'Magical Tinkering & Spellcasting', source: 'Artificer Level 1', description: 'Imbue mundane objects with minor magical properties or light. You cast spells prepared using thieves’ tools or artisan tools.' },
   { id: 'cf5e-art-2', className: 'Artificer', reqLevel: 2, name: 'Infuse Item', source: 'Artificer Level 2', description: 'Gain the ability to produce magic items (Enhanced Weapon +1, Enhanced Defense +1, Replicating Magic Items).' },
-  { id: 'cf5e-art-3', className: 'Artificer', reqLevel: 7, name: 'Flash of Genius', source: 'Artificer Level 7', description: 'When you or another creature you see makes an ability check or saving throw, add your Intelligence modifier to the roll.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' }
+  { id: 'cf5e-art-3', className: 'Artificer', reqLevel: 7, name: 'Flash of Genius', source: 'Artificer Level 7', description: 'When you or another creature you see makes an ability check or saving throw, add your Intelligence modifier to the roll.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' },
+
+  // ==========================================
+  // D&D 5E SUBCLASSES & ARCHETYPES
+  // ==========================================
+  // Fighter Subclasses
+  { id: 'cf5e-sub-ek-1', className: 'Eldritch Knight', reqLevel: 3, name: 'Weapon Bond', source: 'Eldritch Knight Level 3', description: 'Perform a 1-hour ritual to bond with up to two weapons. You cannot be disarmed of a bonded weapon, and can summon it to your hand as a bonus action.' },
+  { id: 'cf5e-sub-ek-2', className: 'Eldritch Knight', reqLevel: 3, name: 'Spellcasting (Eldritch Knight)', source: 'Eldritch Knight Level 3', description: 'You cast wizard abjuration and evocation spells using Intelligence as your spellcasting ability (1/3 caster progression).' },
+  { id: 'cf5e-sub-ek-3', className: 'Eldritch Knight', reqLevel: 7, name: 'War Magic', source: 'Eldritch Knight Level 7', description: 'When you use your action to cast a cantrip, you can make one weapon attack as a bonus action.' },
+  { id: 'cf5e-sub-ek-4', className: 'Eldritch Knight', reqLevel: 10, name: 'Eldritch Strike', source: 'Eldritch Knight Level 10', description: 'When you hit a creature with a weapon attack, that creature has disadvantage on the next saving throw it makes against a spell you cast before the end of your next turn.' },
+  { id: 'cf5e-sub-ek-5', className: 'Eldritch Knight', reqLevel: 15, name: 'Arcane Charge', source: 'Eldritch Knight Level 15', description: 'When you use your Action Surge, you can teleport up to 30 feet to an unoccupied space you can see before or after the additional action.' },
+  { id: 'cf5e-sub-ek-6', className: 'Eldritch Knight', reqLevel: 18, name: 'Improved War Magic', source: 'Eldritch Knight Level 18', description: 'When you use your action to cast a spell, you can make one weapon attack as a bonus action.' },
+
+  { id: 'cf5e-sub-chm-1', className: 'Champion', reqLevel: 3, name: 'Improved Critical (19-20)', source: 'Champion Level 3', description: 'Your weapon attacks score a critical hit on a roll of 19 or 20.' },
+  { id: 'cf5e-sub-chm-2', className: 'Champion', reqLevel: 7, name: 'Remarkable Athlete', source: 'Champion Level 7', description: 'Add half your proficiency bonus (rounded up) to any Strength, Dexterity, or Constitution check that doesn’t already use your proficiency bonus. Running jump distance increases by STR mod in feet.' },
+  { id: 'cf5e-sub-chm-3', className: 'Champion', reqLevel: 10, name: 'Additional Fighting Style', source: 'Champion Level 10', description: 'You can choose a second option from the Fighting Style class feature.' },
+  { id: 'cf5e-sub-chm-4', className: 'Champion', reqLevel: 15, name: 'Superior Critical (18-20)', source: 'Champion Level 15', description: 'Your weapon attacks score a critical hit on a roll of 18–20.' },
+  { id: 'cf5e-sub-chm-5', className: 'Champion', reqLevel: 18, name: 'Survivor', source: 'Champion Level 18', description: 'At the start of each of your turns in combat, if you have no more than half your hit points left and at least 1 HP, you regain 5 + CON modifier hit points.' },
+
+  { id: 'cf5e-sub-bm-1', className: 'Battle Master', reqLevel: 3, name: 'Combat Superiority (Maneuvers)', source: 'Battle Master Level 3', description: 'Gain 4 Superiority Dice (d8) to fuel tactical maneuvers: Riposte, Precision Attack, Trip Attack, Menacing Attack, Disarming Attack, or Feinting Attack.', usesMax: 4, usesRemaining: 4, recharge: 'Short Rest' },
+  { id: 'cf5e-sub-bm-2', className: 'Battle Master', reqLevel: 3, name: 'Student of War', source: 'Battle Master Level 3', description: 'Gain proficiency with one type of artisan’s tools of your choice.' },
+  { id: 'cf5e-sub-bm-3', className: 'Battle Master', reqLevel: 7, name: 'Know Your Enemy', source: 'Battle Master Level 7', description: 'Spend 1 minute observing a creature out of combat to learn if it is your equal, superior, or inferior in STR, DEX, CON, AC, current HP, or class levels.' },
+  { id: 'cf5e-sub-bm-4', className: 'Battle Master', reqLevel: 15, name: 'Relentless', source: 'Battle Master Level 15', description: 'When you roll initiative and have no superiority dice remaining, you regain 1 superiority die.' },
+
+  { id: 'cf5e-sub-aa-1', className: 'Arcane Archer', reqLevel: 3, name: 'Arcane Shot & Archer Lore', source: 'Arcane Archer Level 3', description: 'Imbue arrows with magical effects twice per short rest (Bursting Arrow, Grasping Arrow, Shadow Arrow, Piercing Arrow). Gain proficiency in Arcana or Nature.', usesMax: 2, usesRemaining: 2, recharge: 'Short Rest' },
+  { id: 'cf5e-sub-aa-2', className: 'Arcane Archer', reqLevel: 7, name: 'Magic Arrow & Curving Shot', source: 'Arcane Archer Level 7', description: 'All nonmagical arrows you fire become magical. When you miss with a magic arrow, use a bonus action to reroll the attack against a different target within 60 feet.' },
+  { id: 'cf5e-sub-aa-3', className: 'Arcane Archer', reqLevel: 15, name: 'Ever-Ready Shot', source: 'Arcane Archer Level 15', description: 'When you roll initiative and have no uses of Arcane Shot remaining, you regain one use.' },
+
+  // Rogue Subclasses
+  { id: 'cf5e-sub-ass-1', className: 'Assassin', reqLevel: 3, name: 'Assassinate', source: 'Assassin Level 3', description: 'You have advantage on attack rolls against any creature that hasn’t taken a turn in combat yet. Any hit you score against a creature that is surprised is an automatic critical hit.' },
+  { id: 'cf5e-sub-ass-2', className: 'Assassin', reqLevel: 9, name: 'Infiltration Expertise', source: 'Assassin Level 9', description: 'Spend seven days and 25 gp to establish an unfailing false identity with complete documentation and history.' },
+  { id: 'cf5e-sub-ass-3', className: 'Assassin', reqLevel: 13, name: 'Impostor', source: 'Assassin Level 13', description: 'Gain the ability to unerringly mimic another person’s speech, writing, and behavior after 3 hours of study.' },
+  { id: 'cf5e-sub-ass-4', className: 'Assassin', reqLevel: 17, name: 'Death Strike', source: 'Assassin Level 17', description: 'When you hit a creature that is surprised, it must make a Constitution saving throw (DC 8 + DEX mod + prof). On a failed save, double the damage of your attack against it.' },
+
+  { id: 'cf5e-sub-at-1', className: 'Arcane Trickster', reqLevel: 3, name: 'Mage Hand Legerdemain & Spellcasting', source: 'Arcane Trickster Level 3', description: 'Cast Mage Hand as an invisible bonus action and use it to stow/retrieve items from containers or pick locks/disarm traps at 30ft range. Cast wizard enchantment and illusion spells.' },
+  { id: 'cf5e-sub-at-2', className: 'Arcane Trickster', reqLevel: 9, name: 'Magical Ambush', source: 'Arcane Trickster Level 9', description: 'If you are hidden from a creature when you cast a spell on it, the creature has disadvantage on any saving throw it makes against the spell on this turn.' },
+  { id: 'cf5e-sub-at-3', className: 'Arcane Trickster', reqLevel: 13, name: 'Versatile Trickster', source: 'Arcane Trickster Level 13', description: 'Use a bonus action to designate a creature within 5 feet of your Mage Hand. You gain advantage on attack rolls against that creature until the end of your turn.' },
+  { id: 'cf5e-sub-at-4', className: 'Arcane Trickster', reqLevel: 17, name: 'Spell Thief', source: 'Arcane Trickster Level 17', description: 'When a creature casts a spell that targets you or includes you in its area, use your reaction to force a saving throw. On a fail, negate the spell, steal it for 8 hours, and prevent the caster from casting it.' },
+
+  { id: 'cf5e-sub-thf-1', className: 'Thief', reqLevel: 3, name: 'Fast Hands & Second-Story Work', source: 'Thief Level 3', description: 'Use the bonus action granted by Cunning Action to make a Sleight of Hand check, use thieves’ tools, or take the Use an Object action. Climbing costs no extra movement.' },
+  { id: 'cf5e-sub-thf-2', className: 'Thief', reqLevel: 9, name: 'Supreme Sneak', source: 'Thief Level 9', description: 'You have advantage on a Dexterity (Stealth) check if you move no more than half your speed on the same turn.' },
+  { id: 'cf5e-sub-thf-3', className: 'Thief', reqLevel: 13, name: 'Use Magic Device', source: 'Thief Level 13', description: 'You have learned enough about the workings of magic to improvise the use of items not intended for you. You ignore all class, race, and level requirements on the use of magic items.' },
+  { id: 'cf5e-sub-thf-4', className: 'Thief', reqLevel: 17, name: 'Thief’s Reflexes', source: 'Thief Level 17', description: 'You can take two turns during the first round of any combat (your normal initiative and your initiative minus 10).' },
+
+  // Monk Subclasses
+  { id: 'cf5e-sub-shd-1', className: 'Way of Shadow', reqLevel: 3, name: 'Shadow Arts', source: 'Way of Shadow Level 3', description: 'Spend 2 ki points to cast Darkness, Darkvision, Pass without Trace, or Silence without material components. You gain the Minor Illusion cantrip.' },
+  { id: 'cf5e-sub-shd-2', className: 'Way of Shadow', reqLevel: 6, name: 'Shadow Step', source: 'Way of Shadow Level 6', description: 'When you are in dim light or darkness, you can use a bonus action to teleport up to 60 feet to an unoccupied space you can see that is also in dim light or darkness. You have advantage on your first melee attack before the end of the turn.' },
+  { id: 'cf5e-sub-shd-3', className: 'Way of Shadow', reqLevel: 11, name: 'Cloak of Shadows', source: 'Way of Shadow Level 11', description: 'When you are in an area of dim light or darkness, you can use your action to become invisible. You remain invisible until you make an attack, cast a spell, or enter bright light.' },
+  { id: 'cf5e-sub-shd-4', className: 'Way of Shadow', reqLevel: 17, name: 'Opportunist', source: 'Way of Shadow Level 17', description: 'Whenever a creature within 5 feet of you is hit by an attack made by someone other than you, you can use your reaction to make a melee attack against that creature.' },
+
+  { id: 'cf5e-sub-oh-1', className: 'Way of the Open Hand', reqLevel: 3, name: 'Open Hand Technique', source: 'Way of the Open Hand Level 3', description: 'Whenever you hit a creature with attacks granted by Flurry of Blows, you can knock it prone (DEX save), push it up to 15 feet (STR save), or prevent it from taking reactions.' },
+  { id: 'cf5e-sub-oh-2', className: 'Way of the Open Hand', reqLevel: 6, name: 'Wholeness of Body', source: 'Way of the Open Hand Level 6', description: 'As an action, you can regain hit points equal to three times your monk level once per long rest.', usesMax: 1, usesRemaining: 1, recharge: 'Long Rest' },
+  { id: 'cf5e-sub-oh-3', className: 'Way of the Open Hand', reqLevel: 17, name: 'Quivering Palm', source: 'Way of the Open Hand Level 17', description: 'When you hit with an unarmed strike, spend 3 ki points to start lethal vibrations. As an action within days equal to monk level, force a CON save or reduce target to 0 HP (10d10 necrotic on success).' },
+
+  // Sorcerer Subclasses
+  { id: 'cf5e-sub-drac-1', className: 'Draconic Bloodline', reqLevel: 1, name: 'Dragon Ancestor & Draconic Resilience', source: 'Draconic Bloodline Level 1', description: 'Your hit point maximum increases by 1 for each sorcerer level. While unarmored, your AC equals 13 + your Dexterity modifier. You speak, read, and write Draconic.' },
+  { id: 'cf5e-sub-drac-2', className: 'Draconic Bloodline', reqLevel: 6, name: 'Elemental Affinity', source: 'Draconic Bloodline Level 6', description: 'When you cast a spell that deals damage of the type associated with your draconic ancestry, add your Charisma modifier to that damage roll. Spend 1 sorcery point to gain resistance to that damage type for 1 hour.' },
+  { id: 'cf5e-sub-drac-3', className: 'Draconic Bloodline', reqLevel: 14, name: 'Dragon Wings', source: 'Draconic Bloodline Level 14', description: 'As a bonus action, you can manifest a pair of draconic wings from your back, gaining a flying speed equal to your current walking speed.' },
+  { id: 'cf5e-sub-drac-4', className: 'Draconic Bloodline', reqLevel: 18, name: 'Draconic Presence', source: 'Draconic Bloodline Level 18', description: 'Channel the dread presence of your dragon ancestor. Spend 5 sorcery points to create a 60-foot aura of awe or fear for 1 minute.' },
+
+  { id: 'cf5e-sub-wm-1', className: 'Wild Magic', reqLevel: 1, name: 'Wild Magic Surge & Tides of Chaos', source: 'Wild Magic Level 1', description: 'Your spellcasting can unleash chaotic surges of magic. Once per long rest, gain advantage on one attack roll, ability check, or saving throw; the DM can trigger a Wild Magic Surge to refresh it.', usesMax: 1, usesRemaining: 1, recharge: 'Long Rest' },
+  { id: 'cf5e-sub-wm-2', className: 'Wild Magic', reqLevel: 6, name: 'Bend Luck', source: 'Wild Magic Level 6', description: 'When another creature you see makes an attack roll, ability check, or saving throw, use your reaction and 2 sorcery points to roll 1d4 and add or subtract it from the result.' },
+
+  // Druid Subclasses
+  { id: 'cf5e-sub-moon-1', className: 'Circle of the Moon', reqLevel: 2, name: 'Combat Wild Shape & Circle Forms', source: 'Circle of the Moon Level 2', description: 'Use Wild Shape as a bonus action and spend spell slots to heal 1d8 HP per level. You can transform into beasts of CR 1 (CR 2 at 6th level, CR 3 at 9th, CR 6 at 18th).' },
+  { id: 'cf5e-sub-moon-2', className: 'Circle of the Moon', reqLevel: 6, name: 'Primal Strike', source: 'Circle of the Moon Level 6', description: 'Your attacks in beast form count as magical for the purpose of overcoming resistance and immunity to nonmagical attacks and damage.' },
+  { id: 'cf5e-sub-moon-3', className: 'Circle of the Moon', reqLevel: 10, name: 'Elemental Wild Shape', source: 'Circle of the Moon Level 10', description: 'Spend two uses of Wild Shape at the same time to transform into an Air Elemental, Earth Elemental, Fire Elemental, or Water Elemental.' },
+
+  // Cleric Subclasses
+  { id: 'cf5e-sub-life-1', className: 'Life Domain', reqLevel: 1, name: 'Disciple of Life & Heavy Armor', source: 'Life Domain Level 1', description: 'Whenever you use a spell of 1st level or higher to restore hit points to a creature, the creature regains additional hit points equal to 2 + the spell’s level. Gain heavy armor proficiency.' },
+  { id: 'cf5e-sub-life-2', className: 'Life Domain', reqLevel: 2, name: 'Channel Divinity: Preserve Life', source: 'Life Domain Level 2', description: 'As an action, restore hit points equal to 5 times your cleric level distributed among bloodied allies within 30 feet.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
+  { id: 'cf5e-sub-life-3', className: 'Life Domain', reqLevel: 6, name: 'Blessed Healer', source: 'Life Domain Level 6', description: 'When you cast a spell of 1st level or higher that restores hit points to another creature, you regain hit points equal to 2 + the spell’s level.' },
+
+  { id: 'cf5e-sub-light-1', className: 'Light Domain', reqLevel: 1, name: 'Warding Flare', source: 'Light Domain Level 1', description: 'Use your reaction to impose disadvantage on an attacker within 30 feet that you can see before it hits you. Uses = WIS modifier per long rest.', usesMax: 3, usesRemaining: 3, recharge: 'Long Rest' },
+  { id: 'cf5e-sub-light-2', className: 'Light Domain', reqLevel: 2, name: 'Channel Divinity: Radiance of the Dawn', source: 'Light Domain Level 2', description: 'As an action, dispel magical darkness within 30 feet and deal 2d10 + cleric level radiant damage to hostile creatures that fail a Constitution save.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
+
+  // Paladin Subclasses
+  { id: 'cf5e-sub-vng-1', className: 'Oath of Vengeance', reqLevel: 3, name: 'Channel Divinity: Vow of Enmity', source: 'Oath of Vengeance Level 3', description: 'Bonus action to utter a vow of enmity against a creature within 10 feet. You gain advantage on attack rolls against the creature for 1 minute or until it drops to 0 HP.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
+  { id: 'cf5e-sub-vng-2', className: 'Oath of Vengeance', reqLevel: 7, name: 'Relentless Avenger', source: 'Oath of Vengeance Level 7', description: 'When you hit a creature with an opportunity attack, you can move up to half your speed immediately as part of the same reaction without provoking opportunity attacks.' },
+  { id: 'cf5e-sub-vng-3', className: 'Oath of Vengeance', reqLevel: 15, name: 'Soul of Vengeance', source: 'Oath of Vengeance Level 15', description: 'When a creature under the effect of your Vow of Enmity makes an attack, you can use your reaction to make a melee weapon attack against that creature if it is within range.' },
+
+  // Barbarian Subclasses
+  { id: 'cf5e-sub-brk-1', className: 'Path of the Berserker', reqLevel: 3, name: 'Frenzy', source: 'Path of the Berserker Level 3', description: 'You can go into a frenzy when you rage. For the duration of your rage, you can make a single melee weapon attack as a bonus action on each of your turns. You suffer 1 level of exhaustion when rage ends.' },
+  { id: 'cf5e-sub-brk-2', className: 'Path of the Berserker', reqLevel: 6, name: 'Mindless Rage', source: 'Path of the Berserker Level 6', description: 'You can’t be charmed or frightened while raging. If you are charmed or frightened when you enter your rage, the effect is suspended for the duration of the rage.' },
+  { id: 'cf5e-sub-brk-3', className: 'Path of the Berserker', reqLevel: 10, name: 'Intimidating Presence', source: 'Path of the Berserker Level 10', description: 'Use your action to frighten someone with your menacing presence. A creature within 30 feet must succeed on a WIS save (DC 8 + prof + CHA mod) or become frightened of you until the end of your next turn.' },
+
+  // Warlock Subclasses
+  { id: 'cf5e-sub-fnd-1', className: 'The Fiend', reqLevel: 1, name: 'Dark One’s Blessing', source: 'The Fiend Level 1', description: 'When you reduce a hostile creature to 0 hit points, you gain temporary hit points equal to your Charisma modifier + your warlock level.' },
+  { id: 'cf5e-sub-fnd-2', className: 'The Fiend', reqLevel: 6, name: 'Dark One’s Own Luck', source: 'The Fiend Level 6', description: 'When you make an ability check or a saving throw, you can use this feature to add a d10 to your roll once per short rest.', usesMax: 1, usesRemaining: 1, recharge: 'Short Rest' },
+  { id: 'cf5e-sub-fnd-3', className: 'The Fiend', reqLevel: 14, name: 'Hurl Through Hell', source: 'The Fiend Level 14', description: 'When you hit a creature with an attack, you can instantly transport the target through the lower planes. It takes 10d10 psychic damage when it reappears at the end of your next turn (1/long rest).', usesMax: 1, usesRemaining: 1, recharge: 'Long Rest' },
+
+  { id: 'cf5e-sub-hex-1', className: 'The Hexblade', reqLevel: 1, name: 'Hexblade’s Curse & Hex Warrior', source: 'The Hexblade Level 1', description: 'Curse a target: crit on 19-20, bonus damage = proficiency bonus, heal = warlock lvl + CHA mod on death. Use Charisma modifier for weapon attack and damage rolls. Gain medium armor, shields, and martial weapons proficiencies.' },
+  { id: 'cf5e-sub-hex-2', className: 'The Hexblade', reqLevel: 6, name: 'Accursed Specter', source: 'The Hexblade Level 6', description: 'When you slay a humanoid, you can cause its spirit to rise as a specter loyal to you until your next long rest.', usesMax: 1, usesRemaining: 1, recharge: 'Long Rest' },
+
+  // Bard Subclasses
+  { id: 'cf5e-sub-lore-1', className: 'College of Lore', reqLevel: 3, name: 'Cutting Words & Bonus Proficiencies', source: 'College of Lore Level 3', description: 'Use your reaction and 1 Bardic Inspiration die to subtract the roll from an enemy’s attack roll, ability check, or damage roll. Gain proficiency with three skills of your choice.' },
+  { id: 'cf5e-sub-lore-2', className: 'College of Lore', reqLevel: 6, name: 'Additional Magical Secrets', source: 'College of Lore Level 6', description: 'You learn two spells of your choice from any class (up to 3rd level). A chosen spell counts as a bard spell for you.' }
 ];
 
 // ==========================================
@@ -506,32 +602,114 @@ export const OFFICIAL_35E_CLASS_FEATURES: (ClassFeature & { className: string; r
   { id: 'cf35-dru-1', className: 'Druid', reqLevel: 1, name: 'Nature Sense & Animal Companion', source: 'Druid 3.5e', description: 'Gain +2 bonus on Knowledge (nature) and Survival checks. Obtain an animal companion (badger, camel, dire rat, dog, eagle, hawk, horse, owl, pony, snake, or wolf).' },
   { id: 'cf35-dru-2', className: 'Druid', reqLevel: 5, name: 'Wild Shape (3.5e)', source: 'Druid 3.5e', description: 'Assume the form of a Small or Medium animal 1/day (increases to 2/day at 6th, 3/day at 7th, 4/day at 10th). You take on physical abilities while keeping mental scores.' },
   { id: 'cf35-dru-3', className: 'Druid', reqLevel: 8, name: 'Wild Shape (Large)', source: 'Druid 3.5e', description: 'Wild shape forms include Large animals (Dire Wolf, Brown Bear, Rhinoceros, Tiger).' },
-  { id: 'cf35-dru-4', className: 'Druid', reqLevel: 16, name: 'Wild Shape (Elemental)', source: 'Druid 3.5e', description: 'Assume the form of a Small, Medium, or Large Air, Earth, Fire, or Water Elemental.' }
+  { id: 'cf35-dru-4', className: 'Druid', reqLevel: 16, name: 'Wild Shape (Elemental)', source: 'Druid 3.5e', description: 'Assume the form of a Small, Medium, or Large Air, Earth, Fire, or Water Elemental.' },
+  { id: 'cf35-brd-1', className: 'Bard', reqLevel: 1, name: 'Bardic Music & Countersong', source: 'Bard 3.5e', description: 'Once per day per bard level, inspire courage, fascinate, or counter magical sound/speech effects with Perform.' },
+  { id: 'cf35-brd-2', className: 'Bard', reqLevel: 1, name: 'Bardic Knowledge', source: 'Bard 3.5e', description: 'Make a special bardic knowledge check with a bonus equal to bard level + Intelligence modifier to know notable legends or lore.' },
+  { id: 'cf35-mnk-1', className: 'Monk', reqLevel: 1, name: 'Flurry of Blows', source: 'Monk 3.5e', description: 'When unarmored, make one extra melee attack per round at highest base attack bonus with an unarmed strike or special monk weapon.' },
+  { id: 'cf35-mnk-2', className: 'Monk', reqLevel: 1, name: 'Unarmed Strike & AC Bonus', source: 'Monk 3.5e', description: 'Add Wisdom bonus to AC and Reflex defense while unarmored and unencumbered. Deals lethal or nonlethal damage at will.' },
+  { id: 'cf35-rng-1', className: 'Ranger', reqLevel: 1, name: 'Favored Enemy & Track', source: 'Ranger 3.5e', description: 'Gain +2 bonus on Bluff, Listen, Sense Motive, Spot, and Survival checks, and +2 weapon damage rolls against selected creature type. Gain Track feat.' },
+  { id: 'cf35-rng-2', className: 'Ranger', reqLevel: 2, name: 'Combat Style (Archery or Two-Weapon)', source: 'Ranger 3.5e', description: 'Gain Rapid Shot or Two-Weapon Fighting as a bonus combat feat without meeting normal prerequisites.' },
+  { id: 'cf35-sor-1', className: 'Sorcerer', reqLevel: 1, name: 'Spontaneous Arcane Spellcasting', source: 'Sorcerer 3.5e', description: 'Cast arcane spells without preparing them in advance using Charisma as the key spellcasting ability.' },
+
+  // D&D 3.5e Prestige Classes (DMG Chapter 6)
+  { id: 'cf35-as-1', className: 'Assassin', reqLevel: 1, name: 'Sneak Attack +1d6 (Assassin)', source: 'Assassin 3.5e', description: 'Deal +1d6 extra precision damage whenever target is denied Dexterity bonus or flanked (+1d6 every two levels thereafter).' },
+  { id: 'cf35-as-2', className: 'Assassin', reqLevel: 1, name: 'Death Attack', source: 'Assassin 3.5e', description: 'Study victim for 3 rounds then make a sneak attack. If successful, victim must make Fortitude save (DC 10 + Assassin lvl + INT mod) or be paralyzed or slain.' },
+  { id: 'cf35-as-3', className: 'Assassin', reqLevel: 1, name: 'Poison Use', source: 'Assassin 3.5e', description: 'Assassins are trained in the use of poison and never risk accidentally poisoning themselves when applying poison to a blade.' },
+  { id: 'cf35-as-4', className: 'Assassin', reqLevel: 2, name: '+1 Save vs Poison & Uncanny Dodge', source: 'Assassin 3.5e', description: 'Gain +1 resistance bonus on saves against poisons, and retain Dexterity bonus to AC even if caught flat-footed or struck by an invisible attacker.' },
+
+  { id: 'cf35-due-1', className: 'Duelist', reqLevel: 1, name: 'Canny Defense', source: 'Duelist 3.5e', description: 'When not wearing armor or using a shield, add Intelligence bonus (up to 1 point per duelist level) as a dodge bonus to Armor Class.' },
+  { id: 'cf35-due-2', className: 'Duelist', reqLevel: 2, name: 'Improved Reaction & Enhanced Mobility', source: 'Duelist 3.5e', description: 'Gain +2 bonus on initiative rolls. Gain an additional +4 dodge bonus to AC against attacks of opportunity caused by moving out of a threatened square.' },
+  { id: 'cf35-due-3', className: 'Duelist', reqLevel: 3, name: 'Grace (+2 Reflex) & Precise Strike', source: 'Duelist 3.5e', description: 'Gain +2 competence bonus on all Reflex saving throws. Strike vital points with a light or one-handed piercing weapon for +1d6 precision damage.' },
+
+  { id: 'cf35-dd-1', className: 'Dragon Disciple', reqLevel: 1, name: 'Natural Armor Increase (+1)', source: 'Dragon Disciple 3.5e', description: 'As dragon scales develop, natural armor bonus increases by +1 at 1st level, +2 at 4th, +3 at 7th, and +4 at 10th level.' },
+  { id: 'cf35-dd-2', className: 'Dragon Disciple', reqLevel: 2, name: 'Ability Boost (Strength +2)', source: 'Dragon Disciple 3.5e', description: 'Gain a permanent +2 bonus to Strength as draconic muscle grafts to your physique (+4 at 4th lvl, +2 CON at 7th, +2 INT at 9th, +4 STR at 10th).' },
+  { id: 'cf35-dd-3', className: 'Dragon Disciple', reqLevel: 3, name: 'Draconic Breath Weapon', source: 'Dragon Disciple 3.5e', description: 'Gain a breath weapon (line or cone based on dragon ancestor) dealing 2d8 energy damage (Reflex half). Increases to 4d8 at 7th level and 6d8 at 10th level.' },
+  { id: 'cf35-dd-4', className: 'Dragon Disciple', reqLevel: 9, name: 'Dragon Wings', source: 'Dragon Disciple 3.5e', description: 'Sprout large dragon wings from back, granting fly speed equal to twice base land speed (good maneuverability).' },
+
+  { id: 'cf35-aa-1', className: 'Arcane Archer', reqLevel: 1, name: 'Enhance Arrow +1', source: 'Arcane Archer 3.5e', description: 'Every nonmagical arrow fired by an arcane archer gains a +1 enhancement bonus to attack and damage (+2 at 3rd, +3 at 5th, +4 at 7th, +5 at 9th).' },
+  { id: 'cf35-aa-2', className: 'Arcane Archer', reqLevel: 2, name: 'Imbue Arrow', source: 'Arcane Archer 3.5e', description: 'Place an area spell upon an arrow. When the arrow is fired, the spell’s area is centered on where the arrow impacts, even if the spell normally has a range of touch or personal.' },
+  { id: 'cf35-aa-3', className: 'Arcane Archer', reqLevel: 4, name: 'Seeker Arrow', source: 'Arcane Archer 3.5e', description: '1/day, launch an arrow that flies directly toward a target you have seen, curving around non-solid barriers and ignoring all cover and concealment.' },
+
+  { id: 'cf35-bg-1', className: 'Blackguard', reqLevel: 1, name: 'Smite Good & Aura of Evil', source: 'Blackguard 3.5e', description: 'Add Charisma bonus to attack roll and deal +1 damage per blackguard level against good foes. Radiates an overpowering aura of evil.' },
+  { id: 'cf35-bg-2', className: 'Blackguard', reqLevel: 2, name: 'Dark Blessing & Aura of Despair', source: 'Blackguard 3.5e', description: 'Add Charisma bonus to all saving throws. Radiate a malign aura: all enemies within 10 feet take a -2 penalty on all saving throws.' },
+  { id: 'cf35-bg-3', className: 'Blackguard', reqLevel: 3, name: 'Command Undead & Sneak Attack +1d6', source: 'Blackguard 3.5e', description: 'Rebuke and command undead as an evil cleric of blackguard level - 2. Gain sneak attack +1d6 (+2d6 at 6th, +3d6 at 9th).' },
+
+  { id: 'cf35-sd-1', className: 'Shadowdancer', reqLevel: 1, name: 'Hide in Plain Sight (Shadowdancer)', source: 'Shadowdancer 3.5e', description: 'A shadowdancer can use the Hide skill even while being observed, as long as she is within 10 feet of some sort of shadow.' },
+  { id: 'cf35-sd-2', className: 'Shadowdancer', reqLevel: 2, name: 'Evasion & Darkvision', source: 'Shadowdancer 3.5e', description: 'Take no damage on successful Reflex saves against half-damage effects. Gain darkvision 60 ft (or increase existing darkvision by 30 ft).' },
+  { id: 'cf35-sd-3', className: 'Shadowdancer', reqLevel: 3, name: 'Shadow Illusion & Summon Shadow', source: 'Shadowdancer 3.5e', description: 'Create visual illusions (silent image) 1/day from darkness. Summon an undead shadow as an obedient companion and scout.' },
+  { id: 'cf35-sd-4', className: 'Shadowdancer', reqLevel: 4, name: 'Shadow Jump (20 ft)', source: 'Shadowdancer 3.5e', description: 'Travel between shadows as if by dimension door up to 20 feet per day (increases to 40 ft at 6th, 80 ft at 8th, 160 ft at 10th).' },
+
+  { id: 'cf35-ek-1', className: 'Eldritch Knight', reqLevel: 1, name: 'Bonus Combat Feat (Eldritch Knight)', source: 'Eldritch Knight 3.5e', description: 'Gain a bonus fighter combat feat at 1st level (must meet all standard prerequisites).' },
+  { id: 'cf35-ek-2', className: 'Eldritch Knight', reqLevel: 1, name: 'Arcane Spellcasting Progression', source: 'Eldritch Knight 3.5e', description: 'At each level beyond 1st, gain new spells per day and an increase in caster level as if advancing in prior arcane spellcasting class.' },
+
+  { id: 'cf35-lm-1', className: 'Loremaster', reqLevel: 1, name: 'Secret Knowledge', source: 'Loremaster 3.5e', description: 'Learn a secret of ancient lore (Instant Mastery, Secret Health, Secrets of Inner Strength, Lore of True Stamina, or Secret Knowledge of Avoidance).' },
+  { id: 'cf35-lm-2', className: 'Loremaster', reqLevel: 2, name: 'Lore (Bardic Style)', source: 'Loremaster 3.5e', description: 'Make a lore check equal to 1d20 + Loremaster level + INT modifier to know details about magical items, legendary sites, and forgotten artifacts.' },
+
+  { id: 'cf35-mt-1', className: 'Mystic Theurge', reqLevel: 1, name: 'Combined Spellcasting Progression', source: 'Mystic Theurge 3.5e', description: 'At each level, gain new spells per day and caster level increases as if advancing in both prior arcane and divine spellcasting classes simultaneously.' },
+
+  { id: 'cf35-hw-1', className: 'Horizon Walker', reqLevel: 1, name: 'Terrain Mastery', source: 'Horizon Walker 3.5e', description: 'Master a terrain type (Aquatic, Desert, Forest, Hills, Marsh, Mountains, Plains, Underground) gaining native bonuses and immunity to exhaustion/fatigue.' },
+  { id: 'cf35-hw-2', className: 'Horizon Walker', reqLevel: 6, name: 'Planar Terrain Mastery', source: 'Horizon Walker 3.5e', description: 'Master planar realms (Fiery, Weightless, Shifting, Aligned) gaining energy resistances, dimension door 1d4 rounds, and planar adaptation.' },
+
+  { id: 'cf35-ddf-1', className: 'Dwarven Defender', reqLevel: 1, name: 'Defensive Stance', source: 'Dwarven Defender 3.5e', description: 'Adopt an immovable defensive posture: gain +2 Strength, +4 Constitution, +2 resistance bonus on all saves, and +4 dodge bonus to AC.' },
+  { id: 'cf35-ddf-2', className: 'Dwarven Defender', reqLevel: 2, name: 'Defensive Awareness & Trap Sense', source: 'Dwarven Defender 3.5e', description: 'Retain Dexterity bonus to AC even when flat-footed. Gain bonus on Reflex saves and AC against traps.' },
+
+  { id: 'cf35-am-1', className: 'Archmage', reqLevel: 1, name: 'High Sorcery', source: 'Archmage 3.5e', description: 'Select an ability of High Sorcery (Arcane Fire, Arcane Reach, Mastery of Counterspelling, Mastery of Elements, or Spell Power) by permanently sacrificing a spell slot.' }
 ];
 
 /**
- * Automatically syncs official class features for a character based on their class, level, and edition.
+ * Automatically syncs official class features for a character based on their class, level, edition, and subclass.
  * Strips previous auto-assigned class features while preserving user custom entries.
+ * Fully supports 5e subclasses and 3.5e/5e multiclassing / prestige classes additively!
  */
 export function syncClassFeaturesForCharacter(
   character: CharacterData,
   targetClassName?: string,
   targetLevelNum?: number,
-  edition: RuleEdition = '5e'
+  edition: RuleEdition = '5e',
+  targetSubclassName?: string
 ): CharacterData {
   const activeClass = targetClassName || character.characterClass || 'Fighter';
   const activeLevel = targetLevelNum !== undefined ? targetLevelNum : (character.level || 1);
   const activeEdition = edition || character.edition || '5e';
+  const activeSubclass = targetSubclassName !== undefined ? targetSubclassName : (character.subclass || '');
 
   const catalog = activeEdition === '3.5e' ? OFFICIAL_35E_CLASS_FEATURES : OFFICIAL_5E_CLASS_FEATURES;
 
-  // Find all matching features for the active class where reqLevel <= activeLevel
-  const matchingFeatures = catalog.filter(f => {
+  // Determine levels for primary and secondary class (multiclassing / prestige class)
+  const isMulticlassing = character.optionalRules?.useMulticlassing;
+  const secondaryClass = character.optionalRules?.secondaryClass || '';
+  const secondaryLevel = character.optionalRules?.secondaryLevel || 1;
+  const primaryLevel = isMulticlassing ? Math.max(1, activeLevel - secondaryLevel) : activeLevel;
+
+  // 1. Match primary class features
+  const primaryFeatures = catalog.filter(f => {
     const classMatch = f.className.toLowerCase() === activeClass.toLowerCase() ||
       activeClass.toLowerCase().includes(f.className.toLowerCase()) ||
       f.className.toLowerCase().includes(activeClass.toLowerCase());
-    return classMatch && f.reqLevel <= activeLevel;
+    return classMatch && f.reqLevel <= primaryLevel;
   });
+
+  // 2. Match subclass features (e.g. Eldritch Knight, Assassin, Draconic Bloodline, etc.)
+  const subclassFeatures = activeSubclass ? catalog.filter(f => {
+    const subLower = activeSubclass.toLowerCase();
+    const catClassLower = f.className.toLowerCase();
+    const subMatch = catClassLower === subLower ||
+      subLower.includes(catClassLower) ||
+      catClassLower.includes(subLower);
+    return subMatch && f.reqLevel <= primaryLevel;
+  }) : [];
+
+  // 3. Match secondary multiclass features (5e multiclass or 3.5e prestige class)
+  const secondaryFeatures = (isMulticlassing && secondaryClass) ? catalog.filter(f => {
+    const secLower = secondaryClass.toLowerCase();
+    const catClassLower = f.className.toLowerCase();
+    const secMatch = catClassLower === secLower ||
+      secLower.includes(catClassLower) ||
+      catClassLower.includes(secLower);
+    return secMatch && f.reqLevel <= secondaryLevel;
+  }) : [];
+
+  const allMatching = [...primaryFeatures, ...subclassFeatures, ...secondaryFeatures];
 
   // Preserve non-auto features (custom user features or features from other sources/races/forms)
   const nonAutoFeatures = (character.classFeatures || []).filter(f => {
@@ -541,7 +719,7 @@ export function syncClassFeaturesForCharacter(
   });
 
   // Convert catalog items into character ClassFeatures
-  const newClassFeatures: ClassFeature[] = matchingFeatures.map(f => ({
+  const newClassFeatures: ClassFeature[] = allMatching.map(f => ({
     id: f.id,
     name: f.name,
     source: `AutoClass: ${f.className} Lvl ${f.reqLevel}`,
@@ -551,7 +729,7 @@ export function syncClassFeaturesForCharacter(
     recharge: f.recharge,
   }));
 
-  // Merge unique features
+  // Merge unique features by name
   const mergedFeaturesMap = new Map<string, ClassFeature>();
   for (const feat of [...nonAutoFeatures, ...newClassFeatures]) {
     mergedFeaturesMap.set(feat.name.toLowerCase(), feat);
@@ -560,6 +738,7 @@ export function syncClassFeaturesForCharacter(
   return {
     ...character,
     characterClass: activeClass,
+    subclass: activeSubclass,
     level: activeLevel,
     classFeatures: Array.from(mergedFeaturesMap.values()),
   };
