@@ -14,6 +14,81 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.12',
+    date: 'Today',
+    title: 'Hybrid Heritage Synchronization, Custom Template Integration & Skills Engine Polish',
+    badge: 'Lineage & Skills Polish',
+    badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    highlights: [
+      {
+        category: '🧬 Dynamic Custom Half-Breed Templates in Character Creation',
+        detail: 'Homebrew races and templates created in the Compendium Forge (with halfbreed tags or raceType) are now dynamically made available during character creation and hybrid heritage selection, preserving full defense metadata, scaling attributes, and racial skill bonuses.'
+      },
+      {
+        category: '🔄 Cross-Entity Lineage & Compendium Forge Sync',
+        detail: 'Editing custom races or half-breed templates in the Forge immediately cascades updates to active characters whose race matches composite lineages (updating speed, damage reduction, and racial skill bonuses in real time without manual re-creation).'
+      },
+      {
+        category: '🎲 Non-Stacking Racial Skill Bonus & Situational Roll Engine',
+        detail: 'Complete calculation of racial skill bonuses according to official D&D 3.5e stacking rules (highest unconditional bonus applies), with separate situational bonus tracking and an interactive ConditionalSkillRollModal for rolling circumstance-based checks.'
+      },
+      {
+        category: '📐 Skills Panel Anti-Collision & Responsive Layout Polish',
+        detail: 'Refined the Sheet 1 Skills panel layout with compact situational badges (+2 Sit. with sparkle icon and tooltip), rigid shrink protection on numeric controls (ranks, ability modifiers, misc modifiers, and roll button), skill name truncation guards, and expanded responsive grid columns (lg:col-span-6 xl:col-span-5).'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.11',
+    date: 'Today',
+    title: 'Legal Licensing, SRD Provenance Architecture & Open Gaming Suite',
+    badge: 'Legal & IP Compliance',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '📜 Interactive Legal & Licensing Compliance Modal',
+        detail: 'Created the dedicated LegalLicensingModal with three streamlined tabs: Attribution & Disclaimers, SRD 5.1 under Creative Commons (CC-BY-4.0), and D&D 3.5e Open Game License v1.0a, complete with 1-click clipboard copy for official attribution text.'
+      },
+      {
+        category: '🏷️ Compendium License Provenance Badges',
+        detail: 'Tagged every compendium item card and detail view in Sheet 7 with explicit license provenance badges (CC-BY-4.0, OGL 1.0a, ORC, and Homebrew), ensuring clear visual distinction between Open Game Content and user-authored homebrew.'
+      },
+      {
+        category: '⚖️ User Guide Legal & Licensing Documentation Hub',
+        detail: 'Added a dedicated "Legal & Licenses" tab in Sheet 6 (User Guide) covering Creative Commons irrevocable permissions, OGL 1.0a Section 15 requirements, Product Identity boundaries, and nominative trademark fair use.'
+      },
+      {
+        category: '🌐 Global Quick-Access Integration',
+        detail: 'Integrated direct launch triggers across the Main Menu drawer footer, the Compendium top action bar, the User Guide header, and the item inspection cards.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.10',
+    date: 'Today',
+    title: 'Official D&D 3.5e Monster Bestiary Expansion & Tactical Defense Rulings',
+    badge: '3.5e SRD Bestiary',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🐉 25+ Official 3.5e Monster Entries',
+        detail: 'Expanded the compendium with classic 3.5e SRD monsters across all challenge tiers: Human Warrior Skeleton (CR 1/2), Orc Warrior (CR 1/2), Ghoul (CR 1), Bugbear Stalker (CR 2), Shadow (CR 3), Rust Monster (CR 3), Gelatinous Cube (CR 3), Gargoyle (CR 4), Displacer Beast (CR 4), Owlbear (CR 4), Basilisk (CR 5), Manticore (CR 5), Wraith (CR 5), Chimera (CR 7), Medusa (CR 7), Mind Flayer (CR 8), Aboleth (CR 7), Bone Devil (CR 9), Beholder (CR 13), Ice Devil / Gelugon (CR 13), Lich 11th-Level Wizard (CR 13), and the Balor Demon (CR 20).'
+      },
+      {
+        category: '🛡️ 3.5e Tactical Combat & Defenses Card',
+        detail: 'Enhanced the monster inspection modal in Sheet 7 (Compendium) with a specialized 3.5e combat readout detailing Touch AC, Flat-Footed AC, Base Attack Bonus (BAB), Damage Reduction with bypass types (e.g. DR 10/Magic, DR 10/Good, DR 15/Cold Iron and Good), Spell Resistance (SR), and calculated Fortitude, Reflex, and Will saving throws.'
+      },
+      {
+        category: '⚔️ Precise Attack Mechanics & Threat Ranges',
+        detail: 'Equipped each 3.5e monster with authentic weapon threat ranges, critical multipliers (e.g. Scimitar 18-20/x2, Greataxe x3, Vorpal Greatsword), multiattack routines, special venom mechanics, and iconic abilities like Beholder Eye Rays, Aboleth Mucus, Rust Monster antennae, and Medusa Petrifying Gaze.'
+      },
+      {
+        category: '⚡ Instant Campaign Roster Spawning',
+        detail: 'All newly added 3.5e monsters can be spawned directly into the active campaign roster or encounter tracker with a single click, fully mapped with portrait artwork and tokens.'
+      }
+    ]
+  },
+  {
     version: 'v0.9.9',
     date: 'Today',
     title: 'Workspace Streamlining, Redundancy Elimination & Context-Aware Vitals',

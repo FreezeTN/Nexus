@@ -15,7 +15,6 @@ import {
   Upload, 
   Heart, 
   Shield, 
-  Sparkles, 
   Flame, 
   RefreshCw,
   HelpCircle,
@@ -35,8 +34,14 @@ import {
   Zap,
   RadioTower,
   ShoppingBag,
-  Dog
+  Dog,
+  Scale,
+  ShieldCheck,
+  FileText,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
+import { LegalLicensingModal } from '../modals/LegalLicensingModal';
 
 interface Sheet6UserGuideProps {
   edition?: RuleEdition;
@@ -49,10 +54,11 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSection, setActiveSection] = useState<string>('all');
-  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'manual' | 'audio' | 'changelog'>(edition);
+  const [guideEdition, setGuideEdition] = useState<RuleEdition | 'manual' | 'audio' | 'changelog' | 'legal'>(edition);
+  const [showLegalModal, setShowLegalModal] = useState(false);
 
   useEffect(() => {
-    if (guideEdition === 'manual' || guideEdition === 'audio' || guideEdition === 'changelog') return;
+    if (guideEdition === 'manual' || guideEdition === 'audio' || guideEdition === 'changelog' || guideEdition === 'legal') return;
     if (enabledSystems && enabledSystems.length > 0) {
       if (!enabledSystems.includes(guideEdition as RuleEdition)) {
         setGuideEdition(enabledSystems[0]);
@@ -1179,6 +1185,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
                 ? 'Comprehensive guide to the built-in procedural Web Audio synthesizer, master volume slider, volume presets, sound effect triggers, and sound preferences.'
                 : guideEdition === 'changelog'
                 ? 'Complete version history log of features, enhancements, bug fixes, system expansions, and UI updates.'
+                : guideEdition === 'legal'
+                ? 'Legal & Licensing Compliance: Creative Commons (CC-BY-4.0), Open Game License (OGL 1.0a), and non-affiliation trademark disclaimers.'
                 : guideEdition === '3.5e'
                 ? 'Complete manual for D&D 3.5e mechanics: Base Attack Bonus (BAB), Touch AC, Flat-Footed AC, Fort/Ref/Will Base Saves, 3.5e Skill Point Calculator, and Class Skill checkboxes.'
                 : 'Complete manual for D&D 5e mechanics: Proficiency bonus, 18 skills, Advantage/Disadvantage, death saves, spell slots, and character management.'}
@@ -1234,6 +1242,17 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
               <History className="w-3.5 h-3.5 text-amber-400" />
               <span>Changelog</span>
             </button>
+            <button
+              onClick={() => setGuideEdition('legal')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shrink-0 whitespace-nowrap ${
+                guideEdition === 'legal'
+                  ? 'bg-amber-500 text-stone-950 shadow-md ring-1 ring-amber-300 font-extrabold'
+                  : 'text-stone-300 hover:text-amber-300 hover:bg-stone-900'
+              }`}
+            >
+              <Scale className="w-3.5 h-3.5 text-amber-400" />
+              <span>Legal & Licenses</span>
+            </button>
             <div className="w-8 shrink-0 h-1" />
           </div>
         </div>
@@ -1250,6 +1269,8 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
                 placeholder={
                   guideEdition === 'changelog'
                     ? 'Search release notes (e.g. v0.9.0, DM, audio)...'
+                    : guideEdition === 'legal'
+                    ? 'Search legal & license clauses (e.g. CC-BY, OGL, copyright)...'
                     : `Search ${guideEdition} functions (e.g. roll, volume, skill, hp)...`
                 }
                 className="w-full bg-stone-950/90 border border-stone-800 rounded-xl pl-9 pr-4 py-2 text-xs text-stone-100 placeholder-stone-500 focus:outline-none focus:border-amber-500"
@@ -1265,7 +1286,7 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
             )}
           </div>
 
-          {guideEdition !== 'changelog' && (
+          {guideEdition !== 'changelog' && guideEdition !== 'legal' && (
             <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1">
               <button
                 onClick={() => setActiveSection('all')}
@@ -1365,6 +1386,110 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
             </div>
           )}
         </div>
+      ) : guideEdition === 'legal' ? (
+        <div className="space-y-6">
+          {/* Top Banner */}
+          <div className="bg-gradient-to-br from-stone-900 via-stone-950 to-stone-900 border border-amber-600/40 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+              <div className="space-y-2 max-w-2xl">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 uppercase">
+                    Licensing & Intellectual Property
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                    CC-BY-4.0 & OGL 1.0a Compliant
+                  </span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-serif font-black text-amber-200">
+                  Open Gaming Compliance & Legal Disclaimers
+                </h3>
+                <p className="text-stone-300 text-xs sm:text-sm leading-relaxed">
+                  Nexus TRPG is designed from the ground up to respect official tabletop licenses and intellectual property laws. We utilize officially published System Reference Documents (SRD) under open licenses alongside transparent non-affiliation disclaimers.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowLegalModal(true)}
+                  className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 text-xs cursor-pointer font-serif"
+                >
+                  <Scale className="w-4 h-4" />
+                  <span>Open Full Legal Modal</span>
+                </button>
+                <div className="text-[11px] font-mono text-stone-400 text-center">
+                  Includes 1-click copyable attribution clauses
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3 Core Pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* Pillar 1: SRD 5.1 CC-BY-4.0 */}
+            <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-blue-950/80 border border-blue-600/40 rounded-2xl text-blue-400">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-serif font-bold text-base text-stone-100">D&D 5e / SRD 5.1</h4>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-blue-950 text-blue-300 border border-blue-700/50 font-bold">
+                      CC-BY-4.0
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-400">Creative Commons Attribution 4.0 International</p>
+                </div>
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed">
+                In January 2023, Wizards of the Coast LLC released the entire 5e System Reference Document 5.1 (“SRD 5.1”) under Creative Commons Attribution 4.0 International (CC-BY-4.0).
+              </p>
+            </div>
+
+            {/* Pillar 2: OGL 1.0a for 3.5e */}
+            <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-amber-950/80 border border-amber-600/40 rounded-2xl text-amber-400">
+                  <FileText className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-serif font-bold text-base text-stone-100">D&D 3.5e / SRD 3.5</h4>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-950 text-amber-300 border border-amber-700/50 font-bold">
+                      OGL 1.0a
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-400">Open Gaming License Version 1.0a</p>
+                </div>
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed">
+                D&D 3.5e rules and monsters (BAB, Touch AC, Flat-Footed AC, Saving Throws, Skills, SRD 3.5 Spells & Bestiary) are published under the Open Game License v1.0a.
+              </p>
+            </div>
+
+            {/* Pillar 3: Trademarks & Non-Affiliation */}
+            <div className="bg-stone-900/90 border border-stone-800 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-rose-950/80 border border-rose-600/40 rounded-2xl text-rose-400">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h4 className="font-serif font-bold text-base text-stone-100">Trademark Disclaimers</h4>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-950 text-rose-300 border border-rose-700/50 font-bold">
+                      Fair Use
+                    </span>
+                  </div>
+                  <p className="text-xs text-stone-400">Nominative Fair Use & Non-Affiliation</p>
+                </div>
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed">
+                "Dungeons & Dragons", "D&D", and "Wizards of the Coast" are trademarks of Wizards of the Coast LLC. "Pathfinder" is a trademark of Paizo Inc. "Call of Cthulhu" is a trademark of Chaosium Inc. "Shadowrun" is a trademark of The Topps Company / Catalyst Game Labs.
+              </p>
+            </div>
+          </div>
+        </div>
       ) : (
         <div className="space-y-6">
           {filteredSections.map((section) => {
@@ -1429,32 +1554,11 @@ export const Sheet6UserGuide: React.FC<Sheet6UserGuideProps> = ({
         </div>
       )}
 
-      {/* Quick FAQ / Tips Box */}
-      <div className="bg-stone-900/70 border border-amber-900/40 rounded-2xl p-6 shadow-xl space-y-4">
-        <h4 className="text-base font-serif font-bold text-amber-300 flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-amber-400" /> Pro Tips for {guideEdition === 'changelog' ? 'TRPG Players' : guideEdition}
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-          <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
-            <div className="font-bold text-amber-200">💾 Automatic Local Persistence</div>
-            <p className="text-stone-400 text-[11px]">
-              Every edit, roll history, custom attack, portrait link, audio preference, and spell adjustment is automatically saved to your browser.
-            </p>
-          </div>
-          <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
-            <div className="font-bold text-amber-200">🎲 Interactive Roll Triggers</div>
-            <p className="text-stone-400 text-[11px]">
-              Click any d20 icon across Stats, Skills, Attacks, and Spells to trigger instant interactive rolls logged to your dice tray with audio feedback.
-            </p>
-          </div>
-          <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-1">
-            <div className="font-bold text-amber-200">👑 Concurrent DM & Player Access</div>
-            <p className="text-stone-400 text-[11px]">
-              Dungeon Masters and Players can view and edit character sheets concurrently without locking each other out.
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* LEGAL & LICENSING COMPLIANCE MODAL */}
+      <LegalLicensingModal
+        isOpen={showLegalModal}
+        onClose={() => setShowLegalModal(false)}
+      />
     </div>
   );
 };

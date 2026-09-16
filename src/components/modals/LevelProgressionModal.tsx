@@ -12,6 +12,7 @@ import { getAbilityModifier, formatModifier, getProficiencyBonus, getCombinedLev
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import { playLevelUpSound } from '../../utils/diceAudio';
 import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
+import { recalculateScalingRaceStats } from '../../utils/raceApplication';
 import { useLanguage } from '../../i18n/LanguageContext';
 import {
   TrendingUp,
@@ -263,7 +264,8 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
       };
 
       const syncedChar = syncClassFeaturesForCharacter(updatedChar, activeClassName, targetLevel, character.edition);
-      onUpdateCharacter(syncedChar);
+      const withRaceScaling = recalculateScalingRaceStats(syncedChar);
+      onUpdateCharacter(withRaceScaling);
       alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
     } else {
       const currentPriXp = getPrimaryXp(character);
@@ -291,7 +293,8 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
       };
 
       const syncedChar = syncClassFeaturesForCharacter(updatedChar, character.characterClass, targetLevel, character.edition);
-      onUpdateCharacter(syncedChar);
+      const withRaceScaling = recalculateScalingRaceStats(syncedChar);
+      onUpdateCharacter(withRaceScaling);
       alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
     }
     onClose();

@@ -105,6 +105,13 @@ export const AbilityScoresPanel: React.FC<AbilityScoresPanelProps> = ({
                   <div className={`text-3xl font-serif font-extrabold ${isModified ? 'text-purple-200' : 'text-amber-100'}`}>
                     {score}
                   </div>
+                  {character.appliedRacialAbilityBonuses?.[ability] ? (
+                    <span className="text-[10px] text-amber-400 font-mono block -mt-0.5">
+                      {character.appliedRacialAbilityBonuses[ability] > 0
+                        ? `+${character.appliedRacialAbilityBonuses[ability]}`
+                        : character.appliedRacialAbilityBonuses[ability]} race
+                    </span>
+                  ) : null}
                   {isModified && (
                     <span className="text-[10px] text-stone-400 font-mono block -mt-0.5 line-through">
                       Base: {baseScore}
@@ -174,6 +181,18 @@ export const AbilityScoresPanel: React.FC<AbilityScoresPanelProps> = ({
                     <span className="text-stone-400">Base Score:</span>
                     <span>{details.baseScore}</span>
                   </div>
+
+                  {character.appliedRacialAbilityBonuses?.[ability] ? (
+                    <div className="flex justify-between text-amber-300">
+                      <span className="text-stone-400">Racial Bonus:</span>
+                      <span>
+                        {character.appliedRacialAbilityBonuses[ability] > 0
+                          ? `+${character.appliedRacialAbilityBonuses[ability]}`
+                          : character.appliedRacialAbilityBonuses[ability]}{' '}
+                        ({character.race || 'Race'})
+                      </span>
+                    </div>
+                  ) : null}
 
                   {details.isOverridden && (
                     <div className="bg-purple-950/60 border border-purple-700/50 p-1.5 rounded text-[10px] text-purple-200">

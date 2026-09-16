@@ -1,5 +1,5 @@
 import { CharacterData } from '../types';
-import { DEFAULT_SKILLS_LIST } from '../utils/dndCalculations';
+import { DEFAULT_SKILLS_LIST } from './defaultSkillLists';
 import { OFFICIAL_BULK_MONSTERS } from './srdRulesLibrary';
 
 export const SAMPLE_CHARACTERS: CharacterData[] = [

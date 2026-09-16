@@ -31,6 +31,11 @@ import {
   SUBCLASS_MAP_BY_SYSTEM,
   getRacesForSystem,
   getClassesForSystem,
+  getRaceDetailsForSystem,
+  getClassDetailsForSystem,
+  getAvailable35eHalfBreedTemplates,
+  getAvailable35eBaseCreatures,
+  getAvailableParentRaces,
   getSubclassesForSystemClass,
   ALIGNMENT_OPTIONS,
   ALIGNMENT_OPTIONS_BY_SYSTEM,
@@ -43,6 +48,8 @@ import {
   BACKGROUND_OPTIONS
 } from './newCharacter/newCharacterData';
 import { systemRegistry } from '../../systems';
+import { HomebrewForgeModal } from '../compendium/HomebrewForgeModal';
+import { CompendiumItem } from '../../data/compendiumData';
 
 interface NewCharacterModalProps {
   onClose: () => void;
@@ -168,6 +175,34 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   const [selectedTemplate35eId, setSelectedTemplate35eId] = useState<string>('half-dragon');
   const [templateDragonVariety35e, setTemplateDragonVariety35e] = useState<string>('Red');
 
+  // Custom Compendium reactivity & Forge modal state
+  const [compendiumVersion, setCompendiumVersion] = useState(0);
+  const [showForgeModal, setShowForgeModal] = useState(false);
+  const [forgeModalTab, setForgeModalTab] = useState<'races' | 'classes'>('races');
+
+  useEffect(() => {
+    const handleCompendiumUpdate = () => {
+      setCompendiumVersion(v => v + 1);
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'dnd_app_custom_compendium_v1') {
+        setCompendiumVersion(v => v + 1);
+      }
+    };
+    window.addEventListener('compendiumUpdated' as any, handleCompendiumUpdate);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('compendiumUpdated' as any, handleCompendiumUpdate);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  const raceDetails = useMemo(() => getRaceDetailsForSystem(edition), [edition, compendiumVersion]);
+  const classDetails = useMemo(() => getClassDetailsForSystem(edition), [edition, compendiumVersion]);
+  const availableTemplates35e = useMemo(() => getAvailable35eHalfBreedTemplates(edition), [edition, compendiumVersion]);
+  const availableBases35e = useMemo(() => getAvailable35eBaseCreatures(edition), [edition, compendiumVersion]);
+  const availableParentRaces = useMemo(() => getAvailableParentRaces(edition), [edition, compendiumVersion]);
+
   // Portrait URL & HP Calculation Mode
   const [portraitUrl, setPortraitUrl] = useState('');
   const [hpCalcMode, setHpCalcMode] = useState<'Average' | 'Rolled' | 'Max'>('Average');
@@ -230,6 +265,28 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     if (availableSubclasses.length > 0) {
       setSubclass(availableSubclasses[0]);
     }
+  };
+
+  const handleForgeSaved = (item: CompendiumItem) => {
+    setCompendiumVersion(v => v + 1);
+    const cat = String(item.category || '').toLowerCase();
+    if (cat === 'races' || cat === 'race') {
+      const isTemplate = Boolean(item.raceData?.isHalfBreedTemplate || (item as any).isHalfBreedTemplate || (item as any).raceType === 'half_breed_template');
+      if (edition === '3.5e' && isTemplate) {
+        setUseHalfBreedTemplate35e(true);
+        setSelectedTemplate35eId(item.id);
+        setUseHalfBreedSystem(false);
+        setUseClassicSRDHalfBreed(false);
+      } else {
+        setRace(item.name);
+        setUseHalfBreedSystem(false);
+        setUseClassicSRDHalfBreed(false);
+        setUseHalfBreedTemplate35e(false);
+      }
+    } else if (cat === 'classes' || cat === 'class') {
+      handleClassChange(item.name);
+    }
+    setShowForgeModal(false);
   };
 
   // 4d6 Drop Lowest Random Stat generator
@@ -437,8 +494,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     }
 
     if (useHalfBreedSystem) {
-      const pData = PARENT_RACE_CATALOG.find(p => p.name === primaryParent) || PARENT_RACE_CATALOG[0];
-      const sData = PARENT_RACE_CATALOG.find(s => s.name === secondaryParent) || PARENT_RACE_CATALOG[1];
+      const pData = availableParentRaces.find(p => p.name === primaryParent) || availableParentRaces[0] || PARENT_RACE_CATALOG[0];
+      const sData = availableParentRaces.find(s => s.name === secondaryParent) || availableParentRaces[1] || PARENT_RACE_CATALOG[1];
       const hybridName = getHybridName(primaryParent, secondaryParent, customHybridName);
       return {
         id: `hybrid-${primaryParent}-${secondaryParent}`,
@@ -471,8 +528,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     }
 
     if (useHalfBreedTemplate35e && edition === '3.5e') {
-      const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
-      const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+      const bCreature = availableBases35e.find(b => b.id === selectedBase35eId) || availableBases35e[0] || BASE_CREATURES_35E[0];
+      const tTemplate = availableTemplates35e.find(t => t.id === selectedTemplate35eId) || availableTemplates35e[0] || HALF_BREED_TEMPLATES_35E[0];
       const resolvedT = resolve35eHalfBreedTemplate(bCreature, tTemplate, level, true, templateDragonVariety35e);
       return {
         id: `template-${bCreature.id}-${tTemplate.id}`,
@@ -499,7 +556,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     }
 
     return findRaceInCompendiumOrSRD(race, edition);
-  }, [useHalfBreedSystem, primaryParent, secondaryParent, customHybridName, useClassicSRDHalfBreed, selectedClassicSRDId, dragonVariety, useHalfBreedTemplate35e, selectedBase35eId, selectedTemplate35eId, templateDragonVariety35e, race, edition]);
+  }, [useHalfBreedSystem, primaryParent, secondaryParent, customHybridName, useClassicSRDHalfBreed, selectedClassicSRDId, dragonVariety, useHalfBreedTemplate35e, selectedBase35eId, selectedTemplate35eId, templateDragonVariety35e, race, edition, availableBases35e, availableTemplates35e, availableParentRaces]);
 
   // Calculate live racial stats (bonuses, DR, natural armor, energy resistances, immunities)
   const calculatedRaceStats = useMemo(() => {
@@ -540,8 +597,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
     const isCaster = ['Wizard', 'Sorcerer', 'Cleric', 'Druid', 'Bard', 'Warlock', 'Paladin', 'Ranger', 'Shaman', 'Mage', 'Occultist'].includes(characterClass);
 
-    const primaryData = PARENT_RACE_CATALOG.find(p => p.name === primaryParent) || PARENT_RACE_CATALOG[0];
-    const secondaryData = PARENT_RACE_CATALOG.find(s => s.name === secondaryParent) || PARENT_RACE_CATALOG[1];
+    const primaryData = availableParentRaces.find(p => p.name === primaryParent) || availableParentRaces[0] || PARENT_RACE_CATALOG[0];
+    const secondaryData = availableParentRaces.find(s => s.name === secondaryParent) || availableParentRaces[1] || PARENT_RACE_CATALOG[1];
 
     const availableSRDHalfBreeds = getClassicSRDHalfBreedsForEdition(edition);
     const selectedSRD = availableSRDHalfBreeds.find(hb => hb.id === selectedClassicSRDId) || availableSRDHalfBreeds[0];
@@ -572,8 +629,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         hybridFeature = buildClassicSRDFeature(selectedSRD, dragonVariety);
         charSpeed = selectedSRD.speed;
       } else if (useHalfBreedTemplate35e && edition === '3.5e') {
-        const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
-        const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+        const bCreature = availableBases35e.find(b => b.id === selectedBase35eId) || availableBases35e[0] || BASE_CREATURES_35E[0];
+        const tTemplate = availableTemplates35e.find(t => t.id === selectedTemplate35eId) || availableTemplates35e[0] || HALF_BREED_TEMPLATES_35E[0];
         const resolvedT = resolve35eHalfBreedTemplate(bCreature, tTemplate, level, true, templateDragonVariety35e);
         finalRaceName = resolvedT.compositeName;
         charSpeed = resolvedT.speed;
@@ -664,14 +721,14 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         baseRaceId: selectedBase35eId,
         templateId: selectedTemplate35eId,
         dragonVariety: selectedTemplate35eId.includes('dragon') ? templateDragonVariety35e : undefined,
-        primaryParent: (BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0]).name,
-        secondaryParent: (HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0]).name,
+        primaryParent: (availableBases35e.find(b => b.id === selectedBase35eId) || availableBases35e[0] || BASE_CREATURES_35E[0]).name,
+        secondaryParent: (availableTemplates35e.find(t => t.id === selectedTemplate35eId) || availableTemplates35e[0] || HALF_BREED_TEMPLATES_35E[0]).name,
         customHybridName: finalRaceName,
         speedFeet: charSpeed,
-        sizeCategory: (BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0]).size,
+        sizeCategory: (availableBases35e.find(b => b.id === selectedBase35eId) || availableBases35e[0] || BASE_CREATURES_35E[0]).size,
         hasDarkvision: (() => {
-          const b = BASE_CREATURES_35E.find(bc => bc.id === selectedBase35eId) || BASE_CREATURES_35E[0];
-          const t = HALF_BREED_TEMPLATES_35E.find(tpl => tpl.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+          const b = availableBases35e.find(bc => bc.id === selectedBase35eId) || availableBases35e[0] || BASE_CREATURES_35E[0];
+          const t = availableTemplates35e.find(tpl => tpl.id === selectedTemplate35eId) || availableTemplates35e[0] || HALF_BREED_TEMPLATES_35E[0];
           return resolve35eHalfBreedTemplate(b, t, level, true, templateDragonVariety35e).darkvisionFeet > 0;
         })()
       } : undefined,
@@ -852,8 +909,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
     // Apply resolved race traits, defenses, damage reductions, resistances, immunities, and ability bonuses
     let finalChar: CharacterData;
     if (edition === '3.5e' && useHalfBreedTemplate35e) {
-      const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
-      const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+      const bCreature = availableBases35e.find(b => b.id === selectedBase35eId) || availableBases35e[0] || BASE_CREATURES_35E[0];
+      const tTemplate = availableTemplates35e.find(t => t.id === selectedTemplate35eId) || availableTemplates35e[0] || HALF_BREED_TEMPLATES_35E[0];
       finalChar = applyHalfBreedTemplate35eToCharacter(syncedChar, bCreature, tTemplate, {
         dragonVariety: templateDragonVariety35e,
         applyAbilities: applyRacialBonuses
@@ -997,9 +1054,23 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
             <div className="space-y-2">
               <div className="flex flex-wrap items-center justify-between gap-1.5">
-                <label className="block text-stone-400 text-xs font-bold">
-                  {edition === 'shadowrun' ? 'Metatype (Race)' : edition === 'pathfinder' ? 'Ancestry (Race)' : edition === 'cthulhu' ? 'Origin / Heritage' : 'Race'}
-                </label>
+                <div className="flex items-center gap-2">
+                  <label className="block text-stone-400 text-xs font-bold">
+                    {edition === 'shadowrun' ? 'Metatype (Race)' : edition === 'pathfinder' ? 'Ancestry (Race)' : edition === 'cthulhu' ? 'Origin / Heritage' : 'Race'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgeModalTab('races');
+                      setShowForgeModal(true);
+                    }}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 font-mono flex items-center gap-1 transition cursor-pointer bg-stone-900 border border-stone-700 hover:border-amber-500/60 px-1.5 py-0.5 rounded"
+                    title="Open Homebrew Race Studio to craft a standalone race or Half-Breed Template"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>+ Forge Race / Half-Breed</span>
+                  </button>
+                </div>
                 {(edition === '5e' || edition === '3.5e') && (
                   <div className="flex items-center gap-2 flex-wrap">
                     <label className="flex items-center gap-1.5 cursor-pointer text-amber-400 hover:text-amber-300 font-mono text-[10px] font-bold bg-amber-950/60 border border-amber-600/40 px-2 py-0.5 rounded-md transition">
@@ -1069,9 +1140,29 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                   onChange={(e) => setRace(e.target.value)}
                   className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
                 >
-                  {getRacesForSystem(edition).map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
+                  {raceDetails.customRaces.length > 0 && (
+                    <optgroup label="✨ Custom Homebrew Races & Half-Breeds">
+                      {raceDetails.customRaces.map(r => (
+                        <option key={r.name} value={r.name}>
+                          ✨ {r.name} {r.isTemplate ? '(Half-Breed Template)' : r.isHalfBreed ? '(Half-Breed)' : '(Homebrew)'}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {raceDetails.otherCustomRaces.length > 0 && (
+                    <optgroup label="🌟 Homebrew Races from Other Systems">
+                      {raceDetails.otherCustomRaces.map(r => (
+                        <option key={r.name} value={r.name}>
+                          🌟 {r.name} ({r.edition || 'Universal'})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Core Races (SRD)">
+                    {raceDetails.coreRaces.map(r => (
+                      <option key={r} value={r}>{r}</option>
+                    ))}
+                  </optgroup>
                 </select>
               ) : null}
 
@@ -1096,7 +1187,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                         onChange={(e) => setPrimaryParent(e.target.value)}
                         className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-medium focus:outline-none focus:border-amber-500"
                       >
-                        {PARENT_RACE_CATALOG.map(pr => (
+                        {availableParentRaces.map(pr => (
                           <option key={pr.id} value={pr.name}>{pr.name} ({pr.size}, {pr.speed}ft)</option>
                         ))}
                       </select>
@@ -1109,7 +1200,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                         onChange={(e) => setSecondaryParent(e.target.value)}
                         className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-medium focus:outline-none focus:border-amber-500"
                       >
-                        {PARENT_RACE_CATALOG.map(pr => (
+                        {availableParentRaces.map(pr => (
                           <option key={pr.id} value={pr.name}>{pr.name} ({pr.size}, {pr.speed}ft)</option>
                         ))}
                       </select>
@@ -1269,7 +1360,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                         onChange={(e) => setSelectedBase35eId(e.target.value)}
                         className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-bold focus:outline-none focus:border-amber-500 text-xs"
                       >
-                        {BASE_CREATURES_35E.map(b => (
+                        {availableBases35e.map(b => (
                           <option key={b.id} value={b.id}>
                             {b.name} ({b.size}, {b.speed}ft)
                           </option>
@@ -1284,7 +1375,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                         onChange={(e) => setSelectedTemplate35eId(e.target.value)}
                         className="w-full bg-stone-950 border border-stone-700 rounded p-1.5 text-stone-100 font-bold focus:outline-none focus:border-amber-500 text-xs"
                       >
-                        {HALF_BREED_TEMPLATES_35E.map(t => (
+                        {availableTemplates35e.map(t => (
                           <option key={t.id} value={t.id}>
                             {t.name} (LA +{t.levelAdjustment})
                           </option>
@@ -1314,8 +1405,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
                   {/* Inspector card showing resolved traits and stacking */}
                   {(() => {
-                    const bCreature = BASE_CREATURES_35E.find(b => b.id === selectedBase35eId) || BASE_CREATURES_35E[0];
-                    const tTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplate35eId) || HALF_BREED_TEMPLATES_35E[0];
+                    const bCreature = availableBases35e.find(b => b.id === selectedBase35eId) || availableBases35e[0] || BASE_CREATURES_35E[0];
+                    const tTemplate = availableTemplates35e.find(t => t.id === selectedTemplate35eId) || availableTemplates35e[0] || HALF_BREED_TEMPLATES_35E[0];
                     const resolved = resolve35eHalfBreedTemplate(bCreature, tTemplate, level, true, templateDragonVariety35e);
 
                     const abilityKeys: (keyof typeof resolved.abilities)[] = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
@@ -1439,17 +1530,51 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
           {!isMonster ? (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-stone-400 mb-1">
-                  {edition === 'shadowrun' ? 'Archetype / Role' : edition === 'cthulhu' ? 'Occupation' : 'Class'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-stone-400 text-xs font-bold">
+                    {edition === 'shadowrun' ? 'Archetype / Role' : edition === 'cthulhu' ? 'Occupation' : 'Class'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgeModalTab('classes');
+                      setShowForgeModal(true);
+                    }}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 font-mono flex items-center gap-1 transition cursor-pointer bg-stone-900 border border-stone-700 hover:border-amber-500/60 px-1.5 py-0.5 rounded"
+                    title="Open Homebrew Class Forge to build or import a custom class"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    <span>+ Forge Class</span>
+                  </button>
+                </div>
                 <select
                   value={characterClass}
                   onChange={(e) => handleClassChange(e.target.value)}
                   className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
                 >
-                  {getClassesForSystem(edition).map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {classDetails.customClasses.length > 0 && (
+                    <optgroup label="✨ Custom Homebrew Classes">
+                      {classDetails.customClasses.map(c => (
+                        <option key={c.name} value={c.name}>
+                          ✨ {c.name} (Custom Class)
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {classDetails.otherCustomClasses.length > 0 && (
+                    <optgroup label="🌟 Homebrew Classes from Other Systems">
+                      {classDetails.otherCustomClasses.map(c => (
+                        <option key={c.name} value={c.name}>
+                          🌟 {c.name} ({c.edition || 'Universal'})
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Core Classes">
+                    {classDetails.coreClasses.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </div>
 
@@ -2440,6 +2565,15 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
           </div>
         </form>
       </div>
+
+      {showForgeModal && (
+        <HomebrewForgeModal
+          initialSystem={edition}
+          initialTab={forgeModalTab}
+          onClose={() => setShowForgeModal(false)}
+          onSaved={handleForgeSaved}
+        />
+      )}
     </div>
   );
 };

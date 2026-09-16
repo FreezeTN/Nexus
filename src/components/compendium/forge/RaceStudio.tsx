@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { CompendiumItem } from '../../../data/compendiumData';
 import { SupportedEdition } from './ForgeTypes';
+import { RacialSkillBonus } from '../../../types';
+import { RaceClassificationSelector } from './RaceClassificationSelector';
+import { RaceRacialSkillBonusesBuilder } from './RaceRacialSkillBonusesBuilder';
 import { Users, Sparkles, Plus, Trash2, Shield, Eye, Globe, Zap, Sword, Flame, Wand2, BookmarkCheck, Check, Snowflake, Droplets, Volume2, Copy, GitFork, Dna, Layers } from 'lucide-react';
 import {
   CLASSIC_SRD_HALF_BREEDS,
@@ -117,7 +120,32 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
   const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [isDraftSaved, setIsDraftSaved] = useState(false);
 
-  // Core Biology
+  // Core Biology & Classification
+  const [raceType, setRaceType] = useState<'standalone' | 'halfbreed'>(() => {
+    if (rd?.isHalfBreedTemplate || rd?.raceType === 'halfbreed') return 'halfbreed';
+    return 'standalone';
+  });
+  const [templateCategory, setTemplateCategory] = useState<'Inherited Cross-Breed' | 'Acquired Template' | 'Hybrid Lineage' | 'Monstrous Heritage'>(
+    rd?.templateCategory || 'Inherited Cross-Breed'
+  );
+  const [compatibleBaseRaces, setCompatibleBaseRaces] = useState<string>(
+    rd?.compatibleBaseRaces || 'Any humanoid or monstrous humanoid'
+  );
+  const [templateLevelAdjustment, setTemplateLevelAdjustment] = useState<number>(
+    rd?.levelAdjustment ?? (is35e ? 2 : 0)
+  );
+  const [inheritedTraitsSummary, setInheritedTraitsSummary] = useState<string>(
+    rd?.inheritedTraitsSummary || 'Retains all statistics and special abilities of the base creature, except as noted.'
+  );
+
+  // Structured Racial Skill Bonuses
+  const [racialSkillBonuses, setRacialSkillBonuses] = useState<RacialSkillBonus[]>(() => {
+    if (rd?.racialSkillBonuses && Array.isArray(rd.racialSkillBonuses)) {
+      return rd.racialSkillBonuses;
+    }
+    return [];
+  });
+
   const [name, setName] = useState(editingItem?.name || '');
   const [description, setDescription] = useState(editingItem?.description || '');
   const [creatureType, setCreatureType] = useState(rd?.creatureType || 'Humanoid');
@@ -459,6 +487,12 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
         if (d.languages) setLanguages(d.languages);
         if (d.ageAndLifespan) setAgeAndLifespan(d.ageAndLifespan);
         if (d.alignmentTendencies) setAlignmentTendencies(d.alignmentTendencies);
+        if (d.raceType) setRaceType(d.raceType);
+        if (d.templateCategory) setTemplateCategory(d.templateCategory);
+        if (d.compatibleBaseRaces) setCompatibleBaseRaces(d.compatibleBaseRaces);
+        if (d.templateLevelAdjustment !== undefined) setTemplateLevelAdjustment(d.templateLevelAdjustment);
+        if (d.inheritedTraitsSummary) setInheritedTraitsSummary(d.inheritedTraitsSummary);
+        if (Array.isArray(d.racialSkillBonuses)) setRacialSkillBonuses(d.racialSkillBonuses);
         setHasRestoredDraft(true);
       }
     } catch {
@@ -516,7 +550,13 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
           subraces,
           languages,
           ageAndLifespan,
-          alignmentTendencies
+          alignmentTendencies,
+          raceType,
+          templateCategory,
+          compatibleBaseRaces,
+          templateLevelAdjustment,
+          inheritedTraitsSummary,
+          racialSkillBonuses
         };
         localStorage.setItem(draftKey, JSON.stringify(draftState));
         setIsDraftSaved(true);
@@ -535,6 +575,7 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
     naturalWeapons, skillAffinitiesStr, spellLikeAbilities,
     damageResistances5e, damageImmunities5e, conditionImmunities5e, naturalArmorFormula5e,
     scalingRacialDice5e, innateSpells5e, traits, subraces, languages, ageAndLifespan, alignmentTendencies,
+    raceType, templateCategory, compatibleBaseRaces, templateLevelAdjustment, inheritedTraitsSummary, racialSkillBonuses,
     editingItem, draftKey
   ]);
 
@@ -1153,6 +1194,22 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
       }
     }
 
+    // Attach Classification (Stand-Alone Race vs Half-Breed Template)
+    raceDataPayload.raceType = raceType;
+    raceDataPayload.isHalfBreedTemplate = raceType === 'halfbreed';
+    raceDataPayload.isHalfBreed = raceType === 'halfbreed';
+    if (raceType === 'halfbreed') {
+      raceDataPayload.templateCategory = templateCategory;
+      raceDataPayload.compatibleBaseRaces = compatibleBaseRaces;
+      raceDataPayload.levelAdjustment = templateLevelAdjustment;
+      raceDataPayload.inheritedTraitsSummary = inheritedTraitsSummary;
+    }
+
+    // Attach Racial Skill Bonuses
+    if (racialSkillBonuses.length > 0) {
+      raceDataPayload.racialSkillBonuses = racialSkillBonuses;
+    }
+
     // Attach 5e specific properties
     if (is5e) {
       if (damageResistances5e.length > 0) raceDataPayload.damageResistances5e = damageResistances5e;
@@ -1289,6 +1346,21 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
           )}
         </div>
       </div>
+
+      {/* Race Classification: Stand-Alone Race vs. Half-Breed Template */}
+      <RaceClassificationSelector
+        raceType={raceType}
+        templateCategory={templateCategory}
+        compatibleBaseRaces={compatibleBaseRaces}
+        levelAdjustment={templateLevelAdjustment}
+        inheritedTraitsSummary={inheritedTraitsSummary}
+        onChangeRaceType={setRaceType}
+        onChangeCategory={setTemplateCategory}
+        onChangeCompatible={setCompatibleBaseRaces}
+        onChangeLA={setTemplateLevelAdjustment}
+        onChangeInherited={setInheritedTraitsSummary}
+        onOpenHybridModal={() => setShowHalfBreedModal(true)}
+      />
 
       {/* 1. Core Species Identity */}
       <div className="space-y-4 bg-stone-900/80 border border-stone-800 p-4 rounded-2xl">
@@ -1999,19 +2071,13 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
             </div>
           </div>
 
-          {/* SKILL AFFINITIES */}
-          <div className="bg-stone-950/70 border border-stone-800 p-3.5 rounded-xl space-y-1.5">
-            <label className="text-xs font-mono font-bold text-stone-200 flex items-center gap-1.5">
-              <span>Skill Affinities (Racial Bonuses)</span>
-            </label>
-            <input
-              type="text"
-              value={skillAffinitiesStr}
-              onChange={e => setSkillAffinitiesStr(e.target.value)}
-              placeholder="e.g. +2 Bluff, +2 Perception (Listen & Spot), +4 Sense Motive, +2 Spellcraft, +2 Tumble"
-              className="w-full px-3 py-2 bg-stone-900 border border-stone-700 rounded-lg text-emerald-300 font-mono text-xs"
-            />
-          </div>
+          {/* SKILL AFFINITIES & RACIAL SKILL BONUSES ENGINE */}
+          <RaceRacialSkillBonusesBuilder
+            edition={edition}
+            bonuses={racialSkillBonuses}
+            onChange={setRacialSkillBonuses}
+            onSyncString={setSkillAffinitiesStr}
+          />
 
           {/* SPELL-LIKE ABILITIES BY LEVEL TIERS */}
           <div className="bg-stone-950/70 border border-stone-800 p-3.5 rounded-xl space-y-2">
@@ -2291,6 +2357,13 @@ export const RaceStudio: React.FC<RaceStudioProps> = ({
               </div>
             )}
           </div>
+
+          {/* 5e Racial Skill Bonuses */}
+          <RaceRacialSkillBonusesBuilder
+            edition={edition}
+            bonuses={racialSkillBonuses}
+            onChange={setRacialSkillBonuses}
+          />
         </div>
       )}
 

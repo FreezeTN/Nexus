@@ -246,6 +246,18 @@ export interface Skill {
   isClassSkill?: boolean; // Used for 3.5e
 }
 
+export type RacialSkillBonusType = 'specific' | 'ability' | 'conditional';
+
+export interface RacialSkillBonus {
+  id: string;
+  type: RacialSkillBonusType; // 'specific' = single skill, 'ability' = all skills for an ability, 'conditional' = skill under circumstance
+  skillName?: string; // e.g. 'Spot', 'Listen', 'Jump', 'Swim' (for 'specific' or 'conditional')
+  ability?: AbilityName; // e.g. 'DEX' (for 'ability' affiliated bonuses, e.g. +2 to all DEX-based skills)
+  bonus: number; // e.g. 2, 4, 5, 8
+  condition?: string; // Specific circumstance text (e.g. 'at night', 'underwater', 'in rocky terrain', 'related to stone or metal')
+  source?: string; // e.g. 'Elf Keen Senses', 'Racial Trait', 'Homebrew Heritage'
+}
+
 export interface WeaponDamageRow {
   id?: string;
   damage: string; // e.g. "1d8+1", "2d6", "1d4"
@@ -308,9 +320,14 @@ export interface Feat {
   id: string;
   name: string;
   source?: string;
+  category?: string;
   prerequisite?: string;
+  actionType?: string;
   description: string;
-  hpMaxBonus?: number;
+  statBonus?: string; // Half-feat or ASI bonus (e.g. "+2 Constitution", "+1 Strength")
+  abilityBonuses?: Partial<Record<AbilityName, number>>;
+  hpMaxBonus?: number; // Flat Max HP bonus (e.g. +10, or 3.5e Toughness +3)
+  hpPerLevel?: number; // Scaling Max HP bonus per level (e.g. Tough +2/lvl, or homebrew +3/lvl)
 }
 
 export type ContainerType = 
@@ -555,6 +572,12 @@ export interface CharacterData {
   damageResistances?: string[];
   damageImmunities?: string[];
   conditionImmunities?: string[];
+
+  // Racial Skill Bonuses (D&D 3.5e & 5e mechanics)
+  racialSkillBonuses?: RacialSkillBonus[]; // Racial skill bonuses (specific, ability-affiliated, or conditional; non-stacking)
+  appliedRacialAbilityBonuses?: Record<string, number>; // Exact racial ability score adjustments applied to character.abilities
+  isHalfBreedTemplate?: boolean; // True if character heritage is a Half-Breed / Inherited Template
+  templateBaseRace?: string; // Parent/base race if created or modified via Half-Breed Template
 
   // 3.5e Special Combat Maneuvers & Stability
   isQuadruped?: boolean; // 4+ legs (stability +4 vs trip/bull rush, higher carrying capacity)

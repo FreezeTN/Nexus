@@ -5,8 +5,14 @@ import {
   useLayoutCustomization,
   getFeaturesForEdition,
   getSheetsForEdition,
-  LayoutFeatureDef
+  LayoutFeatureDef,
+  getCustomTabOrder,
+  saveCustomTabOrder,
+  resetCustomTabOrder,
+  sortTabsByCustomOrder,
+  EVENT_NAV_TAB_ORDER_CHANGED
 } from '../../../utils/layoutCustomization';
+import { useUiMode } from '../../../context/UiModeContext';
 import { CharacterData, RuleEdition } from '../../../types';
 import { systemRegistry } from '../../../systems';
 import {
@@ -31,7 +37,10 @@ import {
   Shield,
   Ghost,
   Terminal,
-  Compass
+  Compass,
+  ArrowLeft,
+  ArrowRight,
+  GripHorizontal
 } from 'lucide-react';
 
 const SHEET_METADATA: Record<SheetCategory, { title: string; subtitle: string; icon: React.ReactNode; badgeColor: string }> = {
@@ -111,6 +120,77 @@ export const SheetLayoutOptionsTab: React.FC<SheetLayoutOptionsTabProps> = ({
   const [selectedEdition, setSelectedEdition] = useState<RuleEdition>(() => {
     return forcedEdition || activeCharEdition;
   });
+
+  // Tab Order Customization
+  const { workspaceRole } = useUiMode();
+  const [customTabOrder, setCustomTabOrder] = useState<string[] | null>(() => getCustomTabOrder(workspaceRole));
+
+  useEffect(() => {
+    setCustomTabOrder(getCustomTabOrder(workspaceRole));
+  }, [workspaceRole]);
+
+  useEffect(() => {
+    const handleOrderChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ role: string; order: string[] | null }>;
+      if (customEvent.detail && customEvent.detail.role === workspaceRole) {
+        setCustomTabOrder(customEvent.detail.order);
+      }
+    };
+    window.addEventListener(EVENT_NAV_TAB_ORDER_CHANGED, handleOrderChange);
+    return () => window.removeEventListener(EVENT_NAV_TAB_ORDER_CHANGED, handleOrderChange);
+  }, [workspaceRole]);
+
+  const defaultTabsForRole = useMemo(() => {
+    if (workspaceRole === 'player') {
+      return [
+        { id: 'sheet1', title: 'Stats & Features', icon: '🛡️' },
+        { id: 'sheet2', title: 'Combat', icon: '🎯' },
+        { id: 'sheet3', title: 'Gear & Wealth', icon: '📦' },
+        { id: 'sheet4', title: 'Spells', icon: '🪄' },
+        { id: 'sheet5', title: 'Notes', icon: '📜' }
+      ];
+    } else if (workspaceRole === 'gm') {
+      return [
+        { id: 'sheetDm', title: 'DM Overview', icon: '👑' },
+        { id: 'sheet2', title: 'Combat', icon: '🎯' },
+        { id: 'sheet7', title: 'Bestiary & SRD', icon: '📚' },
+        { id: 'sheet5', title: 'Notes', icon: '📜' },
+        { id: 'sheet1', title: 'Stats & Features', icon: '🛡️' },
+        { id: 'sheet3', title: 'Gear & Wealth', icon: '📦' },
+        { id: 'sheet4', title: 'Spells', icon: '🪄' }
+      ];
+    }
+    return [
+      { id: 'sheet1', title: 'Stats & Features', icon: '🛡️' },
+      { id: 'sheet2', title: 'Combat', icon: '🎯' },
+      { id: 'sheetDm', title: 'DM Overview', icon: '👑' },
+      { id: 'sheet3', title: 'Gear & Wealth', icon: '📦' },
+      { id: 'sheet4', title: 'Spells', icon: '🪄' },
+      { id: 'sheet5', title: 'Notes', icon: '📜' },
+      { id: 'sheet7', title: 'Bestiary & SRD', icon: '📚' },
+      { id: 'sheet6', title: 'Rules & Guide', icon: '📖' }
+    ];
+  }, [workspaceRole]);
+
+  const currentOrderedTabs = useMemo(() => {
+    return sortTabsByCustomOrder(defaultTabsForRole, customTabOrder);
+  }, [defaultTabsForRole, customTabOrder]);
+
+  const handleMoveTab = (index: number, direction: 'left' | 'right') => {
+    const targetIndex = direction === 'left' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= currentOrderedTabs.length) return;
+    const newItems = [...currentOrderedTabs];
+    const [moved] = newItems.splice(index, 1);
+    newItems.splice(targetIndex, 0, moved);
+    const newOrder = newItems.map(t => t.id);
+    setCustomTabOrder(newOrder);
+    saveCustomTabOrder(newOrder, workspaceRole);
+  };
+
+  const handleResetTabOrder = () => {
+    resetCustomTabOrder(workspaceRole);
+    setCustomTabOrder(null);
+  };
 
   // When active character or forced edition changes, sync selectedEdition
   useEffect(() => {
@@ -357,6 +437,70 @@ export const SheetLayoutOptionsTab: React.FC<SheetLayoutOptionsTabProps> = ({
                   : 'Story & traits'}
               </span>
             </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Sheet Tabs Alignment & Reordering Bar */}
+      <div className="bg-stone-950/80 p-3 rounded-xl border border-stone-800 space-y-2.5">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <GripHorizontal className="w-4 h-4 text-amber-400" />
+            <h3 className="font-serif font-bold text-xs text-amber-200">
+              Sheet Tabs Alignment & Order
+            </h3>
+            <span className="text-[10px] font-mono text-stone-400 bg-stone-900 px-2 py-0.5 rounded border border-stone-800">
+              {workspaceRole.toUpperCase()} View
+            </span>
+          </div>
+
+          {customTabOrder && (
+            <button
+              onClick={handleResetTabOrder}
+              className="flex items-center gap-1 text-[11px] font-mono text-amber-400 hover:text-amber-300 hover:underline cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Reset to Default Order
+            </button>
+          )}
+        </div>
+
+        <p className="text-[11px] text-stone-400 leading-relaxed">
+          Re-align the tabs below using the arrow buttons, or simply <strong>drag & drop</strong> any tab directly in the top navigation bar.
+        </p>
+
+        {/* Tab pills in ordered sequence */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-thin scrollbar-thumb-stone-800">
+          {currentOrderedTabs.map((tab, idx) => (
+            <div
+              key={tab.id}
+              className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded-lg px-2 py-1 shrink-0 shadow-sm"
+            >
+              <span className="text-xs">{tab.icon}</span>
+              <span className="text-xs font-serif font-medium text-stone-200 mr-1">
+                {tab.title}
+              </span>
+              <div className="flex items-center gap-0.5 border-l border-stone-800 pl-1 ml-0.5">
+                <button
+                  type="button"
+                  disabled={idx === 0}
+                  onClick={() => handleMoveTab(idx, 'left')}
+                  title="Move left"
+                  className="p-1 rounded text-stone-400 hover:text-amber-300 hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  disabled={idx === currentOrderedTabs.length - 1}
+                  onClick={() => handleMoveTab(idx, 'right')}
+                  title="Move right"
+                  className="p-1 rounded text-stone-400 hover:text-amber-300 hover:bg-stone-800 disabled:opacity-30 disabled:cursor-not-allowed transition cursor-pointer"
+                >
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       </div>

@@ -1,4 +1,5 @@
-import { AbilityName, AbilityScores, Attack, CharacterData, GearItem, RuleEdition, Skill, Spell, Wealth } from '../types';
+import { AbilityName, AbilityScores, Attack, CharacterData, Feat, GearItem, RuleEdition, Skill, Spell, Wealth } from '../types';
+import { parseAbilityScoreBonuses } from './homebrewValidator';
 import {
   getCombinedLevel,
   getActiveClassChoice,
@@ -6,6 +7,7 @@ import {
   getSavingThrowBonus,
   getEffectiveLevel,
   getEffectiveAbilities,
+  getEffectiveAbilityDetails,
   getProficiencyBonus,
   formatModifier
 } from '../systems/dnd5e';
@@ -16,6 +18,8 @@ export * from './calculators/dnd35eCalculators';
 export * from './handSlotCalculations';
 export * from './dnd35eAdvancedMechanics';
 export * from './environmentRules';
+export * from './racialSkillBonusEngine';
+import { getRacialSkillBonusForSkill } from './racialSkillBonusEngine';
 
 
 export {
@@ -1404,16 +1408,112 @@ export function getMaxHpBreakdown(char: CharacterData): MaxHpBreakdown {
   const tempModifier = char.maxHpModifier || 0;
   const details: string[] = [`Base Max HP: ${baseMaxHp}`];
 
-  // Calculate Feat Bonuses (e.g. Tough feat: +2 HP per level)
+  // Calculate Feat Bonuses (e.g. Tough feat: +2 HP per level, homebrew Toughness: +3 HP per level, or flat Max HP)
   if (char.feats && char.feats.length > 0) {
+    const charLevel = Math.max(1, char.level || 1);
     char.feats.forEach(feat => {
-      if (feat.hpMaxBonus) {
-        featBonus += feat.hpMaxBonus;
-        details.push(`Feat (${feat.name}): ${feat.hpMaxBonus > 0 ? '+' : ''}${feat.hpMaxBonus} Max HP`);
-      } else if (feat.name.toLowerCase().includes('tough')) {
-        const toughValue = 2 * (char.level || 1);
-        featBonus += toughValue;
-        details.push(`Feat (${feat.name}): +${toughValue} Max HP (+2/level)`);
+      let featHpGranted = 0;
+      const breakdownNotes: string[] = [];
+      const text = `${feat.name || ''} ${feat.description || ''}`;
+
+      // 1. Explicit hpPerLevel property (scaling)
+      let perLevelRate: number | undefined = feat.hpPerLevel;
+
+      // 2. If no explicit hpPerLevel, auto-detect per-level rate from description or name:
+      // Supports phrases like "+3 HP per level", "+3/level", "+3/lvl", "3 hp per level", "+3 hit points each level",
+      // parenthetical "(+3/level)", "(+3)", "Toughness +3", "Toughness +3 HP", etc.
+      if (perLevelRate === undefined) {
+        const perLevelMatch = 
+          // e.g. "+3 HP per level", "+3 hit points per level", "3 hp per level", "+3 per level", "+3/level", "+3/lvl", "+3 each level", "3 for each level"
+          text.match(/(?:grant[s]?|gain[s]?|increase[s]?|add[s]?)?\s*(?:[+]|\b)(\d+)\s*(?:additional\s*)?(?:max\s*)?(?:hp|hit\s*points?)?\s*(?:\/|\bper\s*|\bfor\s*each\s*|\bfor\s*every\s*|\beach\s*)(?:character\s*)?(?:level|lvl)/i) ||
+          // e.g. "+3/level hp", "+3 per level max hp"
+          text.match(/(?:[+]|\b)(\d+)\s*(?:\/|\bper\s*)(?:character\s*)?(?:level|lvl)\s*(?:max\s*)?(?:hp|hit\s*points?)/i) ||
+          // e.g. "increases hit point maximum by 3 x your level"
+          text.match(/(?:hit\s*point\s*maximum|max\s*hp|hp)\s*(?:increases?|grants?|gains?)\s*by\s*(?:an\s*amount\s*equal\s*to\s*)?(\d+)\s*[x×*]\s*(?:your\s*)?level/i) ||
+          // e.g. parenthetical: "(+3/level)", "(+3/lvl)", "(+3)", "(3/level)", "(+3 HP/level)"
+          text.match(/\(\s*[+]?(\d+)\s*(?:max\s*)?(?:hp|hit\s*points?)?(?:\/|\bper\s*)?(?:level|lvl)?\s*\)/i) ||
+          // e.g. "3 max hp per level", "3 hp/level", "3 hp/lvl"
+          text.match(/(\d+)\s*(?:max\s*)?(?:hp|hit\s*points?)\s*(?:per|\/)\s*level/i) ||
+          text.match(/(\d+)\s*hp\/(?:level|lvl)/i) ||
+          text.match(/(\d+)\s*(?:max\s*)?hp\s*each\s*level/i) ||
+          // e.g. "Toughness +3", "Toughness +3 HP", "Custom Toughness +3" in the title or text
+          (feat.name || '').match(/(?:tough|toughness|health|vitality|stout|resilient|durable|vigor|life).*?[+](\d+)(?:\s*hp)?/i) ||
+          (feat.name || '').match(/[+](\d+)\s*(?:hp)?.*?(?:tough|toughness|health|vitality|stout|resilient|durable|vigor|life)/i) ||
+          text.match(/(?:tough|toughness|health|vitality|constitution|hit\s*point|hp).*?(?:[+]|\b)(\d+)\s*(?:hp\s*)?per\s*level/i) ||
+          text.match(/(?:[+]|\b)(\d+)\s*per\s*level.*?(?:tough|toughness|health|vitality|hit\s*point|hp)/i);
+
+        if (perLevelMatch) {
+          const parsed = parseInt(perLevelMatch[1], 10);
+          if (!isNaN(parsed) && parsed > 0) {
+            perLevelRate = parsed;
+          }
+        }
+      }
+
+      // If still not detected, check if the feat has 'tough' / 'toughness' / 'vitality' in its name
+      // and has a +X in its description (e.g. "+3 hit points" or "+3 HP") or hpMaxBonus was set to 3.
+      // In 5e (where Toughness is +2/lvl), user homebrew "+3 HP" or hpMaxBonus: 3 on a Toughness feat
+      // was entered in the HP bonus field with the intention of +3 HP per level.
+      const lowerName = (feat.name || '').toLowerCase().trim();
+      const isToughFeat = lowerName.includes('tough') || lowerName.includes('toughness');
+      if (perLevelRate === undefined && isToughFeat && char.edition !== '3.5e') {
+        if (typeof feat.hpMaxBonus === 'number' && feat.hpMaxBonus > 0 && feat.hpMaxBonus <= 10) {
+          perLevelRate = feat.hpMaxBonus;
+        } else {
+          const hpInDesc = (feat.description || '').match(/(?:[+]|\b)(\d+)\s*(?:additional\s*)?(?:max\s*)?(?:hp|hit\s*points?)/i);
+          if (hpInDesc) {
+            const parsed = parseInt(hpInDesc[1], 10);
+            if (!isNaN(parsed) && parsed > 0 && parsed <= 10) {
+              perLevelRate = parsed;
+            }
+          }
+        }
+      }
+
+      if (typeof perLevelRate === 'number' && perLevelRate !== 0) {
+        const total = perLevelRate * charLevel;
+        featHpGranted += total;
+        breakdownNotes.push(`${total > 0 ? '+' : ''}${total} Max HP (${perLevelRate > 0 ? '+' : ''}${perLevelRate}/level)`);
+      }
+
+      // 3. Flat Max HP Bonus (explicit hpMaxBonus or parsed flat HP bonus)
+      // Note: If feat.hpMaxBonus equals perLevelRate (e.g. user entered 3 into an ambiguous input intending 3/level),
+      // we avoid double counting it as both flat and per-level.
+      if (typeof feat.hpMaxBonus === 'number' && feat.hpMaxBonus !== 0 && feat.hpMaxBonus !== perLevelRate) {
+        featHpGranted += feat.hpMaxBonus;
+        breakdownNotes.push(`${feat.hpMaxBonus > 0 ? '+' : ''}${feat.hpMaxBonus} Max HP`);
+      } else if (featHpGranted === 0) {
+        // If neither perLevel nor hpMaxBonus was set, check for flat bonus in description:
+        const flatMatch = text.match(/(?:grant[s]?|gain[s]?|increase[s]?)\s*[+](\d+)\s*(?:max\s*)?(?:hp|hit\s*points?)(?!\s*(?:per|\/|\bfor\s*each|\bfor\s*every|\beach|[x×*]))/i);
+        if (flatMatch) {
+          const flatVal = parseInt(flatMatch[1], 10);
+          if (!isNaN(flatVal) && flatVal > 0) {
+            featHpGranted += flatVal;
+            breakdownNotes.push(`+${flatVal} Max HP`);
+          }
+        }
+      }
+
+      // 4. Canonical fallback for official Tough / Toughness feats if no custom rate was detected
+      if (featHpGranted === 0) {
+        if (lowerName === 'tough' || lowerName === 'tough feat') {
+          const toughVal = 2 * charLevel;
+          featHpGranted += toughVal;
+          breakdownNotes.push(`+${toughVal} Max HP (+2/level)`);
+        } else if (lowerName === 'toughness' && char.edition === '3.5e') {
+          featHpGranted += 3;
+          breakdownNotes.push(`+3 Max HP (3.5e SRD)`);
+        } else if (lowerName === 'toughness' || lowerName.includes('tough')) {
+          // Standard default fallback (+2/level)
+          const toughVal = 2 * charLevel;
+          featHpGranted += toughVal;
+          breakdownNotes.push(`+${toughVal} Max HP (+2/level default)`);
+        }
+      }
+
+      if (featHpGranted !== 0) {
+        featBonus += featHpGranted;
+        details.push(`Feat (${feat.name}): ${breakdownNotes.join(', ')}`);
       }
     });
   }
@@ -1457,7 +1557,20 @@ export function getMaxHpBreakdown(char: CharacterData): MaxHpBreakdown {
     details.push(`Negative Levels (${char.negativeLevels}): -${negativeLevelHpPenalty} Max HP (-5 per level)`);
   }
 
-  let subtotal = baseMaxHp + featBonus + equippedItemBonus + tempModifier - negativeLevelHpPenalty;
+  // Constitution Adjustment (D&D 5e & 3.5e: Changes to CON modifier retroactively adjust HP per level)
+  const baseConScore = Number(char?.abilities?.CON?.score) || 10;
+  const baseConMod = Math.floor((baseConScore - 10) / 2);
+  const conDetails = getEffectiveAbilityDetails(char, 'CON');
+  const effectiveConMod = conDetails.modifier;
+  const conModDelta = effectiveConMod - baseConMod;
+  let conHpBonus = 0;
+  if (conModDelta !== 0) {
+    const charLevel = Math.max(1, char.level || 1);
+    conHpBonus = conModDelta * charLevel;
+    details.push(`Constitution Adjustment (${conModDelta > 0 ? '+' : ''}${conModDelta} mod × ${charLevel} lvl): ${conHpBonus > 0 ? '+' : ''}${conHpBonus} Max HP`);
+  }
+
+  let subtotal = baseMaxHp + featBonus + equippedItemBonus + conHpBonus + tempModifier - negativeLevelHpPenalty;
   subtotal = Math.max(1, subtotal);
 
   const exhaustion = char.exhaustionLevel || 0;
@@ -1477,6 +1590,73 @@ export function getMaxHpBreakdown(char: CharacterData): MaxHpBreakdown {
     exhaustionHalved,
     effectiveMaxHp,
     details
+  };
+}
+
+export interface FeatEffectiveStats {
+  hpPerLevel?: number;
+  hpMaxBonus?: number;
+  statBonus?: string;
+  parsedStatBonuses: Array<{ stat: string; value: number }>;
+}
+
+/**
+ * Universal helper that returns all mechanical benefits (HP scaling, flat HP, and stat bonuses)
+ * of a feat, checking both explicit fields and natural language phrasing.
+ */
+export function getFeatEffectiveStats(feat: Feat): FeatEffectiveStats {
+  const text = `${feat.name || ''} ${feat.description || ''} ${feat.statBonus || ''}`;
+
+  // 1. HP per level
+  let hpPerLevel = feat.hpPerLevel;
+  if (hpPerLevel === undefined || hpPerLevel === 0) {
+    const perLevelMatch = 
+      text.match(/(?:grant[s]?|gain[s]?|increase[s]?|add[s]?)?\s*(?:[+]|\b)(\d+)\s*(?:additional\s*)?(?:max\s*)?(?:hp|hit\s*points?)?\s*(?:\/|\bper\s*|\bfor\s*each\s*|\bfor\s*every\s*|\beach\s*)(?:character\s*)?(?:level|lvl)/i) ||
+      text.match(/(?:[+]|\b)(\d+)\s*(?:\/|\bper\s*)(?:character\s*)?(?:level|lvl)\s*(?:max\s*)?(?:hp|hit\s*points?)/i) ||
+      text.match(/(?:hit\s*point\s*maximum|max\s*hp|hp)\s*(?:increases?|grants?|gains?)\s*by\s*(?:an\s*amount\s*equal\s*to\s*)?(\d+)\s*[x×*]\s*(?:your\s*)?level/i) ||
+      text.match(/\(\s*[+]?(\d+)\s*(?:max\s*)?(?:hp|hit\s*points?)?(?:\/|\bper\s*)?(?:level|lvl)?\s*\)/i) ||
+      text.match(/(\d+)\s*(?:max\s*)?(?:hp|hit\s*points?)\s*(?:per|\/)\s*level/i) ||
+      text.match(/(\d+)\s*hp\/(?:level|lvl)/i) ||
+      text.match(/(\d+)\s*(?:max\s*)?hp\s*each\s*level/i) ||
+      (feat.name || '').match(/(?:tough|toughness|health|vitality|stout|resilient|durable|vigor|life).*?[+](\d+)(?:\s*hp)?/i) ||
+      (feat.name || '').match(/[+](\d+)\s*(?:hp)?.*?(?:tough|toughness|health|vitality|stout|resilient|durable|vigor|life)/i) ||
+      text.match(/(?:tough|toughness|health|vitality|constitution|hit\s*point|hp).*?(?:[+]|\b)(\d+)\s*(?:hp\s*)?per\s*level/i) ||
+      text.match(/(?:[+]|\b)(\d+)\s*per\s*level.*?(?:tough|toughness|health|vitality|hit\s*point|hp)/i);
+
+    if (perLevelMatch) {
+      const parsed = parseInt(perLevelMatch[1], 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        hpPerLevel = parsed;
+      }
+    }
+  }
+
+  // 2. Flat Max HP
+  let hpMaxBonus = feat.hpMaxBonus;
+  if ((hpMaxBonus === undefined || hpMaxBonus === 0) && !hpPerLevel) {
+    const flatMatch = text.match(/(?:grant[s]?|gain[s]?|increase[s]?)\s*[+](\d+)\s*(?:max\s*)?(?:hp|hit\s*points?)(?!\s*(?:per|\/|\bfor\s*each|\bfor\s*every|\beach|[x×*]))/i);
+    if (flatMatch) {
+      const flatVal = parseInt(flatMatch[1], 10);
+      if (!isNaN(flatVal) && flatVal > 0) {
+        hpMaxBonus = flatVal;
+      }
+    }
+  }
+
+  // 3. Stat bonuses
+  const parsedStatBonuses: Array<{ stat: string; value: number }> = [];
+  if (feat.statBonus) {
+    parsedStatBonuses.push(...parseAbilityScoreBonuses(feat.statBonus));
+  }
+  if (parsedStatBonuses.length === 0 && text) {
+    parsedStatBonuses.push(...parseAbilityScoreBonuses(text));
+  }
+
+  return {
+    hpPerLevel: hpPerLevel !== 0 ? hpPerLevel : undefined,
+    hpMaxBonus: hpMaxBonus !== 0 ? hpMaxBonus : undefined,
+    statBonus: feat.statBonus || (parsedStatBonuses.length > 0 ? parsedStatBonuses.map(p => `${p.value > 0 ? '+' : ''}${p.value} ${p.stat}`).join(', ') : undefined),
+    parsedStatBonuses
   };
 }
 
@@ -2053,69 +2233,7 @@ export function formatWealthDetailed(wealth?: Wealth): {
   };
 }
 
-export const DEFAULT_SKILLS_LIST: { name: string; ability: AbilityName }[] = [
-  { name: 'Acrobatics', ability: 'DEX' },
-  { name: 'Animal Handling', ability: 'WIS' },
-  { name: 'Arcana', ability: 'INT' },
-  { name: 'Athletics', ability: 'STR' },
-  { name: 'Deception', ability: 'CHA' },
-  { name: 'History', ability: 'INT' },
-  { name: 'Insight', ability: 'WIS' },
-  { name: 'Intimidation', ability: 'CHA' },
-  { name: 'Investigation', ability: 'INT' },
-  { name: 'Medicine', ability: 'WIS' },
-  { name: 'Nature', ability: 'INT' },
-  { name: 'Perception', ability: 'WIS' },
-  { name: 'Performance', ability: 'CHA' },
-  { name: 'Persuasion', ability: 'CHA' },
-  { name: 'Religion', ability: 'INT' },
-  { name: 'Sleight of Hand', ability: 'DEX' },
-  { name: 'Stealth', ability: 'DEX' },
-  { name: 'Survival', ability: 'WIS' },
-];
-
-export const DEFAULT_35E_SKILLS_LIST: { name: string; ability: AbilityName }[] = [
-  { name: 'Appraise', ability: 'INT' },
-  { name: 'Balance', ability: 'DEX' },
-  { name: 'Bluff', ability: 'CHA' },
-  { name: 'Climb', ability: 'STR' },
-  { name: 'Concentration', ability: 'CON' },
-  { name: 'Craft', ability: 'INT' },
-  { name: 'Decipher Script', ability: 'INT' },
-  { name: 'Diplomacy', ability: 'CHA' },
-  { name: 'Disable Device', ability: 'INT' },
-  { name: 'Disguise', ability: 'CHA' },
-  { name: 'Escape Artist', ability: 'DEX' },
-  { name: 'Forgery', ability: 'INT' },
-  { name: 'Gather Information', ability: 'CHA' },
-  { name: 'Handle Animal', ability: 'CHA' },
-  { name: 'Heal', ability: 'WIS' },
-  { name: 'Hide', ability: 'DEX' },
-  { name: 'Intimidate', ability: 'CHA' },
-  { name: 'Jump', ability: 'STR' },
-  { name: 'Knowledge (Arcana)', ability: 'INT' },
-  { name: 'Knowledge (Dungeoneering)', ability: 'INT' },
-  { name: 'Knowledge (Local)', ability: 'INT' },
-  { name: 'Knowledge (Nature)', ability: 'INT' },
-  { name: 'Knowledge (Religion)', ability: 'INT' },
-  { name: 'Knowledge (The Planes)', ability: 'INT' },
-  { name: 'Listen', ability: 'WIS' },
-  { name: 'Move Silently', ability: 'DEX' },
-  { name: 'Open Lock', ability: 'DEX' },
-  { name: 'Perform', ability: 'CHA' },
-  { name: 'Profession', ability: 'WIS' },
-  { name: 'Ride', ability: 'DEX' },
-  { name: 'Search', ability: 'INT' },
-  { name: 'Sense Motive', ability: 'WIS' },
-  { name: 'Sleight of Hand', ability: 'DEX' },
-  { name: 'Spellcraft', ability: 'INT' },
-  { name: 'Spot', ability: 'WIS' },
-  { name: 'Survival', ability: 'WIS' },
-  { name: 'Swim', ability: 'STR' },
-  { name: 'Tumble', ability: 'DEX' },
-  { name: 'Use Magic Device', ability: 'CHA' },
-  { name: 'Use Rope', ability: 'DEX' },
-];
+export { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST } from '../data/defaultSkillLists';
 
 export function get35eSkillSynergyBonus(
   skillName: string,
@@ -2182,7 +2300,9 @@ export function get35eSkillBonus(
   abilities: AbilityScores,
   allSkills?: Skill[],
   totalAcp: number = 0,
-  sizeCategory?: string
+  sizeCategory?: string,
+  character?: CharacterData,
+  activeConditionIds?: string[]
 ): number {
   const abilityMod = getAbilityModifier(abilities[skill.ability]?.score || 10);
   const ranks = skill.ranks || 0;
@@ -2202,7 +2322,10 @@ export function get35eSkillBonus(
     sizeBonus = getSizeHideModifier(sizeCategory);
   }
 
-  return ranks + abilityMod + misc + synergy + acpPenalty + sizeBonus;
+  // D&D Racial Skill Bonus (Non-stacking, highest bonus applies)
+  const racialBonus = character ? getRacialSkillBonusForSkill(skill, character, activeConditionIds) : 0;
+
+  return ranks + abilityMod + misc + synergy + acpPenalty + sizeBonus + racialBonus;
 }
 
 export interface Save35eBreakdown {

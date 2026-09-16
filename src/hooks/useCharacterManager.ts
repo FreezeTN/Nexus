@@ -3,7 +3,7 @@ import { CharacterData, RuleEdition, Party, GearItem, Spell } from '../types';
 import { SAMPLE_CHARACTERS } from '../data/defaultCharacters';
 import { DEFAULT_PARTIES } from '../data/defaultParties';
 import { useHistoryState } from '../utils/useHistoryState';
-import { recalculateCharacterAC, isCharacterDead } from '../utils/dndCalculations';
+import { recalculateCharacterAC, isCharacterDead, getEffectiveMaxHp } from '../utils/dndCalculations';
 import { broadcastStateUpdate, useDetachedSyncListener } from '../utils/useDetachedSync';
 import { eventBus } from '../events/eventBus';
 import { saveCustomCompendiumEntry } from '../data/compendiumData';
@@ -290,6 +290,15 @@ export function useCharacterManager({
           conditions: cleanedConds
         };
       }
+    }
+
+    // Downscale Current HP if it exceeds the new Effective Max HP (e.g. feat or health item removed)
+    const effectiveMax = getEffectiveMaxHp(finalChar);
+    if (finalChar.hpCurrent > effectiveMax) {
+      finalChar = {
+        ...finalChar,
+        hpCurrent: Math.max(0, effectiveMax)
+      };
     }
 
     const recalculated = recalculateCharacterAC({

@@ -1,67 +1,382 @@
 import { RuleEdition } from '../../../types';
 import { systemRegistry } from '../../../systems';
 import { loadCustomCompendiumEntries } from '../../../data/compendiumData';
+import {
+  BASE_CREATURES_35E,
+  HALF_BREED_TEMPLATES_35E,
+  PARENT_RACE_CATALOG,
+  BaseCreature35e,
+  HalfBreedTemplate35e,
+  ParentRaceData
+} from '../../../data/halfBreedData';
 
-export function getRacesForSystem(edition: RuleEdition): string[] {
+export function isEditionMatch(entryEdition?: string, currentEdition?: RuleEdition): boolean {
+  if (!entryEdition || entryEdition === 'all' || entryEdition === 'custom' || entryEdition === 'any' || entryEdition === '') return true;
+  if (!currentEdition) return true;
+  const e1 = entryEdition.toLowerCase().trim();
+  const e2 = currentEdition.toLowerCase().trim();
+  if (e1 === e2) return true;
+  if ((e1 === '3.5e' || e1 === '3.5' || e1 === 'dnd35e' || e1 === '35e') && (e2 === '3.5e' || e2 === '3.5' || e2 === 'dnd35e' || e2 === '35e')) return true;
+  if ((e1 === '5e' || e1 === '5' || e1 === 'dnd5e') && (e2 === '5e' || e2 === '5' || e2 === 'dnd5e')) return true;
+  return false;
+}
+
+export interface CustomRaceEntry {
+  name: string;
+  isCustom: boolean;
+  isHalfBreed?: boolean;
+  isTemplate?: boolean;
+  edition?: string;
+  source?: string;
+  raceType?: string;
+  category?: string;
+}
+
+export interface CustomClassEntry {
+  name: string;
+  isCustom: boolean;
+  edition?: string;
+  source?: string;
+  subclasses?: string[];
+}
+
+export function getRaceDetailsForSystem(edition: RuleEdition): {
+  coreRaces: string[];
+  customRaces: CustomRaceEntry[];
+  otherCustomRaces: CustomRaceEntry[];
+} {
   const systemRaces = RACE_OPTIONS_BY_SYSTEM[edition] || RACE_OPTIONS_BY_SYSTEM['5e'];
-  const baseRaces: string[] = [...systemRaces];
+  const coreRaces: string[] = [...systemRaces];
 
   const plugin = systemRegistry.getSystem(edition);
   if (plugin?.data?.races) {
     for (const pr of plugin.data.races) {
-      if (!baseRaces.includes(pr)) {
-        baseRaces.push(pr);
+      if (!coreRaces.includes(pr)) {
+        coreRaces.push(pr);
       }
     }
   }
 
+  const customRaces: CustomRaceEntry[] = [];
+  const otherCustomRaces: CustomRaceEntry[] = [];
+
   try {
     const customEntries = loadCustomCompendiumEntries();
-    const customRaces = customEntries
-      .filter(e => e.category === 'races' && (!e.edition || e.edition === edition))
-      .map(e => e.name);
+    const raceEntries = customEntries.filter(e => {
+      const c = String(e.category || '').toLowerCase();
+      return c === 'races' || c === 'race';
+    });
 
-    for (const cr of customRaces) {
-      if (!baseRaces.includes(cr)) {
-        baseRaces.push(cr);
+    for (const entry of raceEntries) {
+      const name = entry.name?.trim();
+      if (!name) continue;
+
+      const eAny = entry as any;
+      const rdAny = (entry.raceData || {}) as any;
+
+      const isHalfBreed = Boolean(
+        rdAny.isHalfBreedTemplate ||
+        rdAny.raceType === 'half_breed_template' ||
+        eAny.isHalfBreedTemplate ||
+        eAny.raceType === 'half_breed_template' ||
+        name.toLowerCase().includes('half-') ||
+        name.toLowerCase().includes('hybrid') ||
+        entry.tags?.some(t => t.toLowerCase().includes('half') || t.toLowerCase().includes('hybrid'))
+      );
+
+      const isTemplate = Boolean(
+        rdAny.isHalfBreedTemplate ||
+        rdAny.raceType === 'half_breed_template' ||
+        eAny.isHalfBreedTemplate ||
+        eAny.raceType === 'half_breed_template'
+      );
+
+      const item: CustomRaceEntry = {
+        name,
+        isCustom: true,
+        isHalfBreed,
+        isTemplate,
+        edition: entry.edition,
+        source: entry.source || 'Custom Homebrew',
+        raceType: entry.raceData?.raceType || (isTemplate ? 'half_breed_template' : 'standard'),
+        category: entry.category
+      };
+
+      if (isEditionMatch(entry.edition, edition)) {
+        if (!customRaces.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+          customRaces.push(item);
+        }
+      } else {
+        if (!otherCustomRaces.some(r => r.name.toLowerCase() === name.toLowerCase()) && !customRaces.some(r => r.name.toLowerCase() === name.toLowerCase())) {
+          otherCustomRaces.push(item);
+        }
       }
     }
   } catch (e) {
     // ignore
   }
 
-  return baseRaces;
+  return {
+    coreRaces,
+    customRaces,
+    otherCustomRaces
+  };
 }
 
-export function getClassesForSystem(edition: RuleEdition): string[] {
+export function getRacesForSystem(edition: RuleEdition): string[] {
+  const { coreRaces, customRaces, otherCustomRaces } = getRaceDetailsForSystem(edition);
+  const result: string[] = [];
+
+  // Custom races for current system first so user immediately sees their creations
+  for (const cr of customRaces) {
+    if (!result.includes(cr.name)) {
+      result.push(cr.name);
+    }
+  }
+
+  // Core system races
+  for (const r of coreRaces) {
+    if (!result.includes(r)) {
+      result.push(r);
+    }
+  }
+
+  // Other system custom races as fallback
+  for (const o of otherCustomRaces) {
+    if (!result.includes(o.name)) {
+      result.push(o.name);
+    }
+  }
+
+  return result;
+}
+
+export function getClassDetailsForSystem(edition: RuleEdition): {
+  coreClasses: string[];
+  customClasses: CustomClassEntry[];
+  otherCustomClasses: CustomClassEntry[];
+} {
   const systemClasses = CLASS_OPTIONS_BY_SYSTEM[edition] || CLASS_OPTIONS_BY_SYSTEM['5e'];
-  const baseClasses: string[] = [...systemClasses];
+  const coreClasses: string[] = [...systemClasses];
 
   const plugin = systemRegistry.getSystem(edition);
   if (plugin?.data?.classes) {
     for (const pc of plugin.data.classes) {
-      if (!baseClasses.includes(pc)) {
-        baseClasses.push(pc);
+      if (!coreClasses.includes(pc)) {
+        coreClasses.push(pc);
       }
     }
   }
 
+  const customClasses: CustomClassEntry[] = [];
+  const otherCustomClasses: CustomClassEntry[] = [];
+
   try {
     const customEntries = loadCustomCompendiumEntries();
-    const customClasses = customEntries
-      .filter(e => e.category === 'classes' && (!e.edition || e.edition === edition))
-      .map(e => e.name);
+    const classEntries = customEntries.filter(e => {
+      const c = String(e.category || '').toLowerCase();
+      return c === 'classes' || c === 'class';
+    });
 
-    for (const cc of customClasses) {
-      if (!baseClasses.includes(cc)) {
-        baseClasses.push(cc);
+    for (const entry of classEntries) {
+      const name = entry.name?.trim();
+      if (!name) continue;
+
+      const subclasses = entry.classData?.subclasses || (entry.classData?.subclassDetails?.map(s => s.name)) || [];
+
+      const item: CustomClassEntry = {
+        name,
+        isCustom: true,
+        edition: entry.edition,
+        source: entry.source || 'Custom Homebrew',
+        subclasses
+      };
+
+      if (isEditionMatch(entry.edition, edition)) {
+        if (!customClasses.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+          customClasses.push(item);
+        }
+      } else {
+        if (!otherCustomClasses.some(c => c.name.toLowerCase() === name.toLowerCase()) && !customClasses.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+          otherCustomClasses.push(item);
+        }
       }
     }
   } catch (e) {
     // ignore
   }
 
-  return baseClasses;
+  return {
+    coreClasses,
+    customClasses,
+    otherCustomClasses
+  };
+}
+
+export function getClassesForSystem(edition: RuleEdition): string[] {
+  const { coreClasses, customClasses, otherCustomClasses } = getClassDetailsForSystem(edition);
+  const result: string[] = [];
+
+  for (const cc of customClasses) {
+    if (!result.includes(cc.name)) {
+      result.push(cc.name);
+    }
+  }
+
+  for (const c of coreClasses) {
+    if (!result.includes(c)) {
+      result.push(c);
+    }
+  }
+
+  for (const oc of otherCustomClasses) {
+    if (!result.includes(oc.name)) {
+      result.push(oc.name);
+    }
+  }
+
+  return result;
+}
+
+export function getAvailable35eHalfBreedTemplates(edition: RuleEdition = '3.5e'): HalfBreedTemplate35e[] {
+  const list = [...HALF_BREED_TEMPLATES_35E];
+  try {
+    const customEntries = loadCustomCompendiumEntries();
+    const customTemplates = customEntries.filter(e => {
+      const c = String(e.category || '').toLowerCase();
+      const eAny = e as any;
+      const rdAny = (e.raceData || {}) as any;
+      const isTempl = Boolean(
+        rdAny.isHalfBreed ||
+        rdAny.isHalfBreedTemplate ||
+        rdAny.raceType === 'halfbreed' ||
+        rdAny.raceType === 'half_breed_template' ||
+        eAny.isHalfBreed ||
+        eAny.raceType === 'halfbreed' ||
+        rdAny.templateCategory ||
+        (e.tags && (e.tags.includes('halfbreed') || e.tags.includes('template')))
+      );
+      return (c === 'races' || c === 'race') && isTempl;
+    });
+
+    for (const ct of customTemplates) {
+      if (!list.some(t => t.id === ct.id || t.name.toLowerCase() === ct.name.toLowerCase())) {
+        const abilityMap: Record<string, number> = {};
+        if (ct.raceData?.abilityBonuses) {
+          for (const b of ct.raceData.abilityBonuses) {
+            abilityMap[b.ability.toUpperCase()] = b.bonus;
+          }
+        }
+        const rdAny = (ct.raceData || {}) as any;
+        list.push({
+          id: ct.id,
+          name: ct.name,
+          edition: '3.5e',
+          source: ct.source || 'Custom Half-Breed Template',
+          levelAdjustment: rdAny.levelAdjustment ?? rdAny.templateLevelAdjustment ?? 1,
+          typeChange: ct.raceData?.creatureType ? `${ct.raceData.creatureType} (Augmented)` : 'Augmented Humanoid',
+          abilityModifiers: abilityMap,
+          naturalArmorBonus: rdAny.naturalArmorBonus || rdAny.naturalArmor || 0,
+          sizeChange: 'same',
+          traits: ct.raceData?.traits?.map(t => ({ name: t.name, description: t.description })) || [],
+          racialSkillBonuses: rdAny.racialSkillBonuses || (ct as any).racialSkillBonuses || [],
+          racialSkillPointsText: 'Racial skill points from template waived if class levels are present.',
+          description: ct.description || `${ct.name} template`
+        });
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return list;
+}
+
+export function getAvailable35eBaseCreatures(edition: RuleEdition = '3.5e'): BaseCreature35e[] {
+  const list = [...BASE_CREATURES_35E];
+  try {
+    const customEntries = loadCustomCompendiumEntries();
+    const customBases = customEntries.filter(e => {
+      const c = String(e.category || '').toLowerCase();
+      const eAny = e as any;
+      const rdAny = (e.raceData || {}) as any;
+      const isTempl = Boolean(
+        rdAny.isHalfBreed ||
+        rdAny.isHalfBreedTemplate ||
+        rdAny.raceType === 'halfbreed' ||
+        rdAny.raceType === 'half_breed_template' ||
+        eAny.isHalfBreed ||
+        eAny.raceType === 'halfbreed' ||
+        rdAny.templateCategory ||
+        (e.tags && (e.tags.includes('halfbreed') || e.tags.includes('template')))
+      );
+      return (c === 'races' || c === 'race') && !isTempl && isEditionMatch(e.edition, '3.5e');
+    });
+
+    for (const cb of customBases) {
+      if (!list.some(b => b.id === cb.id || b.name.toLowerCase() === cb.name.toLowerCase())) {
+        const abilityMap: Record<string, number> = {};
+        if (cb.raceData?.abilityBonuses) {
+          for (const b of cb.raceData.abilityBonuses) {
+            abilityMap[b.ability.toUpperCase()] = b.bonus;
+          }
+        }
+        const rdAny = (cb.raceData || {}) as any;
+        list.push({
+          id: cb.id,
+          name: cb.name,
+          size: (cb.raceData?.size as any) || 'Medium',
+          speed: cb.raceData?.speed || 30,
+          abilities: abilityMap as any,
+          naturalArmor: rdAny.naturalArmorBonus || rdAny.naturalArmor || 0,
+          darkvisionFeet: typeof cb.raceData?.darkvision === 'number' ? cb.raceData.darkvision : 0,
+          hasLowLightVision: false,
+          source: cb.source || 'Custom Race',
+          description: cb.description || cb.name,
+          traits: cb.raceData?.traits?.map(t => ({ name: t.name, description: t.description })) || [],
+          racialSkillBonuses: rdAny.racialSkillBonuses || (cb as any).racialSkillBonuses || []
+        });
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return list;
+}
+
+export function getAvailableParentRaces(edition: RuleEdition): ParentRaceData[] {
+  const list = [...PARENT_RACE_CATALOG];
+  try {
+    const customEntries = loadCustomCompendiumEntries();
+    const customRaces = customEntries.filter(e => {
+      const c = String(e.category || '').toLowerCase();
+      const eAny = e as any;
+      const rdAny = (e.raceData || {}) as any;
+      const isTempl = Boolean(rdAny.isHalfBreedTemplate || rdAny.raceType === 'half_breed_template' || eAny.isHalfBreedTemplate || eAny.raceType === 'half_breed_template');
+      return (c === 'races' || c === 'race') && !isTempl && isEditionMatch(e.edition, edition);
+    });
+
+    for (const cr of customRaces) {
+      const id = cr.id || cr.name.toLowerCase().replace(/\s+/g, '-');
+      if (!list.some(p => p.id === id || p.name.toLowerCase() === cr.name.toLowerCase())) {
+        const traits = cr.raceData?.traits || [];
+        list.push({
+          id,
+          name: cr.name,
+          size: (cr.raceData?.size as any) || 'Medium',
+          speed: cr.raceData?.speed || 30,
+          hasDarkvision: Boolean(cr.raceData?.darkvision),
+          primaryTraitName: traits[0]?.name || `${cr.name} Heritage`,
+          primaryTraitDesc: traits[0]?.description || `Heritage abilities inherited from ${cr.name}.`,
+          secondaryTraitName: traits[1]?.name || `${cr.name} Resilience`,
+          secondaryTraitDesc: traits[1]?.description || `Cultural adaptability from ${cr.name}.`,
+          statBonusHint: cr.raceData?.abilityBonuses?.map(b => `${b.ability.toUpperCase()} +${b.bonus}`).join(', ')
+        });
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+  return list;
 }
 
 export function getSubclassesForSystemClass(edition: RuleEdition, clsName: string): string[] {
@@ -86,9 +401,10 @@ export function getSubclassesForSystemClass(edition: RuleEdition, clsName: strin
   // 3. Check if it's a custom class in compendium
   try {
     const customEntries = loadCustomCompendiumEntries();
-    const customClass = customEntries.find(
-      e => e.category === 'classes' && e.name.toLowerCase() === lowerCls
-    );
+    const customClass = customEntries.find(e => {
+      const c = String(e.category || '').toLowerCase();
+      return (c === 'classes' || c === 'class') && e.name.toLowerCase().trim() === lowerCls;
+    });
     if (customClass?.classData?.subclasses && customClass.classData.subclasses.length > 0) {
       return customClass.classData.subclasses;
     }

@@ -63,7 +63,11 @@ export function parseAbilityScoreBonuses(input: string): ParsedStatBonus[] {
     // "+2 Strength" or "+10 STR" or "-2 Dex"
     /([+-]?\d+)\s*(?:to\s*)?(STR(?:ENGTH)?|DEX(?:TERITY)?|CON(?:STITUTION)?|INT(?:ELLIGENCE)?|WIS(?:DOM)?|CHA(?:RISMA)?)/gi,
     // "Strength +2" or "STR +10" or "Dexterity: +2"
-    /(STR(?:ENGTH)?|DEX(?:TERITY)?|CON(?:STITUTION)?|INT(?:ELLIGENCE)?|WIS(?:DOM)?|CHA(?:RISMA)?)\s*(?::\s*|\s+)?([+-]?\d+)/gi
+    /(STR(?:ENGTH)?|DEX(?:TERITY)?|CON(?:STITUTION)?|INT(?:ELLIGENCE)?|WIS(?:DOM)?|CHA(?:RISMA)?)\s*(?::\s*|\s+)?([+-]?\d+)/gi,
+    // "increases your Constitution score by 2" or "grants +2 Constitution"
+    /(?:increase[s]?|grant[s]?|raise[s]?)\s+(?:your\s+)?(STR(?:ENGTH)?|DEX(?:TERITY)?|CON(?:STITUTION)?|INT(?:ELLIGENCE)?|WIS(?:DOM)?|CHA(?:RISMA)?)(?:\s+score)?\s+by\s+([+-]?\d+)/gi,
+    // "Your Constitution score increases by 2"
+    /(STR(?:ENGTH)?|DEX(?:TERITY)?|CON(?:STITUTION)?|INT(?:ELLIGENCE)?|WIS(?:DOM)?|CHA(?:RISMA)?)(?:\s+score)?\s+(?:increases?|raised|raises)\s+by\s+([+-]?\d+)/gi
   ];
 
   const statMap: Record<string, 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA'> = {
@@ -75,7 +79,7 @@ export function parseAbilityScoreBonuses(input: string): ParsedStatBonus[] {
     cha: 'CHA', charisma: 'CHA'
   };
 
-  // Run first regex
+  // Run first regex (+X Stat)
   let m: RegExpExecArray | null;
   while ((m = statRegexes[0].exec(input)) !== null) {
     const val = parseInt(m[1], 10);
@@ -86,13 +90,36 @@ export function parseAbilityScoreBonuses(input: string): ParsedStatBonus[] {
     }
   }
 
-  // Run second regex
+  // Run second regex (Stat +X)
   while ((m = statRegexes[1].exec(input)) !== null) {
     const key = m[1].toLowerCase();
     const val = parseInt(m[2], 10);
     const normalized = statMap[key];
     if (normalized && !isNaN(val)) {
-      // Avoid duplicate if already matched
+      if (!results.some(r => r.stat === normalized && r.value === val)) {
+        results.push({ stat: normalized, value: val, rawMatch: m[0] });
+      }
+    }
+  }
+
+  // Run third regex (increases your Stat by X)
+  while ((m = statRegexes[2].exec(input)) !== null) {
+    const key = m[1].toLowerCase();
+    const val = parseInt(m[2], 10);
+    const normalized = statMap[key];
+    if (normalized && !isNaN(val)) {
+      if (!results.some(r => r.stat === normalized && r.value === val)) {
+        results.push({ stat: normalized, value: val, rawMatch: m[0] });
+      }
+    }
+  }
+
+  // Run fourth regex (Stat score increases by X)
+  while ((m = statRegexes[3].exec(input)) !== null) {
+    const key = m[1].toLowerCase();
+    const val = parseInt(m[2], 10);
+    const normalized = statMap[key];
+    if (normalized && !isNaN(val)) {
       if (!results.some(r => r.stat === normalized && r.value === val)) {
         results.push({ stat: normalized, value: val, rawMatch: m[0] });
       }

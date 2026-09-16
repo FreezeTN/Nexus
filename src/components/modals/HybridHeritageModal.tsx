@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { CharacterData, ClassFeature } from '../../types';
 import {
   PARENT_RACE_CATALOG,
@@ -14,6 +14,10 @@ import {
   HalfBreedTemplate35e,
   resolve35eHalfBreedTemplate
 } from '../../data/halfBreedData';
+import {
+  getAvailable35eHalfBreedTemplates,
+  getAvailable35eBaseCreatures
+} from './newCharacter/newCharacterData';
 import { applyHalfBreedTemplate35eToCharacter } from '../../utils/raceApplication';
 import { Dna, X, Check, Sparkles, Zap, Shield, Swords, Eye, Info, ChevronDown, ChevronUp, AlertTriangle, Layers } from 'lucide-react';
 
@@ -39,8 +43,11 @@ export const HybridHeritageModal: React.FC<HybridHeritageModalProps> = ({
   );
 
   // 3.5e Template System State
+  const availableBases35e = useMemo(() => getAvailable35eBaseCreatures(character.edition), [character.edition]);
+  const availableTemplates35e = useMemo(() => getAvailable35eHalfBreedTemplates(character.edition), [character.edition]);
+
   const defaultBaseId = currentHybrid?.baseRaceId || (
-    BASE_CREATURES_35E.find(b => character.race?.toLowerCase().includes(b.name.toLowerCase()))?.id || 'dwarf'
+    availableBases35e.find(b => character.race?.toLowerCase().includes(b.name.toLowerCase()))?.id || 'dwarf'
   );
   const defaultTemplateId = currentHybrid?.templateId || 'half-dragon';
 
@@ -72,8 +79,8 @@ export const HybridHeritageModal: React.FC<HybridHeritageModalProps> = ({
   const hasDarkvisionAlpine = primaryData.hasDarkvision || secondaryData.hasDarkvision;
 
   // Selected 3.5e Base & Template
-  const selectedBase = BASE_CREATURES_35E.find(b => b.id === selectedBaseId) || BASE_CREATURES_35E[0];
-  const selectedTemplate = HALF_BREED_TEMPLATES_35E.find(t => t.id === selectedTemplateId) || HALF_BREED_TEMPLATES_35E[0];
+  const selectedBase = availableBases35e.find(b => b.id === selectedBaseId) || availableBases35e[0] || BASE_CREATURES_35E[0];
+  const selectedTemplate = availableTemplates35e.find(t => t.id === selectedTemplateId) || availableTemplates35e[0] || HALF_BREED_TEMPLATES_35E[0];
 
   const charLevel = character.level || 1;
   const hasClassLevels = charLevel >= 1 || !!character.characterClass;
@@ -345,7 +352,7 @@ export const HybridHeritageModal: React.FC<HybridHeritageModalProps> = ({
                       onChange={(e) => setSelectedBaseId(e.target.value)}
                       className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100 font-medium focus:outline-none focus:border-amber-500"
                     >
-                      {BASE_CREATURES_35E.map(bc => (
+                      {availableBases35e.map(bc => (
                         <option key={bc.id} value={bc.id}>
                           {bc.name} ({bc.size}, {bc.speed}ft) — {bc.source.split(',')[0]}
                         </option>
@@ -370,7 +377,7 @@ export const HybridHeritageModal: React.FC<HybridHeritageModalProps> = ({
                       onChange={(e) => setSelectedTemplateId(e.target.value)}
                       className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100 font-medium focus:outline-none focus:border-amber-500"
                     >
-                      {HALF_BREED_TEMPLATES_35E.map(t => (
+                      {availableTemplates35e.map(t => (
                         <option key={t.id} value={t.id}>
                           {t.name} (LA +{t.levelAdjustment}) — {t.typeChange}
                         </option>

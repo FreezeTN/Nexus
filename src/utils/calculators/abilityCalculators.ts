@@ -1,4 +1,6 @@
 import { AbilityName, AbilityScores, CharacterData, GearItem, Skill } from '../../types';
+import { parseAbilityScoreBonuses } from '../homebrewValidator';
+import { getRacialSkillBonusForSkill } from '../racialSkillBonusEngine';
 
 export interface AbilityScoreDetails {
   baseScore: number;
@@ -133,6 +135,42 @@ export function getEffectiveAbilityDetails(char: CharacterData, ability: Ability
     }
   }
 
+  // Check feats for ability bonuses (half-feats, ASI feats, homebrew stat bonuses)
+  const feats = char?.feats || [];
+  for (const feat of feats) {
+    let featStatBonus = 0;
+
+    // 1. Structured abilityBonuses object if present
+    if (feat.abilityBonuses && typeof feat.abilityBonuses[ability] === 'number') {
+      featStatBonus += feat.abilityBonuses[ability]!;
+    }
+
+    // 2. Explicit statBonus string (e.g. "+2 Constitution", "+1 Strength")
+    if (feat.statBonus) {
+      const parsed = parseAbilityScoreBonuses(feat.statBonus);
+      for (const p of parsed) {
+        if (p.stat === ability || p.stat === 'ALL') {
+          featStatBonus += p.value;
+        }
+      }
+    }
+
+    // 3. Fallback: Parse from feat description / title if statBonus wasn't explicitly populated
+    if (featStatBonus === 0 && (feat.description || feat.name)) {
+      const parsed = parseAbilityScoreBonuses(`${feat.name || ''}: ${feat.description || ''}`);
+      for (const p of parsed) {
+        if (p.stat === ability || p.stat === 'ALL') {
+          featStatBonus += p.value;
+        }
+      }
+    }
+
+    if (featStatBonus !== 0) {
+      bonusAmount += featStatBonus;
+      bonusSources.push(`Feat: ${feat.name} (${formatModifier(featStatBonus)})`);
+    }
+  }
+
   const naturalWithBonus = baseScore + bonusAmount;
   let effectiveScore = naturalWithBonus;
   let isOverridden = false;
@@ -233,7 +271,8 @@ export function getSkillBonus(
   skill: Skill,
   abilities: AbilityScores,
   level: number,
-  character?: CharacterData
+  character?: CharacterData,
+  activeConditionIds?: string[]
 ): number {
   const abilityScore = abilities[skill.ability]?.score || 10;
   const mod = getAbilityModifier(abilityScore);
@@ -244,6 +283,11 @@ export function getSkillBonus(
     bonus += prof * 2;
   } else if (skill.proficient) {
     bonus += prof;
+  }
+
+  // D&D Racial Skill Bonus (Non-stacking, highest bonus applies)
+  if (character) {
+    bonus += getRacialSkillBonusForSkill(skill, character, activeConditionIds);
   }
 
   if (character?.inventory) {

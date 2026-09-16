@@ -14,7 +14,9 @@ import {
   DND35E_SKILL_SYNERGIES,
   calculate35eTotalArmorCheckPenalty,
   DND35E_ACP_SKILLS,
-  getSizeHideModifier
+  getSizeHideModifier,
+  resolveRacialSkillBonus,
+  getRacialSkillBonusForSkill
 } from '../../../utils/dndCalculations';
 import {
   Shield,
@@ -25,8 +27,11 @@ import {
   RefreshCw,
   AlertTriangle,
   Info,
-  Filter
+  Filter,
+  Dna
 } from 'lucide-react';
+import { ConditionalSkillRollModal } from '../../modals/ConditionalSkillRollModal';
+import { CharacterRacialBonusesModal } from '../../modals/CharacterRacialBonusesModal';
 
 import { useLanguage } from '../../../i18n/LanguageContext';
 
@@ -73,6 +78,12 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
 
   const [filterMode, setFilterMode] = useState<'all' | 'class' | 'cross' | 'trained' | 'synergy'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showRacialBonusesModal, setShowRacialBonusesModal] = useState(false);
+  const [conditionalRollModalSkill, setConditionalRollModalSkill] = useState<{
+    skill: Skill;
+    baseModifier: number;
+    edition: '5e' | '3.5e';
+  } | null>(null);
 
   const handleSkillProficiencyChange = (skillId: string, type: 'proficient' | 'expertise') => {
     const updatedSkills = character.skills.map(skill => {
@@ -131,11 +142,22 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
       icon={<Shield className="w-5 h-5 text-amber-500" />}
       storageKey="sheet1_skills"
       headerExtra={
-        character.edition !== '3.5e' ? (
-          <div className="text-xs text-stone-400 font-mono">
-            {t('stats.profBonus', 'Prof')}: <span className="text-purple-300 font-bold">+{profBonus}</span>
-          </div>
-        ) : undefined
+        <div className="flex items-center gap-2">
+          {character.edition !== '3.5e' && (
+            <div className="text-xs text-stone-400 font-mono hidden sm:block">
+              {t('stats.profBonus', 'Prof')}: <span className="text-purple-300 font-bold">+{profBonus}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowRacialBonusesModal(true)}
+            className="px-2 py-0.5 bg-stone-900 hover:bg-stone-800 text-amber-300 border border-amber-700/40 rounded text-[10px] font-mono flex items-center gap-1 transition"
+            title="View and customize D&D Racial Skill Bonuses"
+          >
+            <Dna className="w-3 h-3 text-amber-400" />
+            <span>Racial Bonuses</span>
+          </button>
+        </div>
       }
     >
       <div className="space-y-2 pt-2">
@@ -306,9 +328,10 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                 const isSwim = skill.name.toLowerCase() === 'swim';
                 const isHide = skill.name.toLowerCase() === 'hide';
                 const hideSizeMod = isHide ? getSizeHideModifier(character.sizeCategory) : 0;
-                const skillBonus = get35eSkillBonus(skill, character.abilities, character.skills, acpInfo.totalAcp, character.sizeCategory);
+                const skillBonus = get35eSkillBonus(skill, character.abilities, character.skills, acpInfo.totalAcp, character.sizeCategory, character);
                 const abilityMod = getAbilityModifier(character.abilities[skill.ability]?.score || 10);
                 const capInfo = check35eSkillRankCap(skill, character.level);
+                const racialRes = resolveRacialSkillBonus(skill, character);
 
                 return (
                   <div
@@ -339,89 +362,131 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                         </span>
                       </label>
 
-                      <span className="font-mono text-[10px] text-amber-500 font-bold w-6">
+                      <span className="font-mono text-[10px] text-amber-500 font-bold w-6 shrink-0">
                         {skill.ability}
                       </span>
-                      <span className="font-medium text-stone-200 truncate">{displayName}</span>
+                      <span className="font-medium text-stone-200 truncate shrink-0 max-w-[130px]" title={displayName}>
+                        {displayName}
+                      </span>
 
-                      {/* Synergy Badge */}
-                      {synergyInfo.totalBonus > 0 && (
-                        <span
-                          className="px-1.5 py-0.2 bg-emerald-950 border border-emerald-600/60 text-emerald-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
-                          title={`+${synergyInfo.totalBonus} Synergy Bonus from: ${synergyInfo.sources.join(', ')}`}
-                        >
-                          +{synergyInfo.totalBonus} Syn
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1 shrink-0">
+                        {/* Racial Bonus Badge (Non-stacking) */}
+                        {racialRes.unconditionalBonus > 0 && (
+                          <span
+                            className="px-1.5 py-0.5 bg-amber-950/80 border border-amber-500/60 text-amber-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
+                            title={`+${racialRes.unconditionalBonus} Racial Bonus (${racialRes.highestUnconditionalSource || 'Racial Trait'}). Racial bonuses do not stack.`}
+                          >
+                            +{racialRes.unconditionalBonus} Race
+                          </span>
+                        )}
 
-                      {/* ACP Badge */}
-                      {isAcpSkill && acpInfo.totalAcp < 0 && (
-                        <span
-                          className="px-1.5 py-0.2 bg-stone-900 border border-amber-700/50 text-amber-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
-                          title={isSwim ? `${acpInfo.totalAcp * 2} ACP (Double penalty for Swim in 3.5e)` : `${acpInfo.totalAcp} Armor Check Penalty`}
-                        >
-                          {isSwim ? `${acpInfo.totalAcp * 2} ACP` : `${acpInfo.totalAcp} ACP`}
-                        </span>
-                      )}
+                        {/* Conditional Racial Bonus Badges */}
+                        {racialRes.conditionalMatches.map(c => (
+                          <button
+                            key={c.bonusObj.id}
+                            type="button"
+                            onClick={() => setConditionalRollModalSkill({
+                              skill,
+                              baseModifier: skillBonus,
+                              edition: '3.5e'
+                            })}
+                            className="px-1.5 py-0.5 bg-purple-950/80 hover:bg-purple-900 border border-purple-500/60 text-purple-300 text-[9px] font-mono font-bold rounded shrink-0 flex items-center gap-1 transition cursor-pointer"
+                            title={`Situational Racial Bonus: +${c.value} (${c.condition || 'Situational'}). Click to roll situational check.`}
+                          >
+                            <Sparkles className="w-2.5 h-2.5 text-purple-400 shrink-0" />
+                            <span>+{c.value} Sit.</span>
+                          </button>
+                        ))}
 
-                      {/* Size Modifier Badge for Hide */}
-                      {isHide && hideSizeMod !== 0 && (
-                        <span
-                          className="px-1.5 py-0.2 bg-blue-950 border border-blue-600/60 text-blue-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
-                          title={`${formatModifier(hideSizeMod)} Size Modifier to Hide (${character.sizeCategory || 'Medium'})`}
-                        >
-                          {formatModifier(hideSizeMod)} Size
-                        </span>
-                      )}
+                        {/* Synergy Badge */}
+                        {synergyInfo.totalBonus > 0 && (
+                          <span
+                            className="px-1.5 py-0.5 bg-emerald-950 border border-emerald-600/60 text-emerald-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
+                            title={`+${synergyInfo.totalBonus} Synergy Bonus from: ${synergyInfo.sources.join(', ')}`}
+                          >
+                            +{synergyInfo.totalBonus} Syn
+                          </span>
+                        )}
 
-                      {/* Exceeded Cap Warning */}
-                      {capInfo.isExceeded && (
-                        <button
-                          type="button"
-                          onClick={() => handleCapToMax(skill.id, capInfo.maxRanks)}
-                          className="px-1.5 py-0.2 bg-rose-950 text-rose-300 border border-rose-600/60 text-[9px] font-mono font-bold rounded flex items-center gap-0.5 shrink-0 hover:bg-rose-900"
-                          title={`Exceeds 3.5e cap (${capInfo.maxRanks} ranks). Click to clamp.`}
-                        >
-                          <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
-                          <span>Max {capInfo.maxRanks}</span>
-                        </button>
-                      )}
+                        {/* ACP Badge */}
+                        {isAcpSkill && acpInfo.totalAcp < 0 && (
+                          <span
+                            className="px-1.5 py-0.5 bg-stone-900 border border-amber-700/50 text-amber-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
+                            title={isSwim ? `${acpInfo.totalAcp * 2} ACP (Double penalty for Swim in 3.5e)` : `${acpInfo.totalAcp} Armor Check Penalty`}
+                          >
+                            {isSwim ? `${acpInfo.totalAcp * 2} ACP` : `${acpInfo.totalAcp} ACP`}
+                          </span>
+                        )}
+
+                        {/* Size Modifier Badge for Hide */}
+                        {isHide && hideSizeMod !== 0 && (
+                          <span
+                            className="px-1.5 py-0.5 bg-blue-950 border border-blue-600/60 text-blue-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
+                            title={`${formatModifier(hideSizeMod)} Size Modifier to Hide (${character.sizeCategory || 'Medium'})`}
+                          >
+                            {formatModifier(hideSizeMod)} Size
+                          </span>
+                        )}
+
+                        {/* Exceeded Cap Warning */}
+                        {capInfo.isExceeded && (
+                          <button
+                            type="button"
+                            onClick={() => handleCapToMax(skill.id, capInfo.maxRanks)}
+                            className="px-1.5 py-0.5 bg-rose-950 text-rose-300 border border-rose-600/60 text-[9px] font-mono font-bold rounded flex items-center gap-0.5 shrink-0 hover:bg-rose-900"
+                            title={`Exceeds 3.5e cap (${capInfo.maxRanks} ranks). Click to clamp.`}
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5 text-rose-400" />
+                            <span>Max {capInfo.maxRanks}</span>
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-[11px] font-mono">
-                      <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded px-1.5 py-0.5" title="Skill Ranks">
+                    <div className="flex items-center gap-1.5 text-[11px] font-mono shrink-0">
+                      <div className="flex items-center gap-0.5 bg-stone-900 border border-stone-800 rounded px-1.5 py-0.5" title="Skill Ranks (R)">
                         <span className="text-stone-500 text-[9px]">R:</span>
                         <input
                           type="number"
                           min="0"
                           value={skill.ranks || 0}
                           onChange={(e) => handle35eSkillChange(skill.id, 'ranks', parseInt(e.target.value) || 0)}
-                          className="w-8 bg-transparent text-center font-bold text-amber-300 focus:outline-none"
+                          className="w-6 bg-transparent text-center font-bold text-amber-300 focus:outline-none"
                         />
                       </div>
 
-                      <div className="text-stone-400 text-[10px]" title="Ability Modifier">
+                      <div className="text-stone-400 text-[10px] min-w-[22px] text-center" title="Ability Modifier (A)">
                         A:{formatModifier(abilityMod)}
                       </div>
 
-                      <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded px-1.5 py-0.5" title="Misc Modifier">
+                      <div className="flex items-center gap-0.5 bg-stone-900 border border-stone-800 rounded px-1.5 py-0.5" title="Misc Modifier (M)">
                         <span className="text-stone-500 text-[9px]">M:</span>
                         <input
                           type="number"
                           value={skill.miscMod || 0}
                           onChange={(e) => handle35eSkillChange(skill.id, 'miscMod', parseInt(e.target.value) || 0)}
-                          className="w-7 bg-transparent text-center font-bold text-stone-300 focus:outline-none"
+                          className="w-5 bg-transparent text-center font-bold text-stone-300 focus:outline-none"
                         />
                       </div>
 
-                      <span className="font-bold text-emerald-300 text-sm ml-1">
+                      <span className="font-bold text-emerald-300 text-sm min-w-[24px] text-right">
                         {formatModifier(skillBonus)}
                       </span>
 
                       <button
-                        onClick={() => onRoll(`${displayName} Check (3.5e)`, 20, 1, skillBonus, 'normal')}
-                        className="p-1 bg-stone-800 hover:bg-amber-600 text-stone-300 hover:text-white rounded-lg transition"
-                        title={`Roll ${displayName} Check`}
+                        onClick={() => {
+                          if (racialRes.hasConditional) {
+                            setConditionalRollModalSkill({
+                              skill,
+                              baseModifier: skillBonus,
+                              edition: '3.5e'
+                            });
+                          } else {
+                            onRoll(`${displayName} Check (3.5e)`, 20, 1, skillBonus, 'normal');
+                          }
+                        }}
+                        className="p-1 bg-stone-800 hover:bg-amber-600 text-stone-300 hover:text-white rounded-lg transition shrink-0"
+                        title={racialRes.hasConditional ? `Roll ${displayName} Check (Situational racial bonus available)` : `Roll ${displayName} Check`}
                       >
                         <Dices className="w-3.5 h-3.5" />
                       </button>
@@ -431,7 +496,9 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
               }
 
               // Standard 5e Skill Render
-              const skillBonus = getSkillBonus(skill, effectiveAbilities, character.level);
+              const skillBonus = getSkillBonus(skill, effectiveAbilities, character.level, character);
+              const racialRes = resolveRacialSkillBonus(skill, character);
+
               return (
                 <div
                   key={skill.id}
@@ -460,21 +527,63 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                       [EXP]
                     </button>
 
-                    <span className="font-mono text-[10px] text-amber-500 font-bold w-7">
+                    <span className="font-mono text-[10px] text-amber-500 font-bold w-7 shrink-0">
                       {skill.ability}
                     </span>
 
-                    <span className="font-medium text-stone-200 truncate">{displayName}</span>
+                    <span className="font-medium text-stone-200 truncate shrink-0 max-w-[140px]" title={displayName}>
+                      {displayName}
+                    </span>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {/* Racial Bonus Badge (Non-stacking) */}
+                      {racialRes.unconditionalBonus > 0 && (
+                        <span
+                          className="px-1.5 py-0.5 bg-amber-950/80 border border-amber-500/60 text-amber-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
+                          title={`+${racialRes.unconditionalBonus} Racial Bonus (${racialRes.highestUnconditionalSource || 'Racial Trait'}). Racial bonuses do not stack.`}
+                        >
+                          +{racialRes.unconditionalBonus} Race
+                        </span>
+                      )}
+
+                      {/* Conditional Racial Bonus Badges */}
+                      {racialRes.conditionalMatches.map(c => (
+                        <button
+                          key={c.bonusObj.id}
+                          type="button"
+                          onClick={() => setConditionalRollModalSkill({
+                            skill,
+                            baseModifier: skillBonus,
+                            edition: '5e'
+                          })}
+                          className="px-1.5 py-0.5 bg-purple-950/80 hover:bg-purple-900 border border-purple-500/60 text-purple-300 text-[9px] font-mono font-bold rounded shrink-0 flex items-center gap-1 transition cursor-pointer"
+                          title={`Situational Racial Bonus: +${c.value} (${c.condition || 'Situational'}). Click to roll situational check.`}
+                        >
+                          <Sparkles className="w-2.5 h-2.5 text-purple-400 shrink-0" />
+                          <span>+{c.value} Sit.</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-amber-200 text-sm">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-mono font-bold text-amber-200 text-sm min-w-[24px] text-right">
                       {formatModifier(skillBonus)}
                     </span>
                     <button
-                      onClick={() => onRoll(`${displayName} Check`, 20, 1, skillBonus, 'normal')}
-                      className="p-1 bg-stone-800 hover:bg-amber-600 text-stone-300 hover:text-white rounded-lg transition"
-                      title={`Roll ${displayName} Check`}
+                      onClick={() => {
+                        if (racialRes.hasConditional) {
+                          setConditionalRollModalSkill({
+                            skill,
+                            baseModifier: skillBonus,
+                            edition: '5e'
+                          });
+                        } else {
+                          onRoll(`${displayName} Check`, 20, 1, skillBonus, 'normal');
+                        }
+                      }}
+                      className="p-1 bg-stone-800 hover:bg-amber-600 text-stone-300 hover:text-white rounded-lg transition shrink-0"
+                      title={racialRes.hasConditional ? `Roll ${displayName} Check (Situational racial bonus available)` : `Roll ${displayName} Check`}
                     >
                       <Dices className="w-3.5 h-3.5" />
                     </button>
@@ -484,6 +593,48 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
             })}
         </div>
       </div>
+
+      {conditionalRollModalSkill && (
+        <ConditionalSkillRollModal
+          isOpen={!!conditionalRollModalSkill}
+          onClose={() => setConditionalRollModalSkill(null)}
+          skill={conditionalRollModalSkill.skill}
+          character={character}
+          edition={conditionalRollModalSkill.edition}
+          baseModifier={conditionalRollModalSkill.baseModifier}
+          calculateWithConditions={(activeConditionIds) => {
+            if (conditionalRollModalSkill.edition === '3.5e') {
+              return get35eSkillBonus(
+                conditionalRollModalSkill.skill,
+                character.abilities,
+                character.skills,
+                acpInfo.totalAcp,
+                character.sizeCategory,
+                character,
+                activeConditionIds
+              );
+            } else {
+              return getSkillBonus(
+                conditionalRollModalSkill.skill,
+                effectiveAbilities,
+                character.level,
+                character,
+                activeConditionIds
+              );
+            }
+          }}
+          onRoll={onRoll}
+        />
+      )}
+
+      {showRacialBonusesModal && (
+        <CharacterRacialBonusesModal
+          isOpen={showRacialBonusesModal}
+          onClose={() => setShowRacialBonusesModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
     </CollapsibleBox>
   );
 };

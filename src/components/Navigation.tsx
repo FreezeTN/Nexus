@@ -1,10 +1,17 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink, MapPin, User, Sliders } from 'lucide-react';
+import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink, MapPin, User, Sliders, GripVertical, RotateCcw } from 'lucide-react';
 import { RuleEdition } from '../types';
 import { UserProfile, GameSession } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
 import { useUiMode } from '../context/UiModeContext';
-import { useLayoutCustomization } from '../utils/layoutCustomization';
+import {
+  useLayoutCustomization,
+  getCustomTabOrder,
+  saveCustomTabOrder,
+  resetCustomTabOrder,
+  sortTabsByCustomOrder,
+  EVENT_NAV_TAB_ORDER_CHANGED
+} from '../utils/layoutCustomization';
 
 export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
 
@@ -44,6 +51,28 @@ export const Navigation: React.FC<NavigationProps> = ({
       onTabChange('sheet1');
     }
   }, [workspaceRole, activeTab, onTabChange]);
+
+  // Tab order customization & drag-and-drop alignment
+  const [tabOrder, setTabOrder] = useState<string[] | null>(() => getCustomTabOrder(workspaceRole));
+  const [draggedTabId, setDraggedTabId] = useState<TabId | null>(null);
+  const [dragOverTabId, setDragOverTabId] = useState<TabId | null>(null);
+  const [dropPosition, setDropPosition] = useState<'before' | 'after' | null>(null);
+  const isDraggingRef = useRef(false);
+
+  useEffect(() => {
+    setTabOrder(getCustomTabOrder(workspaceRole));
+  }, [workspaceRole]);
+
+  useEffect(() => {
+    const handleOrderChange = (e: Event) => {
+      const customEvent = e as CustomEvent<{ role: string; order: string[] | null }>;
+      if (customEvent.detail && customEvent.detail.role === workspaceRole) {
+        setTabOrder(customEvent.detail.order);
+      }
+    };
+    window.addEventListener(EVENT_NAV_TAB_ORDER_CHANGED, handleOrderChange);
+    return () => window.removeEventListener(EVENT_NAV_TAB_ORDER_CHANGED, handleOrderChange);
+  }, [workspaceRole]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -228,8 +257,78 @@ export const Navigation: React.FC<NavigationProps> = ({
     allTabs = [tabStats, tabCombat, tabDmOverview, tabGear, tabSpells, tabNotes, tabCompendium, tabGuide];
   }
 
+  // Apply custom user tab alignment order
+  const sortedAllTabs = sortTabsByCustomOrder(allTabs, tabOrder);
+
+  // Drag and drop handlers for sheet tab re-alignment
+  const handleDragStart = (e: React.DragEvent, id: TabId) => {
+    isDraggingRef.current = true;
+    setDraggedTabId(id);
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: TabId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (!draggedTabId || draggedTabId === id) {
+      if (dragOverTabId !== null) setDragOverTabId(null);
+      if (dropPosition !== null) setDropPosition(null);
+      return;
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isRightHalf = e.clientX > (rect.left + rect.width / 2);
+    const pos = isRightHalf ? 'after' : 'before';
+    if (dragOverTabId !== id || dropPosition !== pos) {
+      setDragOverTabId(id);
+      setDropPosition(pos);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+    setDragOverTabId(null);
+    setDropPosition(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: TabId) => {
+    e.preventDefault();
+    const sourceId = (e.dataTransfer.getData('text/plain') as TabId) || draggedTabId;
+    if (sourceId && sourceId !== targetId) {
+      const allIds = sortedAllTabs.map(t => t.id);
+      const withoutSource = allIds.filter(id => id !== sourceId);
+      const targetIndex = withoutSource.indexOf(targetId);
+      if (targetIndex !== -1) {
+        const insertIndex = dropPosition === 'after' ? targetIndex + 1 : targetIndex;
+        withoutSource.splice(insertIndex, 0, sourceId);
+        setTabOrder(withoutSource);
+        saveCustomTabOrder(withoutSource, workspaceRole);
+      }
+    }
+    setDraggedTabId(null);
+    setDragOverTabId(null);
+    setDropPosition(null);
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 80);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTabId(null);
+    setDragOverTabId(null);
+    setDropPosition(null);
+    setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 80);
+  };
+
+  const handleResetOrder = () => {
+    resetCustomTabOrder(workspaceRole);
+    setTabOrder(null);
+  };
+
   // Filter tabs: respect user layout toggles, role restrictions, and active character state
-  const tabs = allTabs.filter(t => {
+  const tabs = sortedAllTabs.filter(t => {
     // Check user layout preferences for this tab
     const layoutKey = `nav_${t.id}`;
     if (!isVisible(layoutKey)) {
@@ -282,19 +381,50 @@ export const Navigation: React.FC<NavigationProps> = ({
               <div
                 key={tab.id}
                 role="none"
+                draggable={true}
+                onDragStart={(e) => handleDragStart(e, tab.id)}
+                onDragOver={(e) => handleDragOver(e, tab.id)}
+                onDragLeave={handleDragLeave}
+                onDrop={(e) => handleDrop(e, tab.id)}
+                onDragEnd={handleDragEnd}
                 data-active={isActive ? "true" : "false"}
-                className={`group flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border transition whitespace-nowrap text-left shrink-0 ${
-                  isActive
+                title={t('nav.dragReorder', 'Drag to re-align sheet tabs, or click to view')}
+                className={`group relative flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl border transition whitespace-nowrap text-left shrink-0 select-none cursor-grab active:cursor-grabbing ${
+                  draggedTabId === tab.id
+                    ? 'opacity-40 border-dashed border-amber-500 scale-95'
+                    : isActive
                     ? 'bg-theme-dark border-theme-strong text-theme-text shadow-md font-medium shadow-theme-glow ring-1 ring-amber-500/30'
                     : 'bg-stone-900/60 border-stone-800 text-stone-400 hover:text-stone-200 hover:bg-stone-900'
                 }`}
               >
+                {/* Drop indicator lines */}
+                {dragOverTabId === tab.id && dropPosition === 'before' && (
+                  <div className="absolute -left-1 sm:-left-1.5 top-0.5 bottom-0.5 w-1 bg-amber-400 rounded-full shadow-[0_0_10px_rgba(251,191,36,0.95)] z-30 pointer-events-none animate-pulse" />
+                )}
+                {dragOverTabId === tab.id && dropPosition === 'after' && (
+                  <div className="absolute -right-1 sm:-right-1.5 top-0.5 bottom-0.5 w-1 bg-amber-400 rounded-full shadow-[0_0_10px_rgba(251,191,36,0.95)] z-30 pointer-events-none animate-pulse" />
+                )}
+
+                {/* Drag Handle */}
+                <div
+                  className="text-stone-600 group-hover:text-amber-400/80 transition-colors p-0.5 -mr-0.5 cursor-grab active:cursor-grabbing"
+                  title={t('nav.dragHandle', 'Drag to re-align sheet')}
+                >
+                  <GripVertical className="w-3.5 h-3.5" />
+                </div>
+
                 <button
                   id={`tab-${tab.id}`}
                   role="tab"
                   aria-selected={isActive}
                   aria-controls={`tabpanel-${tab.id}`}
-                  onClick={() => onTabChange(tab.id)}
+                  onClick={(e) => {
+                    if (isDraggingRef.current) {
+                      e.preventDefault();
+                      return;
+                    }
+                    onTabChange(tab.id);
+                  }}
                   className="flex items-center gap-2 cursor-pointer focus:outline-none"
                 >
                   <div
@@ -338,6 +468,19 @@ export const Navigation: React.FC<NavigationProps> = ({
           })}
           <div className="w-4 shrink-0 h-1" />
         </div>
+
+        {/* Reset Alignment Button (Shown when tabs are customized) */}
+        {tabOrder && (
+          <button
+            onClick={handleResetOrder}
+            title={t('nav.resetAlignment', 'Reset sheet tabs to default alignment')}
+            aria-label="Reset sheet tabs to default alignment"
+            className="hidden sm:flex items-center gap-1 px-2 py-1.5 ml-1 text-[11px] rounded-lg border border-amber-600/40 bg-amber-950/40 text-amber-300 hover:bg-amber-900/60 hover:text-amber-200 transition shrink-0 shadow-sm cursor-pointer"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden lg:inline font-mono text-[10px]">Reset Order</span>
+          </button>
+        )}
 
         {/* Right Scroll Button */}
         <button

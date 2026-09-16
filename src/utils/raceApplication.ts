@@ -1,4 +1,4 @@
-import { CharacterData, ClassFeature, RuleEdition } from '../types';
+import { CharacterData, ClassFeature, RuleEdition, RacialSkillBonus, AbilityName } from '../types';
 import { CompendiumItem, loadCustomCompendiumEntries } from '../data/compendiumData';
 import {
   parseAbilityScoreBonuses,
@@ -10,6 +10,7 @@ import {
   parseSlashProgression
 } from './homebrewValidator';
 import { recalculateCharacterAC } from './dndCalculations';
+import { SRD_RACIAL_SKILL_BONUSES } from './racialSkillBonusEngine';
 import {
   CLASSIC_SRD_HALF_BREEDS,
   ClassicSRDHalfBreed,
@@ -22,6 +23,7 @@ export interface CalculatedRaceStats {
   raceName: string;
   abilityBonuses: Record<string, number>;
   abilityBonusSummary: string[];
+  racialSkillBonuses: RacialSkillBonus[];
   damageReduction: {
     value: number;
     bypass: string;
@@ -77,18 +79,29 @@ export function findRaceInCompendiumOrSRD(
   customEntries?: CompendiumItem[]
 ): CompendiumItem | null {
   if (!raceName || !raceName.trim()) return null;
-  const target = raceName.trim().toLowerCase();
+
+  // Clean race name in case of emoji decorations or badge suffixes from dropdowns
+  let cleanName = raceName.trim();
+  cleanName = cleanName.replace(/^[✨🌟🧬🧝\s]+/, '').replace(/\s*\((Homebrew|Custom|Half-Breed|Half-Breed Template|Template|Universal)[^)]*\)$/i, '').trim();
+
+  const rawTarget = raceName.trim().toLowerCase();
+  const target = cleanName.toLowerCase();
 
   // 1. Search provided or loaded custom compendium entries
   const entries = customEntries || loadCustomCompendiumEntries();
+  const isRaceCat = (cat?: string) => cat === 'races' || cat === 'race' || cat?.toLowerCase() === 'races' || cat?.toLowerCase() === 'race';
+
   const foundCustom = entries.find(
-    e => e.category === 'races' && e.name.trim().toLowerCase() === target
+    e => isRaceCat(e.category) && (
+      e.name.trim().toLowerCase() === target ||
+      e.name.trim().toLowerCase() === rawTarget
+    )
   );
   if (foundCustom) return foundCustom;
 
   // Partial match fallback for custom races (e.g. "Tiefling Trueblood" vs "Tiefling Trueblood Lineage")
   const partialCustom = entries.find(
-    e => e.category === 'races' && (
+    e => isRaceCat(e.category) && (
       e.name.toLowerCase().includes(target) || target.includes(e.name.toLowerCase())
     )
   );
@@ -109,7 +122,7 @@ export function findRaceInCompendiumOrSRD(
   }
 
   // 3. Fallback: Core race basic stats generator
-  return generateStandardRaceCompendiumFallback(raceName, edition);
+  return generateStandardRaceCompendiumFallback(cleanName, edition);
 }
 
 /**
@@ -287,31 +300,67 @@ export function calculateRaceBonusesAndDefenses(
   };
   const abilityBonusSummary: string[] = [];
 
+  // A. Check structured rd.abilityBonuses array
   if (Array.isArray(rd?.abilityBonuses) && rd.abilityBonuses.length > 0) {
     for (const b of rd.abilityBonuses) {
-      const norm = normalizeAbilityName(b.ability);
+      const rawStat = b.ability || b.stat || b.name || '';
+      const norm = normalizeAbilityName(rawStat);
+      const val = Number(b.bonus ?? b.value ?? b.modifier ?? 0);
       if (norm === 'ALL') {
         Object.keys(abilityBonuses).forEach(k => {
-          abilityBonuses[k] += b.bonus;
+          abilityBonuses[k] += val;
         });
-        abilityBonusSummary.push(`${b.bonus >= 0 ? '+' : ''}${b.bonus} All`);
+        abilityBonusSummary.push(`${val >= 0 ? '+' : ''}${val} All`);
       } else if (norm && norm in abilityBonuses) {
-        abilityBonuses[norm] += b.bonus;
-        abilityBonusSummary.push(`${b.bonus >= 0 ? '+' : ''}${b.bonus} ${norm}`);
+        abilityBonuses[norm] += val;
+        abilityBonusSummary.push(`${val >= 0 ? '+' : ''}${val} ${norm}`);
       }
     }
-  } else if (rd?.abilityBonusesStr || desc) {
-    const parsed = parseAbilityScoreBonuses(rd?.abilityBonusesStr || desc);
+  } else if (rd?.abilityBonuses && typeof rd.abilityBonuses === 'object' && !Array.isArray(rd.abilityBonuses)) {
+    // B. Check rd.abilityBonuses object e.g. { STR: 2, DEX: 1 }
+    for (const [k, v] of Object.entries(rd.abilityBonuses)) {
+      const norm = normalizeAbilityName(k);
+      const val = Number(v ?? 0);
+      if (norm && norm in abilityBonuses && val !== 0) {
+        abilityBonuses[norm] += val;
+        abilityBonusSummary.push(`${val >= 0 ? '+' : ''}${val} ${norm}`);
+      }
+    }
+  }
+
+  // C. Check rd.abilityModifiers
+  if (rd?.abilityModifiers && typeof rd.abilityModifiers === 'object') {
+    for (const [k, v] of Object.entries(rd.abilityModifiers)) {
+      const norm = normalizeAbilityName(k);
+      const val = Number(v ?? 0);
+      if (norm && norm in abilityBonuses && abilityBonuses[norm] === 0 && val !== 0) {
+        abilityBonuses[norm] += val;
+        abilityBonusSummary.push(`${val >= 0 ? '+' : ''}${val} ${norm}`);
+      }
+    }
+  }
+
+  // D. Check rd.abilityBonusesStr or description
+  const textToParse = rd?.abilityBonusesStr || (abilityBonusSummary.length === 0 ? desc : '');
+  if (textToParse) {
+    const parsed = parseAbilityScoreBonuses(textToParse);
     for (const p of parsed) {
       const norm = normalizeAbilityName(p.stat);
+      const val = Number(p.value || 0);
       if (norm === 'ALL') {
         Object.keys(abilityBonuses).forEach(k => {
-          abilityBonuses[k] += p.value;
+          if (abilityBonuses[k] === 0) {
+            abilityBonuses[k] += val;
+          }
         });
-        abilityBonusSummary.push(`${p.value >= 0 ? '+' : ''}${p.value} All`);
+        if (!abilityBonusSummary.some(s => s.includes('All'))) {
+          abilityBonusSummary.push(`${val >= 0 ? '+' : ''}${val} All`);
+        }
       } else if (norm && norm in abilityBonuses) {
-        abilityBonuses[norm] += p.value;
-        abilityBonusSummary.push(`${p.value >= 0 ? '+' : ''}${p.value} ${norm}`);
+        if (abilityBonuses[norm] === 0 && val !== 0) {
+          abilityBonuses[norm] = val;
+          abilityBonusSummary.push(`${val >= 0 ? '+' : ''}${val} ${norm}`);
+        }
       }
     }
   }
@@ -542,10 +591,52 @@ export function calculateRaceBonusesAndDefenses(
     }
   }
 
+  // 10. Racial Skill Bonuses
+  let racialSkillBonuses: RacialSkillBonus[] = [];
+
+  // A. Check structured racialSkillBonuses on rd or raceItemOrData
+  if (Array.isArray(rd?.racialSkillBonuses) && rd.racialSkillBonuses.length > 0) {
+    racialSkillBonuses = [...rd.racialSkillBonuses];
+  } else if (Array.isArray(raceItemOrData?.racialSkillBonuses) && raceItemOrData.racialSkillBonuses.length > 0) {
+    racialSkillBonuses = [...raceItemOrData.racialSkillBonuses];
+  }
+
+  // B. If empty, check skillAffinities or skillAffinitiesStr
+  const skillAffText = rd?.skillAffinities || rd?.skillAffinitiesStr || '';
+  if (racialSkillBonuses.length === 0 && skillAffText) {
+    const regex = /([+-]?\d+)\s*(?:racial\s*bonus\s*(?:on|to)\s*)?([A-Za-z\s()]+?)(?:checks?)?(?:,|$|\.|\n)/gi;
+    let sm: RegExpExecArray | null;
+    while ((sm = regex.exec(skillAffText)) !== null) {
+      const bVal = parseInt(sm[1], 10);
+      const skName = sm[2]?.trim();
+      if (!isNaN(bVal) && skName && skName.length < 30) {
+        racialSkillBonuses.push({
+          id: `rsb-aff-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          type: 'specific',
+          skillName: skName,
+          bonus: bVal,
+          source: `${raceName} Skill Affinity`
+        });
+      }
+    }
+  }
+
+  // C. Fallback: check SRD standard racial skill catalog
+  if (racialSkillBonuses.length === 0) {
+    const rLower = raceName.toLowerCase().trim();
+    for (const [key, bonuses] of Object.entries(SRD_RACIAL_SKILL_BONUSES)) {
+      if (rLower.includes(key)) {
+        racialSkillBonuses = [...bonuses];
+        break;
+      }
+    }
+  }
+
   return {
     raceName,
     abilityBonuses,
     abilityBonusSummary,
+    racialSkillBonuses,
     damageReduction: {
       value: drValue,
       bypass: drBypass || '-',
@@ -591,17 +682,33 @@ export function applyRaceToCharacter(
   const calculated = calculateRaceBonusesAndDefenses(raceItemOrData, charLevel);
   const raceName = raceItemOrData.name || raceItemOrData.raceData?.name || character.race;
 
-  // 1. Ability Scores Application
+  // 1. Ability Scores Application (Clean Non-Stacking with Previous Racial Bonuses)
   const updatedAbilities: Record<string, any> = { ...(character.abilities || {}) };
   const applyAbilities = options?.applyAbilities !== false;
 
+  const prevRacialBonuses: Record<string, number> = { ...(character.appliedRacialAbilityBonuses || {}) };
+  const hadTrackedBonuses = Boolean(character.appliedRacialAbilityBonuses);
+
+  // If character didn't have tracked bonuses stored, but has an existing different race, derive previous bonuses to back them out
+  if (!hadTrackedBonuses && character.race && character.race.trim().toLowerCase() !== raceName.trim().toLowerCase() && !options?.isNewCharacterCreation) {
+    const prevRaceItem = findRaceInCompendiumOrSRD(character.race, character.edition);
+    if (prevRaceItem) {
+      const prevCalculated = calculateRaceBonusesAndDefenses(prevRaceItem, charLevel);
+      Object.assign(prevRacialBonuses, prevCalculated.abilityBonuses);
+    }
+  }
+
   if (applyAbilities) {
-    for (const [stat, bonus] of Object.entries(calculated.abilityBonuses)) {
-      if (bonus !== 0) {
-        const currentScore = updatedAbilities[stat]?.score ?? 10;
+    const statKeys = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'];
+    for (const stat of statKeys) {
+      const prevBonus = Number(prevRacialBonuses[stat] || 0);
+      const newBonus = Number(calculated.abilityBonuses[stat] || 0);
+      const netDiff = options?.isNewCharacterCreation ? newBonus : (newBonus - prevBonus);
+      if (netDiff !== 0) {
+        const currentScore = Number(updatedAbilities[stat]?.score) || 10;
         updatedAbilities[stat] = {
           ...(updatedAbilities[stat] || {}),
-          score: Math.max(1, currentScore + bonus)
+          score: Math.max(1, currentScore + netDiff)
         };
       }
     }
@@ -678,11 +785,30 @@ export function applyRaceToCharacter(
     ? `${character.senses}, ${calculated.senses}`
     : calculated.senses;
 
-  // 10. Construct and recalculate AC
+  // 10. Update 5e Skill Proficiencies if granted by racial traits
+  let updatedSkills = Array.isArray(character.skills) ? [...character.skills] : [];
+  if (character.edition !== '3.5e') {
+    for (const trait of calculated.traits) {
+      const tLower = (trait.name + ' ' + trait.description).toLowerCase();
+      for (const sk of updatedSkills) {
+        if (
+          tLower.includes(`proficiency in ${sk.name.toLowerCase()}`) ||
+          tLower.includes(`proficient in ${sk.name.toLowerCase()}`)
+        ) {
+          sk.proficient = true;
+        }
+      }
+    }
+  }
+
+  // 11. Construct and recalculate AC
   const updatedChar: CharacterData = {
     ...character,
     race: raceName,
     abilities: updatedAbilities as any,
+    appliedRacialAbilityBonuses: { ...calculated.abilityBonuses },
+    racialSkillBonuses: calculated.racialSkillBonuses,
+    skills: updatedSkills,
     speed,
     sizeCategory,
     senses,
@@ -750,6 +876,26 @@ export function recalculateScalingRaceStats(
 
   if (newFeaturesToUnlock.length > 0) {
     updated.classFeatures = [...(character.classFeatures || []), ...newFeaturesToUnlock];
+  }
+
+  // Ensure racialSkillBonuses are attached if not present
+  if ((!updated.racialSkillBonuses || updated.racialSkillBonuses.length === 0) && calculated.racialSkillBonuses.length > 0) {
+    updated.racialSkillBonuses = calculated.racialSkillBonuses;
+  }
+  if (!updated.appliedRacialAbilityBonuses && Object.values(calculated.abilityBonuses).some(v => v !== 0)) {
+    const updatedAbilities = { ...updated.abilities };
+    for (const [ab, bonus] of Object.entries(calculated.abilityBonuses)) {
+      if (bonus !== 0) {
+        const abilityKey = ab as AbilityName;
+        const currentScore = updatedAbilities[abilityKey]?.score ?? 10;
+        updatedAbilities[abilityKey] = {
+          ...updatedAbilities[abilityKey],
+          score: Math.max(1, currentScore + bonus)
+        };
+      }
+    }
+    updated.abilities = updatedAbilities as any;
+    updated.appliedRacialAbilityBonuses = { ...calculated.abilityBonuses };
   }
 
   return recalculateCharacterAC(updated);
@@ -897,6 +1043,56 @@ export function applyHalfBreedTemplate35eToCharacter(
     }
   }
 
+  // Collect Racial Skill Bonuses from Template, Base Creature, and Compendium
+  const collectedRacialSkillBonuses: RacialSkillBonus[] = [
+    ...(resolved.racialSkillBonuses || []),
+    ...(template.racialSkillBonuses || []),
+    ...(baseCreature.racialSkillBonuses || [])
+  ];
+
+  try {
+    const compEntries = loadCustomCompendiumEntries();
+    const tplEntry = compEntries.find(e =>
+      (e.category === 'races' || (e.category as string) === 'race') &&
+      (e.name.toLowerCase() === template.name.toLowerCase() || e.id === template.id || template.name.toLowerCase().includes(e.name.toLowerCase()))
+    );
+    if (tplEntry) {
+      const rd: any = tplEntry.raceData || tplEntry;
+      if (Array.isArray(rd.racialSkillBonuses)) {
+        for (const b of rd.racialSkillBonuses) {
+          if (!collectedRacialSkillBonuses.some(existing => existing.id === b.id)) {
+            collectedRacialSkillBonuses.push(b);
+          }
+        }
+      }
+    }
+    const baseEntry = compEntries.find(e =>
+      (e.category === 'races' || (e.category as string) === 'race') &&
+      (e.name.toLowerCase() === baseCreature.name.toLowerCase() || e.id === baseCreature.id)
+    );
+    if (baseEntry) {
+      const rd: any = baseEntry.raceData || baseEntry;
+      if (Array.isArray(rd.racialSkillBonuses)) {
+        for (const b of rd.racialSkillBonuses) {
+          if (!collectedRacialSkillBonuses.some(existing => existing.id === b.id)) {
+            collectedRacialSkillBonuses.push(b);
+          }
+        }
+      }
+    }
+  } catch {
+    // Ignore storage lookup errors
+  }
+
+  const srdBaseBonuses = SRD_RACIAL_SKILL_BONUSES[baseCreature.id.toLowerCase()];
+  if (Array.isArray(srdBaseBonuses)) {
+    for (const b of srdBaseBonuses) {
+      if (!collectedRacialSkillBonuses.some(existing => existing.id === b.id)) {
+        collectedRacialSkillBonuses.push(b);
+      }
+    }
+  }
+
   const updatedChar: CharacterData = {
     ...character,
     race: finalRaceName,
@@ -913,6 +1109,7 @@ export function applyHalfBreedTemplate35eToCharacter(
     energyResistances: resolvedEnergyRes,
     classFeatures: [...cleanFeatures, ...newFeatures],
     customAttacks: currentAttacks,
+    racialSkillBonuses: collectedRacialSkillBonuses,
     hybridHeritage: {
       enabled: true,
       isTemplateMode: true,

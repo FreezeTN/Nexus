@@ -1,6 +1,7 @@
 import { CharacterData, ClassFeature, Feat, RuleEdition, Skill } from '../types';
-import { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST } from '../utils/dndCalculations';
+import { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST } from './defaultSkillLists';
 import { getMonsterPortraitUrl } from './monsterPortraits';
+import { OFFICIAL_35E_NEW_MONSTERS } from './monsters35eData';
 
 // ==========================================
 // OFFICIAL D&D 5E FEATS
@@ -76,7 +77,8 @@ export const OFFICIAL_5E_FEATS: Feat[] = [
     id: 'feat-5e-12',
     name: 'Tough',
     source: 'Player’s Handbook',
-    description: 'Your hit point maximum increases by an amount equal to twice your level when you gain this feat. Whenever you gain a level thereafter, your hit point maximum increases by an additional 2 hit points.'
+    description: 'Your hit point maximum increases by an amount equal to twice your level when you gain this feat. Whenever you gain a level thereafter, your hit point maximum increases by an additional 2 hit points.',
+    hpPerLevel: 2
   },
   {
     id: 'feat-5e-13',
@@ -3168,9 +3170,9 @@ export const OFFICIAL_BULK_MONSTERS: CharacterData[] = ([
       { id: 'feat-cock-1', name: 'Petrifying Touch', source: 'Monstrosity Trait', description: 'Target hit by bite must succeed DC 11 CON save or be Restrained as it turns to stone. Repeated fail = Petrified.' }
     ]
   }
-] as Partial<CharacterData>[]).map(m => ({
+] as Partial<CharacterData>[]).concat(OFFICIAL_35E_NEW_MONSTERS).map(m => ({
   ...DEFAULT_MONSTER_FIELDS,
   ...m,
-  challengeRating: m.challengeRating || m.subclass?.replace(/^CR\\s*/i, '') || '1',
+  challengeRating: m.challengeRating || m.subclass?.replace(/^CR\s*/i, '') || '1',
   portraitUrl: m.portraitUrl || getMonsterPortraitUrl(m.name || 'Monster', m.id)
 } as CharacterData));

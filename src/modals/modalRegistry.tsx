@@ -54,6 +54,9 @@ const NewCharacterModal = lazy(() =>
 const LevelUpWizardModal = lazy(() =>
   import('../components/modals/LevelUpWizardModal').then(m => ({ default: m.LevelUpWizardModal }))
 );
+const LegalLicensingModal = lazy(() =>
+  import('../components/modals/LegalLicensingModal').then(m => ({ default: m.LegalLicensingModal }))
+);
 
 export function ModalLoadingFallback() {
   return (
@@ -340,6 +343,18 @@ export function renderRegisteredModal<K extends ModalId>({
             character={p.character}
             onUpdateCharacter={p.onUpdateCharacter}
             onRoll={p.onRoll}
+          />
+        </Suspense>
+      );
+    }
+    case 'legal-licensing': {
+      const p = (props || {}) as ModalPropsMap['legal-licensing'];
+      return (
+        <Suspense fallback={<ModalLoadingFallback />}>
+          <LegalLicensingModal
+            isOpen={true}
+            onClose={onClose}
+            defaultTab={p.defaultTab}
           />
         </Suspense>
       );

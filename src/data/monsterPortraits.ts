@@ -258,6 +258,14 @@ export const MONSTER_PORTRAITS_MAP: Record<string, string> = {
 
   // Aberrations & Undead
   'Beholder': `${SRD_RAW_BASE}/beholder.jpg`,
+  'Mind Flayer': `${SRD_RAW_BASE}/aboleth.jpg`,
+  'Illithid': `${SRD_RAW_BASE}/aboleth.jpg`,
+  'Bone Devil': `${SRD_RAW_BASE}/succubus.jpg`,
+  'Ice Devil': `${SRD_RAW_BASE}/iron-golem.jpg`,
+  'Gelugon': `${SRD_RAW_BASE}/iron-golem.jpg`,
+  'Osyluth': `${SRD_RAW_BASE}/succubus.jpg`,
+  'Ghast': `${SRD_RAW_BASE}/ghoul.jpg`,
+  'Wraith': `${SRD_RAW_BASE}/ghost.jpg`,
   'Lich': `${SRD_RAW_BASE}/lich.jpg`,
   'Vampire': `${SRD_RAW_BASE}/vampire.jpg`,
   'Skeleton': `${SRD_RAW_BASE}/skeleton.jpg`,

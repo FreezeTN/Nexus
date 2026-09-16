@@ -8,7 +8,8 @@ import {
   OFFICIAL_5E_FEATS,
   OFFICIAL_35E_FEATS
 } from '../../../data/srdRulesLibrary';
-import { Star, Plus, Trash2, Search } from 'lucide-react';
+import { getEffectiveMaxHp, getFeatEffectiveStats } from '../../../utils/dndCalculations';
+import { Star, Plus, Trash2, Search, Edit2 } from 'lucide-react';
 
 interface FeatsPanelProps {
   character: CharacterData;
@@ -27,17 +28,51 @@ export const FeatsPanel: React.FC<FeatsPanelProps> = ({
   const [featModalTab, setFeatModalTab] = useState<'official' | 'custom'>('official');
   const [featSearch, setFeatSearch] = useState('');
 
-  // New Feat Form state
+  // New / Edit Feat Form state
+  const [editingFeatId, setEditingFeatId] = useState<string | null>(null);
   const [newFeatName, setNewFeatName] = useState('');
   const [newFeatSource, setNewFeatSource] = useState('');
   const [newFeatDesc, setNewFeatDesc] = useState('');
+  const [newFeatStatBonus, setNewFeatStatBonus] = useState('');
+  const [newFeatHpPerLevel, setNewFeatHpPerLevel] = useState<number>(0);
   const [newFeatHpMaxBonus, setNewFeatHpMaxBonus] = useState<number>(0);
 
   const handleDeleteFeat = (id: string) => {
-    onUpdateCharacter({
+    const updatedFeats = character.feats.filter(f => f.id !== id);
+    const updatedChar = {
       ...character,
-      feats: character.feats.filter(f => f.id !== id)
-    });
+      feats: updatedFeats
+    };
+    // Downscale Current HP if it exceeds the new Effective Max HP
+    const newEffectiveMax = getEffectiveMaxHp(updatedChar);
+    if (updatedChar.hpCurrent > newEffectiveMax) {
+      updatedChar.hpCurrent = Math.max(0, newEffectiveMax);
+    }
+    onUpdateCharacter(updatedChar);
+  };
+
+  const handleOpenEditFeat = (feat: Feat) => {
+    setEditingFeatId(feat.id);
+    setNewFeatName(feat.name || '');
+    setNewFeatSource(feat.source || '');
+    setNewFeatDesc(feat.description || '');
+    setNewFeatStatBonus(feat.statBonus || '');
+    setNewFeatHpPerLevel(feat.hpPerLevel || 0);
+    setNewFeatHpMaxBonus(feat.hpMaxBonus || 0);
+    setFeatModalTab('custom');
+    setShowAddFeatModal(true);
+  };
+
+  const handleOpenAddModal = () => {
+    setEditingFeatId(null);
+    setNewFeatName('');
+    setNewFeatSource('');
+    setNewFeatDesc('');
+    setNewFeatStatBonus('');
+    setNewFeatHpPerLevel(0);
+    setNewFeatHpMaxBonus(0);
+    setFeatModalTab('official');
+    setShowAddFeatModal(true);
   };
 
   const handleAddOfficialFeat = (featObj: Feat) => {
@@ -54,37 +89,67 @@ export const FeatsPanel: React.FC<FeatsPanelProps> = ({
 
   const handleAddFeat = () => {
     if (!newFeatName.trim()) return;
-    const newFeat: Feat = {
-      id: 'feat-' + Date.now(),
-      name: newFeatName,
-      source: newFeatSource || 'Feat',
-      description: newFeatDesc,
-      hpMaxBonus: newFeatHpMaxBonus !== 0 ? newFeatHpMaxBonus : undefined
-    };
-    onUpdateCharacter({
-      ...character,
-      feats: [...character.feats, newFeat]
-    });
 
-    try {
-      saveCustomCompendiumEntry({
-        id: 'comp-feat-' + newFeat.id,
-        name: newFeat.name,
-        category: 'feats',
-        edition: character.edition || '5e',
-        description: newFeat.description,
-        source: newFeat.source || 'Custom Feat',
-        isCustom: true,
-        tags: [character.edition || '5e', 'Custom'],
-        featData: newFeat
+    if (editingFeatId) {
+      // Update existing feat on character
+      const updatedFeats = character.feats.map(f => {
+        if (f.id === editingFeatId) {
+          return {
+            ...f,
+            name: newFeatName.trim(),
+            source: newFeatSource.trim() || 'Feat',
+            description: newFeatDesc.trim(),
+            statBonus: newFeatStatBonus.trim() || undefined,
+            hpPerLevel: newFeatHpPerLevel !== 0 ? newFeatHpPerLevel : undefined,
+            hpMaxBonus: newFeatHpMaxBonus !== 0 ? newFeatHpMaxBonus : undefined
+          };
+        }
+        return f;
       });
-    } catch (e) {
-      console.error('Failed to auto-add feat to compendium', e);
+
+      onUpdateCharacter({
+        ...character,
+        feats: updatedFeats
+      });
+    } else {
+      // Add new feat
+      const newFeat: Feat = {
+        id: 'feat-' + Date.now(),
+        name: newFeatName.trim(),
+        source: newFeatSource.trim() || 'Feat',
+        description: newFeatDesc.trim(),
+        statBonus: newFeatStatBonus.trim() || undefined,
+        hpPerLevel: newFeatHpPerLevel !== 0 ? newFeatHpPerLevel : undefined,
+        hpMaxBonus: newFeatHpMaxBonus !== 0 ? newFeatHpMaxBonus : undefined
+      };
+      onUpdateCharacter({
+        ...character,
+        feats: [...character.feats, newFeat]
+      });
+
+      try {
+        saveCustomCompendiumEntry({
+          id: 'comp-feat-' + newFeat.id,
+          name: newFeat.name,
+          category: 'feats',
+          edition: character.edition || '5e',
+          description: newFeat.description,
+          source: newFeat.source || 'Custom Feat',
+          isCustom: true,
+          tags: [character.edition || '5e', 'Custom'],
+          featData: newFeat
+        });
+      } catch (e) {
+        console.error('Failed to auto-add feat to compendium', e);
+      }
     }
 
+    setEditingFeatId(null);
     setNewFeatName('');
     setNewFeatSource('');
     setNewFeatDesc('');
+    setNewFeatStatBonus('');
+    setNewFeatHpPerLevel(0);
     setNewFeatHpMaxBonus(0);
     setShowAddFeatModal(false);
   };
@@ -97,7 +162,7 @@ export const FeatsPanel: React.FC<FeatsPanelProps> = ({
         storageKey="sheet1_feats"
         headerExtra={
           <button
-            onClick={() => setShowAddFeatModal(true)}
+            onClick={handleOpenAddModal}
             className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/80 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition"
           >
             <Plus className="w-3.5 h-3.5" /> Add Feat
@@ -108,74 +173,115 @@ export const FeatsPanel: React.FC<FeatsPanelProps> = ({
           {character.feats.length === 0 ? (
             <p className="text-xs text-stone-500 italic py-2">No feats added yet.</p>
           ) : (
-            character.feats.map((feat) => (
-              <div
-                key={feat.id}
-                className="bg-stone-950/70 border border-stone-800 rounded-xl p-3 text-xs flex flex-col gap-1"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="font-serif font-bold text-amber-200 text-sm">{feat.name}</div>
-                  <div className="flex items-center gap-1.5">
-                    {isShapeshiftAbility(feat.name, feat.description) && (
+            character.feats.map((feat) => {
+              const featStats = getFeatEffectiveStats(feat);
+              return (
+                <div
+                  key={feat.id}
+                  className="bg-stone-950/70 border border-stone-800 rounded-xl p-3 text-xs flex flex-col gap-1"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-serif font-bold text-amber-200 text-sm">{feat.name}</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-stone-800 text-stone-300 border border-stone-700 font-medium">
+                        Feat
+                      </span>
+                      {feat.source && feat.source.toLowerCase() !== 'feat' && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-950/60 text-amber-300 border border-amber-800/60 font-medium">
+                          {feat.source}
+                        </span>
+                      )}
+                      {featStats.hpPerLevel !== undefined && featStats.hpPerLevel !== 0 && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-950/80 text-rose-300 border border-rose-800/60 font-semibold flex items-center gap-0.5">
+                          ❤️ +{featStats.hpPerLevel} HP/lvl
+                        </span>
+                      )}
+                      {featStats.hpMaxBonus !== undefined && featStats.hpMaxBonus !== 0 && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-950/80 text-rose-300 border border-rose-800/60 font-semibold flex items-center gap-0.5">
+                          ❤️ {featStats.hpMaxBonus > 0 ? `+${featStats.hpMaxBonus}` : featStats.hpMaxBonus} Max HP
+                        </span>
+                      )}
+                      {featStats.statBonus && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-semibold flex items-center gap-0.5">
+                          ⭐ {featStats.statBonus}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      {isShapeshiftAbility(feat.name, feat.description) && (
+                        <button
+                          onClick={onOpenShapeshift}
+                          className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                          title="Launch Nexus Shapeshift Engine"
+                        >
+                          <span>🐾</span>
+                          <span>Shapeshift</span>
+                        </button>
+                      )}
+                      {isCompanionSummonAbility(feat.name, feat.description) && (
+                        <button
+                          onClick={onOpenSummonCompanion}
+                          className="px-2.5 py-1 bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                          title="Launch Nexus Companion & Summon Engine"
+                        >
+                          <span>🦅</span>
+                          <span>Summon</span>
+                        </button>
+                      )}
                       <button
-                        onClick={onOpenShapeshift}
-                        className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
-                        title="Launch Nexus Shapeshift Engine"
+                        onClick={() => handleOpenEditFeat(feat)}
+                        className="text-stone-500 hover:text-amber-300 p-1 transition"
+                        title="Edit Feat"
                       >
-                        <span>🐾</span>
-                        <span>Shapeshift</span>
+                        <Edit2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
-                    {isCompanionSummonAbility(feat.name, feat.description) && (
                       <button
-                        onClick={onOpenSummonCompanion}
-                        className="px-2.5 py-1 bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
-                        title="Launch Nexus Companion & Summon Engine"
+                        onClick={() => handleDeleteFeat(feat.id)}
+                        className="text-stone-500 hover:text-rose-400 p-1 transition"
+                        title="Delete Feat"
                       >
-                        <span>🦅</span>
-                        <span>Summon</span>
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleDeleteFeat(feat.id)}
-                      className="text-stone-500 hover:text-rose-400 p-1 transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </div>
                   </div>
+                  {feat.prerequisite && (
+                    <p className="text-stone-400 italic text-[11px]">Prerequisite: {feat.prerequisite}</p>
+                  )}
+                  <p className="text-stone-300 text-xs leading-relaxed">{feat.description}</p>
                 </div>
-                <p className="text-stone-300 text-xs leading-relaxed">{feat.description}</p>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </CollapsibleBox>
 
-      {/* MODAL: Add Feat */}
+      {/* MODAL: Add / Edit Feat */}
       {showAddFeatModal && (
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-stone-900 border border-amber-600/50 rounded-2xl p-6 max-w-xl w-full shadow-2xl text-stone-100 space-y-4 max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between border-b border-stone-800 pb-3">
               <h3 className="text-lg font-serif font-bold text-amber-300 flex items-center gap-2">
-                <Star className="w-5 h-5 text-amber-500" /> Add Feat
+                <Star className="w-5 h-5 text-amber-500" /> {editingFeatId ? 'Edit Feat' : 'Add Feat'}
               </h3>
 
               <div className="flex bg-stone-950 p-1 rounded-xl border border-stone-800 text-xs">
-                <button
-                  onClick={() => setFeatModalTab('official')}
-                  className={`px-3 py-1 rounded-lg font-bold transition ${
-                    featModalTab === 'official' ? 'bg-amber-600 text-white shadow' : 'text-stone-400 hover:text-stone-200'
-                  }`}
-                >
-                  Official Library ({character.edition === '3.5e' ? '3.5e' : '5e'})
-                </button>
+                {!editingFeatId && (
+                  <button
+                    onClick={() => setFeatModalTab('official')}
+                    className={`px-3 py-1 rounded-lg font-bold transition ${
+                      featModalTab === 'official' ? 'bg-amber-600 text-white shadow' : 'text-stone-400 hover:text-stone-200'
+                    }`}
+                  >
+                    Official Library ({character.edition === '3.5e' ? '3.5e' : '5e'})
+                  </button>
+                )}
                 <button
                   onClick={() => setFeatModalTab('custom')}
                   className={`px-3 py-1 rounded-lg font-bold transition ${
                     featModalTab === 'custom' ? 'bg-amber-600 text-white shadow' : 'text-stone-400 hover:text-stone-200'
                   }`}
                 >
-                  Custom Feat
+                  {editingFeatId ? 'Feat Details' : 'Custom Feat'}
                 </button>
               </div>
             </div>
@@ -238,15 +344,46 @@ export const FeatsPanel: React.FC<FeatsPanelProps> = ({
                     className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
                   />
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-stone-400 mb-1">
+                      HP per Level <span className="text-amber-400 font-semibold">(Scaling)</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={newFeatHpPerLevel || ''}
+                      onChange={(e) => setNewFeatHpPerLevel(parseInt(e.target.value) || 0)}
+                      placeholder="e.g. 3 for +3 HP/lvl, 2 for Tough"
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 placeholder:text-stone-600"
+                    />
+                    <span className="text-[10px] text-stone-500 block mt-0.5">Scales with character level</span>
+                  </div>
+                  <div>
+                    <label className="block text-stone-400 mb-1">
+                      Flat Max HP Bonus <span className="text-stone-500">(One-time)</span>
+                    </label>
+                    <input
+                      type="number"
+                      value={newFeatHpMaxBonus || ''}
+                      onChange={(e) => setNewFeatHpMaxBonus(parseInt(e.target.value) || 0)}
+                      placeholder="e.g. 10 or 3"
+                      className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 placeholder:text-stone-600"
+                    />
+                    <span className="text-[10px] text-stone-500 block mt-0.5">Fixed permanent HP grant</span>
+                  </div>
+                </div>
                 <div>
-                  <label className="block text-stone-400 mb-1">HP Bonus (e.g. Toughness Feat gives +2 HP/level)</label>
+                  <label className="block text-stone-400 mb-1">
+                    Stat Bonus <span className="text-indigo-400 font-semibold">(Half-Feat / ASI)</span>
+                  </label>
                   <input
-                    type="number"
-                    value={newFeatHpMaxBonus}
-                    onChange={(e) => setNewFeatHpMaxBonus(parseInt(e.target.value) || 0)}
-                    placeholder="0"
-                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100"
+                    type="text"
+                    value={newFeatStatBonus}
+                    onChange={(e) => setNewFeatStatBonus(e.target.value)}
+                    placeholder="e.g. +2 Constitution, or +1 Strength"
+                    className="w-full bg-stone-800 border border-stone-700 rounded-lg p-2 text-stone-100 placeholder:text-stone-600"
                   />
+                  <span className="text-[10px] text-stone-500 block mt-0.5">Increases ability scores and auto-recalculates modifiers and HP</span>
                 </div>
                 <div>
                   <label className="block text-stone-400 mb-1">Description</label>
@@ -273,7 +410,7 @@ export const FeatsPanel: React.FC<FeatsPanelProps> = ({
                   onClick={handleAddFeat}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"
                 >
-                  Save Feat
+                  {editingFeatId ? 'Save Changes' : 'Save Feat'}
                 </button>
               )}
             </div>

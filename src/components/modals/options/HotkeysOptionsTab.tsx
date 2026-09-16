@@ -5,7 +5,6 @@ import {
   Search,
   Check,
   AlertCircle,
-  Sparkles,
   Command,
   Compass,
   Sliders,
@@ -337,14 +336,6 @@ export const HotkeysOptionsTab: React.FC = () => {
             );
           })
         )}
-      </div>
-
-      {/* Pro-Tip Note */}
-      <div className="p-3 bg-stone-950/80 rounded-xl border border-stone-800 flex items-start gap-2.5 text-stone-400 text-xs">
-        <Sparkles className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-        <div className="leading-relaxed">
-          <span className="text-stone-300 font-bold">Tabletop Speed Tip:</span> Hotkeys are automatically disabled while typing in text areas, chat inputs, or notes so you never accidentally switch tabs while editing.
-        </div>
       </div>
     </div>
   );

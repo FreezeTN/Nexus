@@ -844,3 +844,77 @@ export function useLayoutCustomization() {
     countEnabledForEdition
   };
 }
+
+export const STORAGE_KEY_NAV_TAB_ORDER = 'nexus_sheet_tab_order_v1';
+export const EVENT_NAV_TAB_ORDER_CHANGED = 'nexus_sheet_tab_order_changed';
+
+/**
+ * Get custom tab order saved for a specific workspace role.
+ */
+export function getCustomTabOrder(role: string = 'unified'): string[] | null {
+  try {
+    const raw = localStorage.getItem(`${STORAGE_KEY_NAV_TAB_ORDER}_${role}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to get custom tab order from storage:', e);
+  }
+  return null;
+}
+
+/**
+ * Save custom tab order for a workspace role and notify active components.
+ */
+export function saveCustomTabOrder(order: string[], role: string = 'unified'): void {
+  try {
+    localStorage.setItem(`${STORAGE_KEY_NAV_TAB_ORDER}_${role}`, JSON.stringify(order));
+    window.dispatchEvent(new CustomEvent(EVENT_NAV_TAB_ORDER_CHANGED, { detail: { role, order } }));
+  } catch (e) {
+    console.error('Failed to save custom tab order:', e);
+  }
+}
+
+/**
+ * Reset custom tab order for a workspace role to default.
+ */
+export function resetCustomTabOrder(role: string = 'unified'): void {
+  try {
+    localStorage.removeItem(`${STORAGE_KEY_NAV_TAB_ORDER}_${role}`);
+    window.dispatchEvent(new CustomEvent(EVENT_NAV_TAB_ORDER_CHANGED, { detail: { role, order: null } }));
+  } catch (e) {
+    console.error('Failed to reset custom tab order:', e);
+  }
+}
+
+/**
+ * Reorder an array of tabs according to a saved custom order.
+ * Any tabs not in the saved order are placed at the end in their original relative order.
+ */
+export function sortTabsByCustomOrder<T extends { id: string }>(tabs: T[], savedOrder: string[] | null): T[] {
+  if (!savedOrder || savedOrder.length === 0) return tabs;
+
+  const tabMap = new Map<string, T>();
+  tabs.forEach(t => tabMap.set(t.id, t));
+
+  const result: T[] = [];
+  savedOrder.forEach(id => {
+    const tab = tabMap.get(id);
+    if (tab) {
+      result.push(tab);
+      tabMap.delete(id);
+    }
+  });
+
+  tabs.forEach(t => {
+    if (tabMap.has(t.id)) {
+      result.push(t);
+    }
+  });
+
+  return result;
+}
+

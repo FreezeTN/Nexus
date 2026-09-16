@@ -510,6 +510,70 @@ MILESTONE 29: WORKSPACE STREAMLINING, REDUNDANCY ELIMINATION & CONTEXT-AWARE VIT
     - Step 6: Summary & Launch (Customized configuration recap, startup auto-launch preferences, and one-click workspace entrance).
   - Integrated Guided Tour trigger into the Universal Command Palette (`Ctrl+K` -> "Interactive Guided Tour & Workspace Setup") alongside the persistent header launcher.
 
+--------------------------------------------------------------------------------
+MILESTONE 30: OFFICIAL D&D 3.5E MONSTER BESTIARY EXPANSION & TACTICAL DEFENSE RULINGS (v0.9.10)
+--------------------------------------------------------------------------------
+* 25+ Official 3.5e Monster Bestiary Entries (`src/data/monsters35eData.ts`, `src/components/sheets/Sheet7Compendium.tsx`):
+  - Expanded the Compendium with classic 3.5e SRD monsters across all challenge tiers:
+    - Low Tier: Human Warrior Skeleton (CR 1/2), Orc Warrior (CR 1/2), Ghoul (CR 1), Bugbear Stalker (CR 2).
+    - Mid Tier: Shadow (CR 3), Rust Monster (CR 3), Gelatinous Cube (CR 3), Gargoyle (CR 4), Displacer Beast (CR 4), Owlbear (CR 4), Basilisk (CR 5), Manticore (CR 5), Wraith (CR 5).
+    - High Tier: Chimera (CR 7), Medusa (CR 7), Mind Flayer (CR 8), Aboleth (CR 7), Bone Devil (CR 9).
+    - Epic/Boss Tier: Beholder (CR 13), Ice Devil / Gelugon (CR 13), Lich 11th-Level Wizard (CR 13), Balor Demon (CR 20).
+
+* 3.5e Tactical Combat & Defenses Card:
+  - Enhanced the monster inspection modal in Sheet 7 with a specialized 3.5e combat readout detailing:
+    - Touch AC and Flat-Footed AC calculations.
+    - Base Attack Bonus (BAB) and grapple progression.
+    - Damage Reduction (DR) with bypass types (e.g. DR 10/Magic, DR 10/Good, DR 15/Cold Iron and Good).
+    - Spell Resistance (SR) ratings.
+    - Calculated Fortitude, Reflex, and Will saving throw modifiers.
+
+* Authentic Weapon Threat Ranges & Special Abilities:
+  - Equipped each 3.5e monster with authentic weapon threat ranges and critical multipliers (e.g. Scimitar 18-20/x2, Greataxe x3, Vorpal Greatsword).
+  - Multiattack routines, special venom mechanics, and iconic abilities including Beholder Eye Rays, Aboleth Mucus, Rust Monster antennae, and Medusa Petrifying Gaze.
+  - 1-click instant spawning into the active campaign encounter tracker, fully mapped with portrait artwork and tokens.
+
+--------------------------------------------------------------------------------
+MILESTONE 31: LEGAL LICENSING, SRD PROVENANCE ARCHITECTURE & OPEN GAMING SUITE (v0.9.11)
+--------------------------------------------------------------------------------
+* Interactive Legal & Licensing Compliance Modal (`src/components/modals/LegalLicensingModal.tsx`):
+  - Created a dedicated 3-tab legal compliance modal:
+    1. Attribution & Disclaimers: Full notices, Wizards of the Coast Fan Content compliance, and platform copyright.
+    2. SRD 5.1 under Creative Commons (CC-BY-4.0): Official irrevocable license text and 1-click attribution copy.
+    3. D&D 3.5e Open Game License v1.0a: Complete 15-section text and required section 15 disclosures.
+
+* Compendium License Provenance Badges (`src/components/sheets/Sheet7Compendium.tsx`):
+  - Tagged all compendium cards and detail modals with visual license badges (`CC-BY-4.0`, `OGL 1.0a`, `ORC`, and `Homebrew`).
+  - Guarantees clear visual provenance distinguishing official open content from user-authored material.
+
+* User Guide Legal & Licensing Hub (`src/components/sheets/Sheet6UserGuide.tsx`):
+  - Added dedicated "Legal & Licenses" reference tab covering Creative Commons permissions, OGL Section 15 requirements, Product Identity boundaries, and trademark fair use.
+  - Global launch triggers integrated into Main Menu footer, Compendium action bar, and User Guide header.
+
+--------------------------------------------------------------------------------
+MILESTONE 32: HYBRID HERITAGE SYNCHRONIZATION, CUSTOM TEMPLATE INTEGRATION & SKILLS ENGINE POLISH (v0.9.12)
+--------------------------------------------------------------------------------
+* Dynamic Custom Half-Breed Templates in Character Creation (`src/components/modals/newCharacter/newCharacterData.ts`, `src/components/modals/HybridHeritageModal.tsx`):
+  - Compendium Homebrew integration: Custom races and templates created in the Compendium Forge (`tags: ['halfbreed', 'template']` or `raceType: 'halfbreed'`) are dynamically loaded into character creation and hybrid heritage selection.
+  - Allows players to select custom templates (`getAvailable35eHalfBreedTemplates`) and custom base creatures (`getAvailable35eBaseCreatures`) alongside standard SRD templates (Half-Fiend, Half-Celestial, Half-Dragon, Mul, Half-Ogre).
+  - Full preservation of `racialSkillBonuses` and defense metadata (Damage Reduction, Spell Resistance, Natural Armor, Energy Resistances) when selecting custom templates.
+
+* Cross-Entity Lineage & Compendium Forge Sync (`src/components/sheets/Sheet7Compendium.tsx`):
+  - Implemented automatic cross-entity synchronization when updating custom races or half-breed templates in the Forge.
+  - Cascades changes directly to active characters matching the lineage (`c.hybridHeritage?.templateName`, `c.hybridHeritage?.baseRaceName`, `c.hybridHeritage?.primaryParent`, `c.hybridHeritage?.secondaryParent`), refreshing speed, damage reduction, and racial skill bonuses without manual re-creation.
+
+* Multi-Source Racial Skill Bonus & Situational Roll Engine (`src/utils/racialSkillBonusEngine.ts`, `src/components/modals/ConditionalSkillRollModal.tsx`):
+  - Built a unified engine that resolves racial skill bonuses from base race, hybrid heritage metadata, custom compendium items, and class features (e.g. `Template: Tiefling Trueblood`).
+  - Enforces official D&D 3.5e stacking rules: unconditional racial bonuses to the same skill do not stack (the highest single bonus applies).
+  - Separates unconditional bonuses from situational/conditional bonuses (e.g. Dwarven Stonecunning +2 related to stone or metal, Tiefling +2 on Bluff/Hide in darkness).
+  - Interactive `ConditionalSkillRollModal`: Provides a 1-click dedicated dice roller for situational checks factoring base skill bonus + circumstantial bonus + d20 roll.
+
+* Skills Panel Layout Polish & Anti-Overlap Protection (`src/components/sheets/sheet1/SkillsPanel.tsx`, `src/components/sheets/Sheet1StatsFeatures.tsx`):
+  - Compact Situational Badge: Replaced oversized multi-word condition strings with a clean `+2 Sit.` badge with sparkle icon and full hover tooltip.
+  - Rigid Right-Side Controls: Protected right-side controls with `shrink-0` and compact input widths (`w-6` for ranks, `w-5` for misc modifier) to prevent rank and modifier overlap across all resolutions.
+  - Skill Name Protection: Configured skill names with `shrink-0 max-w-[130px] truncate` so standard skill names (`Climb`, `Concentration`, `Handle Animal`) render in full without premature truncation.
+  - Responsive Grid Expansion: Expanded Sheet 1 Skills panel layout to `lg:col-span-6 xl:col-span-5`, providing ample horizontal breathing room on medium and large viewports.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

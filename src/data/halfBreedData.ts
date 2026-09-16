@@ -1,4 +1,4 @@
-import { ClassFeature, RuleEdition } from '../types';
+import { ClassFeature, RuleEdition, RacialSkillBonus } from '../types';
 
 export interface ClassicSRDHalfBreed {
   id: string;
@@ -813,6 +813,7 @@ export interface BaseCreature35e {
     description: string;
     conflictKey?: string; // e.g. "size_build"
   }>;
+  racialSkillBonuses?: RacialSkillBonus[];
   source: string;
   description: string;
 }
@@ -859,6 +860,7 @@ export interface HalfBreedTemplate35e {
     description: string;
     conflictKey?: string;
   }>;
+  racialSkillBonuses?: RacialSkillBonus[];
   racialSkillPointsText: string;
   hasDragonVarieties?: boolean;
   description: string;
@@ -1381,6 +1383,7 @@ export function resolve35eHalfBreedTemplate(
   skillPointsNotice: string;
   precedenceLog: string[];
   levelAdjustment: number;
+  racialSkillBonuses: RacialSkillBonus[];
 } {
   const precedenceLog: string[] = [];
 
@@ -1553,6 +1556,14 @@ export function resolve35eHalfBreedTemplate(
     precedenceLog.push(`[Rule 3 - Racial Skill Points]: Character has 0 class levels; template racial skill points granted.`);
   }
 
+  const combinedSkillBonuses: RacialSkillBonus[] = [
+    ...(base.racialSkillBonuses || []),
+    ...(template.racialSkillBonuses || [])
+  ];
+  if (combinedSkillBonuses.length > 0) {
+    precedenceLog.push(`[Rule 3 - Racial Skill Bonuses]: Inherited ${combinedSkillBonuses.length} racial skill bonus definition(s). Non-stacking rule applies.`);
+  }
+
   return {
     compositeName,
     size: resolvedSize,
@@ -1578,7 +1589,8 @@ export function resolve35eHalfBreedTemplate(
     conflicts,
     skillPointsNotice,
     precedenceLog,
-    levelAdjustment: template.levelAdjustment
+    levelAdjustment: template.levelAdjustment,
+    racialSkillBonuses: combinedSkillBonuses
   };
 }
 

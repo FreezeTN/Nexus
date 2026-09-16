@@ -53,8 +53,11 @@ import {
   Cloud,
   Database,
   RefreshCw,
-  Edit3
+  Edit3,
+  Scale,
+  ShieldCheck
 } from 'lucide-react';
+import { LegalLicensingModal } from '../modals/LegalLicensingModal';
 
 interface Sheet7CompendiumProps {
   activeCharacter?: CharacterData;
@@ -87,6 +90,7 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
   const [selectedDetailItem, setSelectedDetailItem] = useState<CompendiumItem | null>(null);
   const [itemToDelete, setItemToDelete] = useState<CompendiumItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showLegalModal, setShowLegalModal] = useState(false);
 
   // Custom entries stored in localStorage
   const [customEntries, setCustomEntries] = useState<CompendiumItem[]>(() => loadCustomCompendiumEntries());
@@ -416,17 +420,37 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
           }
         }
 
-        if (updatedItem.category === 'races' && c.race && c.race.toLowerCase() === origName) {
-          changed = true;
-          affectedCount++;
-          const rd = (updatedItem.raceData || {}) as any;
-          c = {
-            ...c,
-            race: updatedItem.name,
-            speed: rd.speed ? (typeof rd.speed === 'number' ? rd.speed : parseInt(String(rd.speed), 10) || c.speed) : c.speed,
-            damageReductionValue: rd.damageReductionValue ?? rd.damageReduction ?? c.damageReductionValue
-          };
-          c = recalculateCharacterAC(c);
+        if (updatedItem.category === 'races') {
+          const raceLower = (c.race || '').toLowerCase();
+          const tplName = (c.hybridHeritage?.templateName || '').toLowerCase();
+          const baseName = (c.hybridHeritage?.baseRaceName || '').toLowerCase();
+          const secParent = (c.hybridHeritage?.secondaryParent || '').toLowerCase();
+          const priParent = (c.hybridHeritage?.primaryParent || '').toLowerCase();
+
+          const isRaceMatch =
+            raceLower === origName ||
+            raceLower.includes(origName) ||
+            tplName === origName ||
+            baseName === origName ||
+            secParent === origName ||
+            priParent === origName ||
+            (Array.isArray(c.classFeatures) && c.classFeatures.some(f => f.source && f.source.toLowerCase().includes(origName)));
+
+          if (isRaceMatch) {
+            changed = true;
+            affectedCount++;
+            const rd = (updatedItem.raceData || {}) as any;
+            c = {
+              ...c,
+              speed: rd.speed ? (typeof rd.speed === 'number' ? rd.speed : parseInt(String(rd.speed), 10) || c.speed) : c.speed,
+              damageReductionValue: rd.damageReductionValue ?? rd.damageReduction ?? c.damageReductionValue,
+              racialSkillBonuses: rd.racialSkillBonuses || c.racialSkillBonuses
+            };
+            if (raceLower === origName) {
+              c.race = updatedItem.name;
+            }
+            c = recalculateCharacterAC(c);
+          }
         }
 
         if (updatedItem.category === 'classes') {
@@ -455,7 +479,10 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                 ...f,
                 name: updatedItem.name,
                 description: updatedItem.description || f.description,
-                prerequisite: updatedItem.featData?.prerequisite || f.prerequisite
+                prerequisite: updatedItem.featData?.prerequisite || f.prerequisite,
+                statBonus: updatedItem.featData?.statBonus !== undefined ? updatedItem.featData.statBonus : f.statBonus,
+                hpPerLevel: updatedItem.featData?.hpPerLevel !== undefined ? updatedItem.featData.hpPerLevel : f.hpPerLevel,
+                hpMaxBonus: updatedItem.featData?.hpMaxBonus !== undefined ? updatedItem.featData.hpMaxBonus : f.hpMaxBonus
               };
             }
             return f;
@@ -797,13 +824,18 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
         spells: [...(activeCharacter.spells || []), newSpell]
       });
       showToast(`🪄 Added spell "${item.name}" to ${activeCharacter.name}'s spellbook!`);
-    } else if (item.category === 'feats' && item.featData) {
+    } else if (item.category === 'feats') {
+      const fd = item.featData || {};
       const newFeat: Feat = {
         id: 'feat-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-        name: item.featData.name || item.name,
+        name: fd.name || item.name,
         source: item.source || 'Feat',
-        description: item.description,
-        prerequisite: item.featData.prerequisite
+        description: item.description || fd.description || '',
+        prerequisite: fd.prerequisite,
+        statBonus: fd.statBonus,
+        actionType: fd.actionType,
+        hpMaxBonus: fd.hpMaxBonus,
+        hpPerLevel: fd.hpPerLevel
       };
 
       onUpdateCharacter({
@@ -887,6 +919,14 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={() => setShowLegalModal(true)}
+              className="px-4 py-3 bg-stone-900 hover:bg-stone-800 text-stone-300 hover:text-amber-300 border border-stone-800 hover:border-amber-500/40 font-bold rounded-2xl transition flex items-center justify-center gap-2 shrink-0 text-sm cursor-pointer shadow-md"
+              title="Open Gaming Licenses, SRD 5.1 Creative Commons notice, OGL 1.0a, and non-affiliation disclaimers"
+            >
+              <Scale className="w-4 h-4 text-amber-400" />
+              <span>Legal & Licenses</span>
+            </button>
             <button
               onClick={handleOpenCreateModal}
               className="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-bold rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-amber-950/40 shrink-0 text-sm cursor-pointer"
@@ -1012,12 +1052,23 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                   <div className="space-y-2">
                     {/* Header badges */}
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded bg-stone-900 text-amber-400 border border-stone-800">
                           {item.category}
                         </span>
                         <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-stone-900 text-stone-400 border border-stone-800">
                           {item.edition || '5e'}
+                        </span>
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                          isCustom
+                            ? 'bg-violet-950/60 text-violet-300 border-violet-700/50'
+                            : item.edition === '3.5e'
+                            ? 'bg-amber-950/50 text-amber-300 border-amber-600/40'
+                            : item.edition === 'pathfinder'
+                            ? 'bg-purple-950/50 text-purple-300 border-purple-600/40'
+                            : 'bg-blue-950/50 text-blue-300 border-blue-600/40'
+                        }`}>
+                          {isCustom ? 'Homebrew' : item.edition === '3.5e' ? 'OGL 1.0a' : item.edition === 'pathfinder' ? 'ORC' : 'CC-BY-4.0'}
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
@@ -1148,12 +1199,23 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
 
             {/* Modal Header */}
             <div className="space-y-2 border-b border-stone-800 pb-4">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-mono font-bold uppercase px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full">
                   {selectedDetailItem.category}
                 </span>
                 <span className="text-xs font-mono text-stone-400">
                   {selectedDetailItem.edition || '5e'} System • {selectedDetailItem.source}
+                </span>
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
+                  selectedDetailItem.isCustom
+                    ? 'bg-violet-950/60 text-violet-300 border-violet-700/50'
+                    : selectedDetailItem.edition === '3.5e'
+                    ? 'bg-amber-950/50 text-amber-300 border-amber-600/40'
+                    : selectedDetailItem.edition === 'pathfinder'
+                    ? 'bg-purple-950/50 text-purple-300 border-purple-600/40'
+                    : 'bg-blue-950/50 text-blue-300 border-blue-600/40'
+                }`}>
+                  {selectedDetailItem.isCustom ? 'User Homebrew' : selectedDetailItem.edition === '3.5e' ? 'SRD 3.5 (OGL 1.0a)' : selectedDetailItem.edition === 'pathfinder' ? 'Pathfinder (ORC / OGL)' : 'SRD 5.1 (CC-BY-4.0)'}
                 </span>
               </div>
               <h3 className="text-2xl font-serif font-black text-stone-100">
@@ -1206,6 +1268,50 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                       <div className="text-xl font-serif font-bold text-purple-400">{m.challengeRating || (m.subclass ? m.subclass.replace(/^CR\s*/i, '') : '1')}</div>
                     </div>
                   </div>
+
+                  {/* 3.5e Combat & Defenses Bar */}
+                  {m.edition === '3.5e' && (
+                    <div className="bg-stone-900/90 border border-amber-500/20 p-3 rounded-2xl space-y-2">
+                      <div className="text-[11px] font-mono text-amber-300 font-bold uppercase tracking-wider flex items-center justify-between">
+                        <span>🛡️ 3.5e Combat & Defenses</span>
+                        {m.senses && <span className="text-stone-400 font-normal lowercase">{m.senses}</span>}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                          <div className="text-[10px] text-stone-400 font-mono">Touch AC</div>
+                          <div className="font-bold text-stone-200">{m.touchAcOverride ?? 10}</div>
+                        </div>
+                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                          <div className="text-[10px] text-stone-400 font-mono">Flat-Footed AC</div>
+                          <div className="font-bold text-stone-200">{m.flatFootedAcOverride ?? m.armorClass ?? 10}</div>
+                        </div>
+                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                          <div className="text-[10px] text-stone-400 font-mono">Base Attack (BAB)</div>
+                          <div className="font-bold text-amber-400">+{m.bab ?? 0}</div>
+                        </div>
+                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                          <div className="text-[10px] text-stone-400 font-mono">DR / SR</div>
+                          <div className="font-bold text-emerald-400">
+                            {m.damageReductionValue ? `DR ${m.damageReductionValue}/${m.damageReductionBypass}` : m.spellResist ? `SR ${m.spellResist}` : '—'}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+                        <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
+                          <span className="text-[10px] font-mono text-stone-400">Fort:</span>
+                          <span className="font-bold text-stone-100">{formatModifier((m.fortSaveBase || 0) + getAbilityModifier(m.abilities?.CON?.score || 10))}</span>
+                        </div>
+                        <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
+                          <span className="text-[10px] font-mono text-stone-400">Ref:</span>
+                          <span className="font-bold text-stone-100">{formatModifier((m.refSaveBase || 0) + getAbilityModifier(m.abilities?.DEX?.score || 10))}</span>
+                        </div>
+                        <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
+                          <span className="text-[10px] font-mono text-stone-400">Will:</span>
+                          <span className="font-bold text-stone-100">{formatModifier((m.willSaveBase || 0) + getAbilityModifier(m.abilities?.WIS?.score || 10))}</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Ability Scores Grid */}
                   {m.abilities && (
@@ -1385,6 +1491,24 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               <div className="bg-stone-900/80 border border-stone-800 p-3.5 rounded-2xl space-y-2 text-xs font-mono">
                 {selectedDetailItem.featData.prerequisite && (
                   <div>Prerequisite: <strong className="text-amber-300">{selectedDetailItem.featData.prerequisite}</strong></div>
+                )}
+                {selectedDetailItem.featData.actionType && (
+                  <div>Action Economy: <strong className="text-stone-300">{selectedDetailItem.featData.actionType}</strong></div>
+                )}
+                {selectedDetailItem.featData.statBonus && (
+                  <div>Stat Bonus: <strong className="text-indigo-300">{selectedDetailItem.featData.statBonus}</strong></div>
+                )}
+                {selectedDetailItem.featData.hpPerLevel !== undefined && selectedDetailItem.featData.hpPerLevel !== 0 && (
+                  <div className="flex items-center gap-1.5 text-rose-300">
+                    <span>❤️</span>
+                    <span>HP Scaling: <strong className="text-rose-200">+{selectedDetailItem.featData.hpPerLevel} HP per level</strong></span>
+                  </div>
+                )}
+                {selectedDetailItem.featData.hpMaxBonus !== undefined && selectedDetailItem.featData.hpMaxBonus !== 0 && (
+                  <div className="flex items-center gap-1.5 text-rose-300">
+                    <span>❤️</span>
+                    <span>Max HP Bonus: <strong className="text-rose-200">+{selectedDetailItem.featData.hpMaxBonus} HP</strong></span>
+                  </div>
                 )}
                 {selectedDetailItem.featData.source && (
                   <div>Source: <strong className="text-cyan-300">{selectedDetailItem.featData.source}</strong></div>
@@ -1750,6 +1874,41 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
               </p>
             </div>
 
+            {/* Legal Provenance & Licensing Information */}
+            <div className="bg-stone-900/60 border border-stone-800/80 rounded-2xl p-3.5 flex items-start gap-3 text-xs">
+              <ShieldCheck className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="space-y-1 flex-1">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-bold text-stone-200">
+                    {selectedDetailItem.isCustom
+                      ? 'Custom Homebrew Content'
+                      : selectedDetailItem.edition === '3.5e'
+                      ? 'D&D 3.5e System Reference Document (OGL 1.0a)'
+                      : selectedDetailItem.edition === 'pathfinder'
+                      ? 'Pathfinder Reference Document (ORC / OGL)'
+                      : '5e System Reference Document 5.1 (CC-BY-4.0)'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLegalModal(true)}
+                    className="text-[11px] text-amber-400 hover:text-amber-300 underline font-mono flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>View License Terms</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                </div>
+                <p className="text-[11px] text-stone-400 leading-relaxed">
+                  {selectedDetailItem.isCustom
+                    ? 'Authored or imported locally by user. User retains all copyright and ownership over original homebrew.'
+                    : selectedDetailItem.edition === '3.5e'
+                    ? 'Open Game Content published under the Wizards of the Coast Open Game License v1.0a.'
+                    : selectedDetailItem.edition === 'pathfinder'
+                    ? 'Published under the Open Game License or Open RPG Creative License (Paizo Inc.).'
+                    : 'System Reference Document 5.1 (“SRD 5.1”) by Wizards of the Coast LLC, licensed under Creative Commons Attribution 4.0 International (CC-BY-4.0).'}
+                </p>
+              </div>
+            </div>
+
             {/* Action Bar */}
             <div className="pt-4 border-t border-stone-800 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
@@ -1879,6 +2038,12 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
           }}
         />
       )}
+
+      {/* LEGAL & LICENSING COMPLIANCE MODAL */}
+      <LegalLicensingModal
+        isOpen={showLegalModal}
+        onClose={() => setShowLegalModal(false)}
+      />
     </div>
   );
 };

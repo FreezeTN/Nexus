@@ -28,7 +28,7 @@ interface LevelUpWizardModalProps {
   onRoll?: (label: string, diceSides: number, count?: number, modifier?: number, mode?: 'normal' | 'advantage' | 'disadvantage') => void;
 }
 
-const SRD_FEATS: Array<{ name: string; prerequisite?: string; description: string; hpMaxBonus?: number }> = [
+const SRD_FEATS: Array<{ name: string; prerequisite?: string; description: string; hpMaxBonus?: number; hpPerLevel?: number }> = [
   {
     name: 'Alert',
     description: '+5 bonus to initiative. You cannot be surprised while conscious, and enemies do not gain advantage on attacks against you from being unseen.'
@@ -52,7 +52,7 @@ const SRD_FEATS: Array<{ name: string; prerequisite?: string; description: strin
   {
     name: 'Tough',
     description: 'Your hit point maximum increases by an amount equal to 2 × your level when you gain this feat, and by 2 additional hit points each time you gain a level thereafter.',
-    hpMaxBonus: 2
+    hpPerLevel: 2
   },
   {
     name: 'Lucky',
@@ -174,6 +174,7 @@ export const LevelUpWizardModal: React.FC<LevelUpWizardModalProps> = ({
             name: featData.name,
             description: featData.description,
             hpMaxBonus: featData.hpMaxBonus,
+            hpPerLevel: featData.hpPerLevel,
             source: `Level ${targetLevel}`
           });
         }

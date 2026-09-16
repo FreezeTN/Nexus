@@ -1,4 +1,4 @@
-import { CharacterData, Spell, Feat, ClassFeature } from '../types';
+import { CharacterData, Spell, Feat, ClassFeature, RacialSkillBonus } from '../types';
 import { OFFICIAL_BULK_MONSTERS, OFFICIAL_5E_FEATS, OFFICIAL_35E_FEATS, OFFICIAL_5E_CLASS_FEATURES, OFFICIAL_35E_CLASS_FEATURES } from './srdRulesLibrary';
 import { PRESET_5E_SPELLS, PRESET_35E_SPELLS } from './presetSpells';
 import { 
@@ -131,7 +131,14 @@ export interface CompendiumItem {
     skillProficiencies5e?: string[];
 
     flySpeed?: number;
+    raceType?: 'standalone' | 'halfbreed';
     isHalfBreed?: boolean;
+    isHalfBreedTemplate?: boolean;
+    templateCategory?: 'Inherited Cross-Breed' | 'Acquired Template' | 'Hybrid Lineage' | 'Monstrous Heritage';
+    compatibleBaseRaces?: string;
+    inheritedTraitsSummary?: string;
+    levelAdjustment?: number;
+    racialSkillBonuses?: RacialSkillBonus[];
     halfBreedData?: {
       isClassicSRD?: boolean;
       classicSRDId?: string;
@@ -1090,6 +1097,9 @@ export function saveCustomCompendiumEntry(
   // 1. Always write to local browser cache (guaranteed offline availability)
   try {
     localStorage.setItem(STORAGE_KEY_CUSTOM_COMPENDIUM, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('compendiumUpdated', { detail: finalizedItem }));
+    }
   } catch (e) {
     console.error('Failed to save custom compendium entry to cache', e);
   }
@@ -1130,6 +1140,9 @@ export function deleteCustomCompendiumEntry(
   // 1. Remove from local browser cache
   try {
     localStorage.setItem(STORAGE_KEY_CUSTOM_COMPENDIUM, JSON.stringify(updated));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('compendiumUpdated', { detail: { id, deleted: true } }));
+    }
   } catch (e) {
     console.error('Failed to delete custom compendium entry from cache', e);
   }

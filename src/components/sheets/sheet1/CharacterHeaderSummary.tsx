@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CharacterData } from '../../../types';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../../data/monsterPortraits';
 import { syncClassFeaturesForCharacter } from '../../../data/srdRulesLibrary';
+import { recalculateScalingRaceStats } from '../../../utils/raceApplication';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import {
   getCombinedLevel,
@@ -60,6 +61,52 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
 }) => {
   const { t } = useLanguage();
   const [show35eXpLedger, setShow35eXpLedger] = useState(false);
+
+  const handleLevelChange = (newLvl: number) => {
+    const clamped = Math.max(1, Math.min(20, newLvl));
+    if (clamped === character.level) return;
+    const isUp = clamped > character.level;
+    const levelDiff = clamped - character.level;
+
+    // Calculate average HP adjustment
+    const conMod = Math.floor(((character.abilities?.CON?.score || 10) - 10) / 2);
+    const hitDieMatch = (character.hitDiceTotal || '').match(/d(\d+)/);
+    const dieSize = hitDieMatch ? parseInt(hitDieMatch[1], 10) : 8;
+    const avgPerLevel = Math.max(1, Math.floor(dieSize / 2) + 1 + conMod);
+    const hpAdjust = levelDiff * avgPerLevel;
+
+    const newHitDiceTotal = `${clamped}d${dieSize}`;
+    const newMaxHp = Math.max(1, (character.hpMax || 10) + hpAdjust);
+    const newCurrentHp = Math.max(1, Math.min(newMaxHp, (character.hpCurrent || 10) + hpAdjust));
+
+    const updated: CharacterData = {
+      ...character,
+      level: clamped,
+      hpMax: newMaxHp,
+      hpCurrent: newCurrentHp,
+      hitDiceTotal: newHitDiceTotal,
+      hitDiceCurrent: Math.max(0, Math.min(clamped, (character.hitDiceCurrent ?? clamped) + (isUp ? 1 : -1)))
+    };
+
+    const synced = syncClassFeaturesForCharacter(updated, updated.characterClass, clamped, updated.edition);
+    const withScalingRace = recalculateScalingRaceStats(synced);
+    onUpdateCharacter(withScalingRace);
+  };
+
+  const handleSecondaryLevelChange = (newSecLvl: number) => {
+    const clamped = Math.max(1, Math.min(20, newSecLvl));
+    const updated: CharacterData = {
+      ...character,
+      optionalRules: {
+        ...character.optionalRules,
+        secondaryLevel: clamped
+      }
+    };
+    const synced = syncClassFeaturesForCharacter(updated, updated.characterClass, updated.level, updated.edition);
+    const withScalingRace = recalculateScalingRaceStats(synced);
+    onUpdateCharacter(withScalingRace);
+  };
+
   return (
     <div className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-6 shadow-xl text-stone-100 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -107,23 +154,17 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
                     {character.characterClass}:
                   </span>
                   <button
-                    onClick={() => {
-                      const newLvl = Math.max(1, character.level - 1);
-                      onUpdateCharacter(syncClassFeaturesForCharacter({ ...character, level: newLvl }, character.characterClass, newLvl, character.edition));
-                    }}
-                    className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
+                    onClick={() => handleLevelChange(character.level - 1)}
+                    className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
                     title="Decrease Primary Level"
                   >
                     -
                   </button>
                   <span className="font-mono text-sm px-0.5 text-amber-100">{character.level}</span>
                   <button
-                    onClick={() => {
-                      const newLvl = character.level + 1;
-                      onUpdateCharacter(syncClassFeaturesForCharacter({ ...character, level: newLvl }, character.characterClass, newLvl, character.edition));
-                    }}
-                    className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
-                    title="Increase Primary Level"
+                    onClick={() => handleLevelChange(character.level + 1)}
+                    className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
+                    title="Increase Primary Level (Scales HP, Hit Dice, Class Features & Scaling Racial Stats)"
                   >
                     +
                   </button>
@@ -137,28 +178,16 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
                         {character.optionalRules.secondaryClass}:
                       </span>
                       <button
-                        onClick={() => onUpdateCharacter({
-                          ...character,
-                          optionalRules: {
-                            ...character.optionalRules,
-                            secondaryLevel: Math.max(1, (character.optionalRules?.secondaryLevel || 1) - 1)
-                          }
-                        })}
-                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
+                        onClick={() => handleSecondaryLevelChange((character.optionalRules?.secondaryLevel || 1) - 1)}
+                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
                         title="Decrease Secondary Level"
                       >
                         -
                       </button>
                       <span className="font-mono text-sm px-0.5 text-amber-100">{character.optionalRules.secondaryLevel || 1}</span>
                       <button
-                        onClick={() => onUpdateCharacter({
-                          ...character,
-                          optionalRules: {
-                            ...character.optionalRules,
-                            secondaryLevel: (character.optionalRules?.secondaryLevel || 1) + 1
-                          }
-                        })}
-                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition"
+                        onClick={() => handleSecondaryLevelChange((character.optionalRules?.secondaryLevel || 1) + 1)}
+                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
                         title="Increase Secondary Level"
                       >
                         +

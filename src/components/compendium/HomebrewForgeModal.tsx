@@ -25,6 +25,7 @@ import {
 
 interface HomebrewForgeModalProps {
   initialSystem?: RuleEdition;
+  initialTab?: 'classes' | 'races' | 'spells' | 'monsters' | 'feats' | 'items' | 'packs';
   onClose: () => void;
   onSaved: (item: CompendiumItem) => void;
   allCustomItems?: CompendiumItem[];
@@ -39,6 +40,7 @@ interface HomebrewForgeModalProps {
 
 export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
   initialSystem = '5e',
+  initialTab,
   onClose,
   onSaved,
   allCustomItems = [],
@@ -69,6 +71,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
         return editingItem.category as any;
       }
     }
+    if (initialTab) return initialTab;
     return 'classes';
   });
   const [sourceAuthor, setSourceAuthor] = useState(editingItem?.source || 'Custom DM');

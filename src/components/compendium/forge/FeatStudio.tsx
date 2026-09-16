@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { CompendiumItem } from '../../../data/compendiumData';
 import { SupportedEdition } from './ForgeTypes';
 import { Scroll, Save, Plus, Shield, Award, Sparkles, BookOpen } from 'lucide-react';
-import { validateHomebrewFeat, ValidationResult } from '../../../utils/homebrewValidator';
+import { validateHomebrewFeat, ValidationResult, parseAbilityScoreBonuses } from '../../../utils/homebrewValidator';
 import { ValidationBadgeBanner } from './ValidationBadgeBanner';
 import { ValidationConfirmModal } from './ValidationConfirmModal';
 
@@ -31,7 +31,28 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
   const [prerequisite, setPrerequisite] = useState(fd?.prerequisite || '');
   const [actionType, setActionType] = useState(fd?.actionType || 'Passive');
   const [charges, setCharges] = useState(fd?.charges || '');
-  const [statBonus, setStatBonus] = useState(fd?.statBonus || '');
+  const [statBonus, setStatBonus] = useState(() => {
+    if (fd?.statBonus) return fd.statBonus;
+    if (editingItem?.description) {
+      const parsed = parseAbilityScoreBonuses(editingItem.description);
+      if (parsed.length > 0) {
+        return parsed.map(p => `${p.value > 0 ? '+' : ''}${p.value} ${p.stat}`).join(', ');
+      }
+    }
+    return '';
+  });
+  const [hpPerLevel, setHpPerLevel] = useState<number>(() => {
+    if (typeof fd?.hpPerLevel === 'number') return fd.hpPerLevel;
+    if (editingItem?.description) {
+      const match = editingItem.description.match(/(\d+)\s*(?:hp|hit\s*points?)?\s*(?:\/|\bper\s*|\bfor\s*each\s*|\beach\s*)(?:character\s*)?(?:level|lvl)/i);
+      if (match) return parseInt(match[1], 10) || 0;
+    }
+    return 0;
+  });
+  const [hpMaxBonus, setHpMaxBonus] = useState<number>(() => {
+    if (typeof fd?.hpMaxBonus === 'number') return fd.hpMaxBonus;
+    return 0;
+  });
 
   // PF2e Specific
   const [pf2Level, setPf2Level] = useState(1);
@@ -111,8 +132,13 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
         name: name.trim(),
         category,
         prerequisite: prerequisite.trim() || undefined,
+        actionType: actionType || undefined,
+        charges: charges.trim() || undefined,
+        statBonus: statBonus.trim() || undefined,
         source: sourceAuthor.trim() || 'Custom Homebrew',
-        description: description.trim()
+        description: description.trim(),
+        hpPerLevel: hpPerLevel !== 0 ? hpPerLevel : undefined,
+        hpMaxBonus: hpMaxBonus !== 0 ? hpMaxBonus : undefined
       };
       if (!descSummary) {
         descSummary = `${category} Feat.${prerequisite ? ` Requires: ${prerequisite}.` : ''}${statBonus ? ` Ability Bonus: ${statBonus}.` : ''}`;
@@ -419,6 +445,28 @@ export const FeatStudio: React.FC<FeatStudioProps> = ({
                 value={statBonus}
                 onChange={(e) => setStatBonus(e.target.value)}
                 placeholder="+1 Strength or Dexterity"
+                className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-stone-200 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-stone-400 mb-1">HP per Level (Scaling Bonus)</label>
+              <input
+                type="number"
+                value={hpPerLevel || ''}
+                onChange={(e) => setHpPerLevel(parseInt(e.target.value) || 0)}
+                placeholder="e.g. 3 for +3 HP/level, 2 for Tough"
+                className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-stone-200 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-stone-400 mb-1">Flat Max HP Bonus (One-time)</label>
+              <input
+                type="number"
+                value={hpMaxBonus || ''}
+                onChange={(e) => setHpMaxBonus(parseInt(e.target.value) || 0)}
+                placeholder="e.g. 10 or 3"
                 className="w-full px-3 py-2 bg-stone-950 border border-stone-700 rounded-xl text-stone-200 text-xs"
               />
             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData } from '../../types';
 import { GameSession } from '../../lib/firebase';
 import { ShadowrunStatsPanel } from '../shadowrun/ShadowrunStatsPanel';
@@ -21,11 +21,18 @@ import {
 import {
   getClassesForSystem,
   getRacesForSystem,
+  getRaceDetailsForSystem,
+  getClassDetailsForSystem,
   getSubclassesForSystemClass,
   getAlignmentsForSystem
 } from '../modals/newCharacter/newCharacterData';
 import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
-import { Crown, AlertTriangle, Eye } from 'lucide-react';
+import {
+  findRaceInCompendiumOrSRD,
+  applyRaceToCharacter,
+  calculateRaceBonusesAndDefenses
+} from '../../utils/raceApplication';
+import { Crown, AlertTriangle, Eye, Sparkles, RefreshCw } from 'lucide-react';
 
 import { CharacterHeaderSummary } from './sheet1/CharacterHeaderSummary';
 import { WorkspaceCustomizer } from '../common/WorkspaceCustomizer';
@@ -78,8 +85,30 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   const isDmRole = currentUser?.role === 'DM';
 
   const is35e = character.edition === '3.5e';
-  const baseClasses = useMemo(() => getClassesForSystem(character.edition), [character.edition]);
-  const baseRaces = useMemo(() => getRacesForSystem(character.edition), [character.edition]);
+  const [compendiumVersion, setCompendiumVersion] = useState(0);
+
+  useEffect(() => {
+    const handleCompendiumUpdate = () => {
+      setCompendiumVersion(v => v + 1);
+    };
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'dnd_app_custom_compendium_v1') {
+        setCompendiumVersion(v => v + 1);
+      }
+    };
+    window.addEventListener('compendiumUpdated' as any, handleCompendiumUpdate);
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      window.removeEventListener('compendiumUpdated' as any, handleCompendiumUpdate);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
+  const raceDetails = useMemo(() => getRaceDetailsForSystem(character.edition), [character.edition, compendiumVersion]);
+  const classDetails = useMemo(() => getClassDetailsForSystem(character.edition), [character.edition, compendiumVersion]);
+
+  const baseClasses = useMemo(() => getClassesForSystem(character.edition), [character.edition, compendiumVersion]);
+  const baseRaces = useMemo(() => getRacesForSystem(character.edition), [character.edition, compendiumVersion]);
   const baseAlignments = useMemo(() => getAlignmentsForSystem(character.edition), [character.edition]);
   const availableSubclasses = useMemo(
     () => getSubclassesForSystemClass(character.edition, character.characterClass),
@@ -157,6 +186,59 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
     if (!is35e) return null;
     return calculate35eMulticlassXpPenalty(character);
   }, [is35e, character]);
+
+  const handleRaceChange = (newRaceName: string) => {
+    const trimmed = (newRaceName || '').trim();
+    if (!trimmed) {
+      onUpdateCharacter({ ...character, race: '' });
+      return;
+    }
+
+    const raceItem = findRaceInCompendiumOrSRD(trimmed, character.edition);
+    if (raceItem) {
+      const updated = applyRaceToCharacter(character, raceItem, {
+        applyAbilities: true,
+        replaceTraits: true
+      });
+      onUpdateCharacter(updated);
+    } else {
+      const updated = applyRaceToCharacter(
+        character,
+        { name: trimmed, raceData: { name: trimmed } },
+        {
+          applyAbilities: true,
+          replaceTraits: true
+        }
+      );
+      onUpdateCharacter(updated);
+    }
+  };
+
+  const currentRaceCalculated = useMemo(() => {
+    if (!character.race) return null;
+    const raceItem = findRaceInCompendiumOrSRD(character.race, character.edition);
+    if (!raceItem) return null;
+    return calculateRaceBonusesAndDefenses(raceItem, character.level || 1);
+  }, [character.race, character.edition, character.level, compendiumVersion]);
+
+  const currentRaceSummary = useMemo(() => {
+    if (!currentRaceCalculated) return null;
+    const parts: string[] = [];
+    if (currentRaceCalculated.abilityBonusSummary.length > 0) {
+      parts.push(currentRaceCalculated.abilityBonusSummary.join(', '));
+    }
+    if (currentRaceCalculated.racialSkillBonuses && currentRaceCalculated.racialSkillBonuses.length > 0) {
+      const skSummaries = currentRaceCalculated.racialSkillBonuses.map(b => `${b.bonus >= 0 ? '+' : ''}${b.bonus} ${b.skillName}`);
+      parts.push(`Skills: ${skSummaries.join(', ')}`);
+    }
+    if (currentRaceCalculated.speed && currentRaceCalculated.speed !== 30) {
+      parts.push(`${currentRaceCalculated.speed} ft.`);
+    }
+    if (currentRaceCalculated.naturalArmor.bonus > 0) {
+      parts.push(`+${currentRaceCalculated.naturalArmor.bonus} Nat Armor`);
+    }
+    return parts.join(' • ');
+  }, [currentRaceCalculated]);
 
   // Check if at least one panel on Sheet 1 is visible
   const hasVisibleFeatures = character.edition === 'shadowrun'
@@ -276,13 +358,24 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                   </button>
                 </div>
                 {customRaceMode ? (
-                  <input
-                    type="text"
-                    value={character.race}
-                    onChange={(e) => onUpdateCharacter({ ...character, race: e.target.value })}
-                    className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100"
-                    placeholder={`Enter custom ${raceLabel.toLowerCase()}...`}
-                  />
+                  <div className="space-y-1">
+                    <input
+                      type="text"
+                      value={character.race}
+                      onChange={(e) => onUpdateCharacter({ ...character, race: e.target.value })}
+                      onBlur={() => handleRaceChange(character.race)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleRaceChange(character.race);
+                        }
+                      }}
+                      className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100"
+                      placeholder={`Enter custom ${raceLabel.toLowerCase()} (press Enter to apply)...`}
+                    />
+                    <div className="text-[10px] text-stone-400">
+                      Press Enter or click away to apply homebrew modifiers.
+                    </div>
+                  </div>
                 ) : (
                   <select
                     value={character.race}
@@ -292,18 +385,59 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                         setCustomRaceMode(true);
                         return;
                       }
-                      onUpdateCharacter({ ...character, race: newRace });
+                      handleRaceChange(newRace);
                     }}
                     className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-100 font-medium focus:ring-1 focus:ring-amber-500 focus:border-amber-500 cursor-pointer"
                   >
                     {isCustomRace && (
                       <option value={character.race}>{character.race} (Custom / Current)</option>
                     )}
-                    {baseRaces.map(r => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
+                    {raceDetails.customRaces.length > 0 && (
+                      <optgroup label="✨ Custom Homebrew Races & Half-Breeds">
+                        {raceDetails.customRaces.map(r => (
+                          <option key={r.name} value={r.name}>
+                            ✨ {r.name} {r.isTemplate ? '(Half-Breed Template)' : r.isHalfBreed ? '(Half-Breed)' : '(Homebrew)'}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {raceDetails.otherCustomRaces.length > 0 && (
+                      <optgroup label="🌟 Homebrew Races from Other Systems">
+                        {raceDetails.otherCustomRaces.map(r => (
+                          <option key={r.name} value={r.name}>
+                            🌟 {r.name} ({r.edition || 'Universal'})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    <optgroup label="Core Races (SRD)">
+                      {raceDetails.coreRaces.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </optgroup>
                     <option value="__custom__">+ Custom {raceLabel}...</option>
                   </select>
+                )}
+
+                {/* Live Racial Modifiers Summary & Re-Apply Badge */}
+                {currentRaceSummary && (
+                  <div className="mt-1.5 px-2.5 py-1.5 bg-amber-950/40 border border-amber-800/40 rounded-lg text-[11px] text-amber-300 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span className="truncate">
+                        <strong className="text-amber-200">Racial Traits:</strong> {currentRaceSummary}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleRaceChange(character.race)}
+                      className="px-2 py-0.5 bg-amber-900/60 hover:bg-amber-800 text-amber-100 rounded text-[10px] font-bold shrink-0 transition flex items-center gap-1 cursor-pointer"
+                      title="Re-apply racial stats & skill bonuses to character sheet"
+                    >
+                      <RefreshCw className="w-2.5 h-2.5" />
+                      <span>Reapply</span>
+                    </button>
+                  </div>
                 )}
               </div>
               <div>
@@ -365,10 +499,28 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                     {isCustomClass && (
                       <option value={character.characterClass}>{character.characterClass} (Custom / Current)</option>
                     )}
+                    {classDetails.customClasses.length > 0 && (
+                      <optgroup label="✨ Custom Homebrew Classes">
+                        {classDetails.customClasses.map(c => (
+                          <option key={c.name} value={c.name}>
+                            ✨ {c.name} (Custom Class)
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {classDetails.otherCustomClasses.length > 0 && (
+                      <optgroup label="🌟 Homebrew Classes from Other Systems">
+                        {classDetails.otherCustomClasses.map(c => (
+                          <option key={c.name} value={c.name}>
+                            🌟 {c.name} ({c.edition || 'Universal'})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                     {is35e ? (
                       <>
                         <optgroup label="Core Base Classes">
-                          {baseClasses.map(c => (
+                          {classDetails.coreClasses.map(c => (
                             <option key={c} value={c}>{c}</option>
                           ))}
                         </optgroup>
@@ -384,9 +536,11 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                         </optgroup>
                       </>
                     ) : (
-                      baseClasses.map(c => (
-                        <option key={c} value={c}>{c}</option>
-                      ))
+                      <optgroup label="Core Classes">
+                        {classDetails.coreClasses.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </optgroup>
                     )}
                     <option value="__custom__">+ Custom Class Name...</option>
                   </select>
@@ -865,14 +1019,14 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
             />
           )}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-6 xl:col-span-5">
               <SkillsPanel
                 character={character}
                 onUpdateCharacter={onUpdateCharacter}
                 onRoll={onRoll}
               />
             </div>
-            <div className="lg:col-span-7 space-y-6">
+            <div className="lg:col-span-6 xl:col-span-7 space-y-6">
               <ClassFeaturesPanel
                 character={character}
                 isDmRole={isDmRole}
@@ -923,9 +1077,9 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
           {/* SECTION 3: Skills & Features Grid */}
           {(isVisible('s1_skills') || isVisible('s1_classFeatures') || isVisible('s1_feats')) && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left Column (5 cols): D&D Skills List (5e vs 3.5e) */}
+              {/* Left Column: D&D Skills List (5e vs 3.5e) */}
               {isVisible('s1_skills') && (
-                <div className={isVisible('s1_classFeatures') || isVisible('s1_feats') ? "lg:col-span-5" : "lg:col-span-12"}>
+                <div className={isVisible('s1_classFeatures') || isVisible('s1_feats') ? "lg:col-span-6 xl:col-span-5" : "lg:col-span-12"}>
                   <SkillsPanel
                     character={character}
                     onUpdateCharacter={onUpdateCharacter}
@@ -934,9 +1088,9 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 </div>
               )}
 
-              {/* Right Column (7 cols): Class Features & Feats */}
+              {/* Right Column: Class Features & Feats */}
               {(isVisible('s1_classFeatures') || isVisible('s1_feats')) && (
-                <div className={isVisible('s1_skills') ? "lg:col-span-7 space-y-6" : "lg:col-span-12 space-y-6"}>
+                <div className={isVisible('s1_skills') ? "lg:col-span-6 xl:col-span-7 space-y-6" : "lg:col-span-12 space-y-6"}>
                   {isVisible('s1_classFeatures') && (
                     <ClassFeaturesPanel
                       character={character}

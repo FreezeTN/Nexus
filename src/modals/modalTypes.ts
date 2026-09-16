@@ -22,7 +22,8 @@ export type ModalId =
   | 'campaign-lore-vault'
   | 'upgrade'
   | 'new-character'
-  | 'level-up-wizard';
+  | 'level-up-wizard'
+  | 'legal-licensing';
 
 export interface ModalPropsMap {
   auth: {
@@ -138,6 +139,9 @@ export interface ModalPropsMap {
     character: CharacterData;
     onUpdateCharacter: (char: CharacterData) => void;
     onRoll: (label: string, dice: number, count?: number, modifier?: number, mode?: any) => any;
+  };
+  'legal-licensing': {
+    defaultTab?: 'attribution' | 'cc-by' | 'ogl';
   };
 }
 
