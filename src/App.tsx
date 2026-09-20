@@ -808,6 +808,7 @@ function AppWorkspace() {
                   <div id="tabpanel-sheet2" role="tabpanel" aria-labelledby="tab-sheet2" tabIndex={0}>
                     <Sheet2Combat
                       character={activeCharacter}
+                      edition={currentSystemTheme}
                       allCharacters={characters}
                       parties={parties}
                       currentUser={currentUser}
@@ -956,7 +957,7 @@ function AppWorkspace() {
         characters={characters}
         activeCharacter={activeCharacter || characters[0]}
         onSelectCharacter={(char) => handleSelectCharacter(char.id)}
-        onOpenNewCharacter={() => handleOpenNewCharacterModal()}
+        onOpenNewCharacter={() => handleOpenNewCharacterModal('character', activeTab === 'menu' ? currentSystemTheme : (activeCharacter?.edition || currentSystemTheme))}
         onOpenOptions={handleOpenAudioModal}
         onOpenAudio={handleOpenAudioModal}
         onOpenExtensionManager={handleOpenExtensionManager}

@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { CharacterData, Party, EncounterEnvironment } from '../../../types';
+import { CharacterData, Party, EncounterEnvironment, AbilityName } from '../../../types';
 import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp, getEffectiveSaves } from '../../../utils/dndCalculations';
 import { getLevelFromTotalXp } from '../../../data/levelProgressionData';
 import { getMonsterPortraitUrl } from '../../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound, playHitSound, playMissSound, playDiceSound } from '../../../utils/diceAudio';
 import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState, ConcentrationPrompt, MassiveDamagePrompt } from './encounterTypes';
+import { TerrainType, DoorState, AoETemplate, BattlemapLayout, BattlemapConfig, ActiveTeleportState, ActiveSpellTargetingState, isCellImpassable } from '../../battlemap/battlemapTypes';
 import { eventBus } from '../../../events/eventBus';
 import { 
   UserProfile, 
@@ -78,6 +79,10 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
           encounterEnvironment: parsed.encounterEnvironment || 'terrestrial',
           encounterMode: parsed.encounterMode || 'combat',
           activeMerchant: parsed.activeMerchant || null,
+          battlemapTerrain: parsed.battlemapTerrain || {},
+          battlemapDoors: parsed.battlemapDoors || {},
+          battlemapFogOfWar: parsed.battlemapFogOfWar || {},
+          battlemapUseFogOfWar: Boolean(parsed.battlemapUseFogOfWar),
           combatLogs: Array.isArray(parsed.combatLogs) && parsed.combatLogs.length > 0 ? parsed.combatLogs : defaultState.combatLogs
         };
       }
@@ -119,6 +124,11 @@ export function useEncounterState({
   const [activeMerchant, setActiveMerchant] = useState<MerchantEncounterState | null>(() => loadSavedEncounter(character).activeMerchant || null);
   const [concentrationPrompt, setConcentrationPrompt] = useState<ConcentrationPrompt | null>(null);
   const [massiveDamagePrompt, setMassiveDamagePrompt] = useState<MassiveDamagePrompt | null>(null);
+  const [terrainMap, setTerrainMap] = useState<Record<string, TerrainType>>(() => (loadSavedEncounter(character).battlemapTerrain as Record<string, TerrainType>) || {});
+  const [doors, setDoors] = useState<Record<string, DoorState>>(() => (loadSavedEncounter(character).battlemapDoors as Record<string, DoorState>) || {});
+  const [fogOfWar, setFogOfWar] = useState<Record<string, boolean>>(() => (loadSavedEncounter(character).battlemapFogOfWar as Record<string, boolean>) || {});
+  const [useFogOfWar, setUseFogOfWar] = useState<boolean>(() => Boolean(loadSavedEncounter(character).battlemapUseFogOfWar));
+  const [activeAoETemplate, setActiveAoETemplate] = useState<AoETemplate | null>(null);
 
   const isDm = Boolean(currentUser && activeSession && activeSession.dmUid === currentUser.uid);
 
@@ -150,7 +160,15 @@ export function useEncounterState({
           concentratingSpell: sc.concentratingSpell ? { spellName: sc.concentratingSpell, castRound: 1 } : undefined,
           isDefeated: sc.isDefeated,
           portraitUrl: sc.portraitUrl,
-          controlledBy: sc.controlledBy
+          controlledBy: sc.controlledBy,
+          mapX: sc.mapX,
+          mapY: sc.mapY,
+          tokenSize: sc.tokenSize,
+          reachFeet: sc.reachFeet,
+          elevationFeet: sc.elevationFeet,
+          speed: sc.speed || 30,
+          movementRemaining: typeof sc.movementRemaining === 'number' ? sc.movementRemaining : (sc.speed || 30),
+          hasDashed: sc.hasDashed
         };
       });
 
@@ -159,6 +177,21 @@ export function useEncounterState({
       setRoundNumber(remoteEnc.roundNumber || 1);
       if (remoteEnc.environment) {
         setEncounterEnvironment(remoteEnc.environment);
+      }
+      if (remoteEnc.battlemapTerrain) {
+        setTerrainMap(remoteEnc.battlemapTerrain as Record<string, TerrainType>);
+      }
+      if (remoteEnc.battlemapDoors) {
+        setDoors(remoteEnc.battlemapDoors as Record<string, DoorState>);
+      }
+      if (remoteEnc.battlemapFogOfWar) {
+        setFogOfWar(remoteEnc.battlemapFogOfWar);
+      }
+      if (typeof remoteEnc.battlemapUseFogOfWar === 'boolean') {
+        setUseFogOfWar(remoteEnc.battlemapUseFogOfWar);
+      }
+      if (remoteEnc.battlemapActiveAoE !== undefined) {
+        setActiveAoETemplate(remoteEnc.battlemapActiveAoE);
       }
 
       // Check if current active turn belongs to current player's character
@@ -181,7 +214,13 @@ export function useEncounterState({
     updatedCombatants: Combatant[], 
     turnIdx: number, 
     roundNum: number, 
-    env?: EncounterEnvironment
+    env?: EncounterEnvironment,
+    customTerrain?: Record<string, string>,
+    customDoors?: Record<string, DoorState>,
+    customFogOfWar?: Record<string, boolean>,
+    customUseFogOfWar?: boolean,
+    customAoE?: AoETemplate | null,
+    customConfig?: Partial<BattlemapConfig>
   ) => {
     if (!activeSessionCode || !isDm) return;
 
@@ -200,7 +239,15 @@ export function useEncounterState({
       concentratingSpell: c.concentratingSpell?.spellName,
       isDefeated: c.isDefeated,
       portraitUrl: c.portraitUrl,
-      controlledBy: c.controlledBy
+      controlledBy: c.controlledBy,
+      mapX: c.mapX,
+      mapY: c.mapY,
+      tokenSize: c.tokenSize,
+      reachFeet: c.reachFeet,
+      elevationFeet: c.elevationFeet,
+      speed: c.speed,
+      movementRemaining: c.movementRemaining,
+      hasDashed: c.hasDashed
     }));
 
     const encounterPayload: SyncedEncounterState = {
@@ -209,13 +256,23 @@ export function useEncounterState({
       activeTurnIndex: turnIdx,
       environment: env || encounterEnvironment,
       combatants: syncedCombatants,
+      battlemapTerrain: customTerrain !== undefined ? customTerrain : (terrainMap as Record<string, string>),
+      battlemapDoors: customDoors !== undefined ? customDoors : doors,
+      battlemapFogOfWar: customFogOfWar !== undefined ? customFogOfWar : fogOfWar,
+      battlemapUseFogOfWar: customUseFogOfWar !== undefined ? customUseFogOfWar : useFogOfWar,
+      battlemapActiveAoE: customAoE !== undefined ? customAoE : activeAoETemplate,
+      battlemapColumns: customConfig?.gridColumns,
+      battlemapRows: customConfig?.gridRows,
+      battlemapFeetPerSquare: customConfig?.feetPerSquare,
+      battlemapDiagonalRule: customConfig?.diagonalRule,
+      battlemapTheme: customConfig?.theme as any,
       updatedAt: new Date().toISOString()
     };
 
     updateSessionEncounter(activeSessionCode, encounterPayload).catch((err) => {
       console.warn('Failed to sync encounter to session:', err);
     });
-  }, [activeSessionCode, isDm, encounterEnvironment]);
+  }, [activeSessionCode, isDm, encounterEnvironment, terrainMap, doors, fogOfWar, useFogOfWar, activeAoETemplate]);
 
   // Player helper to submit their own initiative to the session
   const handlePlayerSubmitInitiative = useCallback((initRoll: number) => {
@@ -302,13 +359,17 @@ export function useEncounterState({
         combatLogs,
         encounterEnvironment,
         encounterMode,
-        activeMerchant
+        activeMerchant,
+        battlemapTerrain: terrainMap,
+        battlemapDoors: doors,
+        battlemapFogOfWar: fogOfWar,
+        battlemapUseFogOfWar: useFogOfWar
       };
       localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
     } catch (err) {
       console.error("Error saving encounter state to localStorage:", err);
     }
-  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, character.id]);
+  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, terrainMap, doors, fogOfWar, useFogOfWar, character.id]);
 
 
   // Keep player combatant synced with character
@@ -842,14 +903,26 @@ export function useEncounterState({
     }
 
     setActiveTurnIndex(nextIndex);
-    const nextCombatant = combatants[nextIndex];
+    const updatedCombatants = combatants.map((c, idx) => {
+      if (idx === nextIndex) {
+        return {
+          ...c,
+          movementRemaining: c.speed || 30,
+          hasDashed: false
+        };
+      }
+      return c;
+    });
+    setCombatants(updatedCombatants);
+
+    const nextCombatant = updatedCombatants[nextIndex];
     if (nextCombatant) {
       playInitiativeTurnSound();
-      addLogEntry('turn', `Turn started for ${nextCombatant.name} (Round ${nextRound})`, nextCombatant.name);
+      addLogEntry('turn', `Turn started for ${nextCombatant.name} (Round ${nextRound}) — Movement: ${nextCombatant.movementRemaining} ft`, nextCombatant.name);
     }
 
     if (activeSessionCode && isDm) {
-      syncEncounterToSession(combatants, nextIndex, nextRound);
+      syncEncounterToSession(updatedCombatants, nextIndex, nextRound);
     }
   }, [combatants, activeTurnIndex, roundNumber, character, onUpdateCharacter, addLogEntry, activeSessionCode, isDm, syncEncounterToSession]);
 
@@ -1072,6 +1145,394 @@ export function useEncounterState({
     setCombatants(prev => prev.filter(c => c.id !== id));
   }, [combatants, addLogEntry]);
 
+  const handleUpdateCombatantPosition = useCallback((id: string, x?: number, y?: number) => {
+    setCombatants(prev => {
+      const next = prev.map(c => {
+        if (c.id === id) {
+          if (typeof x !== 'number' || typeof y !== 'number') {
+            return { ...c, mapX: undefined, mapY: undefined, isOnMap: false };
+          }
+          return { ...c, mapX: x, mapY: y, isOnMap: true };
+        }
+        return c;
+      });
+      // Sync immediately to session if DM or controller
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber]);
+
+  const handleRemoveCombatantFromMap = useCallback((id: string) => {
+    setCombatants(prev => {
+      const target = prev.find(c => c.id === id);
+      if (target) {
+        addLogEntry('turn', `Removed ${target.name}'s token from battlemap (placed in reserve)`, target.name);
+      }
+      const next = prev.map(c => {
+        if (c.id === id) {
+          return { ...c, mapX: undefined, mapY: undefined, isOnMap: false };
+        }
+        return c;
+      });
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry]);
+
+  const handleResetMapTokens = useCallback((mode: 'spawn_points' | 'recall_all' = 'spawn_points') => {
+    setCombatants(prev => {
+      let allyIdx = 0;
+      let enemyIdx = 0;
+      const next = prev.map(c => {
+        if (mode === 'recall_all') {
+          return { ...c, mapX: undefined, mapY: undefined, isOnMap: false };
+        }
+        const isEnemy = c.type === 'enemy';
+        const x = isEnemy ? (24 - 3 - (enemyIdx % 4)) : (2 + (allyIdx % 4));
+        const y = isEnemy ? (2 + Math.floor(enemyIdx / 4) * 2) : (2 + Math.floor(allyIdx / 4) * 2);
+        if (isEnemy) enemyIdx++; else allyIdx++;
+        return {
+          ...c,
+          mapX: x,
+          mapY: y,
+          isOnMap: true,
+          movementRemaining: c.speed || 30,
+          hasDashed: false
+        };
+      });
+      addLogEntry('turn', mode === 'recall_all' ? 'All combatant tokens recalled to reserve' : 'All combatant tokens reset to spawn points');
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry]);
+
+  const handleResetBattlemap = useCallback((options: {
+    clearTerrain?: boolean;
+    clearDoors?: boolean;
+    resetFog?: 'shroud' | 'reveal' | 'none';
+    resetTokens?: 'spawn_points' | 'recall_all' | 'none';
+    clearAoE?: boolean;
+  }) => {
+    if (options.clearTerrain) {
+      setTerrainMap({});
+    }
+    if (options.clearDoors) {
+      setDoors({});
+    }
+    if (options.resetFog === 'shroud') {
+      setFogOfWar({});
+      setUseFogOfWar(true);
+    } else if (options.resetFog === 'reveal') {
+      setUseFogOfWar(false);
+    }
+    if (options.clearAoE) {
+      setActiveAoETemplate(null);
+    }
+    if (options.resetTokens && options.resetTokens !== 'none') {
+      handleResetMapTokens(options.resetTokens);
+    }
+    addLogEntry('turn', 'Tactical battlemap was reset.');
+  }, [handleResetMapTokens, addLogEntry]);
+
+  const handleMoveCombatant = useCallback((
+    id: string,
+    x: number,
+    y: number,
+    distanceFeet: number,
+    options?: { isTeleport?: boolean; isDmFreeMove?: boolean; abilityName?: string }
+  ) => {
+    setCombatants(prev => {
+      const target = prev.find(c => c.id === id);
+      if (!target) return prev;
+
+      const isTeleport = Boolean(options?.isTeleport);
+      const isDmFree = Boolean(options?.isDmFreeMove && isDm);
+
+      const currentRemaining = typeof target.movementRemaining === 'number'
+        ? target.movementRemaining
+        : (target.speed || 30);
+
+      // Teleportation and DM adjustments do not consume ground walk speed
+      const newRemaining = (isTeleport || isDmFree)
+        ? currentRemaining
+        : Math.max(0, currentRemaining - distanceFeet);
+
+      const next = prev.map(c => {
+        if (c.id === id) {
+          return {
+            ...c,
+            mapX: x,
+            mapY: y,
+            movementRemaining: newRemaining
+          };
+        }
+        return c;
+      });
+
+      playInitiativeTurnSound();
+      const colLetter = String.fromCharCode(65 + (x % 26));
+      const coordStr = `${colLetter}${y + 1}`;
+
+      if (isTeleport) {
+        addLogEntry(
+          'ability',
+          `✨ ${target.name} teleported ${distanceFeet} ft to ${coordStr} using ${options?.abilityName || 'Teleport'}!`,
+          target.name
+        );
+      } else if (isDmFree) {
+        addLogEntry(
+          'turn',
+          `👑 [DM] Repositioned ${target.name} to ${coordStr}.`,
+          'DM'
+        );
+      } else {
+        addLogEntry(
+          'turn',
+          `🏃 ${target.name} moved ${distanceFeet} ft to ${coordStr} (${newRemaining} ft remaining)`,
+          target.name
+        );
+      }
+
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry, isDm]);
+
+  const handleApplyBattlemapLayout = useCallback((
+    layout: BattlemapLayout,
+    options: {
+      includeTokens: boolean;
+      includeFog: boolean;
+      replaceTerrain: boolean;
+    },
+    onConfigChange?: (config: BattlemapConfig) => void
+  ) => {
+    const finalTerrain = options.replaceTerrain
+      ? { ...(layout.terrainMap || {}) }
+      : { ...terrainMap, ...(layout.terrainMap || {}) };
+
+    const finalDoors = options.replaceTerrain
+      ? { ...(layout.doors || {}) }
+      : { ...doors, ...(layout.doors || {}) };
+
+    const finalFog = options.includeFog
+      ? { ...(layout.fogOfWar || {}) }
+      : fogOfWar;
+
+    const finalUseFog = options.includeFog
+      ? Boolean(layout.useFogOfWar)
+      : useFogOfWar;
+
+    const finalAoE = layout.activeAoE !== undefined ? layout.activeAoE : activeAoETemplate;
+
+    let finalCombatants = combatants;
+    if (options.includeTokens && layout.tokens && layout.tokens.length > 0) {
+      const updated = [...combatants];
+      const toAdd: Combatant[] = [];
+      layout.tokens.forEach(token => {
+        const existingIdx = updated.findIndex(c => c.name.toLowerCase() === token.name.toLowerCase() || c.id === token.id);
+        if (existingIdx >= 0) {
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            mapX: token.x,
+            mapY: token.y,
+            tokenSize: token.tokenSize || updated[existingIdx].tokenSize || 1,
+            reachFeet: token.reachFeet || updated[existingIdx].reachFeet || 5,
+            elevationFeet: token.elevationFeet ?? updated[existingIdx].elevationFeet ?? 0,
+            isOnMap: true
+          };
+        } else {
+          toAdd.push({
+            id: token.id || `combatant_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            name: token.name,
+            initiative: Math.floor(Math.random() * 20) + 1,
+            armorClass: token.armorClass || 13,
+            hpCurrent: token.hpCurrent ?? token.hpMax ?? 15,
+            hpMax: token.hpMax || 15,
+            tempHp: 0,
+            type: token.type,
+            isPlayerChar: token.type === 'player',
+            conditions: [],
+            mapX: token.x,
+            mapY: token.y,
+            tokenSize: token.tokenSize || 1,
+            reachFeet: token.reachFeet || 5,
+            elevationFeet: token.elevationFeet ?? 0,
+            speed: token.speed || 30,
+            movementRemaining: token.speed || 30,
+            hasDashed: false,
+            portraitUrl: token.portraitUrl,
+            isOnMap: true
+          });
+        }
+      });
+      finalCombatants = [...updated, ...toAdd];
+    }
+
+    setTerrainMap(finalTerrain);
+    setDoors(finalDoors);
+    setFogOfWar(finalFog);
+    setUseFogOfWar(finalUseFog);
+    setActiveAoETemplate(finalAoE);
+    setCombatants(finalCombatants);
+
+    if (onConfigChange && layout.config) {
+      onConfigChange(layout.config);
+    }
+
+    try {
+      const charKey = character.id || 'default';
+      const dataToSave: SavedEncounterData = {
+        combatants: finalCombatants,
+        activeTurnIndex,
+        roundNumber,
+        combatLogs,
+        encounterEnvironment,
+        encounterMode,
+        activeMerchant,
+        battlemapTerrain: finalTerrain,
+        battlemapDoors: finalDoors,
+        battlemapFogOfWar: finalFog,
+        battlemapUseFogOfWar: finalUseFog
+      };
+      localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
+    } catch (err) {
+      console.warn('Failed to save encounter to localStorage:', err);
+    }
+
+    addLogEntry(
+      'turn',
+      `🗺️ Loaded battlemap layout: "${layout.name}" (${layout.config.gridColumns}×${layout.config.gridRows} sq, ${layout.config.theme}).`,
+      'DM'
+    );
+
+    if (activeSessionCode && isDm) {
+      syncEncounterToSession(
+        finalCombatants,
+        activeTurnIndex,
+        roundNumber,
+        undefined,
+        finalTerrain as Record<string, string>,
+        finalDoors,
+        finalFog,
+        finalUseFog,
+        finalAoE,
+        layout.config
+      );
+    }
+  }, [
+    terrainMap,
+    doors,
+    fogOfWar,
+    useFogOfWar,
+    activeAoETemplate,
+    combatants,
+    character.id,
+    activeTurnIndex,
+    roundNumber,
+    combatLogs,
+    encounterEnvironment,
+    encounterMode,
+    activeMerchant,
+    activeSessionCode,
+    isDm,
+    syncEncounterToSession,
+    addLogEntry
+  ]);
+
+  const handleDashCombatant = useCallback((id: string) => {
+    setCombatants(prev => {
+      const target = prev.find(c => c.id === id);
+      if (!target) return prev;
+
+      const baseSpeed = target.speed || 30;
+      const currentRemaining = typeof target.movementRemaining === 'number'
+        ? target.movementRemaining
+        : baseSpeed;
+      const newRemaining = currentRemaining + baseSpeed;
+
+      const next = prev.map(c => {
+        if (c.id === id) {
+          return {
+            ...c,
+            movementRemaining: newRemaining,
+            hasDashed: true
+          };
+        }
+        return c;
+      });
+
+      addLogEntry(
+        'ability',
+        `⚡ ${target.name} took the Dash action! (+${baseSpeed} ft speed, now ${newRemaining} ft remaining)`,
+        target.name
+      );
+
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry]);
+
+  const handleResetCombatantMovement = useCallback((id: string) => {
+    setCombatants(prev => {
+      const target = prev.find(c => c.id === id);
+      if (!target) return prev;
+
+      const baseSpeed = target.speed || 30;
+      const next = prev.map(c => {
+        if (c.id === id) {
+          return {
+            ...c,
+            movementRemaining: baseSpeed,
+            hasDashed: false
+          };
+        }
+        return c;
+      });
+
+      addLogEntry(
+        'turn',
+        `🔄 Reset movement for ${target.name} to ${baseSpeed} ft`,
+        target.name
+      );
+
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry]);
+
+  const handleUpdateCombatantSpeed = useCallback((id: string, newSpeed: number) => {
+    setCombatants(prev => {
+      const next = prev.map(c => {
+        if (c.id === id) {
+          return {
+            ...c,
+            speed: newSpeed,
+            movementRemaining: newSpeed
+          };
+        }
+        return c;
+      });
+
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber]);
+
   const handleSetMerchantEncounter = useCallback((merchantData: MerchantEncounterState) => {
     setActiveMerchant(merchantData);
     setEncounterMode('merchant');
@@ -1219,6 +1680,143 @@ export function useEncounterState({
     );
   }, [allCharacters, character, addLogEntry]);
 
+  // Phase 3: Terrain and Door Handlers
+  const handleUpdateTerrain = useCallback((updatedTerrain: Record<string, TerrainType>) => {
+    setTerrainMap(updatedTerrain);
+    if (isDm && activeSessionCode) {
+      syncEncounterToSession(combatants, activeTurnIndex, roundNumber, undefined, updatedTerrain, doors);
+    }
+  }, [isDm, activeSessionCode, combatants, activeTurnIndex, roundNumber, doors, syncEncounterToSession]);
+
+  const handleToggleDoor = useCallback((x: number, y: number) => {
+    const key = `${x},${y}`;
+    const current = doors[key] || { isOpen: false };
+    const updatedDoors = {
+      ...doors,
+      [key]: {
+        ...current,
+        isOpen: !current.isOpen
+      }
+    };
+    setDoors(updatedDoors);
+    const statusStr = !current.isOpen ? 'opened' : 'closed';
+    addLogEntry('turn', `🚪 Door at (${String.fromCharCode(65 + (x % 26))}${y + 1}) was ${statusStr}.`, 'Tactics');
+    if (activeSessionCode) {
+      syncEncounterToSession(combatants, activeTurnIndex, roundNumber, undefined, terrainMap, updatedDoors);
+    }
+  }, [doors, addLogEntry, activeSessionCode, combatants, activeTurnIndex, roundNumber, terrainMap, syncEncounterToSession]);
+
+  const handleClearAllTerrain = useCallback(() => {
+    setTerrainMap({});
+    setDoors({});
+    addLogEntry('turn', '🧹 Battlemap terrain and doors were cleared by DM.', 'DM');
+    if (isDm && activeSessionCode) {
+      syncEncounterToSession(combatants, activeTurnIndex, roundNumber, undefined, {}, {});
+    }
+  }, [isDm, activeSessionCode, combatants, activeTurnIndex, roundNumber, addLogEntry, syncEncounterToSession]);
+
+  // Phase 4: Fog of War and AoE Handlers
+  const handleUpdateFogOfWar = useCallback((newFog: Record<string, boolean>, enabled?: boolean) => {
+    setFogOfWar(newFog);
+    const nextEnabled = enabled !== undefined ? enabled : useFogOfWar;
+    if (enabled !== undefined) {
+      setUseFogOfWar(enabled);
+    }
+    if (isDm && activeSessionCode) {
+      syncEncounterToSession(
+        combatants,
+        activeTurnIndex,
+        roundNumber,
+        undefined,
+        terrainMap as Record<string, string>,
+        doors,
+        newFog,
+        nextEnabled
+      );
+    }
+  }, [isDm, activeSessionCode, combatants, activeTurnIndex, roundNumber, terrainMap, doors, useFogOfWar, syncEncounterToSession]);
+
+  const handleUpdateAoETemplate = useCallback((template: AoETemplate | null) => {
+    setActiveAoETemplate(template);
+    if (activeSessionCode) {
+      syncEncounterToSession(
+        combatants,
+        activeTurnIndex,
+        roundNumber,
+        undefined,
+        terrainMap as Record<string, string>,
+        doors,
+        fogOfWar,
+        useFogOfWar,
+        template
+      );
+    }
+  }, [activeSessionCode, combatants, activeTurnIndex, roundNumber, terrainMap, doors, fogOfWar, useFogOfWar, syncEncounterToSession]);
+
+  const handleRollSavesForTargets = useCallback((saveType: string, dc: number, targets: Combatant[]) => {
+    if (!targets || targets.length === 0) return;
+    const lines: string[] = [];
+    const abilityKeyMap: Record<string, AbilityName> = {
+      str: 'STR',
+      dex: 'DEX',
+      con: 'CON',
+      int: 'INT',
+      wis: 'WIS',
+      cha: 'CHA',
+      strength: 'STR',
+      dexterity: 'DEX',
+      constitution: 'CON',
+      intelligence: 'INT',
+      wisdom: 'WIS',
+      charisma: 'CHA'
+    };
+    const mappedAbility: AbilityName = abilityKeyMap[saveType.toLowerCase()] || 'DEX';
+
+    targets.forEach((t) => {
+      const d20 = Math.floor(Math.random() * 20) + 1;
+      let mod = 0;
+      if (t.isPlayerChar && character.name === t.name) {
+        const score = character.abilities?.[mappedAbility]?.score ?? 10;
+        mod = Math.floor((score - 10) / 2);
+        if (character.savingThrowProficiencies?.includes(mappedAbility)) {
+          mod += Math.floor((character.level - 1) / 4) + 2;
+        }
+      } else {
+        // Monster/NPC estimation
+        mod = Math.floor(Math.max(0, Math.min(8, (t.armorClass - 10) / 2)));
+      }
+      const total = d20 + mod;
+      const passed = total >= dc;
+      lines.push(`${t.name}: d20(${d20})${mod >= 0 ? `+${mod}` : mod} = ${total} (vs DC ${dc}) -> ${passed ? '✅ SUCCESS' : '❌ FAILED'}`);
+    });
+
+    addLogEntry('ability', `🎲 [AoE Spell Save] DC ${dc} ${saveType} Saving Throw:\n${lines.join('\n')}`, 'AoE Tactics');
+  }, [character, addLogEntry]);
+
+  const handleApplyAoEDamage = useCallback((diceStr: string, damageType: string, targets: Combatant[]) => {
+    if (!targets || targets.length === 0) return;
+    const match = diceStr.match(/(\d+)d(\d+)/i);
+    let totalDmg = 0;
+    const rolls: number[] = [];
+    if (match) {
+      const count = parseInt(match[1], 10);
+      const sides = parseInt(match[2], 10);
+      for (let i = 0; i < count; i++) {
+        const r = Math.floor(Math.random() * sides) + 1;
+        rolls.push(r);
+        totalDmg += r;
+      }
+    } else {
+      totalDmg = parseInt(diceStr, 10) || 28;
+    }
+
+    addLogEntry(
+      'damage',
+      `🔥 [AoE Damage Roll] ${diceStr} ${damageType}: [${rolls.join(', ')}] = ${totalDmg} damage to ${targets.length} target${targets.length > 1 ? 's' : ''}!`,
+      'AoE Tactics'
+    );
+  }, [addLogEntry]);
+
   return {
     combatants,
     setCombatants,
@@ -1260,8 +1858,34 @@ export function useEncounterState({
     handleToggleCombatantType,
     handleUpdateCombatantMaxHp,
     handleRemoveCombatant,
+    handleRemoveCombatantFromMap,
+    handleResetMapTokens,
+    handleResetBattlemap,
+    handleUpdateCombatantPosition,
+    handleMoveCombatant,
+    handleApplyBattlemapLayout,
+    handleDashCombatant,
+    handleResetCombatantMovement,
+    handleUpdateCombatantSpeed,
     handleClearEncounter,
     handleAddPartyToEncounter,
+    terrainMap,
+    setTerrainMap,
+    doors,
+    setDoors,
+    handleUpdateTerrain,
+    handleToggleDoor,
+    handleClearAllTerrain,
+    fogOfWar,
+    setFogOfWar,
+    useFogOfWar,
+    setUseFogOfWar,
+    activeAoETemplate,
+    setActiveAoETemplate,
+    handleUpdateFogOfWar,
+    handleUpdateAoETemplate,
+    handleRollSavesForTargets,
+    handleApplyAoEDamage,
     addLogEntry,
     awardDefeatedMonsterXp,
     applyManualXp,

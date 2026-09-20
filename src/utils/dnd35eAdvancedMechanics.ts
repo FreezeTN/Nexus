@@ -1335,6 +1335,24 @@ export function calculate35eMulticlassXpPenalty(char: CharacterData): Multiclass
     };
   }
 
+  // Gestalt characters (UA p. 72):
+  // When advancing standard Gestalt tracks without pausing/multiclassing, no XP penalty applies.
+  // When making use of multiclassing on a Gestalt track by pausing a class and advancing a different class,
+  // standard multiclassing rules apply to those multiclassed classes.
+  if (char.optionalRules?.useGestaltUA72) {
+    const tracks = char.optionalRules.gestaltTracks;
+    const hasMulticlassOnAnyTrack = tracks && tracks.some(t => t.classes.length > 1);
+    if (!hasMulticlassOnAnyTrack) {
+      return {
+        hasPenalty: false,
+        penaltyPercent: 0,
+        favoredClass: 'Gestalt Progression',
+        isPrestigeClassImmune: false,
+        explanation: 'Gestalt characters (Unearthed Arcana p. 72) advancing their simultaneous classes without paused multiclasses suffer no multiclass XP penalties.'
+      };
+    }
+  }
+
   const raceLower = (char.race || '').toLowerCase();
   let favored = 'Any (Highest Level Class)';
 

@@ -77,7 +77,7 @@ interface HeaderProps {
   onOpenCampaignGraph?: () => void;
   activeSession?: GameSession | null;
   onSelectCharacter: (id: string) => void;
-  onCreateNewCharacter: (category?: 'character' | 'monster' | 'vendor') => void;
+  onCreateNewCharacter: (category?: 'character' | 'monster' | 'vendor', edition?: RuleEdition) => void;
   onDeleteCharacter: (id: string) => void;
   onUpdateCharacter: (updated: CharacterData) => void;
   onExportJson: () => void;
@@ -551,7 +551,7 @@ export const Header: React.FC<HeaderProps> = ({
 
               {currentUser && (
                 <button
-                  onClick={() => onCreateNewCharacter()}
+                  onClick={() => onCreateNewCharacter('character', activeTab === 'menu' ? edition : (activeCharacter?.edition || edition))}
                   className="p-1.5 bg-stone-800 hover:bg-stone-700 active:scale-95 text-amber-400 border border-stone-700 rounded-lg transition cursor-pointer"
                   title="Create New Character"
                 >

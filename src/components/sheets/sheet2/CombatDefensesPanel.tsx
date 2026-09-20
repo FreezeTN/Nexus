@@ -22,8 +22,13 @@ import {
   calculate35eAoOPool,
   calculate35eAbilityDamageDrainSummary,
   get35eSkillBonus,
-  getProficiencyBonus
+  getProficiencyBonus,
+  get35eSpaceAndReach,
+  get35eSizeModifier,
+  get35eGrappleModifier,
+  get35eHideModifier
 } from '../../../utils/dndCalculations';
+import { canCharacterShapeshift, canCharacterSummonCompanion } from '../../../utils/classProgressionUtils';
 
 import { HpOrb, getHpColorClass } from '../../HpOrb';
 import { ConditionsPanel } from '../../combat/ConditionsPanel';
@@ -38,7 +43,9 @@ import { ConcentrationCheckModal } from '../../modals/ConcentrationCheckModal';
 import { TumbleAcrobaticsModal } from '../../modals/TumbleAcrobaticsModal';
 import { MountedCombatModal } from '../../modals/MountedCombatModal';
 import { WildShape35eModal } from '../../modals/WildShape35eModal';
+import { CreatureSizeScaleModal } from '../../modals/CreatureSizeScaleModal';
 import { EnvironmentalHazardsModal } from '../../modals/EnvironmentalHazardsModal';
+import { EditMovementSpeedModal } from '../../modals/EditMovementSpeedModal';
 import { getEnvironmentalTraitStatus } from '../../../utils/environmentRules';
 import { useLayoutCustomization } from '../../../utils/layoutCustomization';
 import { useLanguage } from '../../../i18n/LanguageContext';
@@ -68,7 +75,8 @@ import {
   RefreshCw,
   AlertTriangle,
   Eye,
-  Activity
+  Activity,
+  Maximize2
 } from 'lucide-react';
 
 interface CombatDefensesPanelProps {
@@ -103,6 +111,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   const [show35eMountedModal, setShow35eMountedModal] = useState(false);
   const [show35eWildShapeModal, setShow35eWildShapeModal] = useState(false);
   const [show35eEnvironmentalModal, setShow35eEnvironmentalModal] = useState(false);
+  const [show35eSizeScaleModal, setShow35eSizeScaleModal] = useState(false);
+  const [showSpeedModal, setShowSpeedModal] = useState(false);
   const [isTacticalPanelExpanded, setIsTacticalPanelExpanded] = useState(true);
   const effectiveMaxHp = getEffectiveMaxHp(character);
   const speedInfo = getEffectiveSpeed(character);
@@ -110,6 +120,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   const acp35 = calculate35eTotalArmorCheckPenalty(character);
   const aooInfo = calculate35eAoOPool(character);
   const abilityDamageSummary = calculate35eAbilityDamageDrainSummary(character);
+  const canShapeshift = canCharacterShapeshift(character);
+  const canSummon = Boolean(setShowCompanionModal && canCharacterSummonCompanion(character));
 
   const handleToggleDeathSuccess = (index: number) => {
     const current = character.deathSavesSuccesses;
@@ -320,8 +332,9 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 </button>
               </div>
 
-              {/* Enhanced Health Orb + Health Progress Bar & Quick Adjusters */}
-              {(() => {
+              {/* Enhanced Health Orb + Health Progress Bar & Quick Adjusters (Centered vertically to eliminate dead space) */}
+              <div className="flex-1 flex flex-col justify-center gap-3 my-auto">
+                {(() => {
                 const safeMax = Math.max(1, effectiveMaxHp);
                 const currentHp = character.hpCurrent ?? effectiveMaxHp;
                 const hpPct = Math.max(0, Math.min(100, Math.round((currentHp / safeMax) * 100)));
@@ -411,7 +424,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     </div>
 
                     {/* Sub-row: Temp HP, Nonlethal (3.5e), Hit Dice Tracker, and Rest */}
-                    <div className={`grid ${character.edition === '3.5e' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} gap-2 pt-1 text-xs font-mono`}>
+                    <div className="grid grid-cols-3 gap-2 pt-1 text-xs font-mono">
                       <div className="bg-stone-900/90 p-1.5 rounded-lg border border-stone-800 text-center">
                         <div className="text-[9px] text-stone-400 font-sans uppercase font-bold">Temp HP</div>
                         <div className="flex items-center justify-center gap-1 mt-0.5">
@@ -672,6 +685,54 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                       </div>
                     );
                   })()}
+
+                  {/* 3.5e Creature Size, Combat Space & Natural Reach Strip (Integrated into Column 1 Movement & Space) */}
+                  {(() => {
+                    const sizeScaleInfo = get35eSpaceAndReach(character.sizeCategory, character.reachType || character.isQuadruped);
+                    const sizeAtkAcMod = get35eSizeModifier(character.sizeCategory);
+                    const sizeGrappleMod = get35eGrappleModifier(character.sizeCategory);
+                    const sizeHideMod = get35eHideModifier(character.sizeCategory);
+                    return (
+                      <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800/90 space-y-1.5 shadow-sm">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 font-serif font-bold text-amber-300 text-xs">
+                            <Maximize2 className="w-3.5 h-3.5 text-amber-400" />
+                            <span>{character.sizeCategory || 'Medium'}</span>
+                            <span className="text-[10px] font-sans font-normal text-stone-400">
+                              ({sizeScaleInfo.reachType} Reach)
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setShow35eSizeScaleModal(true)}
+                            className="text-[9.5px] font-bold font-sans bg-amber-950/90 hover:bg-amber-900 text-amber-300 border border-amber-600/50 px-2 py-0.5 rounded transition shadow-sm cursor-pointer flex items-center gap-1 shrink-0"
+                            title="Open Table: Creature Size and Scale (Official D&D 3.5e dimensions, reach and modifiers)"
+                          >
+                            <Maximize2 className="w-2.5 h-2.5 text-amber-400" />
+                            <span>Size Table</span>
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-center gap-2 sm:gap-3 text-[10.5px] font-mono bg-stone-900/60 px-2 py-1.5 rounded-lg border border-stone-800/80 text-center">
+                          <span className="text-stone-300">Space: <strong className="text-sky-300">{sizeScaleInfo.spaceDisplay}</strong></span>
+                          <span className="text-stone-700">•</span>
+                          <span className="text-stone-300">
+                            Reach: <strong className={sizeScaleInfo.isZeroReach ? 'text-amber-400' : 'text-purple-300'}>{sizeScaleInfo.reachDisplay}</strong>
+                          </span>
+                          <span className="text-stone-700">•</span>
+                          <span className="text-[9.5px] text-stone-400" title={`Atk/AC ${formatModifier(sizeAtkAcMod)} | Grapple ${formatModifier(sizeGrappleMod)} | Hide ${formatModifier(sizeHideMod)}`}>
+                            Atk/AC <strong className={sizeAtkAcMod > 0 ? 'text-emerald-400' : sizeAtkAcMod < 0 ? 'text-red-400' : 'text-stone-300'}>{formatModifier(sizeAtkAcMod)}</strong> | Grap <strong className="text-amber-300">{formatModifier(sizeGrappleMod)}</strong>
+                          </span>
+                        </div>
+
+                        {sizeScaleInfo.isZeroReach && (
+                          <div className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 text-center">
+                            ⚠️ 0 ft Reach (Must enter opponent's square to attack)
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 /* 5e Action Economy Tracker - Integrated into Vitality & HP */
@@ -788,13 +849,14 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   </div>
                 </div>
               )}
+              </div>
             </div>
           )}
 
       {/* Middle 4 cols: Armor Class, Initiative, Speed & Damage Mitigation */}
           {showDefStats && (
-            <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-xl space-y-3`}>
-              <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+            <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-3.5 flex flex-col shadow-xl`}>
+              <div className="flex items-center justify-between border-b border-stone-800 pb-2 mb-2">
                 <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
                   <Shield className="w-4 h-4 text-amber-500" /> {t('defenses.armorClass', 'Defense Stats')}
                 </span>
@@ -817,7 +879,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
 
               {/* Primary Defense Metrics Grid: AC, Initiative, Speed */}
               {character.edition === '3.5e' ? (
-                <div className="space-y-2.5">
+                <div className="flex-1 flex flex-col justify-center gap-2.5 my-auto">
                   {/* Top quick stats: Initiative, BAB, Grapple/SR, Speed, AoO */}
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 text-center font-mono">
                     {/* Initiative */}
@@ -880,23 +942,22 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                       );
                     })()}
 
-                    {/* Grapple / SR */}
+                    {/* Grapple */}
                     {(() => {
                       const grappleMod = get35eGrapple(character);
                       return (
                         <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] transition hover:border-stone-700">
                           <div className="h-4 w-full flex items-center justify-center">
-                            <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">Grapple / SR</span>
+                            <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">Grapple</span>
                           </div>
                           <div className="h-7 w-full flex items-center justify-center">
                             <button
                               type="button"
                               onClick={() => onRoll('Grapple Check', 20, 1, grappleMod, 'normal')}
                               className="text-lg font-serif font-extrabold text-amber-300 hover:text-amber-200 transition leading-none cursor-pointer flex items-center gap-1"
-                              title={`Click to roll Grapple Check: d20 + ${grappleMod}${character.spellResist ? ` | Spell Resistance: ${character.spellResist}` : ''}`}
+                              title={`Click to roll Grapple Check: d20 + ${grappleMod}`}
                             >
                               <span>{formatModifier(grappleMod)}</span>
-                              {character.spellResist ? <span className="text-[10px] text-cyan-300 font-normal font-mono">SR{character.spellResist}</span> : null}
                             </button>
                           </div>
                           <div className="h-3.5 w-full flex items-center justify-center">
@@ -907,16 +968,33 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     })()}
 
                     {/* Speed */}
-                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] transition hover:border-stone-700">
-                      <div className="h-4 w-full flex items-center justify-center">
+                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex flex-col justify-between items-center h-[76px] relative group hover:border-sky-500/50 transition">
+                      <div className="h-4 w-full flex items-center justify-center relative px-1">
                         <span className="text-[9px] text-stone-400 font-sans uppercase font-bold tracking-wider truncate">{t('stats.speed', 'Speed')}</span>
+                        <button
+                          type="button"
+                          id="btn-open-speed-modal-35e"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowSpeedModal(true);
+                          }}
+                          className="absolute right-0 top-0 text-stone-500 hover:text-sky-400 transition p-0.5 cursor-pointer"
+                          title="Edit Movement Speeds & Tactical Mobility"
+                        >
+                          <Pencil className="w-2.5 h-2.5" />
+                        </button>
                       </div>
                       <div className="h-7 w-full flex items-center justify-center">
-                        <span className="text-lg font-serif font-extrabold text-sky-300 leading-none flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowSpeedModal(true)}
+                          className="text-lg font-serif font-extrabold text-sky-300 hover:text-sky-200 leading-none flex items-center gap-1 cursor-pointer transition"
+                          title="Click to edit movement speeds"
+                        >
                           <Footprints className="w-3.5 h-3.5 text-sky-400 shrink-0" />
                           <span>{speedInfo.effectiveSpeed}</span>
                           <span className="text-[10px] font-normal font-mono text-stone-400">ft</span>
-                        </span>
+                        </button>
                       </div>
                       <div className="h-3.5 w-full flex items-center justify-center">
                         <span className="text-[8px] text-stone-500 font-mono truncate px-0.5" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
@@ -1234,17 +1312,6 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                       })}
                     </div>
                   </div>
-
-                  {/* 3.5e Senses & Vision Display */}
-                  <div className="bg-stone-950 p-2 rounded-xl border border-stone-800/90 flex items-center justify-between text-xs font-mono px-3">
-                    <div className="flex items-center gap-1.5 text-stone-400 font-sans text-[10px] uppercase font-bold">
-                      <Moon className="w-3 h-3 text-indigo-400" />
-                      <span>Senses & Vision</span>
-                    </div>
-                    <span className="text-xs font-bold text-indigo-300">
-                      {character.senses || 'Normal Vision'}
-                    </span>
-                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2 text-center font-mono">
@@ -1291,12 +1358,31 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   })()}
 
                   {/* Speed */}
-                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center">
-                    <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.speed', 'Speed')}</span>
-                    <span className="text-xl font-serif font-extrabold text-sky-300 my-0.5 flex items-center gap-1">
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 flex flex-col items-center justify-center relative group hover:border-sky-500/50 transition">
+                    <div className="w-full flex items-center justify-center relative">
+                      <span className="text-[10px] text-stone-400 font-sans uppercase font-bold">{t('stats.speed', 'Speed')}</span>
+                      <button
+                        type="button"
+                        id="btn-open-speed-modal-5e"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSpeedModal(true);
+                        }}
+                        className="absolute right-0 top-0 text-stone-500 hover:text-sky-400 transition p-0.5 cursor-pointer"
+                        title="Edit Movement Speeds & Tactical Mobility"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSpeedModal(true)}
+                      className="text-xl font-serif font-extrabold text-sky-300 hover:text-sky-200 my-0.5 flex items-center gap-1 cursor-pointer transition"
+                      title="Click to edit movement speeds"
+                    >
                       <Footprints className="w-4 h-4 text-sky-400 shrink-0" />
                       {speedInfo.effectiveSpeed} <span className="text-xs font-normal">ft</span>
-                    </span>
+                    </button>
                     <span className="text-[9px] text-stone-500 truncate max-w-full" title={speedInfo.reasons?.join('; ') || speedInfo.status}>
                       {speedInfo.reasons?.join('; ') || speedInfo.status || 'Base speed'}
                     </span>
@@ -1435,16 +1521,16 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 </div>
               )}
 
-              {/* Damage Mitigation: Resistances, Immunities & Damage Reduction (DR) */}
+              {/* Damage Mitigation: Resistances, Immunities & Damage Reduction (DR) / Spell Resistance (SR) */}
               <div className="grid grid-cols-3 gap-1.5 text-center font-mono">
                 {/* Resistances (50% damage) */}
-                <div className="bg-stone-950 p-2 rounded-xl border border-amber-900/30 hover:border-amber-700/50 transition flex flex-col justify-between items-center h-[64px]">
+                <div className="bg-stone-950 p-2 rounded-xl border border-amber-900/30 hover:border-amber-700/50 transition flex flex-col justify-between items-center min-h-[66px]">
                   <div className="h-4 w-full flex items-center justify-center">
                     <span className="text-[9px] font-sans uppercase font-bold text-amber-400/90 tracking-wider">
                       Resist (½)
                     </span>
                   </div>
-                  <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-1">
+                  <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-1 max-h-[54px] overflow-y-auto no-scrollbar py-0.5">
                     {resistances.length > 0 ? (
                       resistances.map((r, idx) => (
                         <span
@@ -1462,13 +1548,13 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 </div>
 
                 {/* Immunities (0 damage) */}
-                <div className="bg-stone-950 p-2 rounded-xl border border-emerald-900/30 hover:border-emerald-700/50 transition flex flex-col justify-between items-center h-[64px]">
+                <div className="bg-stone-950 p-2 rounded-xl border border-emerald-900/30 hover:border-emerald-700/50 transition flex flex-col justify-between items-center min-h-[66px]">
                   <div className="h-4 w-full flex items-center justify-center">
                     <span className="text-[9px] font-sans uppercase font-bold text-emerald-400/90 tracking-wider">
                       Immune (0)
                     </span>
                   </div>
-                  <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-1">
+                  <div className="flex-1 w-full flex flex-wrap items-center justify-center gap-1 max-h-[54px] overflow-y-auto no-scrollbar py-0.5">
                     {immunities.length > 0 ? (
                       immunities.map((i, idx) => (
                         <span
@@ -1485,38 +1571,60 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   </div>
                 </div>
 
-                {/* Damage Reduction (DR) */}
+                {/* Damage Reduction (DR) & Spell Resistance (SR) */}
                 {character.edition === '3.5e' ? (
                   <button
                     type="button"
                     onClick={() => setShow35eDrModal(true)}
-                    className="bg-stone-950 p-2 rounded-xl border border-sky-900/30 hover:border-sky-500/60 transition flex flex-col justify-between items-center h-[64px] group cursor-pointer text-center"
-                    title="Click to configure 3.5e DR, Energy Resistances, and test Damage Mitigation"
+                    className="bg-stone-950 p-2 rounded-xl border border-sky-900/30 hover:border-sky-500/60 transition flex flex-col justify-between items-center min-h-[66px] group cursor-pointer text-center"
+                    title={`Click to configure 3.5e DR, Energy Resistances, Spell Resistance, and test Damage Mitigation${character.spellResist ? ` | Spell Resistance: SR ${character.spellResist}` : ''}`}
                   >
                     <div className="h-4 w-full flex items-center justify-center relative px-1">
                       <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
-                        Damage Red.
+                        DR & SR
                       </span>
                       <Pencil className="w-2.5 h-2.5 text-stone-500 group-hover:text-sky-300 transition absolute right-0 top-0 p-0.5" />
                     </div>
-                    <div className="flex-1 w-full flex items-center justify-center">
-                      <span className="text-xs font-serif font-extrabold text-sky-300">
-                        DR {character.damageReductionValue || 0}/{character.damageReductionBypass || '-'}
-                      </span>
+                    <div className="flex-1 w-full flex flex-col items-center justify-center py-0.5">
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-serif font-extrabold text-sky-300">
+                          DR {character.damageReductionValue || 0}/{character.damageReductionBypass || '-'}
+                        </span>
+                        {character.spellResist ? (
+                          <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-1.5 py-0.5 rounded shadow-xs">
+                            SR {character.spellResist}
+                          </span>
+                        ) : null}
+                      </div>
+                      {character.energyResistances && Object.entries(character.energyResistances).some(([_, v]) => (v || 0) > 0) && (
+                        <div className="flex items-center justify-center gap-1 flex-wrap mt-0.5 max-w-full overflow-hidden">
+                          {Object.entries(character.energyResistances)
+                            .filter(([_, v]) => (v || 0) > 0)
+                            .map(([type, val]) => (
+                              <span key={type} className="text-[8px] font-mono uppercase px-1 py-0.2 rounded bg-amber-950/40 border border-amber-800/40 text-amber-200">
+                                {type.slice(0, 4)} {val}
+                              </span>
+                            ))}
+                        </div>
+                      )}
                     </div>
                   </button>
                 ) : (
-                  <div className="bg-stone-950 p-2 rounded-xl border border-sky-900/30 flex flex-col justify-between items-center h-[64px]">
+                  <div className="bg-stone-950 p-2 rounded-xl border border-sky-900/30 flex flex-col justify-between items-center min-h-[66px]">
                     <div className="h-4 w-full flex items-center justify-center">
                       <span className="text-[9px] font-sans uppercase font-bold text-sky-400/90 tracking-wider">
-                        Damage Red.
+                        {character.spellResist ? 'DR & SR' : 'Damage Red.'}
                       </span>
                     </div>
-                    <div className="flex-1 w-full flex items-center justify-center gap-1">
+                    <div className="flex-1 w-full flex items-center justify-center gap-1.5 flex-wrap py-0.5">
                       <span className="text-sm font-serif font-extrabold text-sky-300">
-                        {drInfo.totalDR !== 0 ? Math.abs(drInfo.totalDR) : '0'}
+                        {drInfo.totalDR !== 0 ? Math.abs(drInfo.totalDR) : '0'} <span className="text-[9px] text-stone-500 font-sans">DR</span>
                       </span>
-                      <span className="text-[9px] text-stone-500 font-sans">DR</span>
+                      {character.spellResist ? (
+                        <span className="text-[10px] font-mono font-bold text-cyan-300 bg-cyan-950/80 border border-cyan-700/60 px-1.5 py-0.5 rounded">
+                          SR {character.spellResist}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -1526,8 +1634,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
 
           {/* Right 4 cols: Death Saving Throws / Transformation State */}
           {showDeathSaves && (
-            <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-4 flex flex-col justify-between shadow-xl space-y-3`}>
-              <div className="flex items-center justify-between border-b border-stone-800 pb-2">
+            <div className={`${topColClass} bg-stone-900 border border-stone-800 rounded-2xl p-3.5 flex flex-col shadow-xl`}>
+              <div className="flex items-center justify-between border-b border-stone-800 pb-2 mb-2">
                 <span className="font-serif font-bold text-amber-200 text-sm flex items-center gap-1.5">
                   <Skull className="w-4 h-4 text-rose-400" />
                   {character.edition === '3.5e' ? 'Combat Status & Tactical Suite' : 'Death Saves & Form'}
@@ -1541,7 +1649,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
 
               {/* 3.5e Dying, Stabilization & Tactical Engines Suite VS 5e Death Saves Panel */}
               {character.edition === '3.5e' ? (
-                <div className="space-y-2.5">
+                <div className="flex-1 flex flex-col justify-center gap-3 my-auto">
                   {/* Status & Stabilization Panel */}
                   <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
                     {/* Status Banner */}
@@ -1627,6 +1735,17 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     )}
                   </div>
 
+                  {/* 3.5e Senses & Vision Display (Integrated into Column 3 Status & Awareness) */}
+                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800/90 flex items-center justify-between text-xs font-mono px-3 shadow-sm">
+                    <div className="flex items-center gap-1.5 text-stone-400 font-sans text-[10px] uppercase font-bold">
+                      <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Senses & Vision</span>
+                    </div>
+                    <span className="text-xs font-bold text-indigo-300">
+                      {character.senses || 'Normal Vision'}
+                    </span>
+                  </div>
+
                   {/* 3.5e Tactical Engines & Advanced Mechanics Suite Grid */}
                   <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
                     <div 
@@ -1638,7 +1757,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         <Layers className="w-3.5 h-3.5 text-amber-400" />
                         <span>Tactical Engines & Mechanics</span>
                         <span className="text-[9px] bg-stone-900 border border-stone-800 text-stone-400 px-1.5 py-0.2 rounded font-mono">
-                          8 tools
+                          {8 + (canShapeshift ? 1 : 0)} tools
                         </span>
                       </span>
                       <div className="flex items-center gap-1.5">
@@ -1758,26 +1877,28 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         </span>
                       </button>
 
-                      {/* Wild Shape / Alternate Form */}
-                      <button
-                        type="button"
-                        onClick={() => setShow35eWildShapeModal(true)}
-                        className={`p-1.5 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group border ${
-                          character.wildShapeActive
-                            ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500'
-                            : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 hover:border-emerald-700/50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold flex items-center gap-1">
-                            <PawPrint className="w-3 h-3 text-emerald-400" /> Wild Shape
+                      {/* Wild Shape / Alternate Form (Only for characters with Wild Shape / Shapeshift ability) */}
+                      {canShapeshift && (
+                        <button
+                          type="button"
+                          onClick={() => setShow35eWildShapeModal(true)}
+                          className={`p-1.5 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group border ${
+                            character.wildShapeActive
+                              ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500'
+                              : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800 hover:border-emerald-700/50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold flex items-center gap-1">
+                              <PawPrint className="w-3 h-3 text-emerald-400" /> Wild Shape
+                            </span>
+                            {character.wildShapeActive && <span className="text-[8px] text-emerald-300 font-bold">Active</span>}
+                          </div>
+                          <span className="text-[8px] text-stone-400 truncate">
+                            {character.wildShapeActive ? character.wildShapeForm?.name || 'Wild Form' : 'Alternate forms'}
                           </span>
-                          {character.wildShapeActive && <span className="text-[8px] text-emerald-300 font-bold">Active</span>}
-                        </div>
-                        <span className="text-[8px] text-stone-400 truncate">
-                          {character.wildShapeActive ? character.wildShapeForm?.name || 'Wild Form' : 'Alternate forms'}
-                        </span>
-                      </button>
+                        </button>
+                      )}
 
                       {/* Environmental Hazards */}
                       <button
@@ -1988,33 +2109,41 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 </div>
               )}
 
-              {/* Active Transformation / Wild Shape Quick Bar */}
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setShowTransformationModal(true)}
-                  className="w-full bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-600/40 p-2 rounded-xl text-emerald-200 text-xs font-bold transition flex items-center justify-between"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <span>🐾</span>
-                    <span>
-                      {character.activeTransformation ? `Form: ${character.activeTransformation.form.name}` : 'Shapeshift'}
-                    </span>
-                  </span>
-                  <span className="text-[10px] text-emerald-400 font-mono">→</span>
-                </button>
-                {setShowCompanionModal && (
-                  <button
-                    onClick={() => setShowCompanionModal(true)}
-                    className="w-full bg-teal-950/60 hover:bg-teal-900/80 border border-teal-600/40 p-2 rounded-xl text-teal-200 text-xs font-bold transition flex items-center justify-between"
-                  >
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      <span>🦅</span>
-                      <span className="truncate">Summon Engine</span>
-                    </span>
-                    <span className="text-[10px] text-teal-400 font-mono">→</span>
-                  </button>
-                )}
-              </div>
+              {/* Active Transformation / Wild Shape & Summon Companion Quick Bar (Conditional on Character Capabilities) */}
+              {(() => {
+                if (!canShapeshift && !canSummon) return null;
+
+                return (
+                  <div className={`grid ${canShapeshift && canSummon ? 'grid-cols-2' : 'grid-cols-1'} gap-2`}>
+                    {canShapeshift && (
+                      <button
+                        onClick={() => setShowTransformationModal(true)}
+                        className="w-full bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-600/40 p-2 rounded-xl text-emerald-200 text-xs font-bold transition flex items-center justify-between"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span>🐾</span>
+                          <span>
+                            {character.activeTransformation ? `Form: ${character.activeTransformation.form.name}` : 'Shapeshift'}
+                          </span>
+                        </span>
+                        <span className="text-[10px] text-emerald-400 font-mono">→</span>
+                      </button>
+                    )}
+                    {canSummon && setShowCompanionModal && (
+                      <button
+                        onClick={() => setShowCompanionModal(true)}
+                        className="w-full bg-teal-950/60 hover:bg-teal-900/80 border border-teal-600/40 p-2 rounded-xl text-teal-200 text-xs font-bold transition flex items-center justify-between"
+                      >
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <span>🦅</span>
+                          <span className="truncate">Summon Engine</span>
+                        </span>
+                        <span className="text-[10px] text-teal-400 font-mono">→</span>
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
@@ -2078,6 +2207,16 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
           character={character}
           onUpdateCharacter={onUpdateCharacter}
           onRollAttack={(label, bonus) => onRoll(label, 20, 1, bonus, 'normal')}
+        />
+      )}
+
+      {/* 3.5e Creature Size and Scale Table Modal */}
+      {character.edition === '3.5e' && (
+        <CreatureSizeScaleModal
+          isOpen={show35eSizeScaleModal}
+          onClose={() => setShow35eSizeScaleModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
         />
       )}
 
@@ -2151,6 +2290,14 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
           onRoll={onRoll}
         />
       )}
+
+      {/* Movement Speeds & Tactical Mobility Modal */}
+      <EditMovementSpeedModal
+        character={character}
+        isOpen={showSpeedModal}
+        onClose={() => setShowSpeedModal(false)}
+        onSave={(updated) => onUpdateCharacter(updated)}
+      />
     </div>
   );
 };

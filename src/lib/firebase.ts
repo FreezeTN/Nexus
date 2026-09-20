@@ -851,6 +851,14 @@ export interface SyncedCombatant {
   isDead?: boolean;
   isHidden?: boolean;
   controlledBy?: string;
+  mapX?: number;
+  mapY?: number;
+  tokenSize?: number;
+  reachFeet?: number;
+  elevationFeet?: number;
+  speed?: number;
+  movementRemaining?: number;
+  hasDashed?: boolean;
 }
 
 export interface SyncedEncounterState {
@@ -862,6 +870,16 @@ export interface SyncedEncounterState {
   environment?: EncounterEnvironment;
   status?: 'idle' | 'active' | 'completed';
   isActive?: boolean;
+  battlemapTheme?: 'dungeon' | 'grass' | 'cave' | 'volcano' | 'snow' | 'ship' | 'void';
+  battlemapColumns?: number;
+  battlemapRows?: number;
+  battlemapFeetPerSquare?: number;
+  battlemapDiagonalRule?: 'standard5e' | 'alternating35e' | 'euclidean';
+  battlemapTerrain?: Record<string, string>; // "x,y" => TerrainType
+  battlemapDoors?: Record<string, { isOpen: boolean; isLocked?: boolean }>; // "x,y" => door state
+  battlemapFogOfWar?: Record<string, boolean>; // "x,y" => isExplored
+  battlemapUseFogOfWar?: boolean;
+  battlemapActiveAoE?: any | null; // Synced AoE template
   updatedAt: string;
   updatedByUid?: string;
   updatedByName?: string;

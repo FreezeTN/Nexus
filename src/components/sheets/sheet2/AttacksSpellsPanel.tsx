@@ -17,6 +17,8 @@ import {
   getEffectiveMaxHp,
   getCharacterBab,
   get35eIterativeAttacks,
+  calculate35eAttackBonus,
+  calculate35eDamageFormula,
   format35eIterativeString,
   get35eEffectiveThreatRange,
   get35eCriticalMultiplier,
@@ -38,8 +40,11 @@ import {
   Flame,
   Pencil,
   Sparkles,
-  Zap
+  Zap,
+  RefreshCw,
+  Check
 } from 'lucide-react';
+import { syncInventoryWeaponsToAttacks } from '../../../utils/gearAttackSync';
 import { useLayoutCustomization } from '../../../utils/layoutCustomization';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import { FullAttackModal } from '../../modals/FullAttackModal';
@@ -47,10 +52,12 @@ import { CriticalConfirmationModal } from '../../modals/CriticalConfirmationModa
 import { MetamagicSpellModal } from '../../modals/MetamagicSpellModal';
 import { TwoWeaponFightingModal } from '../../modals/TwoWeaponFightingModal';
 import { AoOTrackerModal } from '../../modals/AoOTrackerModal';
-import { Spell } from '../../../types';
+import { EditAttackModal } from '../../modals/EditAttackModal';
+import { Spell, RuleEdition } from '../../../types';
 
 interface AttacksSpellsPanelProps {
   character: CharacterData;
+  edition?: RuleEdition;
   onUpdateCharacter: (updated: CharacterData) => void;
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage: (label: string, expression: string) => void;
@@ -61,6 +68,7 @@ interface AttacksSpellsPanelProps {
 
 export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   character,
+  edition,
   onUpdateCharacter,
   onRoll,
   onRollDamage,
@@ -69,7 +77,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   onOpenSummonCompanion
 }) => {
   const { t } = useLanguage();
-  const is35e = character.edition === '3.5e';
+  const is35e = (edition || character.edition) === '3.5e';
   const [cheatCategory, setCheatCategory] = useState<'All' | 'Action' | 'Bonus Action' | 'Reaction' | 'Maneuver' | 'Condition'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCheatSheet, setShowCheatSheet] = useState(false);
@@ -81,6 +89,34 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   const [metamagicModalSpell, setMetamagicModalSpell] = useState<Spell | null>(null);
   const [show35eTwfModal, setShow35eTwfModal] = useState(false);
   const [show35eAoOModal, setShow35eAoOModal] = useState(false);
+  const [justSyncedWeapons, setJustSyncedWeapons] = useState(false);
+  const [editingAttack, setEditingAttack] = useState<Attack | null>(null);
+  const [showEditAttackModal, setShowEditAttackModal] = useState(false);
+
+  const handleOpenEditAttack = (atk: Attack) => {
+    setEditingAttack(atk);
+    setShowEditAttackModal(true);
+  };
+
+  const handleOpenAddAttack = () => {
+    setEditingAttack(null);
+    setShowEditAttackModal(true);
+  };
+
+  const handleSaveAttack = (savedAttack: Attack) => {
+    const exists = character.attacks.some(a => a.id === savedAttack.id);
+    if (exists) {
+      onUpdateCharacter({
+        ...character,
+        attacks: character.attacks.map(a => a.id === savedAttack.id ? savedAttack : a)
+      });
+    } else {
+      onUpdateCharacter({
+        ...character,
+        attacks: [...character.attacks, savedAttack]
+      });
+    }
+  };
 
   // New Attack Form
   const [attackName, setAttackName] = useState('');
@@ -133,6 +169,23 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
     onUpdateCharacter({
       ...character,
       attacks: character.attacks.map(a => a.id === id ? { ...a, isOffhand: !a.isOffhand } : a)
+    });
+  };
+
+  const handleCycleGrip35e = (id: string) => {
+    onUpdateCharacter({
+      ...character,
+      attacks: character.attacks.map(a => {
+        if (a.id !== id) return a;
+        // Cycle: 1-Handed (standard) -> 2-Handed (1.5x STR) -> Off-Hand (0.5x STR) -> 1-Handed
+        if (a.isTwoHanded) {
+          return { ...a, isTwoHanded: false, isOffhand: true };
+        } else if (a.isOffhand) {
+          return { ...a, isTwoHanded: false, isOffhand: false };
+        } else {
+          return { ...a, isTwoHanded: true, isOffhand: false };
+        }
+      })
     });
   };
 
@@ -253,6 +306,31 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
           headerExtra={
             <div className="flex items-center gap-2 flex-wrap">
               <button
+                type="button"
+                onClick={() => {
+                  const synced = syncInventoryWeaponsToAttacks(character);
+                  onUpdateCharacter(synced);
+                  setJustSyncedWeapons(true);
+                  setTimeout(() => setJustSyncedWeapons(false), 2000);
+                }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 border rounded-lg text-xs font-bold transition shadow ${
+                  justSyncedWeapons
+                    ? 'bg-emerald-950/80 border-emerald-500 text-emerald-300'
+                    : 'bg-stone-900 hover:bg-stone-800 border-stone-700 text-stone-200'
+                }`}
+                title="Synchronize attacks with currently equipped weapons in inventory"
+              >
+                {justSyncedWeapons ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-emerald-400" /> Synced!
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> Sync Weapons
+                  </>
+                )}
+              </button>
+              <button
                 onClick={() => setShow35eTwfModal(true)}
                 className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 text-stone-200 rounded-lg text-xs font-bold transition shadow"
                 title={character.edition === '3.5e'
@@ -277,7 +355,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                 <BookMarked className="w-3.5 h-3.5 text-amber-400" /> {t('combat.actions', 'Actions & Rules')}
               </button>
               <button
-                onClick={() => setShowAddAttackModal(true)}
+                onClick={handleOpenAddAttack}
                 className="flex items-center gap-1 px-2.5 py-1 bg-amber-700/80 hover:bg-amber-600 text-white rounded-lg text-xs font-bold transition"
               >
                 <Plus className="w-3.5 h-3.5" /> {t('combat.addAttack', 'Add Attack')}
@@ -291,7 +369,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                 <Swords className="w-8 h-8 mx-auto text-stone-600 opacity-60" />
                 <p className="text-xs">{t('combat.noAttacksYet', 'No attacks added yet. Click "Add Attack" to configure weapons or spell attacks.')}</p>
                 <button
-                  onClick={() => setShowAddAttackModal(true)}
+                  onClick={handleOpenAddAttack}
                   className="text-xs text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
                 >
                   {t('combat.addFirstAttack', '+ Add your first Weapon or Attack')}
@@ -301,14 +379,18 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {character.attacks.map((atk) => {
                   const meta = getDamageTypeMeta(atk.damageType);
-                  const is35e = character.edition === '3.5e';
                   const bab = getCharacterBab(character);
+                  const atk35e = is35e ? calculate35eAttackBonus(character, atk) : null;
+                  const dmg35e = is35e ? calculate35eDamageFormula(character, atk) : null;
+
                   const sizePenaltyInfo = is35e && atk.weaponSize
                     ? calculate35eWeaponSizePenalty(character.sizeCategory || 'Medium', atk.weaponSize)
                     : null;
-                  const netAttackBonus = atk.attackBonus + (sizePenaltyInfo?.penalty || 0);
+                  const netAttackBonus = is35e
+                    ? (atk35e?.totalAttackBonus ?? atk.attackBonus)
+                    : atk.attackBonus + (sizePenaltyInfo?.penalty || 0);
 
-                  const iterativeAttacks = is35e ? get35eIterativeAttacks(netAttackBonus, bab) : [];
+                  const iterativeAttacks = is35e && atk35e ? atk35e.iterativeAttacks : (is35e ? get35eIterativeAttacks(netAttackBonus, bab) : []);
                   const hasIteratives = iterativeAttacks.length > 1;
 
                   const has5eTwfStyle = !is35e && Boolean(
@@ -318,9 +400,9 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                   );
                   const abilities = getEffectiveAbilities(character);
                   const strMod = getAbilityModifier(abilities?.STR?.score || 10);
-                  const effectiveDamage = atk.isOffhand
-                    ? (is35e ? adjust35eOffhandDamageFormula(atk.damage, strMod) : adjust5eOffhandDamageFormula(atk.damage, has5eTwfStyle))
-                    : atk.damage;
+                  const effectiveDamage = is35e
+                    ? (dmg35e?.damageFormula ?? atk.damage)
+                    : (atk.isOffhand ? adjust5eOffhandDamageFormula(atk.damage, has5eTwfStyle) : atk.damage);
 
                   return (
                     <div
@@ -328,7 +410,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                       className="bg-stone-950/90 border border-stone-800 hover:border-amber-600/50 rounded-xl p-3 text-xs flex flex-col justify-between gap-2.5 transition shadow-md group min-w-0 overflow-hidden"
                     >
                       <div className="space-y-1.5 min-w-0">
-                        {/* Top: Name & Badges & Delete */}
+                        {/* Top: Name & Badges & Edit / Delete */}
                         <div className="flex items-start justify-between gap-2 min-w-0">
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -370,37 +452,89 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                                   )}
                                 </span>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => handleToggleOffhand(atk.id)}
-                                className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 transition shrink-0 ${
-                                  atk.isOffhand
-                                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
-                                    : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-300 hover:border-stone-700'
-                                }`}
-                                title={is35e
-                                  ? "Toggle Off-Hand (applies ½ STR damage modifier in 3.5e)"
-                                  : "Toggle Off-Hand (suppresses positive ability modifier to damage in 5e unless TWF style is active)"}
-                              >
-                                <Swords className="w-2.5 h-2.5" />
-                                <span>
-                                  {atk.isOffhand
-                                    ? (is35e
-                                        ? 'Off-Hand (½ STR)'
-                                        : (has5eTwfStyle ? 'Off-Hand (TWF Style)' : 'Off-Hand (No Mod)'))
-                                    : 'Off-Hand: Off'}
+                              {is35e && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleCycleGrip35e(atk.id)}
+                                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 transition shrink-0 cursor-pointer ${
+                                    atk.isTwoHanded
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                                      : atk.isOffhand
+                                      ? 'bg-orange-500/20 text-orange-300 border-orange-500/50 font-bold'
+                                      : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-300 hover:border-stone-700'
+                                  }`}
+                                  title="Click to cycle weapon grip: 1-Handed (1× STR) ➔ 2-Handed (1.5× STR) ➔ Off-Hand (½ STR)"
+                                >
+                                  <Swords className="w-2.5 h-2.5" />
+                                  <span>
+                                    {atk.isTwoHanded ? '2-Handed (1.5× STR)' : atk.isOffhand ? 'Off-Hand (½ STR)' : '1-Handed (1× STR)'}
+                                  </span>
+                                </button>
+                              )}
+                              {is35e && atk.enhancementBonus && atk.enhancementBonus > 0 && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border bg-amber-950/60 text-amber-300 border-amber-700/60">
+                                  +{atk.enhancementBonus} Magic
                                 </span>
-                              </button>
+                              )}
+                              {atk.inventoryItemId && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border bg-emerald-950/60 text-emerald-300 border-emerald-600/60 flex items-center gap-1" title="Synchronized from equipped inventory weapon">
+                                  <span>🗡️</span>
+                                  <span>Gear</span>
+                                </span>
+                              )}
+                              {atk.isNatural && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border bg-emerald-950/60 text-emerald-300 border-emerald-600/60">
+                                  🐾 Natural
+                                </span>
+                              )}
+                              {atk.isSecondaryNatural && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border bg-orange-950/60 text-orange-300 border-orange-600/60">
+                                  Secondary (-5)
+                                </span>
+                              )}
+                              {atk.isSoleNaturalAttack && (
+                                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full border bg-lime-950/60 text-lime-300 border-lime-600/60">
+                                  Sole (1.5× STR)
+                                </span>
+                              )}
+                              {!is35e && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleOffhand(atk.id)}
+                                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 transition shrink-0 ${
+                                    atk.isOffhand
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 font-bold'
+                                      : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-300 hover:border-stone-700'
+                                  }`}
+                                  title="Toggle Off-Hand (suppresses positive ability modifier to damage in 5e unless TWF style is active)"
+                                >
+                                  <Swords className="w-2.5 h-2.5" />
+                                  <span>
+                                    {atk.isOffhand
+                                      ? (has5eTwfStyle ? 'Off-Hand (TWF Style)' : 'Off-Hand (No Mod)')
+                                      : 'Off-Hand: Off'}
+                                  </span>
+                                </button>
+                              )}
                             </div>
                           </div>
 
-                          <button
-                            onClick={() => handleDeleteAttack(atk.id)}
-                            className="p-1 text-stone-600 hover:text-rose-400 transition shrink-0 opacity-60 group-hover:opacity-100"
-                            title="Delete Attack"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => handleOpenEditAttack(atk)}
+                              className="p-1 text-stone-500 hover:text-amber-400 transition opacity-70 group-hover:opacity-100"
+                              title="Edit Weapon & Attack Properties"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteAttack(atk.id)}
+                              className="p-1 text-stone-600 hover:text-rose-400 transition opacity-60 group-hover:opacity-100"
+                              title="Delete Attack"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
 
                         {/* Notes / Special Rules */}
@@ -422,7 +556,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                                 <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                                 <span>Full Attack:</span>
                                 <span className="text-amber-100 font-extrabold">
-                                  {format35eIterativeString(netAttackBonus, bab)}
+                                  {atk35e?.fullAttackDisplay || format35eIterativeString(netAttackBonus, bab)}
                                 </span>
                               </div>
                               <button
@@ -434,6 +568,22 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                                 <span>⚡ Full Attack</span>
                               </button>
                             </div>
+
+                            {/* Dynamic breakdown line */}
+                            {atk35e && (
+                              <div className="text-[10px] text-stone-400 border-t border-stone-800/80 pt-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 font-mono">
+                                <span title="Calculated Attack Formula Breakdown">
+                                  <span className="text-stone-500">Atk: </span>
+                                  <span className="text-amber-300/90">{atk35e.breakdown}</span>
+                                </span>
+                                {dmg35e && (
+                                  <span title="Calculated Damage Formula Breakdown">
+                                    <span className="text-stone-500">Dmg: </span>
+                                    <span className="text-rose-300/90">{dmg35e.breakdown}</span>
+                                  </span>
+                                )}
+                              </div>
+                            )}
 
                             {/* Iterative Attack Step Chips */}
                             {hasIteratives ? (
@@ -498,7 +648,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                               'normal'
                             )}
                             className="flex-1 min-w-0 py-1.5 px-2 bg-stone-900 hover:bg-amber-600 text-amber-200 hover:text-stone-950 rounded-lg font-mono font-bold text-xs transition border border-stone-700 hover:border-amber-500 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] overflow-hidden"
-                            title={`Roll Attack: d20 + ${netAttackBonus}${sizePenaltyInfo && sizePenaltyInfo.penalty < 0 ? ` (base +${atk.attackBonus}, ${sizePenaltyInfo.penalty} weapon size penalty)` : ''}`}
+                            title={`Roll Attack: d20 + ${netAttackBonus}${is35e && atk35e ? ` (${atk35e.breakdown})` : ` (base +${atk.attackBonus})`}`}
                           >
                             <Crosshair className="w-3.5 h-3.5 shrink-0" />
                             <span className="truncate">Attack ({formatModifier(netAttackBonus)})</span>
@@ -507,7 +657,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                           <button
                             onClick={() => onRollDamage(`${atk.name}${atk.isOffhand ? ' (Off-Hand)' : ''} Damage (${atk.damageType})`, effectiveDamage)}
                             className="flex-1 min-w-0 py-1.5 px-2 bg-rose-950/80 hover:bg-rose-900 text-rose-200 rounded-lg font-mono font-bold text-xs transition border border-rose-600/50 hover:border-rose-400 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] overflow-hidden"
-                            title={`Roll Damage: ${effectiveDamage} (${atk.damageType})${atk.isOffhand ? (is35e ? ' - ½ STR applied' : (has5eTwfStyle ? ' - TWF Style applied' : ' - Ability mod suppressed')) : ''}`}
+                            title={`Roll Damage: ${effectiveDamage} (${atk.damageType})${is35e && dmg35e ? ` (${dmg35e.breakdown})` : ''}`}
                           >
                             <Flame className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                             <span className="truncate">Dmg ({effectiveDamage})</span>
@@ -1014,6 +1164,17 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
           character={character}
           onUpdateCharacter={onUpdateCharacter}
           onRollAttack={(label, bonus) => onRoll(label, 20, 1, bonus, 'normal')}
+        />
+      )}
+
+      {/* Dynamic Weapon & Attack Editor Modal */}
+      {showEditAttackModal && (
+        <EditAttackModal
+          isOpen={showEditAttackModal}
+          onClose={() => setShowEditAttackModal(false)}
+          character={character}
+          attack={editingAttack}
+          onSave={handleSaveAttack}
         />
       )}
     </div>

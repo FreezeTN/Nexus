@@ -16,8 +16,10 @@ import {
   Footprints,
   Sparkles,
   Swords,
-  Crosshair
+  Crosshair,
+  Maximize2
 } from 'lucide-react';
+import { CreatureSizeScaleModal } from './CreatureSizeScaleModal';
 
 interface AoOTrackerModalProps {
   isOpen: boolean;
@@ -39,6 +41,7 @@ export const AoOTrackerModal: React.FC<AoOTrackerModalProps> = ({
   const aooInfo = calculate35eAoOPool(character);
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'tracker' | 'rules'>('tracker');
+  const [showSizeModal, setShowSizeModal] = useState(false);
 
   const handleSpendAoO = () => {
     if (aooInfo.currentAoO <= 0) return;
@@ -197,10 +200,32 @@ export const AoOTrackerModal: React.FC<AoOTrackerModalProps> = ({
                   ))}
                 </div>
 
-                <div className="text-[11px] font-mono text-stone-400 bg-stone-900/90 p-2 rounded-lg border border-stone-800 flex items-center justify-between">
+                <div className="text-[11px] font-mono text-stone-400 bg-stone-900/90 p-2 rounded-lg border border-stone-800 flex items-center justify-between flex-wrap gap-1">
                   <span>{aooInfo.explanation}</span>
-                  <span className="text-amber-400 font-bold">Threatened Reach: {aooInfo.threatReachFt} ft</span>
+                  <div className="flex items-center gap-2">
+                    <span className={`font-bold ${aooInfo.threatReachFt === 0 ? 'text-amber-400' : 'text-amber-300'}`}>
+                      Threatened Reach: {aooInfo.threatReachFt} ft
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSizeModal(true)}
+                      className="text-[10px] font-sans text-amber-400 hover:text-amber-300 bg-stone-950 border border-amber-600/40 px-1.5 py-0.5 rounded transition flex items-center gap-1 cursor-pointer"
+                    >
+                      <Maximize2 className="w-2.5 h-2.5" />
+                      <span>Size & Reach Table</span>
+                    </button>
+                  </div>
                 </div>
+
+                {aooInfo.threatReachFt === 0 && (
+                  <div className="text-[11px] text-amber-300 bg-amber-950/40 border border-amber-800/50 p-2.5 rounded-lg flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="block text-amber-200">0 ft. Natural Reach ({character.sizeCategory || 'Tiny'}):</strong>
+                      <span>Creatures with 0 ft. natural reach do not threaten squares around them and cannot make standard Attacks of Opportunity. You must move into an opponent&apos;s square to attack, which provokes an Attack of Opportunity!</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Combat Reflexes Feat & Stance Settings */}
@@ -353,6 +378,14 @@ export const AoOTrackerModal: React.FC<AoOTrackerModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Embedded Creature Size and Scale Table Modal */}
+      <CreatureSizeScaleModal
+        isOpen={showSizeModal}
+        onClose={() => setShowSizeModal(false)}
+        character={character}
+        onUpdateCharacter={onUpdateCharacter}
+      />
     </div>
   );
 };

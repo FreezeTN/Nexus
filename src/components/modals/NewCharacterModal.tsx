@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CharacterData, ClassFeature, RuleEdition, Skill } from '../../types';
-import { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST } from '../../utils/dndCalculations';
-import { UserPlus, Sparkles, X, Store, Layers, Skull, Dices, Shuffle, Settings, Zap, Crosshair, Scale, Swords, Dna, Bookmark, Shield, AlertCircle, RefreshCw } from 'lucide-react';
+import { CharacterData, ClassFeature, GestaltTrack, RuleEdition, Skill } from '../../types';
+import { DEFAULT_SKILLS_LIST, DEFAULT_35E_SKILLS_LIST, getHitDieValue, getGestaltBaseSkillPoints } from '../../utils/dndCalculations';
+import { UserPlus, Sparkles, X, Store, Layers, Skull, Dices, Shuffle, Settings, Zap, Crosshair, Scale, Swords, Dna, Bookmark, Shield, AlertCircle, RefreshCw, Check } from 'lucide-react';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
 import {
   PARENT_RACE_CATALOG,
@@ -72,9 +72,11 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   existingCampaigns = [],
   initialCampaignName = ''
 }) => {
-  const edition: RuleEdition = (enabledSystems && enabledSystems.length > 0 && !enabledSystems.includes(initialEdition))
-    ? enabledSystems[0]
-    : initialEdition;
+  const [edition, setEdition] = useState<RuleEdition>(() => {
+    return (enabledSystems && enabledSystems.length > 0 && !enabledSystems.includes(initialEdition))
+      ? enabledSystems[0]
+      : initialEdition;
+  });
 
   // Gather unique campaigns from props and local storage
   const allCampaignOptions = useMemo(() => {
@@ -144,6 +146,13 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
   const [useMilestoneXp, setUseMilestoneXp] = useState(false);
   const [disableAutoXpGain, setDisableAutoXpGain] = useState(false);
   const [useGestaltUA72, setUseGestaltUA72] = useState(false);
+  const [gestaltTrackCount, setGestaltTrackCount] = useState<2 | 3 | 4>(2);
+  const [gestaltClass2, setGestaltClass2] = useState('Wizard');
+  const [gestaltSubclass2, setGestaltSubclass2] = useState('');
+  const [gestaltClass3, setGestaltClass3] = useState('Rogue');
+  const [gestaltSubclass3, setGestaltSubclass3] = useState('');
+  const [gestaltClass4, setGestaltClass4] = useState('Cleric');
+  const [gestaltSubclass4, setGestaltSubclass4] = useState('');
   const [useDefenseBonusUA109, setUseDefenseBonusUA109] = useState(false);
   const [useArmorAsDRUA109, setUseArmorAsDRUA109] = useState(false);
 
@@ -266,6 +275,43 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       setSubclass(availableSubclasses[0]);
     }
   };
+
+  // Context-aware ruleset switcher
+  const handleEditionChange = (newEdition: RuleEdition) => {
+    setEdition(newEdition);
+    const availableClasses = getClassesForSystem(newEdition);
+    const nextClass = availableClasses.includes(characterClass) ? characterClass : (availableClasses[0] || 'Fighter');
+    setCharacterClass(nextClass);
+
+    const availableSubclasses = getSubclassesForSystemClass(newEdition, nextClass);
+    setSubclass(availableSubclasses[0] || 'General');
+
+    const availableRaces = getRacesForSystem(newEdition);
+    if (!availableRaces.includes(race)) {
+      setRace(availableRaces[0] || 'Human');
+    }
+
+    const availableBgs = getBackgroundsForSystem(newEdition);
+    if (!availableBgs.includes(background)) {
+      setBackground(availableBgs[0] || 'Folk Hero');
+    }
+
+    const availableAligns = getAlignmentsForSystem(newEdition);
+    if (!availableAligns.includes(alignment)) {
+      setAlignment(availableAligns[0] || 'Neutral Good');
+    }
+
+    if (newEdition !== '3.5e') {
+      setUseHalfBreedTemplate35e(false);
+    }
+  };
+
+  // Sync state if initialEdition prop changes from caller context
+  useEffect(() => {
+    if (initialEdition) {
+      handleEditionChange(initialEdition);
+    }
+  }, [initialEdition]);
 
   const handleForgeSaved = (item: CompendiumItem) => {
     setCompendiumVersion(v => v + 1);
@@ -539,6 +585,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
           name: resolvedT.compositeName,
           size: resolvedT.size,
           speed: resolvedT.speed,
+          creatureType: tTemplate.typeChange || 'Humanoid',
           darkvision: resolvedT.darkvisionFeet > 0 ? resolvedT.darkvisionFeet : false,
           senses: (() => {
             const parts: string[] = [];
@@ -547,6 +594,14 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
             if (resolvedT.hasBlindsight && resolvedT.blindsightFeet) parts.push(`Blindsight ${resolvedT.blindsightFeet} ft.`);
             return parts.join(', ') || 'Normal';
           })(),
+          damageReductionValue: resolvedT.damageReduction?.value,
+          damageReductionBypass: resolvedT.damageReduction?.bypass,
+          naturalArmorBonus: resolvedT.naturalArmor,
+          spellResistanceBase: resolvedT.spellResistanceText ? (level + 10) : undefined,
+          spellResistanceScalingProgression: resolvedT.spellResistanceText ? 'HD + 10 (max 35)' : undefined,
+          energyResistances: resolvedT.energyResistances ? Object.entries(resolvedT.energyResistances).map(([energyType, value]) => ({ energyType, value })) : undefined,
+          damageImmunities: resolvedT.damageImmunities,
+          conditionImmunities: resolvedT.conditionImmunities,
           traits: [
             ...resolvedT.retainedBaseTraits.map(t => ({ name: `[Base] ${t.name}`, description: t.description })),
             ...resolvedT.gainedTemplateTraits.map(t => ({ name: `[Template] ${t.name}`, description: t.description }))
@@ -581,7 +636,17 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       const racialConBonus = applyRacialBonuses ? (calculatedRaceStats?.abilityBonuses?.CON || 0) : 0;
       const effectiveCon = con + racialConBonus;
       conMod = Math.floor((effectiveCon - 10) / 2);
-      hitDieValue = characterClass === 'Barbarian' ? 12 : ['Fighter', 'Paladin', 'Ranger'].includes(characterClass) ? 10 : ['Sorcerer', 'Wizard'].includes(characterClass) ? 6 : 8;
+
+      const allActiveGestaltClasses = useGestaltUA72 ? [
+        characterClass,
+        gestaltClass2,
+        ...(gestaltTrackCount >= 3 ? [gestaltClass3] : []),
+        ...(gestaltTrackCount >= 4 ? [gestaltClass4] : [])
+      ] : [characterClass];
+
+      hitDieValue = useGestaltUA72
+        ? Math.max(...allActiveGestaltClasses.map(c => getHitDieValue(c, edition)))
+        : getHitDieValue(characterClass, edition);
       if (hpCalcMode === 'Max') {
         hpMax = Math.max(1, level * (hitDieValue + conMod));
       } else if (hpCalcMode === 'Rolled') {
@@ -678,9 +743,9 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       campaignName: finalCampaignName || undefined,
       race: finalRaceName,
       characterClass,
-      subclass,
+      subclass: edition === '3.5e' ? '' : subclass,
       level,
-      background,
+      background: edition === '3.5e' ? '' : background,
       alignment,
       experiencePoints: 0,
       edition,
@@ -736,16 +801,47 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       optionalRules: {
         useVariantEncumbrance,
         useFlankingRules,
-        useMulticlassing: useGestaltUA72 ? true : useMulticlassing,
-        secondaryClass: (useGestaltUA72 || useMulticlassing) ? secondaryClass : undefined,
-        secondaryLevel: useGestaltUA72 ? level : (useMulticlassing ? secondaryLevel : undefined),
-        secondarySubclass: (useGestaltUA72 || useMulticlassing) ? secondarySubclass : undefined,
+        useMulticlassing,
+        secondaryClass: useMulticlassing ? secondaryClass : undefined,
+        secondaryLevel: useMulticlassing ? secondaryLevel : undefined,
+        secondarySubclass: useMulticlassing ? secondarySubclass : undefined,
         useGrittyRealismResting,
         useVariantCritDamage,
         useMilestoneXp,
         disableAutoXpGain,
         useManualXpMode: disableAutoXpGain,
         useGestaltUA72,
+        gestaltTrackCount: useGestaltUA72 ? gestaltTrackCount : undefined,
+        gestaltTracks: useGestaltUA72 ? [
+          {
+            id: 'track-1',
+            name: 'Track 1',
+            classes: [
+              { id: 't1-c1', className: characterClass, subclass: subclass || '', level, isPaused: false }
+            ]
+          },
+          {
+            id: 'track-2',
+            name: 'Track 2',
+            classes: [
+              { id: 't2-c1', className: gestaltClass2, subclass: gestaltSubclass2 || '', level, isPaused: false }
+            ]
+          },
+          ...(gestaltTrackCount >= 3 ? [{
+            id: 'track-3',
+            name: 'Track 3',
+            classes: [
+              { id: 't3-c1', className: gestaltClass3, subclass: gestaltSubclass3 || '', level, isPaused: false }
+            ]
+          }] : []),
+          ...(gestaltTrackCount >= 4 ? [{
+            id: 'track-4',
+            name: 'Track 4',
+            classes: [
+              { id: 't4-c1', className: gestaltClass4, subclass: gestaltSubclass4 || '', level, isPaused: false }
+            ]
+          }] : [])
+        ] : undefined,
         useDefenseBonusUA109,
         useArmorAsDRUA109,
         useHalfBreedSystem: (edition === '5e' || edition === '3.5e') && useHalfBreedSystem,
@@ -767,12 +863,21 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
       refSaveBase: edition === '3.5e' ? (['Rogue', 'Ranger', 'Monk', 'Bard'].includes(characterClass) ? Math.floor(level / 2) + 2 : Math.floor(level / 3)) : undefined,
       willSaveBase: edition === '3.5e' ? (['Wizard', 'Cleric', 'Druid', 'Sorcerer', 'Monk', 'Bard'].includes(characterClass) ? Math.floor(level / 2) + 2 : Math.floor(level / 3)) : undefined,
 
+      damageReductionValue: calculatedRaceStats?.damageReduction?.value || undefined,
+      damageReductionBypass: calculatedRaceStats?.damageReduction?.value ? (calculatedRaceStats.damageReduction.bypass || '-') : undefined,
+      spellResist: calculatedRaceStats?.spellResistance?.value || undefined,
+      energyResistances: calculatedRaceStats?.energyResistances ? { ...calculatedRaceStats.energyResistances } : undefined,
+      damageResistances: calculatedRaceStats?.damageResistances ? [...calculatedRaceStats.damageResistances] : undefined,
+      damageImmunities: calculatedRaceStats?.damageImmunities ? [...calculatedRaceStats.damageImmunities] : undefined,
+      conditionImmunities: calculatedRaceStats?.conditionImmunities ? [...calculatedRaceStats.conditionImmunities] : undefined,
+      naturalArmorBonus: calculatedRaceStats?.naturalArmor?.bonus || undefined,
+
       hpMax: hpMax,
       hpCurrent: hpMax,
       hpTemp: 0,
       hitDiceTotal: `${level}d${hitDieValue}`,
       hitDiceCurrent: level,
-      armorClass: edition === 'shadowrun' ? 12 : edition === 'cthulhu' ? 0 : 10 + Math.floor((dex - 10) / 2),
+      armorClass: edition === 'shadowrun' ? 12 : edition === 'cthulhu' ? 0 : 10 + Math.floor((dex - 10) / 2) + (calculatedRaceStats?.naturalArmor?.bonus || 0),
       initiativeBonus: edition === 'shadowrun' ? rea + intSR : Math.floor((dex - 10) / 2),
       speed: charSpeed,
       inspiration: false,
@@ -817,10 +922,12 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
         {
           id: 'atk-base-1',
           name: edition === 'shadowrun' ? 'Ares Predator Heavy Pistol' : edition === 'cthulhu' ? '.38 Revolver' : 'Basic Strike',
-          attackBonus: edition === 'shadowrun' ? agi + 2 : 2 + Math.floor((str - 10) / 2),
-          damage: edition === 'shadowrun' ? '8P (AP -1)' : edition === 'cthulhu' ? '1d10' : `1d6 ${Math.floor((str - 10) / 2) >= 0 ? '+' + Math.floor((str - 10) / 2) : Math.floor((str - 10) / 2)}`,
+          attackBonus: edition === 'shadowrun' ? agi + 2 : edition === '3.5e' ? 0 : 2 + Math.floor((str - 10) / 2),
+          damage: edition === 'shadowrun' ? '8P (AP -1)' : edition === 'cthulhu' ? '1d10' : edition === '3.5e' ? '1d6' : `1d6 ${Math.floor((str - 10) / 2) >= 0 ? '+' + Math.floor((str - 10) / 2) : Math.floor((str - 10) / 2)}`,
           damageType: edition === 'shadowrun' ? 'Physical' : 'Piercing',
-          range: edition === 'shadowrun' ? '15m' : '5 ft Melee'
+          range: edition === 'shadowrun' ? '15m' : '5 ft Melee',
+          baseDamageDice: edition === '3.5e' ? '1d6' : undefined,
+          abilityUsed: edition === '3.5e' ? 'STR' : undefined
         }
       ],
 
@@ -1528,7 +1635,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
           </div>
 
           {!isMonster ? (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className={`grid grid-cols-1 ${edition === '3.5e' ? 'sm:grid-cols-2' : 'sm:grid-cols-3'} gap-3`}>
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-stone-400 text-xs font-bold">
@@ -1578,20 +1685,22 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                 </select>
               </div>
 
-              <div>
-                <label className="block text-stone-400 mb-1">
-                  {edition === 'shadowrun' ? 'Specialization' : edition === 'pathfinder' ? 'Subclass / Doctrine' : edition === 'cthulhu' ? 'Specialist Focus' : 'Subclass'}
-                </label>
-                <select
-                  value={subclass}
-                  onChange={(e) => setSubclass(e.target.value)}
-                  className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
-                >
-                  {getSubclassesForSystemClass(edition, characterClass).map(sc => (
-                    <option key={sc} value={sc}>{sc}</option>
-                  ))}
-                </select>
-              </div>
+              {edition !== '3.5e' && (
+                <div>
+                  <label className="block text-stone-400 mb-1">
+                    {edition === 'shadowrun' ? 'Specialization' : edition === 'pathfinder' ? 'Subclass / Doctrine' : edition === 'cthulhu' ? 'Specialist Focus' : 'Subclass'}
+                  </label>
+                  <select
+                    value={subclass}
+                    onChange={(e) => setSubclass(e.target.value)}
+                    className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
+                  >
+                    {getSubclassesForSystemClass(edition, characterClass).map(sc => (
+                      <option key={sc} value={sc}>{sc}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-stone-400 mb-1">Level</label>
@@ -1619,26 +1728,9 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {edition === '3.5e' ? (
             <div>
-              <label className="block text-stone-400 mb-1">
-                {edition === 'shadowrun' ? 'Background / Prior Career' : edition === 'cthulhu' ? 'Background / Origin' : 'Background'}
-              </label>
-              <select
-                value={background}
-                onChange={(e) => setBackground(e.target.value)}
-                className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
-              >
-                {getBackgroundsForSystem(edition).map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-stone-400 mb-1">
-                {edition === 'shadowrun' ? 'Disposition / Allegiance' : edition === 'cthulhu' ? 'Mental Disposition / Temperament' : 'Alignment'}
-              </label>
+              <label className="block text-stone-400 mb-1">Alignment</label>
               <select
                 value={alignment}
                 onChange={(e) => setAlignment(e.target.value)}
@@ -1649,7 +1741,39 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                 ))}
               </select>
             </div>
-          </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-stone-400 mb-1">
+                  {edition === 'shadowrun' ? 'Background / Prior Career' : edition === 'cthulhu' ? 'Background / Origin' : 'Background'}
+                </label>
+                <select
+                  value={background}
+                  onChange={(e) => setBackground(e.target.value)}
+                  className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
+                >
+                  {getBackgroundsForSystem(edition).map(b => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-stone-400 mb-1">
+                  {edition === 'shadowrun' ? 'Disposition / Allegiance' : edition === 'cthulhu' ? 'Mental Disposition / Temperament' : 'Alignment'}
+                </label>
+                <select
+                  value={alignment}
+                  onChange={(e) => setAlignment(e.target.value)}
+                  className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-100"
+                >
+                  {getAlignmentsForSystem(edition).map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
 
           {/* Character Portrait Hyperlink & HP Calculation Method */}
           <div className="bg-stone-950 border border-stone-800 p-3 rounded-xl space-y-3">
@@ -1873,7 +1997,203 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                   </div>
                 </label>
 
-                {/* Dual Classing / Multiclassing */}
+                {/* Gestalt Character Mode (Unearthed Arcana p. 72) - Independent Top-Level Option */}
+                {(edition === '3.5e' || edition === '5e') && (
+                  <div className="bg-stone-900 border border-amber-500/40 rounded-lg p-3 space-y-2.5 sm:col-span-2">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useGestaltUA72}
+                        onChange={(e) => setUseGestaltUA72(e.target.checked)}
+                        className="accent-amber-500 w-4 h-4 rounded mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-amber-300 flex items-center gap-1.5 text-sm">
+                            <Sparkles className="w-4 h-4 text-amber-400" /> Gestalt Character Mode (UA p. 72)
+                          </span>
+                          <span className="text-[10px] bg-amber-950/80 text-amber-300 px-2 py-0.5 rounded border border-amber-600/50 font-semibold">
+                            Independent System
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
+                          Start with up to four simultaneous classes advancing in parallel. Characters take the best Hit Die, BAB, saving throw progressions, and skill points of their classes.
+                        </p>
+                      </div>
+                    </label>
+
+                    {useGestaltUA72 && (
+                      <div className="pt-2.5 border-t border-stone-800 space-y-3">
+                        {/* Simultaneous Class Count Selector */}
+                        <div>
+                          <label className="block text-[11px] text-stone-300 font-bold mb-1.5">
+                            Number of Simultaneous Classes (Up to 4):
+                          </label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {([2, 3, 4] as const).map(num => (
+                              <button
+                                key={num}
+                                type="button"
+                                onClick={() => setGestaltTrackCount(num)}
+                                className={`py-1.5 px-2 rounded text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                                  gestaltTrackCount === num
+                                    ? 'bg-amber-600 text-stone-950 shadow-sm shadow-amber-600/50'
+                                    : 'bg-stone-950 text-stone-300 border border-stone-700 hover:border-amber-600/60'
+                                }`}
+                              >
+                                <span>{num} Classes</span>
+                                {gestaltTrackCount === num && <Check className="w-3.5 h-3.5" />}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Track / Class Inputs */}
+                        <div className="space-y-2 bg-stone-950/80 p-2.5 rounded-lg border border-stone-800">
+                          {/* Track 1: Primary Class */}
+                          <div className="flex items-center justify-between text-xs py-1 border-b border-stone-800/80">
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-[10px] bg-amber-950 text-amber-300 px-1.5 py-0.5 rounded border border-amber-700/50 font-bold">
+                                Track 1
+                              </span>
+                              <span className="font-bold text-stone-200">{characterClass || 'Fighter'}</span>
+                              {subclass && <span className="text-stone-400 text-[11px]">({subclass})</span>}
+                            </div>
+                            <span className="text-[10px] text-stone-400 font-mono">Lv. {level} (Primary)</span>
+                          </div>
+
+                          {/* Track 2 */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            <div>
+                              <label className="block text-[10px] text-amber-300 font-semibold mb-0.5">
+                                Track 2 Class
+                              </label>
+                              <select
+                                value={gestaltClass2}
+                                onChange={(e) => setGestaltClass2(e.target.value)}
+                                className="w-full bg-stone-900 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                              >
+                                {getClassesForSystem(edition).map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-stone-400 font-semibold mb-0.5">
+                                Track 2 Subclass (optional)
+                              </label>
+                              <input
+                                type="text"
+                                value={gestaltSubclass2}
+                                onChange={(e) => setGestaltSubclass2(e.target.value)}
+                                placeholder="e.g. Evoker"
+                                className="w-full bg-stone-900 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Track 3 */}
+                          {gestaltTrackCount >= 3 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-stone-800/80">
+                              <div>
+                                <label className="block text-[10px] text-amber-300 font-semibold mb-0.5">
+                                  Track 3 Class
+                                </label>
+                                <select
+                                  value={gestaltClass3}
+                                  onChange={(e) => setGestaltClass3(e.target.value)}
+                                  className="w-full bg-stone-900 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                                >
+                                  {getClassesForSystem(edition).map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-stone-400 font-semibold mb-0.5">
+                                  Track 3 Subclass (optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={gestaltSubclass3}
+                                  onChange={(e) => setGestaltSubclass3(e.target.value)}
+                                  placeholder="e.g. Thief"
+                                  className="w-full bg-stone-900 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Track 4 */}
+                          {gestaltTrackCount >= 4 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-stone-800/80">
+                              <div>
+                                <label className="block text-[10px] text-amber-300 font-semibold mb-0.5">
+                                  Track 4 Class
+                                </label>
+                                <select
+                                  value={gestaltClass4}
+                                  onChange={(e) => setGestaltClass4(e.target.value)}
+                                  className="w-full bg-stone-900 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                                >
+                                  {getClassesForSystem(edition).map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-[10px] text-stone-400 font-semibold mb-0.5">
+                                  Track 4 Subclass (optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={gestaltSubclass4}
+                                  onChange={(e) => setGestaltSubclass4(e.target.value)}
+                                  placeholder="e.g. Life Domain"
+                                  className="w-full bg-stone-900 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Gestalt Live Calculated Metrics */}
+                        {(() => {
+                          const activeClasses = [
+                            characterClass,
+                            gestaltClass2,
+                            ...(gestaltTrackCount >= 3 ? [gestaltClass3] : []),
+                            ...(gestaltTrackCount >= 4 ? [gestaltClass4] : [])
+                          ];
+                          const bestHd = Math.max(...activeClasses.map(c => getHitDieValue(c, edition)));
+                          const bestSp = Math.max(...activeClasses.map(c => getGestaltBaseSkillPoints(c)));
+
+                          return (
+                            <div className="flex flex-wrap gap-1.5 text-[10px] font-mono text-amber-200 bg-amber-950/40 p-2.5 rounded-lg border border-amber-600/40">
+                              <span className="bg-stone-900/90 px-2 py-0.5 rounded border border-amber-600/40">
+                                Best Hit Die: <strong className="text-amber-300">d{bestHd}</strong>
+                              </span>
+                              <span className="bg-stone-900/90 px-2 py-0.5 rounded border border-amber-600/40">
+                                Higher Skill Points: <strong className="text-amber-300">{bestSp} + INT / lvl</strong>
+                              </span>
+                              <span className="bg-stone-900/90 px-2 py-0.5 rounded border border-amber-600/40">
+                                Combined Class Skills Unlocked
+                              </span>
+                              <span className="bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-600/50 text-emerald-300">
+                                ✓ No XP Penalty when advancing tracks
+                              </span>
+                              <p className="w-full text-[10px] text-stone-400 mt-1 font-sans">
+                                💡 Gestalt characters advance these classes simultaneously. Standard multiclassing can still be used on any track by pausing a class and advancing a different class.
+                              </p>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Dual Classing / Multiclassing - Separate Card */}
                 <label className="flex items-start gap-2 bg-stone-900 border border-stone-800 p-2.5 rounded-lg cursor-pointer hover:border-amber-600/40 transition sm:col-span-2">
                   <input
                     type="checkbox"
@@ -1886,44 +2206,46 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                       <Layers className="w-3.5 h-3.5 text-amber-400" /> Dual Classing / Multiclassing
                     </span>
                     <p className="text-[10px] text-stone-400 leading-tight mt-0.5">
-                      Calculates combined level, combined spell slots, and multiclass Hit Dice pools.
+                      Standard multiclassing across multiple levels. Calculates combined level, combined spell slots, and multiclass Hit Dice pools.
                     </p>
 
                     {useMulticlassing && (
-                      <div className="mt-2.5 pt-2 border-t border-stone-800 grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Class</label>
-                          <select
-                            value={secondaryClass}
-                            onChange={(e) => setSecondaryClass(e.target.value)}
-                            className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
-                          >
-                            {getClassesForSystem(edition).map(c => (
-                              <option key={c} value={c}>{c}</option>
-                            ))}
-                          </select>
-                        </div>
+                      <div className="mt-2.5 pt-2 border-t border-stone-800 space-y-2.5">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Class</label>
+                            <select
+                              value={secondaryClass}
+                              onChange={(e) => setSecondaryClass(e.target.value)}
+                              className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                            >
+                              {getClassesForSystem(edition).map(c => (
+                                <option key={c} value={c}>{c}</option>
+                              ))}
+                            </select>
+                          </div>
 
-                        <div>
-                          <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Level</label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={secondaryLevel}
-                            onChange={(e) => setSecondaryLevel(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-full bg-stone-950 border border-stone-700 font-mono font-bold text-stone-200 rounded px-2 py-1 text-xs text-center"
-                          />
-                        </div>
+                          <div>
+                            <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Level</label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={secondaryLevel}
+                              onChange={(e) => setSecondaryLevel(Math.max(1, parseInt(e.target.value) || 1))}
+                              className="w-full bg-stone-950 border border-stone-700 font-mono font-bold text-stone-200 rounded px-2 py-1 text-xs text-center"
+                            />
+                          </div>
 
-                        <div>
-                          <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Subclass</label>
-                          <input
-                            type="text"
-                            value={secondarySubclass}
-                            onChange={(e) => setSecondarySubclass(e.target.value)}
-                            placeholder="e.g. Assassin"
-                            className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
-                          />
+                          <div>
+                            <label className="block text-[10px] text-amber-300 font-bold mb-0.5">Secondary Subclass</label>
+                            <input
+                              type="text"
+                              value={secondarySubclass}
+                              onChange={(e) => setSecondarySubclass(e.target.value)}
+                              placeholder="e.g. Assassin"
+                              className="w-full bg-stone-950 border border-stone-700 text-stone-200 rounded px-2 py-1 text-xs"
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -2394,7 +2716,19 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center font-mono">
+              <>
+                {edition === '3.5e' && level >= 4 && (
+                  <div className="mb-2 p-2 bg-amber-950/40 border border-amber-800/40 rounded-lg text-xs text-amber-300 flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      Level {level} Ability Increases (3.5e PHB p. 58):
+                    </span>
+                    <span className="font-mono text-stone-300">
+                      +{Math.floor(level / 4)} points available (+1 at levels 4, 8, 12, 16, 20)
+                    </span>
+                  </div>
+                )}
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center font-mono">
                 {/* STR */}
                 <div>
                   <label className="block text-stone-400 text-[10px] mb-1 font-bold">STR</label>
@@ -2409,8 +2743,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                     const finalVal = Math.max(1, str + bonus);
                     const mod = Math.floor((finalVal - 10) / 2);
                     return bonus !== 0 ? (
-                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
-                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      <span className={`text-[10px] block mt-0.5 leading-tight ${bonus > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {bonus > 0 ? `+${bonus}` : bonus} Race = <strong className={bonus > 0 ? 'text-emerald-300' : 'text-rose-300'}>{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
                       </span>
                     ) : (
                       <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
@@ -2434,8 +2768,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                     const finalVal = Math.max(1, dex + bonus);
                     const mod = Math.floor((finalVal - 10) / 2);
                     return bonus !== 0 ? (
-                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
-                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      <span className={`text-[10px] block mt-0.5 leading-tight ${bonus > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {bonus > 0 ? `+${bonus}` : bonus} Race = <strong className={bonus > 0 ? 'text-emerald-300' : 'text-rose-300'}>{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
                       </span>
                     ) : (
                       <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
@@ -2459,8 +2793,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                     const finalVal = Math.max(1, con + bonus);
                     const mod = Math.floor((finalVal - 10) / 2);
                     return bonus !== 0 ? (
-                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
-                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      <span className={`text-[10px] block mt-0.5 leading-tight ${bonus > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {bonus > 0 ? `+${bonus}` : bonus} Race = <strong className={bonus > 0 ? 'text-emerald-300' : 'text-rose-300'}>{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
                       </span>
                     ) : (
                       <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
@@ -2484,8 +2818,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                     const finalVal = Math.max(1, int + bonus);
                     const mod = Math.floor((finalVal - 10) / 2);
                     return bonus !== 0 ? (
-                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
-                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      <span className={`text-[10px] block mt-0.5 leading-tight ${bonus > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {bonus > 0 ? `+${bonus}` : bonus} Race = <strong className={bonus > 0 ? 'text-emerald-300' : 'text-rose-300'}>{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
                       </span>
                     ) : (
                       <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
@@ -2509,8 +2843,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                     const finalVal = Math.max(1, wis + bonus);
                     const mod = Math.floor((finalVal - 10) / 2);
                     return bonus !== 0 ? (
-                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
-                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      <span className={`text-[10px] block mt-0.5 leading-tight ${bonus > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {bonus > 0 ? `+${bonus}` : bonus} Race = <strong className={bonus > 0 ? 'text-emerald-300' : 'text-rose-300'}>{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
                       </span>
                     ) : (
                       <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
@@ -2534,8 +2868,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                     const finalVal = Math.max(1, cha + bonus);
                     const mod = Math.floor((finalVal - 10) / 2);
                     return bonus !== 0 ? (
-                      <span className="text-[10px] text-emerald-400 block mt-0.5 leading-tight">
-                        +{bonus} Race = <strong className="text-emerald-300">{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
+                      <span className={`text-[10px] block mt-0.5 leading-tight ${bonus > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {bonus > 0 ? `+${bonus}` : bonus} Race = <strong className={bonus > 0 ? 'text-emerald-300' : 'text-rose-300'}>{finalVal}</strong> ({mod >= 0 ? `+${mod}` : mod})
                       </span>
                     ) : (
                       <span className="text-[10px] text-stone-500 block mt-0.5 leading-tight">
@@ -2545,7 +2879,8 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
                   })()}
                 </div>
               </div>
-            )}
+            </>
+          )}
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t border-stone-800">

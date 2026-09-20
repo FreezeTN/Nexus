@@ -39,7 +39,7 @@ interface MainMenuProps {
   characters: CharacterData[];
   activeCharacter?: CharacterData | null;
   onSelectCharacter: (id: string) => void;
-  onCreateNewCharacter: (category?: 'character' | 'monster' | 'vendor') => void;
+  onCreateNewCharacter: (category?: 'character' | 'monster' | 'vendor', edition?: RuleEdition) => void;
   onEnterGame: () => void;
   onSystemChange?: (system: RuleEdition) => void;
   edition?: RuleEdition;
@@ -161,7 +161,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       accentText: string;
       primaryBtn: string;
       playBtnLabel: string;
-    }
+    },
+    folderEdition: RuleEdition = selectedEdition
   ) => {
     const isPlayerRole = !currentUser || currentUser.role === 'Player';
     const currentUserId = currentUser?.uid || 'guest_player';
@@ -312,15 +313,15 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
           {isSR && sr && (
             <div className="grid grid-cols-3 gap-2 bg-stone-900/90 p-2 rounded-xl text-center text-xs font-mono border border-stone-800">
-              <div>
+              <div className="flex flex-col items-center justify-center">
                 <span className="text-[9px] text-stone-500 block uppercase">Nuyen</span>
                 <span className="font-bold text-amber-300">¥{(sr.nuyen ?? 25000).toLocaleString()}</span>
               </div>
-              <div>
+              <div className="flex flex-col items-center justify-center">
                 <span className="text-[9px] text-stone-500 block uppercase">Karma</span>
                 <span className="font-bold text-cyan-300">{sr.karmaCurrent ?? 10}</span>
               </div>
-              <div>
+              <div className="flex flex-col items-center justify-center">
                 <span className="text-[9px] text-stone-500 block uppercase">Essence</span>
                 <span className="font-bold text-emerald-300">
                   {sr.cyberware ? (6.0 - sr.cyberware.reduce((acc, c) => acc + c.essenceCost, 0)).toFixed(2) : '6.00'}
@@ -568,7 +569,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => onCreateNewCharacter(folder.categoryType)}
+                    onClick={() => onCreateNewCharacter(folder.categoryType, folderEdition)}
                     className="px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-amber-300 border border-stone-700 hover:border-amber-500/60 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow"
                   >
                     <Plus className="w-3.5 h-3.5" />
@@ -644,7 +645,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
                   {/* Create New Card in Folder */}
                   <button
-                    onClick={() => onCreateNewCharacter(folder.categoryType)}
+                    onClick={() => onCreateNewCharacter(folder.categoryType, folderEdition)}
                     className="p-5 rounded-2xl border border-dashed border-stone-800 hover:border-amber-500/70 bg-stone-950/40 hover:bg-stone-950 transition flex flex-col items-center justify-center text-center space-y-2 group min-h-[120px]"
                   >
                     <div className="p-2.5 bg-stone-900 rounded-full border border-stone-800 group-hover:border-amber-500/50 text-amber-400 group-hover:scale-110 transition">
@@ -669,7 +670,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
       {showFirstUseLauncher ? (
         <FirstUseLauncher
           onJoinCampaign={onOpenSessionLobby}
-          onCreateCharacter={() => onCreateNewCharacter('character')}
+          onCreateCharacter={() => onCreateNewCharacter('character', selectedEdition)}
           onStartCampaignGm={onOpenCampaignGraph || onEnterGame}
           onExploreCompendium={onExploreCompendium}
           onOpenAiAssistant={onOpenAiAssistant}
@@ -1007,7 +1008,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                   accentText: 'text-amber-300',
                   primaryBtn: 'bg-stone-800 hover:bg-amber-600 hover:text-stone-950 text-stone-200',
                   playBtnLabel: 'Play'
-                }
+                },
+            selectedEdition
           )}
         </div>
       )}
@@ -1034,7 +1036,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               accentText: 'text-cyan-300',
               primaryBtn: 'bg-cyan-600 hover:bg-cyan-500 text-stone-950',
               playBtnLabel: 'Enter Matrix'
-            }
+            },
+            'shadowrun'
           )}
         </div>
       )}
@@ -1061,7 +1064,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               accentText: 'text-purple-300',
               primaryBtn: 'bg-purple-600 hover:bg-purple-500 text-stone-950',
               playBtnLabel: 'Play'
-            }
+            },
+            'pathfinder'
           )}
         </div>
       )}
@@ -1088,7 +1092,8 @@ export const MainMenu: React.FC<MainMenuProps> = ({
               accentText: 'text-emerald-300',
               primaryBtn: 'bg-emerald-600 hover:bg-emerald-500 text-stone-950',
               playBtnLabel: 'Investigate'
-            }
+            },
+            'cthulhu'
           )}
         </div>
       )}

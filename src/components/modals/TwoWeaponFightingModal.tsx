@@ -3,6 +3,8 @@ import { Attack, CharacterData } from '../../types';
 import {
   getCharacterBab,
   get35eIterativeAttacks,
+  calculate35eAttackBonus,
+  calculate35eDamageFormula,
   calculate35eTwoWeaponPenalties,
   adjust35eOffhandDamageFormula,
   adjust5eOffhandDamageFormula,
@@ -170,7 +172,13 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
     }
 
     // 3.5e Full Attack Iteratives
-    const mainIteratives = get35eIterativeAttacks(mainWeapon.attackBonus || 0, bab);
+    const mainAtkCalc = calculate35eAttackBonus(character, mainWeapon);
+    const mainDmgCalc = calculate35eDamageFormula(character, mainWeapon);
+    const offAtkCalc = calculate35eAttackBonus(character, offWeapon);
+    const offDmgCalc = calculate35eDamageFormula(character, { ...offWeapon, isOffhand: true });
+
+    const mainIteratives = mainAtkCalc.iterativeAttacks;
+    const mainBaseDamage = mainDmgCalc.damageFormula;
 
     // Main hand attacks
     mainIteratives.forEach((iterEntry, index) => {
@@ -180,14 +188,14 @@ export const TwoWeaponFightingModal: React.FC<TwoWeaponFightingModalProps> = ({
         hand: 'Main Hand',
         weapon: mainWeapon,
         bonus: effectiveBonus,
-        damageFormula: mainWeapon.damage || '1d8',
+        damageFormula: mainBaseDamage,
         notes: `Attack #${index + 1} (${iterEntry.label}, Penalty ${mainPenalty >= 0 ? '+' : ''}${mainPenalty}${isFlanking ? ', Flanking +2' : ''})`
       });
     });
 
     // Off-hand attacks
-    const offhandBaseBonus = (offWeapon.attackBonus || 0);
-    const offhandAdjustedDamage = adjust35eOffhandDamageFormula(offWeapon.damage || '1d6', strMod);
+    const offhandBaseBonus = offAtkCalc.totalAttackBonus;
+    const offhandAdjustedDamage = offDmgCalc.damageFormula;
 
     // 1st off-hand attack (Standard TWF)
     list.push({

@@ -1,5 +1,6 @@
 import { CharacterData } from '../../types';
 import { getEffectiveAbilities, getAbilityModifier } from './abilityCalculators';
+import { get35eSizeModifier } from '../rules/sizeScaleRules35e';
 
 export interface Dnd35eBaseAttackBreakdown {
   bab: number;
@@ -171,25 +172,7 @@ export function get35eSaves(char: CharacterData): Dnd35eSavesBreakdown {
   };
 }
 
-export function get35eSizeModifier(sizeCategory?: string, race?: string): number {
-  if (sizeCategory) {
-    switch (sizeCategory.toLowerCase()) {
-      case 'fine': return 8;
-      case 'diminutive': return 4;
-      case 'tiny': return 2;
-      case 'small': return 1;
-      case 'medium': return 0;
-      case 'large': return -1;
-      case 'huge': return -2;
-      case 'gargantuan': return -4;
-      case 'colossal': return -8;
-    }
-  }
-  const r = (race || '').toLowerCase();
-  if (r.includes('halfling') || r.includes('gnome') || r.includes('goblin') || r.includes('kobold')) return 1;
-  if (r.includes('giant') || r.includes('ogre') || r.includes('troll') || r.includes('minotaur') || r.includes('centaur')) return -1;
-  return 0;
-}
+export { get35eSizeModifier };
 
 export function get35eArmorMaxDex(itemName?: string, armorType?: string, explicitMaxDex?: number): number {
   if (explicitMaxDex !== undefined) return explicitMaxDex;

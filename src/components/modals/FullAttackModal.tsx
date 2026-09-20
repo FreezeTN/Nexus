@@ -3,6 +3,8 @@ import { Attack, CharacterData } from '../../types';
 import {
   getCharacterBab,
   get35eIterativeAttacks,
+  calculate35eAttackBonus,
+  calculate35eDamageFormula,
   formatModifier,
   rollCompoundDamage,
   get35eEffectiveThreatRange,
@@ -64,9 +66,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
   onRoll,
   onRollDamage
 }) => {
-  const bab = getCharacterBab(character);
-  const baseIteratives = get35eIterativeAttacks(attack.attackBonus, bab);
-
+  const is35e = character.edition === '3.5e';
   // Modifiers
   const [powerAttackPenalty, setPowerAttackPenalty] = useState<number>(0);
   const isDefaultTwoHanded = Boolean(
@@ -76,6 +76,19 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
     attack.notes?.toLowerCase().includes('two-hand')
   );
   const [isTwoHandedGrip, setIsTwoHandedGrip] = useState<boolean>(isDefaultTwoHanded);
+
+  const effectiveAttackForGrip = {
+    ...attack,
+    isTwoHanded: isTwoHandedGrip,
+    isOffhand: isTwoHandedGrip ? false : attack.isOffhand
+  };
+  const dmgCalc = is35e ? calculate35eDamageFormula(character, effectiveAttackForGrip) : null;
+  const baseDamageExpr = dmgCalc ? dmgCalc.damageFormula : (attack.damage || '1d8');
+
+  const atkCalc = is35e ? calculate35eAttackBonus(character, attack) : null;
+  const bab = atkCalc ? atkCalc.bab : getCharacterBab(character);
+  const baseAttackBonus = atkCalc ? atkCalc.totalAttackBonus : attack.attackBonus;
+  const baseIteratives = atkCalc ? atkCalc.iterativeAttacks : get35eIterativeAttacks(attack.attackBonus, bab);
   const [hasteActive, setHasteActive] = useState<boolean>(false);
   const [rapidShotActive, setRapidShotActive] = useState<boolean>(false);
   const [flurryActive, setFlurryActive] = useState<boolean>(false);
@@ -112,7 +125,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
     id: 'atk-1',
     name: '1st Attack (Primary)',
     source: 'iterative',
-    bonus: attack.attackBonus + globalAtkAdjustment
+    bonus: baseAttackBonus + globalAtkAdjustment
   });
 
   // Haste extra attack (at highest bonus)
@@ -121,7 +134,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
       id: 'atk-haste',
       name: 'Haste Extra Attack',
       source: 'haste',
-      bonus: attack.attackBonus + globalAtkAdjustment
+      bonus: baseAttackBonus + globalAtkAdjustment
     });
   }
 
@@ -131,7 +144,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
       id: 'atk-rapid',
       name: 'Rapid Shot Attack',
       source: 'rapid_shot',
-      bonus: attack.attackBonus + globalAtkAdjustment
+      bonus: baseAttackBonus + globalAtkAdjustment
     });
   }
 
@@ -141,7 +154,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
       id: 'atk-flurry',
       name: 'Flurry Extra Attack',
       source: 'flurry',
-      bonus: attack.attackBonus + globalAtkAdjustment
+      bonus: baseAttackBonus + globalAtkAdjustment
     });
   }
 
@@ -177,7 +190,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
     // Roll damage if hit or nat20
     let dmgResult: { total: number; breakdown: string } | undefined;
     if (!isNat1 && (!missChanceRes || missChanceRes.isOvercome)) {
-      const baseExpr = attack.damage || '1d8';
+      const baseExpr = baseDamageExpr;
       const fullDamageExpr = powerAttackDmgBonus > 0 ? `${baseExpr} + ${powerAttackDmgBonus}` : baseExpr;
       const rolled = rollCompoundDamage(fullDamageExpr, isNat20);
       dmgResult = { total: rolled.totalDamage, breakdown: rolled.breakdown };
@@ -221,7 +234,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
       // Roll Damage
       let dmgResult: { total: number; breakdown: string } | undefined;
       if (!isNat1 && (!missChanceRes || missChanceRes.isOvercome)) {
-        const baseExpr = attack.damage || '1d8';
+        const baseExpr = baseDamageExpr;
         const fullDamageExpr = powerAttackDmgBonus > 0 ? `${baseExpr} + ${powerAttackDmgBonus}` : baseExpr;
         const rolled = rollCompoundDamage(fullDamageExpr, isNat20);
         dmgResult = { total: rolled.totalDamage, breakdown: rolled.breakdown };
@@ -230,7 +243,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
       // Dispatch to session dice engine
       onRoll(`[Full Attack #${idx + 1}] ${attack.name} - ${step.name}`, 20, 1, step.bonus, 'normal');
       if (dmgResult) {
-        const baseExpr = attack.damage || '1d8';
+        const baseExpr = baseDamageExpr;
         const fullDamageExpr = powerAttackDmgBonus > 0 ? `${baseExpr} + ${powerAttackDmgBonus}` : baseExpr;
         onRollDamage(`[Full Attack #${idx + 1}] ${attack.name} Damage`, fullDamageExpr);
       }
@@ -265,7 +278,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
                 </span>
               </div>
               <p className="text-xs text-stone-400 font-mono">
-                {attack.name} &bull; Base Atk {formatModifier(attack.attackBonus)} &bull; Base Dmg {attack.damage} {attack.damageType} &bull; BAB +{bab}
+                {attack.name} &bull; Base Atk {formatModifier(baseAttackBonus)} &bull; Base Dmg {baseDamageExpr} {attack.damageType} &bull; BAB +{bab}
               </p>
             </div>
           </div>

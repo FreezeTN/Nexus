@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CharacterData } from '../../types';
-import { ScrollText, User, Heart, Shield, BookOpen, Users, FileText, Sparkles, Compass, Flag, ShieldCheck } from 'lucide-react';
+import { ScrollText, User, Heart, Shield, BookOpen, Users, FileText, Sparkles, Compass, Flag, ShieldCheck, Maximize2 } from 'lucide-react';
 import { CollapsibleBox } from '../common/CollapsibleBox';
 import { FormattedTextEditor } from '../common/FormattedTextEditor';
 import { useLayoutCustomization } from '../../utils/layoutCustomization';
 import { EmptyLayoutState } from '../common/EmptyLayoutState';
 import { useLanguage } from '../../i18n/LanguageContext';
+import { CreatureSizeScaleModal } from '../modals/CreatureSizeScaleModal';
+import { get35eSpaceAndReach, get35eSizeScaleEntry } from '../../utils/rules/sizeScaleRules35e';
+import { formatModifier } from '../../utils/dndCalculations';
 
 interface Sheet5Props {
   character: CharacterData;
@@ -22,6 +25,7 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
 }) => {
   const { t } = useLanguage();
   const { isVisible } = useLayoutCustomization();
+  const [showSizeScaleModal, setShowSizeScaleModal] = useState(false);
 
   const handleTextChange = (field: keyof CharacterData, value: string) => {
     onUpdateCharacter({
@@ -122,7 +126,19 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             />
           </div>
           <div>
-            <label className="block text-amber-300 font-bold mb-1">{t('notes.sizeCategory', 'Creature Size Category')}</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-amber-300 font-bold">{t('notes.sizeCategory', 'Creature Size Category')}</label>
+              {character.edition === '3.5e' && (
+                <button
+                  type="button"
+                  onClick={() => setShowSizeScaleModal(true)}
+                  className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-stone-900 border border-amber-600/40 px-2 py-0.5 rounded flex items-center gap-1 transition cursor-pointer"
+                >
+                  <Maximize2 className="w-3 h-3" />
+                  <span>Size & Scale Table</span>
+                </button>
+              )}
+            </div>
             <select
               value={character.sizeCategory || 'Medium'}
               onChange={(e) => onUpdateCharacter({ ...character, sizeCategory: e.target.value as any })}
@@ -159,6 +175,76 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             </label>
           </div>
         </div>
+
+        {/* 3.5e Specific Stance, Space & Reach Quick Config */}
+        {character.edition === '3.5e' && (() => {
+          const reachType = character.reachType || (character.isQuadruped ? 'Long' : 'Tall');
+          const sizeInfo = get35eSpaceAndReach(character.sizeCategory, reachType);
+          const entry = get35eSizeScaleEntry(character.sizeCategory);
+          return (
+            <div className="mt-3 pt-3 border-t border-stone-800/80 bg-stone-950/60 rounded-xl p-3 border border-stone-800 space-y-2.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-amber-300 font-serif">3.5e Reach Stance:</span>
+                  <div className="inline-flex rounded-lg border border-stone-800 bg-stone-900 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateCharacter({ ...character, reachType: 'Tall', isQuadruped: false })}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                        reachType === 'Tall' ? 'bg-amber-500 text-stone-950 font-bold shadow' : 'text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      Biped (Tall)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onUpdateCharacter({ ...character, reachType: 'Long', isQuadruped: true })}
+                      className={`px-2.5 py-1 text-xs font-semibold rounded-md transition ${
+                        reachType === 'Long' ? 'bg-amber-500 text-stone-950 font-bold shadow' : 'text-stone-400 hover:text-stone-200'
+                      }`}
+                    >
+                      Quadruped (Long)
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowSizeScaleModal(true)}
+                  className="text-xs text-amber-400 hover:text-amber-300 font-mono underline"
+                >
+                  Inspect Full Size Table &rarr;
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs font-mono">
+                <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                  <span className="text-[10px] text-stone-400 block uppercase">Combat Space</span>
+                  <span className="text-sky-300 font-bold">{sizeInfo.spaceDisplay}</span>
+                </div>
+                <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                  <span className="text-[10px] text-stone-400 block uppercase">Natural Reach</span>
+                  <span className={`font-bold ${sizeInfo.isZeroReach ? 'text-amber-400' : 'text-purple-300'}`}>
+                    {sizeInfo.reachDisplay}
+                  </span>
+                </div>
+                <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                  <span className="text-[10px] text-stone-400 block uppercase">Atk / AC Mod</span>
+                  <span className="text-emerald-300 font-bold">{formatModifier(entry.sizeModifier)}</span>
+                </div>
+                <div className="bg-stone-900/90 p-2 rounded-lg border border-stone-800">
+                  <span className="text-[10px] text-stone-400 block uppercase">Grapple / Hide</span>
+                  <span className="text-amber-300 font-bold">{formatModifier(entry.grappleModifier)} / {formatModifier(entry.hideModifier)}</span>
+                </div>
+              </div>
+
+              <div className="text-[11px] text-stone-400 font-sans flex items-center justify-between px-1">
+                <span>Typical Dimensions: <strong className="text-stone-300">{entry.heightOrLength}</strong></span>
+                <span>Typical Weight: <strong className="text-stone-300">{entry.weight}</strong></span>
+              </div>
+            </div>
+          );
+        })()}
       </CollapsibleBox>
       )}
 
@@ -327,6 +413,16 @@ export const Sheet5DescriptionNotes: React.FC<Sheet5Props> = ({
             </div>
           </div>
         </CollapsibleBox>
+      )}
+
+      {/* 3.5e Creature Size and Scale Table Modal */}
+      {character.edition === '3.5e' && (
+        <CreatureSizeScaleModal
+          isOpen={showSizeScaleModal}
+          onClose={() => setShowSizeScaleModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
       )}
     </div>
   );

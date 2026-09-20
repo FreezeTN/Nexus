@@ -254,8 +254,416 @@ export function generateProceduralTreasure(
 }
 
 // ==========================================
-// 2. QUICK NPC PROCEDURAL GENERATOR
+// 2. SMART CHARACTER & NPC PROCEDURAL GENERATOR
 // ==========================================
+function parseLevelFromPrompt(prompt: string, fallback: number = 1): number {
+  const match1 = prompt.match(/(?:level|lvl)\s*(\d+)/i);
+  if (match1) return Math.min(20, Math.max(1, parseInt(match1[1], 10)));
+  const match2 = prompt.match(/(\d+)(?:st|nd|rd|th)?\s*(?:level|lvl)/i);
+  if (match2) return Math.min(20, Math.max(1, parseInt(match2[1], 10)));
+  const match3 = prompt.match(/at\s*(\d+)(?:st|nd|rd|th)?/i);
+  if (match3) return Math.min(20, Math.max(1, parseInt(match3[1], 10)));
+  return Math.min(20, Math.max(1, fallback));
+}
+
+function parseRaceFromPrompt(prompt: string): string {
+  const p = prompt.toLowerCase();
+  if (/\bwood\s*elf\b/.test(p)) return 'Wood Elf';
+  if (/\bhigh\s*elf\b/.test(p)) return 'High Elf';
+  if (/\b(?:drow|dark\s*elf)\b/.test(p)) return 'Drow';
+  if (/\b(?:elf|elven|elves)\b/.test(p)) return 'Elf';
+  if (/\bmountain\s*dwarf\b/.test(p)) return 'Mountain Dwarf';
+  if (/\bhill\s*dwarf\b/.test(p)) return 'Hill Dwarf';
+  if (/\b(?:dwarf|dwarven|dwarves)\b/.test(p)) return 'Dwarf';
+  if (/\b(?:halfling|hobbit)\b/.test(p)) return 'Halfling';
+  if (/\b(?:gnome|gnomish)\b/.test(p)) return 'Gnome';
+  if (/\bhalf[- ]?elf\b/.test(p)) return 'Half-Elf';
+  if (/\bhalf[- ]?orc\b/.test(p)) return 'Half-Orc';
+  if (/\btiefling\b/.test(p)) return 'Tiefling';
+  if (/\bdragonborn\b/.test(p)) return 'Dragonborn';
+  if (/\b(?:orc|orcish)\b/.test(p)) return 'Orc';
+  if (/\bgoblin\b/.test(p)) return 'Goblin';
+  if (/\baasimar\b/.test(p)) return 'Aasimar';
+  if (/\bhuman\b/.test(p)) return 'Human';
+  return pick(['Human', 'Elf', 'Dwarf', 'Half-Elf', 'Halfling', 'Tiefling']);
+}
+
+function parseClassFromPrompt(prompt: string, isNpc: boolean): string {
+  const p = prompt.toLowerCase();
+  if (/\bdruid(?:ic)?\b/.test(p)) return 'Druid';
+  if (/\b(?:fighter|warrior|soldier|knight|mercenary|gladiator)\b/.test(p)) return 'Fighter';
+  if (/\b(?:wizard|mage|archmage|evoker|abjurer|illusionist|necromancer)\b/.test(p)) return 'Wizard';
+  if (/\b(?:rogue|thief|assassin|infiltrator|scout|cutpurse)\b/.test(p)) return 'Rogue';
+  if (/\b(?:cleric|priest(?:ess)?|healer|curate|templar)\b/.test(p)) return 'Cleric';
+  if (/\b(?:paladin|crusader|holy knight)\b/.test(p)) return 'Paladin';
+  if (/\b(?:ranger|hunter|tracker|strider|archer)\b/.test(p)) return 'Ranger';
+  if (/\b(?:barbarian|berserker|reaver|wildling)\b/.test(p)) return 'Barbarian';
+  if (/\b(?:monk|martial artist)\b/.test(p)) return 'Monk';
+  if (/\b(?:bard|skald|minstrel|troubadour|performer)\b/.test(p)) return 'Bard';
+  if (/\b(?:sorcerer|sorceress|wild mage|bloodline)\b/.test(p)) return 'Sorcerer';
+  if (/\b(?:warlock|witch|hexblade|eldritch)\b/.test(p)) return 'Warlock';
+  if (/\b(?:artificer|tinkerer|alchemical engineer)\b/.test(p)) return 'Artificer';
+  if (isNpc) {
+    if (/\b(?:bartender|innkeeper|tavern)\b/.test(p)) return 'Tavern Bartender';
+    if (/\b(?:merchant|shopkeeper|vendor|trader)\b/.test(p)) return 'Merchant';
+    if (/\b(?:guard|captain|watch)\b/.test(p)) return 'Fighter';
+  }
+  return isNpc ? 'Local Specialist' : 'Fighter';
+}
+
+function generateThematicName(race: string, charClass: string): string {
+  const r = race.toLowerCase();
+  if (r.includes('elf') || r.includes('elven') || r.includes('drow')) {
+    const first = pick(['Faelyn', 'Sylas', 'Elowen', 'Theron', 'Lyra', 'Aelrindel', 'Caelynn', 'Erevan', 'Keyleth', 'Faelar']);
+    const last = charClass === 'Druid' || charClass === 'Ranger'
+      ? pick(['Whisperleaf', 'Verdantstride', 'Brambleheart', 'Nightbreeze', 'Greenbough', 'Swiftbrook'])
+      : pick(['Starweaver', 'Silverleaf', 'Moonshadow', 'Sunstrider', 'Oakenshield']);
+    return `${first} ${last}`;
+  }
+  if (r.includes('dwarf')) {
+    const first = pick(['Torvald', 'Balin', 'Dwalin', 'Krag', 'Hilda', 'Brunhild', 'Dagmar', 'Thorin']);
+    const last = pick(['Ironbreaker', 'Bronzebeard', 'Stonehammer', 'Deepdelver', 'Forgeguard']);
+    return `${first} ${last}`;
+  }
+  if (r.includes('halfling')) {
+    const first = pick(['Finnegan', 'Milo', 'Rosie', 'Tobias', 'Merry', 'Pippa']);
+    const last = pick(['Quickfoot', 'Underhill', 'Bramble', 'Greenbottle', 'Tealeaf']);
+    return `${first} ${last}`;
+  }
+  if (r.includes('gnome')) {
+    const first = pick(['Fizzwick', 'Bimble', 'Zanna', 'Tinkertop', 'Dimble']);
+    const last = pick(['Cogspinner', 'Sparksprocket', 'Nackle', 'Copperkettle']);
+    return `${first} ${last}`;
+  }
+  if (r.includes('tiefling')) {
+    const first = pick(['Malakor', 'Vesper', 'Kallista', 'Dante', 'Akmenos', 'Lilith']);
+    const last = pick(['Torment', 'Malice', 'Ash', 'Void', 'Brimstone']);
+    return `${first} ${last}`;
+  }
+  if (r.includes('dragonborn')) {
+    const first = pick(['Balthazar', 'Drakon', 'Kavash', 'Rhogar', 'Heskan']);
+    const last = pick(['Flametongue', 'Scalebreaker', 'Ironsnout', 'Drachendusk']);
+    return `${first} ${last}`;
+  }
+  if (r.includes('orc')) {
+    const first = pick(['Grognar', 'Thokk', 'Morgat', 'Durg', 'Krag']);
+    const last = pick(['Skullcrusher', 'Bonegrinder', 'Bloodfang', 'Ironjaw']);
+    return `${first} ${last}`;
+  }
+  const first = pick(['Cedric', 'Alden', 'Rowan', 'Kaelen', 'Elena', 'Bram', 'Mireille', 'Cassian']);
+  const last = pick(['Sterling', 'Vance', 'Blackwood', 'Thorne', 'Drake', 'Ashford', 'Grimm', 'Ravencrest']);
+  return `${first} ${last}`;
+}
+
+export function generateProceduralCharacter(
+  customPrompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any,
+  isNpc: boolean = false
+): any {
+  const level = parseLevelFromPrompt(customPrompt, context?.activeLevel || context?.activeCharacterLevel || 3);
+  const race = parseRaceFromPrompt(customPrompt);
+  const charClass = parseClassFromPrompt(customPrompt, isNpc);
+  const name = generateThematicName(race, charClass);
+  const is35e = edition === '3.5e' || edition === 'pathfinder';
+
+  // Proficiency / BAB calculation
+  const profBonus = Math.ceil(level / 4) + 1;
+  const bab = is35e
+    ? (['Fighter', 'Paladin', 'Barbarian', 'Ranger'].includes(charClass)
+        ? level
+        : ['Druid', 'Cleric', 'Rogue', 'Monk', 'Bard'].includes(charClass)
+        ? Math.floor(level * 0.75)
+        : Math.floor(level * 0.5))
+    : profBonus;
+
+  // Class Archetypes, Stats & Equipment definitions
+  if (charClass === 'Druid') {
+    const subclass = is35e ? 'Druid of the Green Circle' : (customPrompt.toLowerCase().includes('moon') ? 'Circle of the Moon' : 'Circle of the Land (Forest)');
+    const abilities = {
+      STR: { score: 10 },
+      DEX: { score: 14 },
+      CON: { score: 14 },
+      INT: { score: 12 },
+      WIS: { score: 16 + (level >= 4 ? 2 : 0) },
+      CHA: { score: 10 }
+    };
+    const conMod = Math.floor((abilities.CON.score - 10) / 2);
+    const wisMod = Math.floor((abilities.WIS.score - 10) / 2);
+    const dexMod = Math.floor((abilities.DEX.score - 10) / 2);
+    const hpMax = 8 + (level - 1) * 5 + conMod * level;
+    const ac = 15; // Cured Hide (12 + 2) + Wooden Shield (+2) - nonmetallic lore
+    const atkBonus = is35e ? bab + dexMod : profBonus + dexMod;
+    const spellAtkBonus = is35e ? bab + wisMod : profBonus + wisMod;
+
+    return {
+      id: `pc_procedural_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      name,
+      race,
+      characterClass: 'Druid',
+      subclass,
+      level,
+      background: 'Hermit / Grove Warden',
+      alignment: pick(['Neutral Good', 'True Neutral', 'Lawful Neutral']),
+      experiencePoints: level * 1000,
+      edition,
+      isMonster: false,
+      isVendor: false,
+      hpMax,
+      hpCurrent: hpMax,
+      hpTemp: 0,
+      hitDiceTotal: `${level}d8 + ${conMod * level}`,
+      hitDiceCurrent: level,
+      armorClass: ac,
+      initiativeBonus: dexMod,
+      speed: race.includes('Wood Elf') ? 35 : 30,
+      inspiration: false,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+      abilities,
+      savingThrowProficiencies: is35e ? ['FORT', 'WILL'] : ['INT', 'WIS'],
+      skills: ['Perception', 'Nature', 'Survival', 'Animal Handling', 'Medicine'],
+      attacks: [
+        {
+          id: 'atk_1',
+          name: 'Yew Wood Scimitar',
+          attackBonus: atkBonus,
+          damage: `1d6 + ${dexMod}`,
+          damageType: 'Slashing',
+          range: '5 ft.',
+          notes: 'Finesse, Light, Non-metallic Ironwood Edge'
+        },
+        {
+          id: 'atk_2',
+          name: 'Quarterstaff of Shillelagh',
+          attackBonus: spellAtkBonus,
+          damage: is35e ? `1d10 + ${wisMod}` : `1d8 + ${wisMod}`,
+          damageType: 'Magical Bludgeoning',
+          range: '5 ft.',
+          notes: 'Infused with nature magic; strikes as enchanted magical weapon'
+        },
+        {
+          id: 'atk_3',
+          name: 'Produce Flame / Sling',
+          attackBonus: spellAtkBonus,
+          damage: `${Math.max(1, Math.floor((level + 1) / 5))}d8`,
+          damageType: 'Fire',
+          range: '30 ft.',
+          notes: 'Conjures flickering flame in hand that can be hurled at targets'
+        }
+      ],
+      classFeatures: [
+        {
+          id: 'feat_1',
+          name: 'Wild Shape (2/day)',
+          source: 'Druid Feature',
+          description: `Assume the form of any beast with a CR up to ${level >= 8 ? '1 (Flying allowed)' : level >= 4 ? '1/2 (Swimming allowed)' : '1/4'}. Max duration: ${Math.floor(level / 2)} hours.`
+        },
+        {
+          id: 'feat_2',
+          name: 'Druidic Spellcasting',
+          source: 'Spellcasting',
+          description: `Prepared spells: Call Lightning, Plant Growth, Barkskin, Moonbeam, Cure Wounds, Faerie Fire, Goodberry. Spell Save DC: ${8 + (is35e ? bab : profBonus) + wisMod}.`
+        },
+        {
+          id: 'feat_3',
+          name: 'Land\'s Stride & Nature\'s Ward',
+          source: 'Circle Feature',
+          description: 'Moving through nonmagical difficult terrain costs no extra movement. Advantage on saving throws against magically manipulated plants.'
+        },
+        {
+          id: 'feat_4',
+          name: 'Fey Ancestry & Trance',
+          source: 'Elven Heritage',
+          description: 'Advantage on saving throws against being charmed; immune to magic sleep spells; meditates deeply for 4 hours instead of sleeping.'
+        }
+      ],
+      wealth: { cp: 80, sp: 45, ep: 0, gp: 65, pp: 0 },
+      inventory: [
+        { name: 'Cured Hide Armor', quantity: 1, weight: 12, isMagic: false, costGp: 45, notes: 'AC 12 + Dex (max 2). Non-metallic cured beast hide.', itemType: 'Armor', armorAc: 12 },
+        { name: 'Carved Oak Wooden Shield', quantity: 1, weight: 5, isMagic: false, costGp: 15, notes: '+2 AC. Carved from fallen ancient heartwood with sylvan warding runes.', itemType: 'Armor', armorAc: 2 },
+        { name: 'Yew Wood Scimitar', quantity: 1, weight: 3, isMagic: false, costGp: 25, notes: 'Balanced curved blade crafted from hardened seasoned yew.', itemType: 'Weapon' },
+        { name: 'Ashwood Quarterstaff', quantity: 1, weight: 4, isMagic: false, costGp: 5, notes: 'Focus staff bound with leather thongs and amber beads.', itemType: 'Weapon' },
+        { name: 'Druidic Focus (Mistletoe & Holly Sprig)', quantity: 1, weight: 0.5, isMagic: true, costGp: 10, notes: 'Harvested under the full moon; acts as spellcasting focus.', itemType: 'Misc' },
+        { name: 'Herbalism Kit', quantity: 1, weight: 3, isMagic: false, costGp: 15, notes: 'Mortar, pestle, clippers, glass vials, and wild poultices.', itemType: 'Gear' },
+        { name: 'Potion of Healing', quantity: 2, weight: 1, isMagic: true, costGp: 100, notes: 'Restores 2d4+2 hit points when consumed.', itemType: 'Potion' },
+        { name: 'Explorer\'s Survival Pack', quantity: 1, weight: 20, isMagic: false, costGp: 10, notes: 'Bedroll, mess kit, tinderbox, waterskin, 10 days rations, 50ft hempen rope.', itemType: 'Gear' },
+        { name: 'Goodberry Satchel', quantity: 1, weight: 1, isMagic: true, costGp: 5, notes: 'Infused fresh berries providing total nourishment for a day.', itemType: 'Misc' }
+      ],
+      personalityTraits: 'Speaks with quiet deliberation; listens to the wind and the subtle cues of nature before deciding.',
+      ideals: 'The primordial balance of the wildlands must be safeguarded against encroaching corruption and despoilment.',
+      bonds: 'Sworn to protect the sacred groves and creature kin of the ancestral forests from unnatural incursions.',
+      flaws: 'Distrusts overcrowded stone cities and has little patience for courtly intrigue and political posturing.',
+      backstory: `Trained in the secluded sanctuaries of the elder woods, ${name} has answered the call of the grove wardens. Attuned to the rhythm of growth, seasons, and wild beasts, this guardian ventures forth across the realm whenever aberrant perils or dark blights threaten the equilibrium of nature.`
+    };
+  }
+
+  // Fighter Template
+  if (charClass === 'Fighter') {
+    const subclass = customPrompt.toLowerCase().includes('battle') ? 'Battle Master' : 'Champion';
+    const abilities = { STR: { score: 16 }, DEX: { score: 12 }, CON: { score: 15 }, INT: { score: 10 }, WIS: { score: 12 }, CHA: { score: 10 } };
+    const conMod = Math.floor((abilities.CON.score - 10) / 2);
+    const strMod = Math.floor((abilities.STR.score - 10) / 2);
+    const hpMax = 10 + (level - 1) * 6 + conMod * level;
+    return {
+      id: `pc_procedural_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      name,
+      race,
+      characterClass: 'Fighter',
+      subclass,
+      level,
+      background: 'Soldier / Veteran Vanguard',
+      alignment: 'Lawful Good',
+      experiencePoints: level * 1000,
+      edition,
+      isMonster: false,
+      isVendor: false,
+      hpMax,
+      hpCurrent: hpMax,
+      hpTemp: 0,
+      hitDiceTotal: `${level}d10 + ${conMod * level}`,
+      hitDiceCurrent: level,
+      armorClass: 18,
+      initiativeBonus: 1,
+      speed: 30,
+      abilities,
+      savingThrowProficiencies: ['STR', 'CON'],
+      skills: ['Athletics', 'Perception', 'Intimidation', 'Survival'],
+      attacks: [
+        { id: 'atk_1', name: 'Masterwork Longsword', attackBonus: bab + strMod, damage: `1d8 + ${strMod}`, damageType: 'Slashing', range: '5 ft.', notes: 'Versatile (1d10)' },
+        { id: 'atk_2', name: 'Heavy Crossbow', attackBonus: bab + 1, damage: '1d10 + 1', damageType: 'Piercing', range: '100/400 ft.', notes: 'Ammunition, Loading, Two-Handed' }
+      ],
+      classFeatures: [
+        { id: 'feat_1', name: 'Action Surge', source: 'Fighter', description: 'Take an additional standard action on your turn once per short rest.' },
+        { id: 'feat_2', name: 'Second Wind', source: 'Fighter', description: `Regain 1d10 + ${level} HP as a bonus action once per short rest.` },
+        { id: 'feat_3', name: level >= 5 ? 'Extra Attack' : 'Fighting Style (Defense)', source: 'Fighter', description: level >= 5 ? 'Attack twice when taking the Attack action.' : '+1 bonus to AC while wearing armor.' }
+      ],
+      wealth: { cp: 50, sp: 60, ep: 0, gp: 85, pp: 0 },
+      inventory: [
+        { name: 'Chain Mail / Splint Armor', quantity: 1, weight: 55, isMagic: false, costGp: 75, notes: 'AC 16-17 heavy plate harness.', itemType: 'Armor', armorAc: 16 },
+        { name: 'Steel Heater Shield', quantity: 1, weight: 6, isMagic: false, costGp: 10, notes: '+2 AC defensive shield.', itemType: 'Armor', armorAc: 2 },
+        { name: 'Masterwork Longsword', quantity: 1, weight: 3, isMagic: false, costGp: 30, notes: 'Tempered steel blade with balanced pommel.', itemType: 'Weapon' },
+        { name: 'Heavy Crossbow & 20 Bolts', quantity: 1, weight: 18, isMagic: false, costGp: 50, notes: 'High-tension winch crossbow.', itemType: 'Weapon' },
+        { name: 'Dungeoneer\'s Exploration Kit', quantity: 1, weight: 25, isMagic: false, costGp: 12, notes: 'Torches, rations, pitons, hempen rope.', itemType: 'Gear' },
+        { name: 'Potion of Healing', quantity: 2, weight: 1, isMagic: true, costGp: 100, notes: 'Restores 2d4+2 HP.', itemType: 'Potion' }
+      ],
+      personalityTraits: 'Disciplined, vigilant, and stands firm in defense of comrades.',
+      ideals: 'Honor and steadfast resolve under fire are what separate champions from sellswords.',
+      bonds: 'Loyal to the shield-brothers and adventuring party who fought through the trenches together.',
+      flaws: 'Reluctant to retreat even when overwhelming odds suggest strategic withdrawal.',
+      backstory: `A seasoned frontline warrior hardened through campaign skirmishes, ${name} brings disciplined steel and tactical mastery to every confrontation.`
+    };
+  }
+
+  // Wizard Template
+  if (charClass === 'Wizard') {
+    const subclass = customPrompt.toLowerCase().includes('abjur') ? 'School of Abjuration' : 'School of Evocation';
+    const abilities = { STR: { score: 8 }, DEX: { score: 14 }, CON: { score: 14 }, INT: { score: 16 + (level >= 4 ? 2 : 0) }, WIS: { score: 12 }, CHA: { score: 10 } };
+    const intMod = Math.floor((abilities.INT.score - 10) / 2);
+    const conMod = Math.floor((abilities.CON.score - 10) / 2);
+    const hpMax = 6 + (level - 1) * 4 + conMod * level;
+    return {
+      id: `pc_procedural_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      name,
+      race,
+      characterClass: 'Wizard',
+      subclass,
+      level,
+      background: 'Sage / Arcane Scholar',
+      alignment: 'Neutral Good',
+      experiencePoints: level * 1000,
+      edition,
+      isMonster: false,
+      isVendor: false,
+      hpMax,
+      hpCurrent: hpMax,
+      hpTemp: 0,
+      hitDiceTotal: `${level}d6 + ${conMod * level}`,
+      hitDiceCurrent: level,
+      armorClass: 12,
+      initiativeBonus: 2,
+      speed: 30,
+      abilities,
+      savingThrowProficiencies: ['INT', 'WIS'],
+      skills: ['Arcana', 'History', 'Investigation', 'Insight'],
+      attacks: [
+        { id: 'atk_1', name: 'Arcane Fire Bolt', attackBonus: bab + intMod, damage: `${Math.max(1, Math.floor((level + 1) / 5))}d10`, damageType: 'Fire', range: '120 ft.', notes: 'Ignites flammable objects' },
+        { id: 'atk_2', name: 'Silver Dagger', attackBonus: bab + 2, damage: '1d4 + 2', damageType: 'Piercing', range: '20/60 ft.', notes: 'Finesse, Light, Silvered' }
+      ],
+      classFeatures: [
+        { id: 'feat_1', name: 'Arcane Recovery', source: 'Wizard', description: `Regain up to ${Math.ceil(level / 2)} spell slot levels during a short rest.` },
+        { id: 'feat_2', name: 'Sculpt Spells / Arcane Ward', source: 'Tradition', description: 'Protect allies from evocation splash damage or absorb incoming harm with a barrier.' }
+      ],
+      wealth: { cp: 30, sp: 40, ep: 0, gp: 90, pp: 0 },
+      inventory: [
+        { name: 'Spellbook Bound in Dragonhide', quantity: 1, weight: 3, isMagic: true, costGp: 150, notes: 'Contains inscribed formulas: Fireball, Mage Armor, Shield, Magic Missile, Misty Step, Counterspell.', itemType: 'Misc' },
+        { name: 'Arcane Crystal Staff', quantity: 1, weight: 4, isMagic: true, costGp: 20, notes: 'Spellcasting focus carved from ashwood capped with amethyst.', itemType: 'Weapon' },
+        { name: 'Scholar\'s Pack & Ink Vials', quantity: 1, weight: 15, isMagic: false, costGp: 25, notes: 'Parchment, quill, ink, candles, book of lore.', itemType: 'Gear' },
+        { name: 'Potion of Healing', quantity: 2, weight: 1, isMagic: true, costGp: 100, notes: 'Restores 2d4+2 HP.', itemType: 'Potion' }
+      ],
+      personalityTraits: 'Deeply analytical, always deciphering arcane glyphs and historical contexts.',
+      ideals: 'Knowledge unlocked through careful study is the greatest power in creation.',
+      bonds: 'Bound to protect ancient libraries and decipher forgotten planar anomalies.',
+      flaws: 'Easily absorbed in magical theorizing when immediate physical danger is close at hand.',
+      backstory: `An erudite spellcaster educated in grand arcane institutions, ${name} studies the delicate architecture of magical currents to safeguard the realm from planar anomalies.`
+    };
+  }
+
+  // Rogue / NPC Specialist Template
+  const rogueAbilities = { STR: { score: 10 }, DEX: { score: 16 + (level >= 4 ? 2 : 0) }, CON: { score: 14 }, INT: { score: 13 }, WIS: { score: 12 }, CHA: { score: 12 } };
+  const rogueDexMod = Math.floor((rogueAbilities.DEX.score - 10) / 2);
+  const rogueConMod = Math.floor((rogueAbilities.CON.score - 10) / 2);
+  const rogueHp = 8 + (level - 1) * 5 + rogueConMod * level;
+
+  return {
+    id: `pc_procedural_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    name,
+    race,
+    characterClass: isNpc ? (charClass || 'Local Guild Specialist') : (charClass || 'Rogue'),
+    subclass: isNpc ? 'Information Broker & Operative' : 'Thief / Scout Specialist',
+    level,
+    background: 'Criminal / Guild Infiltrator',
+    alignment: pick(['Neutral Good', 'True Neutral', 'Chaotic Neutral']),
+    experiencePoints: level * 1000,
+    edition,
+    isMonster: false,
+    isVendor: false,
+    hpMax: rogueHp,
+    hpCurrent: rogueHp,
+    hpTemp: 0,
+    hitDiceTotal: `${level}d8 + ${rogueConMod * level}`,
+    hitDiceCurrent: level,
+    armorClass: 12 + rogueDexMod,
+    initiativeBonus: rogueDexMod,
+    speed: 30,
+    abilities: rogueAbilities,
+    savingThrowProficiencies: ['DEX', 'INT'],
+    skills: ['Stealth', 'Sleight of Hand', 'Deception', 'Perception', 'Insight', 'Acrobatics'],
+    attacks: [
+      { id: 'atk_1', name: 'Masterwork Rapier', attackBonus: bab + rogueDexMod, damage: `1d8 + ${rogueDexMod}`, damageType: 'Piercing', range: '5 ft.', notes: 'Finesse' },
+      { id: 'atk_2', name: 'Shortbow & Bodkin Arrows', attackBonus: bab + rogueDexMod, damage: `1d6 + ${rogueDexMod}`, damageType: 'Piercing', range: '80/320 ft.', notes: 'Two-Handed, Sneak Attack compatible' }
+    ],
+    classFeatures: [
+      { id: 'feat_1', name: `Sneak Attack (${Math.ceil(level / 2)}d6)`, source: 'Rogue', description: `Deals extra ${Math.ceil(level / 2)}d6 damage on attacks with advantage or when an ally is adjacent.` },
+      { id: 'feat_2', name: 'Cunning Action', source: 'Rogue', description: 'Dash, Disengage, or Hide as a bonus action on every turn.' }
+    ],
+    wealth: { cp: 40, sp: 50, ep: 0, gp: 55, pp: 0 },
+    inventory: [
+      { name: 'Studded Leather Armor', quantity: 1, weight: 13, isMagic: false, costGp: 45, notes: 'Light flexible armor granting 12 + Dex AC.', itemType: 'Armor', armorAc: 12 },
+      { name: 'Masterwork Rapier', quantity: 1, weight: 2, isMagic: false, costGp: 25, notes: 'Precision tempered fencing blade.', itemType: 'Weapon' },
+      { name: 'Shortbow & 20 Arrows', quantity: 1, weight: 4, isMagic: false, costGp: 25, notes: 'Compact recurve bow.', itemType: 'Weapon' },
+      { name: 'Thieves\' Lockpicking Kit', quantity: 1, weight: 1, isMagic: false, costGp: 25, notes: 'Picks, tension wrenches, skeleton keys.', itemType: 'Gear' },
+      { name: 'Potion of Healing', quantity: 2, weight: 1, isMagic: true, costGp: 100, notes: 'Restores 2d4+2 HP.', itemType: 'Potion' }
+    ],
+    personalityTraits: 'Alert, observant, and calculates escape vectors before entering any chamber.',
+    ideals: 'Freedom of movement and survival rely upon knowing more than your adversary.',
+    bonds: 'Guards the contacts who provided refuge when municipal warrants were issued.',
+    flaws: 'Keeps contingencies secret from allies until necessity demands revelation.',
+    backstory: `Operating quietly in the bustling boroughs and shaded trade conduits, ${name} leverages agility, keen senses, and quick blades to overcome insurmountable opposition.`
+  };
+}
+
+// Quick NPC procedural generator wrapper (backward compatibility)
 export function generateProceduralNpc(
   archetype: string = 'Tavern Bartender & Information Broker',
   tone: string = 'Mysterious & Suspicious',
@@ -263,98 +671,264 @@ export function generateProceduralNpc(
   edition: RuleEdition = '5e',
   level: number = 3
 ): any {
-  const firstNames = ['Bram', 'Vesper', 'Cassian', 'Mireille', 'Elowen', 'Corvus', 'Thorne', 'Zephyr', 'Orla', 'Gideon'];
-  const lastNames = ['Nightwhisper', 'Ironwood', 'Silverleaf', 'Ashford', 'Duskbane', 'Grimm', 'Vane', 'Ravencrest', 'Blackstone'];
-  const races = ['Human', 'Half-Elf', 'Dwarf', 'Tiefling', 'Elf', 'Gnome', 'Halfling', 'Dragonborn'];
+  return generateProceduralCharacter(customPrompt || archetype, edition, { activeLevel: level }, true);
+}
 
-  const name = `${pick(firstNames)} ${pick(lastNames)}`;
-  const race = pick(races);
-  const hpMax = Math.max(12, level * 7 + randInt(2, 10));
+// ==========================================
+// 2B. PROCEDURAL MONSTER GENERATOR
+// ==========================================
+export function generateProceduralMonster(
+  customPrompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any
+): any {
+  const p = customPrompt.toLowerCase();
+  let cr = '3';
+  const crMatch = customPrompt.match(/CR\s*(\d+(?:\/\d+)?)/i) || customPrompt.match(/challenge\s*rating\s*(\d+)/i);
+  if (crMatch) cr = crMatch[1];
+  const crNum = parseFloat(cr) || 3;
+
+  let creatureName = 'Shadowclaw Chimera';
+  let creatureType = 'Monstrosity';
+  if (p.includes('drake') || p.includes('dragon')) {
+    creatureName = 'Glacial Drake';
+    creatureType = 'Dragon';
+  } else if (p.includes('undead') || p.includes('wight') || p.includes('wraith')) {
+    creatureName = 'Crypt Reaver Wraith';
+    creatureType = 'Undead';
+  } else if (p.includes('fiend') || p.includes('demon') || p.includes('devil')) {
+    creatureName = 'Brimstone Hellhound Alpha';
+    creatureType = 'Fiend';
+  }
+
+  const hp = Math.max(25, Math.round(crNum * 18 + 20));
+  const ac = Math.min(19, Math.max(12, Math.round(13 + crNum * 0.7)));
 
   return {
-    id: `npc_procedural_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    name,
-    race,
-    characterClass: archetype.split('&')[0].trim(),
-    subclass: archetype,
-    level,
-    background: 'Local Guild Specialist',
-    alignment: pick(['Neutral Good', 'Lawful Neutral', 'True Neutral', 'Chaotic Neutral', 'Neutral Evil']),
-    experiencePoints: level * 1000,
+    id: `monster_procedural_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    name: creatureName,
+    race: creatureType,
+    characterClass: 'Predator',
+    challengeRating: cr,
+    level: Math.max(1, Math.round(crNum)),
+    isMonster: true,
+    isVendor: false,
+    hpMax: hp,
+    hpCurrent: hp,
+    hitDiceTotal: `${Math.max(3, Math.round(crNum * 2))}d10 + ${Math.round(crNum * 4)}`,
+    armorClass: ac,
+    speed: 40,
     edition,
-    isMonster: false,
-    hpMax,
-    hpCurrent: hpMax,
-    hpTemp: 0,
-    hitDiceTotal: `${level}d8 + ${level * 2}`,
-    hitDiceCurrent: level,
-    armorClass: 12 + randInt(0, 4),
-    initiativeBonus: randInt(0, 3),
-    speed: 30,
-    inspiration: false,
-    deathSavesSuccesses: 0,
-    deathSavesFailures: 0,
     abilities: {
-      STR: { score: 10 + randInt(0, 4) },
-      DEX: { score: 12 + randInt(0, 4) },
-      CON: { score: 12 + randInt(0, 3) },
-      INT: { score: 13 + randInt(0, 3) },
-      WIS: { score: 12 + randInt(0, 4) },
-      CHA: { score: 13 + randInt(0, 4) }
+      STR: { score: 16 + Math.min(8, Math.round(crNum)) },
+      DEX: { score: 14 },
+      CON: { score: 15 + Math.min(6, Math.round(crNum)) },
+      INT: { score: 6 },
+      WIS: { score: 12 },
+      CHA: { score: 8 }
     },
-    savingThrowProficiencies: ['WIS', 'CHA'],
-    skills: ['Insight', 'Perception', 'Deception', 'Persuasion'],
     attacks: [
-      {
-        id: 'atk_1',
-        name: 'Hidden Dagger / Cane Sword',
-        attackBonus: 4,
-        damage: '1d4 + 2',
-        damageType: 'Piercing',
-        range: '5 ft. / (20/60 ft.)',
-        notes: 'Finesse, Light, Concealable'
-      },
-      {
-        id: 'atk_2',
-        name: 'Light Crossbow',
-        attackBonus: 4,
-        damage: '1d8 + 2',
-        damageType: 'Piercing',
-        range: '80/320 ft.',
-        notes: 'Ammunition, Loading, Two-Handed'
-      }
+      { id: 'm_atk_1', name: 'Rending Claws', attackBonus: Math.round(3 + crNum * 0.8), damage: `${Math.max(1, Math.round(crNum * 0.5))}d8 + 4`, damageType: 'Slashing', range: '5 ft.', notes: 'Multiattack: 2 attacks per turn' },
+      { id: 'm_atk_2', name: 'Savage Bite / Breath', attackBonus: Math.round(3 + crNum * 0.8), damage: `${Math.max(2, Math.round(crNum))}d6 + 4`, damageType: 'Piercing / Elemental', range: '15-foot cone', notes: 'Recharge 5-6' }
     ],
-    classFeatures: [
-      {
-        id: 'feat_1',
-        name: 'Ear to the Ground',
-        source: 'Archetype Trait',
-        description: 'Advantage on Insight checks made to detect lies during commercial negotiation or tavern whispers.'
-      },
-      {
-        id: 'feat_2',
-        name: 'Clandestine Contacts',
-        source: 'Background',
-        description: 'Can secure black-market trade conduits, safehouse access, or smuggling passages within 24 hours.'
-      }
-    ],
-    wealth: {
-      cp: randInt(10, 50),
-      sp: randInt(20, 80),
-      ep: 0,
-      gp: randInt(15, 65),
-      pp: randInt(0, 2)
-    },
     inventory: [
-      { name: 'Finely Tailored Cloak', quantity: 1, weight: 3, isMagic: false, costGp: 15, notes: 'Contains hidden interior pockets.', itemType: 'Gear' },
-      { name: 'Ledger with Cyphered Names', quantity: 1, weight: 1, isMagic: false, costGp: 25, notes: 'Requires DC 15 Investigation to decode.', itemType: 'Misc' },
-      { name: 'Potion of Healing', quantity: 2, weight: 1, isMagic: true, costGp: 50, notes: 'Restores 2d4+2 HP.', itemType: 'Potion' }
+      { name: 'Pristine Beast Pelts & Claws', quantity: 2, weight: 10, isMagic: false, costGp: crNum * 40, itemType: 'Misc', notes: 'Valuable crafting reagents.' }
     ],
-    personalityTraits: `Speaks with a deliberate, calm cadence. ${tone}. Observes hands and eye movements closely.`,
-    ideals: 'Information is the only true currency that never loses its purchasing power.',
-    bonds: 'Loyal to the tavern or network that sheltered them when their home province fell.',
-    flaws: 'Keeps dark secrets even from trusted allies; always prepares an emergency escape hatch.',
-    backstory: customPrompt || `A seasoned operative who established deep roots in the settlement. Operates as ${archetype}, maintaining an extensive network of scouts and informants.`
+    description: `A terrifying ${creatureType} adapted to lethal ambushes. Thick armored hide deflects conventional strikes, while heightened predatory senses prevent it from being surprised.`
+  };
+}
+
+// ==========================================
+// 2C. PROCEDURAL MERCHANT GENERATOR
+// ==========================================
+export function generateProceduralMerchant(
+  customPrompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any
+): any {
+  const p = customPrompt.toLowerCase();
+  const isBlacksmith = p.includes('blacksmith') || p.includes('armor') || p.includes('weapon') || p.includes('iron');
+  const isAlchemist = p.includes('alchem') || p.includes('potion') || p.includes('elixir');
+
+  const shopName = isBlacksmith ? 'The Iron Anvil Armory' : isAlchemist ? 'Celestial Elixirs & Salves' : 'The Gilded Coin Emporium';
+  const vendorClass = isBlacksmith ? 'Master Armorer' : isAlchemist ? 'Apothecary' : 'General Goods Merchant';
+  const merchantName = isBlacksmith ? 'Torvald Deepforge' : isAlchemist ? 'Elowen Starwhisper' : 'Cedric Vance';
+  const race = isBlacksmith ? 'Dwarf' : isAlchemist ? 'Elf' : 'Human';
+
+  const wares = isBlacksmith
+    ? [
+        { name: 'Masterwork Longsword', quantity: 3, weight: 3, isMagic: false, costGp: 50, itemType: 'Weapon', notes: '+1 to attack rolls.' },
+        { name: 'Heavy Steel Shield', quantity: 4, weight: 6, isMagic: false, costGp: 15, itemType: 'Armor', armorAc: 2, notes: '+2 AC.' },
+        { name: 'Reinforced Half-Plate Harness', quantity: 1, weight: 40, isMagic: false, costGp: 750, itemType: 'Armor', armorAc: 15, notes: 'AC 15 + Dex (max 2).' },
+        { name: 'Bundle of 20 Crossbow Bolts', quantity: 10, weight: 2, isMagic: false, costGp: 2, itemType: 'Misc', notes: 'Hardened steel heads.' }
+      ]
+    : isAlchemist
+    ? [
+        { name: 'Potion of Healing', quantity: 6, weight: 1, isMagic: true, costGp: 50, itemType: 'Potion', notes: 'Restores 2d4+2 HP.' },
+        { name: 'Potion of Greater Healing', quantity: 2, weight: 1, isMagic: true, costGp: 150, itemType: 'Potion', notes: 'Restores 4d4+4 HP.' },
+        { name: 'Antitoxin Vial', quantity: 4, weight: 0.5, isMagic: false, costGp: 50, itemType: 'Gear', notes: 'Advantage on saving throws against poison for 1 hour.' },
+        { name: 'Alchemist\'s Fire Flask', quantity: 3, weight: 1, isMagic: false, costGp: 50, itemType: 'Gear', notes: 'Deals 1d4 fire damage every turn.' }
+      ]
+    : [
+        { name: 'Explorer\'s Survival Pack', quantity: 5, weight: 20, isMagic: false, costGp: 10, itemType: 'Gear', notes: 'Rations, waterskin, bedroll, rope.' },
+        { name: 'Hempen Rope (50 ft.)', quantity: 8, weight: 10, isMagic: false, costGp: 1, itemType: 'Gear', notes: 'Stout 50ft rope.' },
+        { name: 'Bullseye Lantern', quantity: 3, weight: 2, isMagic: false, costGp: 12, itemType: 'Gear', notes: 'Casts bright light in a 60ft cone.' },
+        { name: 'Potion of Healing', quantity: 3, weight: 1, isMagic: true, costGp: 50, itemType: 'Potion', notes: 'Standard restoration elixir.' }
+      ];
+
+  return {
+    id: `merchant_procedural_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    name: merchantName,
+    race,
+    characterClass: vendorClass,
+    subclass: shopName,
+    level: 4,
+    background: 'Guild Merchant',
+    alignment: 'Neutral Good',
+    isMonster: false,
+    isVendor: true,
+    vendorMargin: 100,
+    hpMax: 28,
+    hpCurrent: 28,
+    armorClass: 13,
+    speed: 30,
+    edition,
+    abilities: { STR: { score: 14 }, DEX: { score: 12 }, CON: { score: 14 }, INT: { score: 14 }, WIS: { score: 14 }, CHA: { score: 14 } },
+    wealth: { cp: 200, sp: 300, ep: 0, gp: 450, pp: 10 },
+    inventory: wares,
+    description: `Proprietor of ${shopName}. Offers fair trades, durable equipment, and trustworthy regional information to traveling adventurers.`
+  };
+}
+
+// ==========================================
+// 2D. PROCEDURAL ITEM GENERATOR
+// ==========================================
+export function generateProceduralItem(
+  customPrompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any
+): any {
+  const p = customPrompt.toLowerCase();
+  const isWeapon = p.includes('sword') || p.includes('hammer') || p.includes('bow') || p.includes('dagger') || p.includes('weapon') || p.includes('blade');
+  const isArmor = p.includes('armor') || p.includes('shield') || p.includes('plate') || p.includes('chain');
+
+  if (isWeapon) {
+    return {
+      name: 'Sunforged Radiant Warhammer (+1)',
+      itemType: 'Weapon',
+      rarity: 'Rare',
+      costGp: 1500,
+      requiresAttunement: true,
+      weaponStats: {
+        attackBonus: 1,
+        damage: '1d8+1 (+1d6 Radiant)',
+        damageType: 'Bludgeoning / Radiant',
+        range: '5 ft. (Thrown 20/60 ft.)',
+        notes: 'Versatile (1d10). Returns to hand immediately after being thrown.'
+      },
+      description: 'Forged in celestial flame by dawnbringers. Glows with daylight upon command and deals bonus radiant damage against undead and fiends.'
+    };
+  }
+
+  if (isArmor) {
+    return {
+      name: 'Mithral Ward Aegis (+1 Shield)',
+      itemType: 'Armor',
+      rarity: 'Uncommon',
+      costGp: 850,
+      armorAc: 3,
+      requiresAttunement: false,
+      description: 'Featherlight mithral shield inscribed with deflection wards. Imposes no stealth disadvantage and grants +3 to Armor Class.'
+    };
+  }
+
+  return {
+    name: 'Amulet of the Astral Traveler',
+    itemType: 'Misc',
+    rarity: 'Rare',
+    costGp: 2200,
+    requiresAttunement: true,
+    description: 'An ethereal gemstone pendant that hums with planar resonance. Grants the wearer resistance to force damage and allows casting Misty Step twice per Long Rest.'
+  };
+}
+
+// ==========================================
+// 2E. PROCEDURAL SPELL GENERATOR
+// ==========================================
+export function generateProceduralSpell(
+  customPrompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any
+): any {
+  const p = customPrompt.toLowerCase();
+  let level = 3;
+  const lvlMatch = customPrompt.match(/(\d+)(?:st|nd|rd|th)?\s*level/i) || customPrompt.match(/level\s*(\d+)/i);
+  if (lvlMatch) level = Math.min(9, Math.max(0, parseInt(lvlMatch[1], 10)));
+
+  return {
+    name: level === 0 ? 'Spark of Aether' : 'Verdant Stasis / Chrono Strike',
+    level,
+    school: p.includes('transmut') ? 'Transmutation' : p.includes('abjur') ? 'Abjuration' : 'Evocation',
+    castingTime: '1 Action',
+    range: '60 feet',
+    components: 'V, S, M (a dried sylvan petal)',
+    duration: 'Concentration, up to 1 minute',
+    concentration: true,
+    ritual: false,
+    damage: `${Math.max(2, level * 2)}d6`,
+    damageType: 'Force / Radiant',
+    saveType: 'DEX',
+    description: `Tendrils of temporal light or verdant ivy erupt at the target point. Creatures within 15 feet must make a saving throw or take ${Math.max(2, level * 2)}d6 damage and have their movement speed halved for the duration.`
+  };
+}
+
+// ==========================================
+// 2F. PROCEDURAL QUEST & GRAPH NODE GENERATORS
+// ==========================================
+export function generateProceduralQuest(
+  customPrompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any
+): any {
+  return {
+    title: 'The Blight of the Whispering Grove',
+    questGiver: 'Elder Faelyn Whisperleaf',
+    location: 'Verdant Verge / Ancient Dolmens',
+    summary: 'Dark necrotic seepage is suffocating the roots of the world-tree. The druidic circle requires valiant allies to locate and purge the corrupted altar.',
+    objectives: [
+      { description: 'Scout the petrified glade and locate the corrupted font.', optional: false },
+      { description: 'Defeat the Blight Infused Drake guarding the cavern.', optional: false },
+      { description: 'Purify the heart-stone using consecrated river water.', optional: true }
+    ],
+    complications: [
+      'A rival mercenary company seeks the tainted heart-stone for black-market sale.',
+      'Toxic spore clouds make resting inside the grove impossible without herbal masks.'
+    ],
+    rewards: {
+      xp: 1800,
+      gp: 350,
+      items: ['Staff of the Woodland Warden', 'Potion of Greater Healing (x2)']
+    }
+  };
+}
+
+export function generateProceduralGraphNode(
+  customPrompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any
+): any {
+  return {
+    name: 'The Emerald Conclave Sanctum',
+    type: 'location',
+    region: 'Elderheart Forest',
+    status: 'Active',
+    faction: 'Circle of the Verdant Bloom',
+    summary: 'A sheltered sanctuary of living trees woven together by elven druids. Serves as a meeting ground for rangers, wanderers, and wardens.',
+    tags: ['Druidic', 'Sacred', 'Sanctuary', 'Wildlands'],
+    connections: [
+      { targetName: 'Elder Faelyn', relationship: 'Presiding Archdruid', targetType: 'npc' },
+      { targetName: 'The Sunken Dolmen', relationship: 'Guarded ancient ruin to the north', targetType: 'location' }
+    ]
   };
 }
 
@@ -980,9 +1554,58 @@ export function generateProceduralEntity(
     };
   }
 
-  if (entityType === 'character' || entityType === 'npc') {
+  if (entityType === 'character') {
     return {
-      entity: generateProceduralNpc('Tavern Bartender & Info Broker', 'Mysterious', prompt, edition, context?.activeLevel || 3),
+      entity: generateProceduralCharacter(prompt, edition, context, false),
+      entityType
+    };
+  }
+
+  if (entityType === 'npc') {
+    return {
+      entity: generateProceduralCharacter(prompt, edition, context, true),
+      entityType
+    };
+  }
+
+  if (entityType === 'monster') {
+    return {
+      entity: generateProceduralMonster(prompt, edition, context),
+      entityType
+    };
+  }
+
+  if (entityType === 'merchant') {
+    return {
+      entity: generateProceduralMerchant(prompt, edition, context),
+      entityType
+    };
+  }
+
+  if (entityType === 'item') {
+    return {
+      entity: generateProceduralItem(prompt, edition, context),
+      entityType
+    };
+  }
+
+  if (entityType === 'spell') {
+    return {
+      entity: generateProceduralSpell(prompt, edition, context),
+      entityType
+    };
+  }
+
+  if (entityType === 'quest') {
+    return {
+      entity: generateProceduralQuest(prompt, edition, context),
+      entityType
+    };
+  }
+
+  if (entityType === 'graph_node') {
+    return {
+      entity: generateProceduralGraphNode(prompt, edition, context),
       entityType
     };
   }

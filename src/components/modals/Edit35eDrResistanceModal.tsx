@@ -46,6 +46,7 @@ export const Edit35eDrResistanceModal: React.FC<Edit35eDrResistanceModalProps> =
 
   const [drValue, setDrValue] = useState<number>(currentDrValue);
   const [drBypass, setDrBypass] = useState<string>(currentDrBypass);
+  const [spellResist, setSpellResist] = useState<string>(character.spellResist !== undefined ? String(character.spellResist) : '');
   const [resistances, setResistances] = useState<Record<string, number>>(currentResistances);
 
   // Incoming Damage Calculator State
@@ -61,7 +62,8 @@ export const Edit35eDrResistanceModal: React.FC<Edit35eDrResistanceModalProps> =
     ...character,
     damageReductionValue: drValue,
     damageReductionBypass: drBypass,
-    energyResistances: resistances
+    energyResistances: resistances,
+    spellResist: spellResist.trim() !== '' && !isNaN(Number(spellResist)) ? Number(spellResist) : undefined
   };
 
   const calcResult = calculate35eIncomingDamage(tempChar, incomingAmount, incomingType, {
@@ -78,11 +80,13 @@ export const Edit35eDrResistanceModal: React.FC<Edit35eDrResistanceModalProps> =
   };
 
   const handleSave = () => {
+    const srNum = spellResist.trim() !== '' ? parseInt(spellResist) : undefined;
     onUpdateCharacter({
       ...character,
       damageReductionValue: drValue,
       damageReductionBypass: drBypass,
-      energyResistances: resistances
+      energyResistances: resistances,
+      spellResist: srNum !== undefined && !isNaN(srNum) && srNum > 0 ? srNum : undefined
     });
     onClose();
   };
@@ -90,12 +94,14 @@ export const Edit35eDrResistanceModal: React.FC<Edit35eDrResistanceModalProps> =
   const handleApplyDamageToHp = () => {
     const dmg = calcResult.finalDamage;
     const nextHp = Math.max(-10, character.hpCurrent - dmg);
+    const srNum = spellResist.trim() !== '' ? parseInt(spellResist) : undefined;
     onUpdateCharacter({
       ...character,
       hpCurrent: nextHp,
       damageReductionValue: drValue,
       damageReductionBypass: drBypass,
-      energyResistances: resistances
+      energyResistances: resistances,
+      spellResist: srNum !== undefined && !isNaN(srNum) && srNum > 0 ? srNum : undefined
     });
     setAppliedNotice(`Applied -${dmg} HP! Character HP: ${character.hpCurrent} → ${nextHp}`);
     setTimeout(() => setAppliedNotice(null), 3500);
@@ -113,14 +119,18 @@ export const Edit35eDrResistanceModal: React.FC<Edit35eDrResistanceModalProps> =
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-serif font-bold text-sky-200">
-                  Damage Reduction & Energy Resistances
+                  Damage Reduction & Spell Resistance (DR & SR)
                 </h3>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-700/60 font-bold">
                   3.5e Defenses
                 </span>
               </div>
               <p className="text-xs text-stone-400 font-mono">
-                Current: <strong className="text-sky-300">DR {drValue}/{drBypass}</strong> &bull; Total Energy Resistances: {Object.values(resistances).reduce((a, b) => a + b, 0)}
+                Current: <strong className="text-sky-300">DR {drValue}/{drBypass}</strong>
+                {spellResist.trim() !== '' && !isNaN(Number(spellResist)) && Number(spellResist) > 0 ? (
+                  <> &bull; <strong className="text-cyan-300">SR {spellResist}</strong></>
+                ) : null}
+                {' '}&bull; Total Resistances: {Object.values(resistances).reduce((a, b) => a + b, 0)}
               </p>
             </div>
           </div>
@@ -226,7 +236,74 @@ export const Edit35eDrResistanceModal: React.FC<Edit35eDrResistanceModalProps> =
             </div>
           </div>
 
-          {/* Section 2: Energy Resistances */}
+          {/* Section 2: Spell Resistance (SR) */}
+          <div className="bg-stone-950 p-4 rounded-xl border border-cyan-900/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4" /> Spell Resistance (SR)
+              </span>
+              <span className="text-xs font-mono font-bold text-stone-400">
+                Enemy Caster Check: 1d20 + Caster Level vs SR
+              </span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <div>
+                <label className="text-xs text-stone-400 block mb-1 font-mono">
+                  Spell Resistance Value:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="60"
+                    placeholder="None"
+                    value={spellResist}
+                    onChange={(e) => setSpellResist(e.target.value)}
+                    className="w-24 bg-stone-900 border border-cyan-700/60 rounded-lg px-3 py-1.5 text-center text-cyan-300 font-bold font-mono text-base focus:outline-none focus:border-cyan-400"
+                  />
+                  {spellResist && (
+                    <button
+                      type="button"
+                      onClick={() => setSpellResist('')}
+                      className="text-[10px] text-stone-500 hover:text-stone-300 font-mono px-2 py-1 bg-stone-900 rounded border border-stone-800"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1">
+                <span className="text-[10px] text-stone-500 font-mono block mb-1.5">
+                  Common SR Presets:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { label: 'SR 11 (Drow 1st)', val: '11' },
+                    { label: 'SR 14 (Monk 13)', val: '14' },
+                    { label: 'SR 18 (Spell Resistance spell)', val: '18' },
+                    { label: 'SR 22 (Lesser Fiend)', val: '22' },
+                    { label: 'SR 25 (Balor / Golem)', val: '25' }
+                  ].map((preset) => (
+                    <button
+                      key={preset.label}
+                      type="button"
+                      onClick={() => setSpellResist(preset.val)}
+                      className={`px-2 py-0.5 rounded border text-[10px] font-mono transition cursor-pointer ${
+                        spellResist === preset.val
+                          ? 'bg-cyan-950 text-cyan-300 border-cyan-600 font-bold'
+                          : 'bg-stone-900 hover:bg-stone-800 border-stone-800 text-stone-400 hover:text-cyan-300'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 3: Energy Resistances */}
           <div className="bg-stone-950 p-4 rounded-xl border border-stone-800 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">

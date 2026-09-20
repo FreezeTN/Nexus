@@ -186,8 +186,23 @@ export interface HybridHeritageData {
   precedenceSummary?: string[];
 }
 
+export interface GestaltTrackClass {
+  id: string;
+  className: string;
+  subclass?: string;
+  level: number;
+  isPaused?: boolean;
+}
+
+export interface GestaltTrack {
+  id: string; // e.g. 'track-1', 'track-2', 'track-3', 'track-4'
+  name: string; // e.g. 'Track 1', 'Track 2'
+  classes: GestaltTrackClass[]; // classes taken on this track (active class is not paused)
+}
+
 export interface OptionalRulesConfig {
   useVariantEncumbrance?: boolean;   // Variant Encumbrance (STRx5 = Encumbered -10ft speed, STRx10 = Heavy -20ft speed & Disadvantage)
+  trackEncumbrance?: boolean;        // Carrying capacity & encumbrance rules enabled. When false/unselected, all weight tracking, calculations & displays are hidden.
   weightCalculationMode?: 'equipped_only' | 'carried_only' | 'all_items'; // Encumbrance weight mode (Default: carried_only)
   useFlankingRules?: boolean;       // Flanking rules (+2 Attack in 3.5e, Advantage prompt in 5e)
   useMulticlassing?: boolean;       // Secondary Class / Dual-Classing calculations
@@ -202,7 +217,9 @@ export interface OptionalRulesConfig {
   useMilestoneXp?: boolean;         // Milestone Level Progression (Hide XP threshold progress)
   useDiagonal5105Rules?: boolean;   // 5/10/5 Diagonal Movement Rule
   useSanityRules?: boolean;         // Sanity & Madness System (DMG p.264 / Call of Cthulhu)
-  useGestaltUA72?: boolean;         // Unearthed Arcana p.72: Gestalt Characters (Dual class progression)
+  useGestaltUA72?: boolean;         // Unearthed Arcana p.72: Gestalt Characters (Up to 4 simultaneous classes with independent multiclassing)
+  gestaltTrackCount?: number;       // Number of simultaneous Gestalt tracks (2, 3, or 4; defaults to 2)
+  gestaltTracks?: GestaltTrack[];   // Detailed Gestalt multi-track progression
   useDefenseBonusUA109?: boolean;   // Unearthed Arcana p.109: Class Defense Bonus by Level
   useArmorAsDRUA109?: boolean;      // Unearthed Arcana p.109/111: Armor as Damage Reduction
   hasPowerfulBuild?: boolean;       // Powerful Build / Little Giant: Counts as 1 size category larger for carrying capacity, push, drag, and lift
@@ -284,6 +301,18 @@ export interface Attack {
   bypassMaterial?: 'normal' | 'magic' | 'silver' | 'cold_iron' | 'adamantine'; // Material for 3.5e DR bypass
   alignmentBypass?: 'none' | 'good' | 'evil' | 'lawful' | 'chaotic'; // Alignment bypass for 3.5e DR
   weaponSize?: 'Fine' | 'Diminutive' | 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan' | 'Colossal'; // Weapon size category (3.5e PHB p. 113)
+  enhancementBonus?: number; // e.g. +1, +2 magic weapon bonus
+  miscBonus?: number; // e.g. Weapon Focus +1
+  miscBonusDamage?: number; // e.g. Weapon Specialization +2
+  baseDamageDice?: string; // e.g. "1d6", "1d8"
+  useManualBonus?: boolean; // If true, uses attackBonus/damage directly without auto BAB/ability scaling
+  twoHandedMultiplier?: number; // STR factor for 2-handed wielding (default 1.5, e.g. 2.0 with special feats/features)
+  offhandMultiplier?: number; // STR factor for off-hand wielding (default 0.5, e.g. 1.0 with Double Slice)
+  wieldGrip?: '1H' | '2H' | 'OH'; // Explicit grip state: One-Handed, Two-Handed, Off-Hand
+  inventoryItemId?: string; // ID of linked gear item from inventory
+  isNatural?: boolean; // Natural attack (e.g. bite, claw, slam, gore)
+  isSecondaryNatural?: boolean; // Secondary natural attack (-5 to attack, 0.5x STR; -2 with Multiattack)
+  isSoleNaturalAttack?: boolean; // Single natural attack gains 1.5x STR
 }
 
 export interface ClassFeature {
@@ -369,6 +398,8 @@ export interface GearItem {
   notes?: string;
   rarity?: 'Common' | 'Uncommon' | 'Rare' | 'Very Rare' | 'Legendary' | 'Artifact' | 'Unique' | string;
   slot?: 'Ring' | 'Amulet' | 'Cloak' | 'Boots' | 'Headwear' | 'Gloves' | 'Belt' | 'Armor' | 'Shield' | 'Main Hand' | 'Off Hand' | 'Two-Handed' | 'Wondrous' | 'Inventory' | string;
+  wieldGrip?: '1H' | '2H'; // Player choice of wielding grip: '1H' (one-handed, 1 hand used) or '2H' (two-handed, 2 hands used)
+  isCustom?: boolean; // True if item is a custom homebrew item
   itemType?: 'Armor' | 'Weapon' | 'Ring' | 'Amulet' | 'Cloak' | 'Boots' | 'Headwear' | 'Gloves' | 'Belt' | 'Wondrous Item' | 'Potion' | 'Scroll' | 'Wand' | 'Misc' | string;
   subCategory?: string;
   armorAc?: number;
@@ -426,8 +457,13 @@ export interface GearItem {
     abilityOverride?: AbilityName;
     attackBonusModifier?: number;
     damageBonusModifier?: number;
+    enhancementBonus?: number;
+    threatRange?: number;
+    critMultiplier?: number;
+    isKeen?: boolean;
     additionalDamageRows?: WeaponDamageRow[];
   };
+  enhancementBonus?: number;
 }
 
 export interface Wealth {
@@ -555,6 +591,9 @@ export interface CharacterData {
   flatFootedAcOverride?: number; // Flat-Footed AC adjustment for 3.5e
   spellResist?: number; // Spell Resistance (SR) for 3.5e
   sizeCategory?: 'Fine' | 'Diminutive' | 'Tiny' | 'Small' | 'Medium' | 'Large' | 'Huge' | 'Gargantuan' | 'Colossal';
+  reachType?: 'Tall' | 'Long'; // 3.5e Stance / Reach type: Tall (bipedal) vs Long (quadrupedal / serpentine)
+  spaceOverrideFt?: number; // 3.5e Combat space override in feet
+  naturalReachOverrideFt?: number; // 3.5e Natural reach override in feet
   sizeAcBonus?: number; // Size bonus/penalty to AC override
   senses?: string; // Senses e.g. "Darkvision 60 ft., Low-Light Vision"
   naturalArmorBonus?: number; // 3.5e Natural Armor bonus to AC (e.g. from race, monstrous features, spells)
@@ -780,6 +819,8 @@ export interface CharacterData {
   speedSwim?: number; // Swim speed in feet
   speedClimb?: number; // Climb speed in feet
   speedBurrow?: number; // Burrow speed in feet
+  baseRacialSpeed?: number; // Racial base speed before manual modifications
+  speedOverridden?: boolean; // Indicates user has manually adjusted speed
   inspiration: boolean;
 
   // Death Saves

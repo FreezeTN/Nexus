@@ -252,6 +252,7 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
   const [genPrompt, setGenPrompt] = useState('');
   const [isGenLoading, setIsGenLoading] = useState(false);
   const [generatedResult, setGeneratedResult] = useState<any | null>(null);
+  const [isProceduralResult, setIsProceduralResult] = useState(false);
   const [importedSuccess, setImportedSuccess] = useState<string | null>(null);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
 
@@ -694,6 +695,7 @@ INSTRUCTIONS FOR THE ORACLE:
 
       const res = await generateEntity(entityType, genPrompt, ruleEdition, context, language);
       setGeneratedResult(res.entity);
+      setIsProceduralResult(!!res.isProceduralFallback);
       setImportedSuccess(null);
     } catch (err: any) {
       alert(`Generation failed: ${err.message || 'Unknown error'}`);
@@ -1754,7 +1756,14 @@ INSTRUCTIONS FOR THE ORACLE:
                         )}
                       </h3>
                       <p className="text-xs text-stone-400">
-                        {generatedResult.characterClass || generatedResult.race || generatedResult.school || generatedResult.itemType || generatedResult.type}
+                        {[
+                          generatedResult.race,
+                          generatedResult.characterClass,
+                          generatedResult.subclass && `(${generatedResult.subclass})`,
+                          generatedResult.school,
+                          generatedResult.itemType,
+                          generatedResult.type
+                        ].filter(Boolean).join(' • ')}
                       </p>
                     </div>
 
@@ -1769,6 +1778,15 @@ INSTRUCTIONS FOR THE ORACLE:
                       </button>
                     </div>
                   </div>
+
+                  {isProceduralResult && (
+                    <div className="p-2.5 bg-amber-950/40 border border-amber-600/40 rounded-xl text-xs text-amber-200 flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Crafted with System Procedural Engine (Aligned to Rules & Prompt).</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Summary Card / Preview */}
                   <div className="p-3.5 bg-stone-950 border border-stone-800 rounded-xl text-xs space-y-3 text-stone-300">

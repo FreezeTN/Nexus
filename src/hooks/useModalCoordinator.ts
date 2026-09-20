@@ -89,7 +89,7 @@ export function useModalCoordinator({
     });
   }, [openModal, currentUser, onUserChange]);
 
-  const handleOpenNewCharacterModal = useCallback((category: 'character' | 'monster' | 'vendor' = 'character') => {
+  const handleOpenNewCharacterModal = useCallback((category: 'character' | 'monster' | 'vendor' = 'character', targetEdition?: RuleEdition) => {
     if (!currentUser) {
       handleOpenAuthModal();
       return;
@@ -130,7 +130,7 @@ export function useModalCoordinator({
 
     openModal('new-character', {
       onCreate: onCreateCharacter,
-      initialEdition: currentSystemTheme,
+      initialEdition: targetEdition || currentSystemTheme,
       initialIsMonster: category === 'monster',
       initialIsVendor: category === 'vendor',
       enabledSystems,

@@ -53,12 +53,13 @@ function parseErrorMessage(err: any): string {
 }
 
 async function generateContentWithRetry(ai: GoogleGenAI, params: any) {
-  const primaryModel = params.model || "gemini-3.7-flash";
+  const primaryModel = params.model || "gemini-3.8-flash";
   const modelsToTry = [
     primaryModel,
-    "gemini-3.1-flash-lite",
+    "gemini-3.8-flash",
     "gemini-flash-latest",
-  ];
+    "gemini-3.1-flash-lite",
+  ].filter((v, i, a) => a.indexOf(v) === i);
 
   let lastError: any = null;
 
@@ -543,7 +544,7 @@ ${langDirective}
       const contents = await buildSanitizedChatContents(ai, history, message, image);
 
       const response = await generateContentWithRetry(ai, {
-        model: "gemini-3.7-flash",
+        model: "gemini-3.8-flash",
         contents,
         config: {
           systemInstruction,
@@ -894,7 +895,7 @@ Return a valid JSON object with:
       }
 
       const response = await generateContentWithRetry(ai, {
-        model: "gemini-3.7-flash",
+        model: "gemini-3.8-flash",
         contents: prompt,
         config: {
           systemInstruction: systemPrompt,

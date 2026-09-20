@@ -20,6 +20,7 @@ import {
   formatWealthDetailed
 } from '../../../utils/dndCalculations';
 import { getCharacterContainers, PRESET_CONTAINERS, getContainerWeightSummaries } from '../../../utils/containerUtils';
+import { syncInventoryWeaponsToAttacks } from '../../../utils/gearAttackSync';
 import { eventBus } from '../../../events/eventBus';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import {
@@ -437,7 +438,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       inventory: updatedInventory
     });
 
-    onUpdateCharacter(updatedChar);
+    onUpdateCharacter(syncInventoryWeaponsToAttacks(updatedChar));
   };
 
   const handleToggleStored = (id: string) => {
@@ -510,10 +511,12 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
     const itemToDelete = currentInv.find(i => i.id === id);
     const updated = currentInv.filter(i => i.id !== id);
     
-    onUpdateCharacter(recalculateCharacterAC({
+    const updatedChar = recalculateCharacterAC({
       ...character,
-      inventory: updated
-    }));
+      inventory: updated,
+      attacks: (character.attacks || []).filter(a => a.inventoryItemId !== id && a.id !== 'atk-gear-' + id)
+    });
+    onUpdateCharacter(syncInventoryWeaponsToAttacks(updatedChar));
 
     if (itemToDelete) {
       eventBus.emit('ItemRemoved', {
@@ -3045,10 +3048,11 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                   onClick={() => {
                     const currentInv = Array.isArray(character.inventory) ? character.inventory : [];
                     const updatedInventory = currentInv.map(i => i.id === editingItem.id ? editingItem : i);
-                    onUpdateCharacter(recalculateCharacterAC({
+                    const updatedChar = recalculateCharacterAC({
                       ...character,
                       inventory: updatedInventory
-                    }));
+                    });
+                    onUpdateCharacter(syncInventoryWeaponsToAttacks(updatedChar));
                     setEditingItem(null);
                   }}
                   className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"

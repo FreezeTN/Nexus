@@ -591,27 +591,170 @@ export const OFFICIAL_5E_CLASS_FEATURES: (ClassFeature & { className: string; re
 // OFFICIAL D&D 3.5E CLASS FEATURES
 // ==========================================
 export const OFFICIAL_35E_CLASS_FEATURES: (ClassFeature & { className: string; reqLevel: number })[] = [
-  { id: 'cf35-fgt-1', className: 'Fighter', reqLevel: 1, name: 'Fighter Bonus Feat', source: 'Fighter 3.5e', description: 'At 1st level, 2nd level, and every two fighter levels thereafter, a fighter gets a bonus feat in addition to the feat that any character gets.' },
+  // Fighter 3.5e
+  { id: 'cf35-fgt-1', className: 'Fighter', reqLevel: 1, name: 'Fighter Bonus Feat (1st)', source: 'Fighter 3.5e', description: 'At 1st level, 2nd level, and every two fighter levels thereafter, a fighter gets a bonus combat feat in addition to the regular feat progression.' },
+  { id: 'cf35-fgt-2', className: 'Fighter', reqLevel: 2, name: 'Fighter Bonus Feat (2nd)', source: 'Fighter 3.5e', description: 'Gain an additional bonus feat selected from the list of fighter bonus feats.' },
+  { id: 'cf35-fgt-4', className: 'Fighter', reqLevel: 4, name: 'Fighter Bonus Feat (4th) & Weapon Specialization', source: 'Fighter 3.5e', description: 'Gain a bonus feat. Unlocks the Weapon Specialization feat (+2 damage with chosen weapon).' },
+  { id: 'cf35-fgt-6', className: 'Fighter', reqLevel: 6, name: 'Fighter Bonus Feat (6th)', source: 'Fighter 3.5e', description: 'Gain an additional fighter bonus feat.' },
+  { id: 'cf35-fgt-8', className: 'Fighter', reqLevel: 8, name: 'Fighter Bonus Feat (8th) & Greater Weapon Focus', source: 'Fighter 3.5e', description: 'Gain a bonus feat. Unlocks Greater Weapon Focus (+1 attack roll, +2 total with Focus).' },
+  { id: 'cf35-fgt-10', className: 'Fighter', reqLevel: 10, name: 'Fighter Bonus Feat (10th)', source: 'Fighter 3.5e', description: 'Gain an additional fighter bonus feat.' },
+  { id: 'cf35-fgt-12', className: 'Fighter', reqLevel: 12, name: 'Fighter Bonus Feat (12th) & Greater Weapon Specialization', source: 'Fighter 3.5e', description: 'Gain a bonus feat. Unlocks Greater Weapon Specialization (+2 damage, +4 total with Specialization).' },
+  { id: 'cf35-fgt-14', className: 'Fighter', reqLevel: 14, name: 'Fighter Bonus Feat (14th)', source: 'Fighter 3.5e', description: 'Gain an additional fighter bonus feat.' },
+  { id: 'cf35-fgt-16', className: 'Fighter', reqLevel: 16, name: 'Fighter Bonus Feat (16th)', source: 'Fighter 3.5e', description: 'Gain an additional fighter bonus feat.' },
+  { id: 'cf35-fgt-18', className: 'Fighter', reqLevel: 18, name: 'Fighter Bonus Feat (18th)', source: 'Fighter 3.5e', description: 'Gain an additional fighter bonus feat.' },
+  { id: 'cf35-fgt-20', className: 'Fighter', reqLevel: 20, name: 'Fighter Bonus Feat (20th)', source: 'Fighter 3.5e', description: 'Gain a 11th fighter bonus feat.' },
+
+  // Barbarian 3.5e
+  { id: 'cf35-bar-1', className: 'Barbarian', reqLevel: 1, name: 'Fast Movement (+10 ft)', source: 'Barbarian 3.5e', description: 'A barbarian’s land speed is faster than the norm for her race by +10 feet when wearing no armor, light armor, or medium armor and not carrying a heavy load.' },
+  { id: 'cf35-bar-2', className: 'Barbarian', reqLevel: 1, name: 'Barbarian Rage (1/day)', source: 'Barbarian 3.5e', description: 'Fly into a screaming rage: +4 Strength, +4 Constitution, +2 morale bonus on Will saves, and -2 penalty to AC for 3 + CON mod rounds.', recharge: 'Long Rest' },
+  { id: 'cf35-bar-3', className: 'Barbarian', reqLevel: 2, name: 'Uncanny Dodge', source: 'Barbarian 3.5e', description: 'Retain Dexterity bonus to AC (if any) even if caught flat-footed or struck by an invisible attacker.' },
+  { id: 'cf35-bar-4', className: 'Barbarian', reqLevel: 3, name: 'Trap Sense +1', source: 'Barbarian 3.5e', description: 'Gain a +1 bonus on Reflex saves made to avoid traps and a +1 dodge bonus to AC against attacks made by traps.' },
+  { id: 'cf35-bar-5', className: 'Barbarian', reqLevel: 4, name: 'Barbarian Rage (2/day)', source: 'Barbarian 3.5e', description: 'Can enter a rage twice per day.', recharge: 'Long Rest' },
+  { id: 'cf35-bar-6', className: 'Barbarian', reqLevel: 5, name: 'Improved Uncanny Dodge', source: 'Barbarian 3.5e', description: 'Can no longer be flanked. Rogues cannot sneak attack you by flanking unless the rogue has at least 4 more rogue levels than you have barbarian levels.' },
+  { id: 'cf35-bar-7', className: 'Barbarian', reqLevel: 6, name: 'Trap Sense +2', source: 'Barbarian 3.5e', description: 'Bonus on Reflex saves and dodge AC vs traps increases to +2.' },
+  { id: 'cf35-bar-8', className: 'Barbarian', reqLevel: 7, name: 'Damage Reduction 1/-', source: 'Barbarian 3.5e', description: 'Gain Damage Reduction 1/-. Subtract 1 point of damage from each melee or ranged attack.' },
+  { id: 'cf35-bar-9', className: 'Barbarian', reqLevel: 8, name: 'Barbarian Rage (3/day)', source: 'Barbarian 3.5e', description: 'Can enter a rage three times per day.', recharge: 'Long Rest' },
+  { id: 'cf35-bar-10', className: 'Barbarian', reqLevel: 9, name: 'Trap Sense +3', source: 'Barbarian 3.5e', description: 'Bonus on Reflex saves and dodge AC vs traps increases to +3.' },
+  { id: 'cf35-bar-11', className: 'Barbarian', reqLevel: 10, name: 'Damage Reduction 2/-', source: 'Barbarian 3.5e', description: 'Damage Reduction increases to 2/-.' },
+  { id: 'cf35-bar-12', className: 'Barbarian', reqLevel: 11, name: 'Greater Rage', source: 'Barbarian 3.5e', description: 'Bonuses during rage increase to +6 Strength, +6 Constitution, and +3 morale bonus on Will saves.' },
+  { id: 'cf35-bar-13', className: 'Barbarian', reqLevel: 12, name: 'Barbarian Rage (4/day) & Trap Sense +4', source: 'Barbarian 3.5e', description: 'Can enter a rage 4 times per day. Trap sense bonus increases to +4.', recharge: 'Long Rest' },
+  { id: 'cf35-bar-14', className: 'Barbarian', reqLevel: 13, name: 'Damage Reduction 3/-', source: 'Barbarian 3.5e', description: 'Damage Reduction increases to 3/-.' },
+  { id: 'cf35-bar-15', className: 'Barbarian', reqLevel: 14, name: 'Indomitable Will', source: 'Barbarian 3.5e', description: 'While in a rage, gain a +4 bonus on Will saves to resist enchantment spells and effects.' },
+  { id: 'cf35-bar-16', className: 'Barbarian', reqLevel: 15, name: 'Trap Sense +5', source: 'Barbarian 3.5e', description: 'Bonus on Reflex saves and dodge AC vs traps increases to +5.' },
+  { id: 'cf35-bar-17', className: 'Barbarian', reqLevel: 16, name: 'Damage Reduction 4/- & Rage (5/day)', source: 'Barbarian 3.5e', description: 'Damage Reduction increases to 4/-. Rage increases to 5/day.' },
+  { id: 'cf35-bar-18', className: 'Barbarian', reqLevel: 17, name: 'Tireless Rage', source: 'Barbarian 3.5e', description: 'You no longer become fatigued at the end of your rage.' },
+  { id: 'cf35-bar-19', className: 'Barbarian', reqLevel: 18, name: 'Trap Sense +6', source: 'Barbarian 3.5e', description: 'Bonus on Reflex saves and dodge AC vs traps increases to +6.' },
+  { id: 'cf35-bar-20', className: 'Barbarian', reqLevel: 19, name: 'Damage Reduction 5/-', source: 'Barbarian 3.5e', description: 'Damage Reduction increases to 5/-.' },
+  { id: 'cf35-bar-21', className: 'Barbarian', reqLevel: 20, name: 'Mighty Rage (6/day)', source: 'Barbarian 3.5e', description: 'Bonuses during rage increase to +8 Strength, +8 Constitution, and +4 morale bonus on Will saves. 6 rages/day.' },
+
+  // Bard 3.5e
+  { id: 'cf35-brd-1', className: 'Bard', reqLevel: 1, name: 'Bardic Music & Countersong', source: 'Bard 3.5e', description: 'Once per day per bard level, inspire courage, fascinate, or counter magical sound/speech effects with Perform checks.' },
+  { id: 'cf35-brd-2', className: 'Bard', reqLevel: 1, name: 'Fascinate & Inspire Courage +1', source: 'Bard 3.5e', description: 'Use song or poetics to fascinate creatures, or grant allies +1 morale bonus on saving throws vs charm/fear and +1 morale bonus on attack and weapon damage rolls.' },
+  { id: 'cf35-brd-3', className: 'Bard', reqLevel: 1, name: 'Bardic Knowledge', source: 'Bard 3.5e', description: 'Make a special bardic knowledge check equal to 1d20 + Bard level + INT modifier to know legendary or historic information.' },
+  { id: 'cf35-brd-4', className: 'Bard', reqLevel: 3, name: 'Inspire Competence', source: 'Bard 3.5e', description: 'Use music to help an ally succeed at a task. The ally gets a +2 competence bonus on skill checks with a particular skill.' },
+  { id: 'cf35-brd-5', className: 'Bard', reqLevel: 6, name: 'Suggestion (Bardic Music)', source: 'Bard 3.5e', description: 'Make a suggestion (as the spell) to a creature that you have already fascinated (DC 10 + 1/2 bard lvl + CHA mod negates).' },
+  { id: 'cf35-brd-6', className: 'Bard', reqLevel: 8, name: 'Inspire Courage +2', source: 'Bard 3.5e', description: 'The morale bonus on saves vs charm/fear and on attack and damage rolls granted by inspire courage increases to +2.' },
+  { id: 'cf35-brd-7', className: 'Bard', reqLevel: 9, name: 'Inspire Greatness', source: 'Bard 3.5e', description: 'Grant ally +2 bonus Hit Dice (d10s with temporary hp), +2 competence bonus on attack rolls, and +1 competence bonus on Fortitude saves.' },
+  { id: 'cf35-brd-8', className: 'Bard', reqLevel: 12, name: 'Song of Freedom', source: 'Bard 3.5e', description: 'Use music to produce an effect equivalent to the break enchantment spell on a single creature within 30 feet.' },
+  { id: 'cf35-brd-9', className: 'Bard', reqLevel: 14, name: 'Inspire Courage +3', source: 'Bard 3.5e', description: 'The morale bonus from inspire courage increases to +3.' },
+  { id: 'cf35-brd-10', className: 'Bard', reqLevel: 15, name: 'Inspire Heroics', source: 'Bard 3.5e', description: 'Inspire tremendous heroism in an ally: +4 morale bonus on saving throws and +4 dodge bonus to AC.' },
+  { id: 'cf35-brd-11', className: 'Bard', reqLevel: 18, name: 'Mass Suggestion', source: 'Bard 3.5e', description: 'Make a suggestion simultaneously to any number of creatures that you have already fascinated.' },
+  { id: 'cf35-brd-12', className: 'Bard', reqLevel: 20, name: 'Inspire Courage +4', source: 'Bard 3.5e', description: 'The morale bonus from inspire courage increases to +4.' },
+
+  // Cleric 3.5e
+  { id: 'cf35-clr-1', className: 'Cleric', reqLevel: 1, name: 'Turn or Rebuke Undead', source: 'Cleric 3.5e', description: 'Good clerics turn or destroy undead; evil clerics rebuke or command undead. Usable 3 + Charisma modifier times per day.', recharge: 'Long Rest' },
+  { id: 'cf35-clr-2', className: 'Cleric', reqLevel: 1, name: 'Spontaneous Casting', source: 'Cleric 3.5e', description: 'Channel stored spell energy into healing (Cure spells for good clerics) or harm (Inflict spells for evil clerics) without preparing them.' },
+  { id: 'cf35-clr-3', className: 'Cleric', reqLevel: 1, name: 'Cleric Domains & Granted Powers', source: 'Cleric 3.5e', description: 'Choose two deity domains. You gain domain granted powers and can cast one domain spell per spell level each day.' },
+  { id: 'cf35-clr-4', className: 'Cleric', reqLevel: 1, name: 'Aura', source: 'Cleric 3.5e', description: 'Radiate a powerful aligned aura (chaotic, evil, good, or lawful) corresponding to your deity’s alignment.' },
+
+  // Druid 3.5e
+  { id: 'cf35-dru-1', className: 'Druid', reqLevel: 1, name: 'Nature Sense', source: 'Druid 3.5e', description: 'Gain a +2 bonus on Knowledge (nature) and Survival checks.' },
+  { id: 'cf35-dru-2', className: 'Druid', reqLevel: 1, name: 'Wild Empathy', source: 'Druid 3.5e', description: 'Improve the attitude of an animal with a check equal to 1d20 + Druid level + Charisma modifier (like Diplomacy for animals).' },
+  { id: 'cf35-dru-3', className: 'Druid', reqLevel: 1, name: 'Animal Companion', source: 'Druid 3.5e', description: 'Begin play with an animal companion (badger, camel, dire rat, dog, eagle, hawk, horse, owl, pony, snake, or wolf) that advances with your druid level.' },
+  { id: 'cf35-dru-4', className: 'Druid', reqLevel: 2, name: 'Woodland Stride', source: 'Druid 3.5e', description: 'Move through any sort of undergrowth (such as natural thorns, briars, overgrown areas) at normal speed and without taking damage.' },
+  { id: 'cf35-dru-5', className: 'Druid', reqLevel: 3, name: 'Trackless Step', source: 'Druid 3.5e', description: 'Leave no trail in natural surroundings and cannot be tracked. You can choose to leave a trail if desired.' },
+  { id: 'cf35-dru-6', className: 'Druid', reqLevel: 4, name: 'Resist Nature’s Lure', source: 'Druid 3.5e', description: 'Gain a +4 bonus on saving throws against the spell-like abilities of fey.' },
+  { id: 'cf35-dru-7', className: 'Druid', reqLevel: 5, name: 'Wild Shape (1/day)', source: 'Druid 3.5e', description: 'Turn into any Small or Medium animal once per day. Retain mental abilities while adopting physical abilities and natural attacks.' },
+  { id: 'cf35-dru-8', className: 'Druid', reqLevel: 6, name: 'Wild Shape (2/day)', source: 'Druid 3.5e', description: 'Wild shape uses increase to 2 times per day.' },
+  { id: 'cf35-dru-9', className: 'Druid', reqLevel: 7, name: 'Wild Shape (3/day)', source: 'Druid 3.5e', description: 'Wild shape uses increase to 3 times per day.' },
+  { id: 'cf35-dru-10', className: 'Druid', reqLevel: 8, name: 'Wild Shape (Large)', source: 'Druid 3.5e', description: 'Wild shape forms expand to include Large animals (such as Dire Wolf, Brown Bear, Rhinoceros, Tiger).' },
+  { id: 'cf35-dru-11', className: 'Druid', reqLevel: 9, name: 'Venom Immunity', source: 'Druid 3.5e', description: 'Gain immunity to all organic and magical poisons.' },
+  { id: 'cf35-dru-12', className: 'Druid', reqLevel: 10, name: 'Wild Shape (4/day)', source: 'Druid 3.5e', description: 'Wild shape uses increase to 4 times per day.' },
+  { id: 'cf35-dru-13', className: 'Druid', reqLevel: 11, name: 'Wild Shape (Tiny)', source: 'Druid 3.5e', description: 'Wild shape forms expand to include Tiny animals (such as Bat, Rat, Raven).' },
+  { id: 'cf35-dru-14', className: 'Druid', reqLevel: 12, name: 'Wild Shape (Plant)', source: 'Druid 3.5e', description: 'Wild shape forms expand to include plant creatures (such as Shambling Mound, Treant).' },
+  { id: 'cf35-dru-15', className: 'Druid', reqLevel: 13, name: 'A Thousand Faces', source: 'Druid 3.5e', description: 'Gain the ability to change your appearance at will, as if using the alter self spell, while in normal humanoid form.' },
+  { id: 'cf35-dru-16', className: 'Druid', reqLevel: 14, name: 'Wild Shape (5/day)', source: 'Druid 3.5e', description: 'Wild shape uses increase to 5 times per day.' },
+  { id: 'cf35-dru-17', className: 'Druid', reqLevel: 15, name: 'Timeless Body & Wild Shape (Huge)', source: 'Druid 3.5e', description: 'No longer suffer ability score penalties for aging and cannot be magically aged. Wild shape forms expand to include Huge animals.' },
+  { id: 'cf35-dru-18', className: 'Druid', reqLevel: 16, name: 'Wild Shape (Elemental 1/day)', source: 'Druid 3.5e', description: 'Assume the form of a Small, Medium, or Large Air, Earth, Fire, or Water Elemental 1/day.' },
+  { id: 'cf35-dru-19', className: 'Druid', reqLevel: 18, name: 'Wild Shape (6/day & Elemental 2/day)', source: 'Druid 3.5e', description: 'Wild shape increases to 6/day; Elemental wild shape increases to 2/day and can take Huge elemental form.' },
+  { id: 'cf35-dru-20', className: 'Druid', reqLevel: 20, name: 'Wild Shape (Elemental 3/day & Huge)', source: 'Druid 3.5e', description: 'Elemental wild shape increases to 3/day.' },
+
+  // Monk 3.5e
+  { id: 'cf35-mnk-1', className: 'Monk', reqLevel: 1, name: 'Flurry of Blows', source: 'Monk 3.5e', description: 'When unarmored, make one extra melee attack per round at highest base attack bonus with an unarmed strike or special monk weapon.' },
+  { id: 'cf35-mnk-2', className: 'Monk', reqLevel: 1, name: 'Unarmed Strike & AC Bonus', source: 'Monk 3.5e', description: 'Add Wisdom bonus to AC while unarmored and unencumbered. Unarmed strike damage scales (1d6 at 1st, 1d8 at 4th, 1d10 at 8th, 2d6 at 12th, 2d8 at 16th, 2d10 at 20th).' },
+  { id: 'cf35-mnk-3', className: 'Monk', reqLevel: 2, name: 'Evasion & Monk Bonus Feat', source: 'Monk 3.5e', description: 'Take no damage on successful Reflex saving throw against half-damage effects. Gain Deflect Arrows or Combat Reflexes as a bonus feat.' },
+  { id: 'cf35-mnk-4', className: 'Monk', reqLevel: 3, name: 'Fast Movement (+10 ft) & Still Mind', source: 'Monk 3.5e', description: 'Land speed increases by +10 ft unarmored. Gain +2 bonus on saving throws against enchantment spells and effects.' },
+  { id: 'cf35-mnk-5', className: 'Monk', reqLevel: 4, name: 'Ki Strike (Magic) & Slow Fall (20 ft)', source: 'Monk 3.5e', description: 'Unarmed strikes bypass damage reduction as magic weapons. Take damage from a fall as if it were 20 ft shorter if near a wall.' },
+  { id: 'cf35-mnk-6', className: 'Monk', reqLevel: 5, name: 'Purity of Body', source: 'Monk 3.5e', description: 'Gain complete immunity to all nonmagical diseases.' },
+  { id: 'cf35-mnk-7', className: 'Monk', reqLevel: 6, name: 'Slow Fall (30 ft) & Monk Bonus Feat', source: 'Monk 3.5e', description: 'Slow fall increases to 30 ft. Gain Improved Disarm or Improved Trip as a bonus feat.' },
+  { id: 'cf35-mnk-8', className: 'Monk', reqLevel: 7, name: 'Wholeness of Body', source: 'Monk 3.5e', description: 'Heal own wounds up to twice monk level in hit points each day.' },
+  { id: 'cf35-mnk-9', className: 'Monk', reqLevel: 8, name: 'Slow Fall (40 ft)', source: 'Monk 3.5e', description: 'Slow fall increases to 40 ft.' },
+  { id: 'cf35-mnk-10', className: 'Monk', reqLevel: 9, name: 'Improved Evasion', source: 'Monk 3.5e', description: 'Take no damage on successful Reflex saves and only half damage on failed Reflex saves.' },
+  { id: 'cf35-mnk-11', className: 'Monk', reqLevel: 10, name: 'Ki Strike (Lawful) & Slow Fall (50 ft)', source: 'Monk 3.5e', description: 'Unarmed strikes bypass DR as lawful weapons. Slow fall increases to 50 ft.' },
+  { id: 'cf35-mnk-12', className: 'Monk', reqLevel: 11, name: 'Diamond Body & Greater Flurry', source: 'Monk 3.5e', description: 'Complete immunity to all poisons. Flurry of blows grants two extra attacks at full BAB with no penalty.' },
+  { id: 'cf35-mnk-13', className: 'Monk', reqLevel: 12, name: 'Abundant Step', source: 'Monk 3.5e', description: 'Slip magically between spaces once per day as if using the dimension door spell.' },
+  { id: 'cf35-mnk-14', className: 'Monk', reqLevel: 13, name: 'Diamond Soul', source: 'Monk 3.5e', description: 'Gain Spell Resistance equal to 10 + monk level.' },
+  { id: 'cf35-mnk-15', className: 'Monk', reqLevel: 15, name: 'Quivering Palm', source: 'Monk 3.5e', description: 'Set up lethal vibrations in an opponent once per week (Fortitude save or slain).' },
+  { id: 'cf35-mnk-16', className: 'Monk', reqLevel: 16, name: 'Ki Strike (Adamantine)', source: 'Monk 3.5e', description: 'Unarmed strikes bypass DR as adamantine weapons and ignore hardness.' },
+  { id: 'cf35-mnk-17', className: 'Monk', reqLevel: 17, name: 'Timeless Body & Tongue of the Sun and Moon', source: 'Monk 3.5e', description: 'No longer suffer aging penalties. Speak with any living creature.' },
+  { id: 'cf35-mnk-18', className: 'Monk', reqLevel: 19, name: 'Empty Body', source: 'Monk 3.5e', description: 'Assume an ethereal state for 1 round per monk level per day.' },
+  { id: 'cf35-mnk-19', className: 'Monk', reqLevel: 20, name: 'Perfect Self', source: 'Monk 3.5e', description: 'Become a magical creature (native outsider type). Gain Damage Reduction 10/magic.' },
+
+  // Paladin 3.5e
+  { id: 'cf35-pal-1', className: 'Paladin', reqLevel: 1, name: 'Aura of Good & Detect Evil', source: 'Paladin 3.5e', description: 'Radiate a powerful aura of good. Detect the presence of evil at will as the spell.' },
+  { id: 'cf35-pal-2', className: 'Paladin', reqLevel: 1, name: 'Smite Evil (1/day)', source: 'Paladin 3.5e', description: 'Add Charisma bonus to attack roll and +1 damage per paladin level against an evil target.' },
+  { id: 'cf35-pal-3', className: 'Paladin', reqLevel: 2, name: 'Divine Grace', source: 'Paladin 3.5e', description: 'Add your Charisma bonus (if positive) to all saving throws (Fortitude, Reflex, Will).' },
+  { id: 'cf35-pal-4', className: 'Paladin', reqLevel: 2, name: 'Lay on Hands', source: 'Paladin 3.5e', description: 'Heal wounds total equal to paladin level × Charisma bonus in HP each day.' },
+  { id: 'cf35-pal-5', className: 'Paladin', reqLevel: 3, name: 'Aura of Courage & Divine Health', source: 'Paladin 3.5e', description: 'Immunity to fear; allies within 10 ft gain +4 morale bonus on saves vs fear. Complete immunity to all diseases.' },
+  { id: 'cf35-pal-6', className: 'Paladin', reqLevel: 4, name: 'Turn Undead', source: 'Paladin 3.5e', description: 'Turn undead as a cleric of paladin level - 3 (3 + CHA mod times/day).' },
+  { id: 'cf35-pal-7', className: 'Paladin', reqLevel: 5, name: 'Special Mount & Smite Evil (2/day)', source: 'Paladin 3.5e', description: 'Call an unusually intelligent, strong, and loyal celestial steed. Smite evil increases to 2/day.' },
+  { id: 'cf35-pal-8', className: 'Paladin', reqLevel: 6, name: 'Remove Disease (1/week)', source: 'Paladin 3.5e', description: 'Can cast remove disease as a spell-like ability once per week.' },
+  { id: 'cf35-pal-9', className: 'Paladin', reqLevel: 10, name: 'Smite Evil (3/day)', source: 'Paladin 3.5e', description: 'Smite evil increases to 3 times per day.' },
+  { id: 'cf35-pal-10', className: 'Paladin', reqLevel: 15, name: 'Smite Evil (4/day)', source: 'Paladin 3.5e', description: 'Smite evil increases to 4 times per day.' },
+  { id: 'cf35-pal-11', className: 'Paladin', reqLevel: 20, name: 'Smite Evil (5/day)', source: 'Paladin 3.5e', description: 'Smite evil increases to 5 times per day.' },
+
+  // Ranger 3.5e
+  { id: 'cf35-rng-1', className: 'Ranger', reqLevel: 1, name: '1st Favored Enemy & Track', source: 'Ranger 3.5e', description: 'Gain +2 bonus on Bluff, Listen, Sense Motive, Spot, and Survival checks, and +2 weapon damage rolls against selected creature type. Gain Track feat.' },
+  { id: 'cf35-rng-2', className: 'Ranger', reqLevel: 1, name: 'Wild Empathy', source: 'Ranger 3.5e', description: 'Improve the attitude of an animal with a check equal to 1d20 + Ranger level + Charisma modifier.' },
+  { id: 'cf35-rng-3', className: 'Ranger', reqLevel: 2, name: 'Combat Style (Archery or Two-Weapon)', source: 'Ranger 3.5e', description: 'Gain Rapid Shot or Two-Weapon Fighting as a bonus feat without meeting prerequisites.' },
+  { id: 'cf35-rng-4', className: 'Ranger', reqLevel: 3, name: 'Endurance', source: 'Ranger 3.5e', description: 'Gain Endurance as a bonus feat.' },
+  { id: 'cf35-rng-5', className: 'Ranger', reqLevel: 4, name: 'Animal Companion', source: 'Ranger 3.5e', description: 'Gain an animal companion as a druid of half ranger level.' },
+  { id: 'cf35-rng-6', className: 'Ranger', reqLevel: 5, name: '2nd Favored Enemy', source: 'Ranger 3.5e', description: 'Select an additional favored enemy (+4 to one enemy, +2 to the other).' },
+  { id: 'cf35-rng-7', className: 'Ranger', reqLevel: 6, name: 'Improved Combat Style', source: 'Ranger 3.5e', description: 'Gain Manyshot (Archery) or Improved Two-Weapon Fighting (TWF) as a bonus feat.' },
+  { id: 'cf35-rng-8', className: 'Ranger', reqLevel: 7, name: 'Woodland Stride', source: 'Ranger 3.5e', description: 'Move through natural undergrowth at normal speed without taking damage.' },
+  { id: 'cf35-rng-9', className: 'Ranger', reqLevel: 8, name: 'Swift Tracker', source: 'Ranger 3.5e', description: 'Move at normal speed while tracking without taking the normal -5 penalty.' },
+  { id: 'cf35-rng-10', className: 'Ranger', reqLevel: 9, name: 'Evasion', source: 'Ranger 3.5e', description: 'Take no damage on successful Reflex saving throw against half-damage effects.' },
+  { id: 'cf35-rng-11', className: 'Ranger', reqLevel: 10, name: '3rd Favored Enemy', source: 'Ranger 3.5e', description: 'Select a third favored enemy.' },
+  { id: 'cf35-rng-12', className: 'Ranger', reqLevel: 11, name: 'Combat Style Mastery', source: 'Ranger 3.5e', description: 'Gain Improved Rapid Shot (Archery) or Greater Two-Weapon Fighting (TWF) as a bonus feat.' },
+  { id: 'cf35-rng-13', className: 'Ranger', reqLevel: 13, name: 'Camouflage', source: 'Ranger 3.5e', description: 'Use the Hide skill in any sort of natural terrain even if the terrain doesn’t grant cover or concealment.' },
+  { id: 'cf35-rng-14', className: 'Ranger', reqLevel: 15, name: '4th Favored Enemy', source: 'Ranger 3.5e', description: 'Select a fourth favored enemy.' },
+  { id: 'cf35-rng-15', className: 'Ranger', reqLevel: 17, name: 'Hide in Plain Sight', source: 'Ranger 3.5e', description: 'Use the Hide skill in natural terrain even while being observed.' },
+  { id: 'cf35-rng-16', className: 'Ranger', reqLevel: 20, name: '5th Favored Enemy', source: 'Ranger 3.5e', description: 'Select a fifth favored enemy.' },
+
+  // Rogue 3.5e
+  { id: 'cf35-rog-1', className: 'Rogue', reqLevel: 1, name: 'Sneak Attack +1d6', source: 'Rogue 3.5e', description: 'Deal +1d6 precision damage whenever target is denied Dexterity bonus to AC or flanked.' },
+  { id: 'cf35-rog-2', className: 'Rogue', reqLevel: 1, name: 'Trapfinding', source: 'Rogue 3.5e', description: 'Use the Search skill to locate traps when the DC is higher than 20, and use Disable Device on magic traps.' },
+  { id: 'cf35-rog-3', className: 'Rogue', reqLevel: 2, name: 'Evasion', source: 'Rogue 3.5e', description: 'Take no damage on successful Reflex saving throw against half-damage effects.' },
+  { id: 'cf35-rog-4', className: 'Rogue', reqLevel: 3, name: 'Sneak Attack +2d6 & Trap Sense +1', source: 'Rogue 3.5e', description: 'Sneak attack increases to +2d6. Gain +1 on Reflex saves and dodge AC vs traps.' },
+  { id: 'cf35-rog-5', className: 'Rogue', reqLevel: 4, name: 'Uncanny Dodge', source: 'Rogue 3.5e', description: 'Retain Dexterity bonus to AC even if caught flat-footed or struck by an invisible attacker.' },
+  { id: 'cf35-rog-6', className: 'Rogue', reqLevel: 5, name: 'Sneak Attack +3d6', source: 'Rogue 3.5e', description: 'Sneak attack increases to +3d6.' },
+  { id: 'cf35-rog-7', className: 'Rogue', reqLevel: 6, name: 'Trap Sense +2', source: 'Rogue 3.5e', description: 'Trap sense bonus increases to +2.' },
+  { id: 'cf35-rog-8', className: 'Rogue', reqLevel: 7, name: 'Sneak Attack +4d6', source: 'Rogue 3.5e', description: 'Sneak attack increases to +4d6.' },
+  { id: 'cf35-rog-9', className: 'Rogue', reqLevel: 8, name: 'Improved Uncanny Dodge', source: 'Rogue 3.5e', description: 'Can no longer be flanked. Rogues cannot sneak attack you by flanking unless 4+ levels higher.' },
+  { id: 'cf35-rog-10', className: 'Rogue', reqLevel: 9, name: 'Sneak Attack +5d6 & Trap Sense +3', source: 'Rogue 3.5e', description: 'Sneak attack increases to +5d6. Trap sense bonus increases to +3.' },
+  { id: 'cf35-rog-11', className: 'Rogue', reqLevel: 10, name: 'Rogue Special Ability', source: 'Rogue 3.5e', description: 'Choose Crippling Strike, Defensive Roll, Improved Evasion, Opportunist, Skill Mastery, Slippery Mind, or a bonus feat.' },
+  { id: 'cf35-rog-12', className: 'Rogue', reqLevel: 11, name: 'Sneak Attack +6d6', source: 'Rogue 3.5e', description: 'Sneak attack increases to +6d6.' },
+  { id: 'cf35-rog-13', className: 'Rogue', reqLevel: 12, name: 'Trap Sense +4', source: 'Rogue 3.5e', description: 'Trap sense bonus increases to +4.' },
+  { id: 'cf35-rog-14', className: 'Rogue', reqLevel: 13, name: 'Sneak Attack +7d6 & Special Ability', source: 'Rogue 3.5e', description: 'Sneak attack increases to +7d6. Choose an additional rogue special ability.' },
+  { id: 'cf35-rog-15', className: 'Rogue', reqLevel: 14, name: 'Trap Sense +5', source: 'Rogue 3.5e', description: 'Trap sense bonus increases to +5.' },
+  { id: 'cf35-rog-16', className: 'Rogue', reqLevel: 15, name: 'Sneak Attack +8d6', source: 'Rogue 3.5e', description: 'Sneak attack increases to +8d6.' },
+  { id: 'cf35-rog-17', className: 'Rogue', reqLevel: 16, name: 'Rogue Special Ability', source: 'Rogue 3.5e', description: 'Choose an additional rogue special ability.' },
+  { id: 'cf35-rog-18', className: 'Rogue', reqLevel: 17, name: 'Sneak Attack +9d6 & Trap Sense +6', source: 'Rogue 3.5e', description: 'Sneak attack increases to +9d6. Trap sense increases to +6.' },
+  { id: 'cf35-rog-19', className: 'Rogue', reqLevel: 18, name: 'Rogue Special Ability', source: 'Rogue 3.5e', description: 'Choose an additional rogue special ability.' },
+  { id: 'cf35-rog-20', className: 'Rogue', reqLevel: 19, name: 'Sneak Attack +10d6', source: 'Rogue 3.5e', description: 'Sneak attack increases to +10d6.' },
+  { id: 'cf35-rog-21', className: 'Rogue', reqLevel: 20, name: 'Rogue Special Ability', source: 'Rogue 3.5e', description: 'Choose an additional rogue special ability.' },
+
+  // Sorcerer 3.5e
+  { id: 'cf35-sor-1', className: 'Sorcerer', reqLevel: 1, name: 'Spontaneous Arcane Spellcasting', source: 'Sorcerer 3.5e', description: 'Cast arcane spells without preparing them in advance using Charisma as the key spellcasting ability.' },
+  { id: 'cf35-sor-2', className: 'Sorcerer', reqLevel: 1, name: 'Summon Familiar', source: 'Sorcerer 3.5e', description: 'Can summon a familiar (bat, cat, hawk, lizard, owl, rat, raven, snake, toad, or weasel) to obtain special alertness and skill bonuses.' },
+
+  // Wizard 3.5e
   { id: 'cf35-wiz-1', className: 'Wizard', reqLevel: 1, name: 'Summon Familiar', source: 'Wizard 3.5e', description: 'A wizard can summon a familiar (bat, cat, hawk, lizard, owl, rat, raven, snake, toad, or weasel) to obtain special skill and alertness bonuses.' },
   { id: 'cf35-wiz-2', className: 'Wizard', reqLevel: 1, name: 'Scribe Scroll', source: 'Wizard 3.5e', description: 'A wizard gains Scribe Scroll as a bonus feat at 1st level, allowing creation of magic scrolls from known spells.' },
-  { id: 'cf35-rog-1', className: 'Rogue', reqLevel: 1, name: 'Sneak Attack +1d6', source: 'Rogue 3.5e', description: 'If a rogue can catch an opponent when she is unable to defend herself effectively from her attack, she can strike a vital spot for extra damage (+1d6 at 1st lvl, +1d6 every 2 levels).' },
-  { id: 'cf35-rog-2', className: 'Rogue', reqLevel: 1, name: 'Trapfinding', source: 'Rogue 3.5e', description: 'Rogues can use the Search skill to locate traps when the task has a Difficulty Class higher than 20, and can use Disable Device to disarm magic traps.' },
-  { id: 'cf35-rog-3', className: 'Rogue', reqLevel: 2, name: 'Evasion', source: 'Rogue 3.5e', description: 'If a rogue makes a successful Reflex saving throw against an attack that normally deals half damage on a successful save, she instead takes no damage.' },
-  { id: 'cf35-clr-1', className: 'Cleric', reqLevel: 1, name: 'Turn or Rebuke Undead', source: 'Cleric 3.5e', description: 'Good clerics can turn or destroy undead creatures. Evil clerics can rebuke or command such creatures. Uses per day = 3 + Charisma modifier.', recharge: 'Long Rest' },
-  { id: 'cf35-bar-1', className: 'Barbarian', reqLevel: 1, name: 'Barbarian Rage', source: 'Barbarian 3.5e', description: 'A barbarian can fly into a rage. Grants +4 Strength, +4 Constitution, +2 morale bonus on Will saves, and a -2 penalty to AC for 3 + CON mod rounds.', recharge: 'Long Rest' },
-  { id: 'cf35-pal-1', className: 'Paladin', reqLevel: 2, name: 'Smite Evil', source: 'Paladin 3.5e', description: 'Once per day, a paladin may attempt to smite evil with one normal melee attack. She adds her Charisma bonus to her attack roll and deals 1 extra point of damage per paladin level.' },
-  { id: 'cf35-pal-2', className: 'Paladin', reqLevel: 2, name: 'Divine Grace', source: 'Paladin 3.5e', description: 'A paladin gains a bonus equal to her Charisma bonus (if any) on all saving throws (Fortitude, Reflex, Will).' },
-  { id: 'cf35-dru-1', className: 'Druid', reqLevel: 1, name: 'Nature Sense & Animal Companion', source: 'Druid 3.5e', description: 'Gain +2 bonus on Knowledge (nature) and Survival checks. Obtain an animal companion (badger, camel, dire rat, dog, eagle, hawk, horse, owl, pony, snake, or wolf).' },
-  { id: 'cf35-dru-2', className: 'Druid', reqLevel: 5, name: 'Wild Shape (3.5e)', source: 'Druid 3.5e', description: 'Assume the form of a Small or Medium animal 1/day (increases to 2/day at 6th, 3/day at 7th, 4/day at 10th). You take on physical abilities while keeping mental scores.' },
-  { id: 'cf35-dru-3', className: 'Druid', reqLevel: 8, name: 'Wild Shape (Large)', source: 'Druid 3.5e', description: 'Wild shape forms include Large animals (Dire Wolf, Brown Bear, Rhinoceros, Tiger).' },
-  { id: 'cf35-dru-4', className: 'Druid', reqLevel: 16, name: 'Wild Shape (Elemental)', source: 'Druid 3.5e', description: 'Assume the form of a Small, Medium, or Large Air, Earth, Fire, or Water Elemental.' },
-  { id: 'cf35-brd-1', className: 'Bard', reqLevel: 1, name: 'Bardic Music & Countersong', source: 'Bard 3.5e', description: 'Once per day per bard level, inspire courage, fascinate, or counter magical sound/speech effects with Perform.' },
-  { id: 'cf35-brd-2', className: 'Bard', reqLevel: 1, name: 'Bardic Knowledge', source: 'Bard 3.5e', description: 'Make a special bardic knowledge check with a bonus equal to bard level + Intelligence modifier to know notable legends or lore.' },
-  { id: 'cf35-mnk-1', className: 'Monk', reqLevel: 1, name: 'Flurry of Blows', source: 'Monk 3.5e', description: 'When unarmored, make one extra melee attack per round at highest base attack bonus with an unarmed strike or special monk weapon.' },
-  { id: 'cf35-mnk-2', className: 'Monk', reqLevel: 1, name: 'Unarmed Strike & AC Bonus', source: 'Monk 3.5e', description: 'Add Wisdom bonus to AC and Reflex defense while unarmored and unencumbered. Deals lethal or nonlethal damage at will.' },
-  { id: 'cf35-rng-1', className: 'Ranger', reqLevel: 1, name: 'Favored Enemy & Track', source: 'Ranger 3.5e', description: 'Gain +2 bonus on Bluff, Listen, Sense Motive, Spot, and Survival checks, and +2 weapon damage rolls against selected creature type. Gain Track feat.' },
-  { id: 'cf35-rng-2', className: 'Ranger', reqLevel: 2, name: 'Combat Style (Archery or Two-Weapon)', source: 'Ranger 3.5e', description: 'Gain Rapid Shot or Two-Weapon Fighting as a bonus combat feat without meeting normal prerequisites.' },
-  { id: 'cf35-sor-1', className: 'Sorcerer', reqLevel: 1, name: 'Spontaneous Arcane Spellcasting', source: 'Sorcerer 3.5e', description: 'Cast arcane spells without preparing them in advance using Charisma as the key spellcasting ability.' },
+  { id: 'cf35-wiz-3', className: 'Wizard', reqLevel: 5, name: 'Wizard Bonus Feat (5th)', source: 'Wizard 3.5e', description: 'Gain a bonus metamagic or item creation feat.' },
+  { id: 'cf35-wiz-4', className: 'Wizard', reqLevel: 10, name: 'Wizard Bonus Feat (10th)', source: 'Wizard 3.5e', description: 'Gain a bonus metamagic or item creation feat.' },
+  { id: 'cf35-wiz-5', className: 'Wizard', reqLevel: 15, name: 'Wizard Bonus Feat (15th)', source: 'Wizard 3.5e', description: 'Gain a bonus metamagic or item creation feat.' },
+  { id: 'cf35-wiz-6', className: 'Wizard', reqLevel: 20, name: 'Wizard Bonus Feat (20th)', source: 'Wizard 3.5e', description: 'Gain a bonus metamagic or item creation feat.' },
 
   // D&D 3.5e Prestige Classes (DMG Chapter 6)
   { id: 'cf35-as-1', className: 'Assassin', reqLevel: 1, name: 'Sneak Attack +1d6 (Assassin)', source: 'Assassin 3.5e', description: 'Deal +1d6 extra precision damage whenever target is denied Dexterity bonus or flanked (+1d6 every two levels thereafter).' },
@@ -677,11 +820,12 @@ export function syncClassFeaturesForCharacter(
 
   const catalog = activeEdition === '3.5e' ? OFFICIAL_35E_CLASS_FEATURES : OFFICIAL_5E_CLASS_FEATURES;
 
-  // Determine levels for primary and secondary class (multiclassing / prestige class)
+  // Determine levels for primary and secondary class (multiclassing / prestige class / Gestalt)
+  const isGestalt = character.optionalRules?.useGestaltUA72;
   const isMulticlassing = character.optionalRules?.useMulticlassing;
   const secondaryClass = character.optionalRules?.secondaryClass || '';
   const secondaryLevel = character.optionalRules?.secondaryLevel || 1;
-  const primaryLevel = isMulticlassing ? Math.max(1, activeLevel - secondaryLevel) : activeLevel;
+  const primaryLevel = (!isGestalt && isMulticlassing) ? Math.max(1, activeLevel - secondaryLevel) : activeLevel;
 
   // 1. Match primary class features
   const primaryFeatures = catalog.filter(f => {
@@ -702,7 +846,7 @@ export function syncClassFeaturesForCharacter(
   }) : [];
 
   // 3. Match secondary multiclass features (5e multiclass or 3.5e prestige class)
-  const secondaryFeatures = (isMulticlassing && secondaryClass) ? catalog.filter(f => {
+  const secondaryFeatures = (!isGestalt && isMulticlassing && secondaryClass) ? catalog.filter(f => {
     const secLower = secondaryClass.toLowerCase();
     const catClassLower = f.className.toLowerCase();
     const secMatch = catClassLower === secLower ||
@@ -711,7 +855,46 @@ export function syncClassFeaturesForCharacter(
     return secMatch && f.reqLevel <= secondaryLevel;
   }) : [];
 
-  const allMatching = [...primaryFeatures, ...subclassFeatures, ...secondaryFeatures];
+  // 4. Gestalt Multi-Track features (UA p. 72: gains features from all classes across all tracks)
+  let gestaltFeatures: typeof catalog = [];
+  if (isGestalt) {
+    const tracks = character.optionalRules?.gestaltTracks;
+    if (tracks && tracks.length > 0) {
+      for (const track of tracks) {
+        for (const cls of track.classes) {
+          const clsLevel = Math.max(1, cls.level || activeLevel || 1);
+          const clsFeatures = catalog.filter(f => {
+            const match = f.className.toLowerCase() === cls.className.toLowerCase() ||
+              cls.className.toLowerCase().includes(f.className.toLowerCase()) ||
+              f.className.toLowerCase().includes(cls.className.toLowerCase());
+            return match && f.reqLevel <= clsLevel;
+          });
+          gestaltFeatures.push(...clsFeatures);
+
+          if (cls.subclass) {
+            const subLower = cls.subclass.toLowerCase();
+            const subFeats = catalog.filter(f => {
+              const catLower = f.className.toLowerCase();
+              return (catLower === subLower || subLower.includes(catLower) || catLower.includes(subLower)) && f.reqLevel <= clsLevel;
+            });
+            gestaltFeatures.push(...subFeats);
+          }
+        }
+      }
+    } else if (secondaryClass) {
+      const secFeatures = catalog.filter(f => {
+        const secLower = secondaryClass.toLowerCase();
+        const catClassLower = f.className.toLowerCase();
+        const secMatch = catClassLower === secLower ||
+          secLower.includes(catClassLower) ||
+          catClassLower.includes(secLower);
+        return secMatch && f.reqLevel <= activeLevel;
+      });
+      gestaltFeatures.push(...secFeatures);
+    }
+  }
+
+  const allMatching = [...primaryFeatures, ...subclassFeatures, ...secondaryFeatures, ...gestaltFeatures];
 
   // Preserve non-auto features (custom user features or features from other sources/races/forms)
   const nonAutoFeatures = (character.classFeatures || []).filter(f => {

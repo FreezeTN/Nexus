@@ -68,6 +68,17 @@ export interface Combatant {
   partyId?: string;
   isPartyMember?: boolean;
   controlledBy?: string;
+  mapX?: number; // 0-indexed column on tactical battlemap
+  mapY?: number; // 0-indexed row on tactical battlemap
+  isOnMap?: boolean; // false if removed from map / in reserve benched
+  tokenSize?: number; // 1 = 1x1 (Medium/Small), 2 = 2x2 (Large), 3 = 3x3 (Huge), 4 = 4x4 (Gargantuan)
+  reachFeet?: number; // default 5ft
+  elevationFeet?: number; // default 0ft
+  speed?: number; // Base movement speed in feet (default 30ft)
+  movementRemaining?: number; // Remaining movement feet in current turn
+  hasDashed?: boolean; // Whether Dash action was used this turn
+  mountedOnId?: string; // ID of the mount combatant this rider is riding
+  isMount?: boolean; // Whether this combatant is designated as a mount/steed
 }
 
 export interface CombatLogEntry {
@@ -101,5 +112,13 @@ export interface SavedEncounterData {
   encounterEnvironment?: EncounterEnvironment;
   encounterMode?: EncounterMode;
   activeMerchant?: MerchantEncounterState | null;
+  battlemapTheme?: 'dungeon' | 'grass' | 'cave' | 'volcano' | 'snow' | 'ship' | 'void';
+  battlemapColumns?: number;
+  battlemapRows?: number;
+  battlemapFeetPerSquare?: number;
+  battlemapTerrain?: Record<string, string>;
+  battlemapDoors?: Record<string, { isOpen: boolean; isLocked?: boolean }>;
+  battlemapFogOfWar?: Record<string, boolean>;
+  battlemapUseFogOfWar?: boolean;
 }
 

@@ -9,8 +9,12 @@ import { isCompanionSummonAbility } from '../data/companionData';
 export function canCharacterShapeshift(character: CharacterData): boolean {
   if (!character) return false;
 
-  // 1. Existing Active Transformation
-  if (character.activeTransformation) {
+  // 1. Existing Active Transformation or 3.5e Wild Shape
+  if (
+    character.activeTransformation ||
+    character.wildShapeActive ||
+    Boolean(character.wildShapeForm)
+  ) {
     return true;
   }
 
@@ -30,7 +34,9 @@ export function canCharacterShapeshift(character: CharacterData): boolean {
     allClassesText.includes('shifter') ||
     allClassesText.includes('shapeshift') ||
     allClassesText.includes('changeling') ||
-    allClassesText.includes('lycan')
+    allClassesText.includes('lycan') ||
+    allClassesText.includes('doppelganger') ||
+    allClassesText.includes('tibbit')
   ) {
     return true;
   }
@@ -48,11 +54,18 @@ export function canCharacterShapeshift(character: CharacterData): boolean {
     return true;
   }
 
-  // 3. Class Features or Feats
+  // 3. Class Features, Feats, Traits, or Skills
   if (character.classFeatures && character.classFeatures.some(f => isShapeshiftAbility(f.name, f.description))) {
     return true;
   }
   if (character.feats && character.feats.some(f => isShapeshiftAbility(f.name, f.description))) {
+    return true;
+  }
+  const anyTraits = (character as unknown as { traits?: Array<{ name: string; description?: string }> }).traits;
+  if (anyTraits && anyTraits.some(t => isShapeshiftAbility(t.name, t.description))) {
+    return true;
+  }
+  if (character.skills && character.skills.some(s => isShapeshiftAbility(s.name))) {
     return true;
   }
 
@@ -71,33 +84,39 @@ export function canCharacterShapeshift(character: CharacterData): boolean {
 export function canCharacterSummonCompanion(character: CharacterData): boolean {
   if (!character) return false;
 
-  // Combine primary class and optional secondary class / subclass
+  // 0. Existing active companions or mount state
+  const anyCompanions = (character as unknown as { companions?: unknown[] }).companions;
+  if (anyCompanions && anyCompanions.length > 0) {
+    return true;
+  }
+  if (character.isMounted || character.mountInfo?.name || (character.ownedMounts && character.ownedMounts.length > 0)) {
+    return true;
+  }
+
+  // Combine primary class and optional secondary class / subclass / race
   const primaryClass = (character.characterClass || '').toLowerCase();
   const secondaryClass = (character.optionalRules?.secondaryClass || '').toLowerCase();
   const subclass = (character.subclass || '').toLowerCase();
   const secondarySubclass = (character.optionalRules?.secondarySubclass || '').toLowerCase();
+  const race = (character.race || '').toLowerCase();
 
-  const allClassesText = `${primaryClass} ${secondaryClass} ${subclass} ${secondarySubclass}`;
+  const allClassesText = `${primaryClass} ${secondaryClass} ${subclass} ${secondarySubclass} ${race}`;
 
   // 1. Classes with dedicated companion/familiar/mount progression
-  // Ranger (Beast Master, Drakewarden, Swarmkeeper)
-  // Druid (Wild Companion, Nature's Ally)
-  // Wizard (Find Familiar, Homunculus)
-  // Warlock (Pact of the Chain, Find Familiar)
-  // Artificer (Steel Defender, Homunculus Servant)
-  // Paladin (Find Steed, Special Mount)
-  const companionClasses = [
-    'ranger', 'druid', 'wizard', 'warlock', 'artificer', 'paladin',
-    'summoner', 'necromancer', 'beastmaster', 'falconer', 'conjurer'
-  ];
+  const isDedicatedSummoner = ['summoner', 'necromancer', 'beastmaster', 'falconer', 'conjurer', 'artificer'].some(c => allClassesText.includes(c));
+  if (isDedicatedSummoner) return true;
 
-  if (companionClasses.some(c => allClassesText.includes(c))) {
-    return true;
-  }
+  if (allClassesText.includes('druid')) return true; // Animal companion / Wild companion
+  if (allClassesText.includes('wizard') || allClassesText.includes('sorcerer')) return true; // Summon Familiar
+  if (allClassesText.includes('warlock') && (character.level >= 3 || allClassesText.includes('chain'))) return true;
+
+  const charLevel = Math.max(character.level || 1, character.optionalRules?.secondaryLevel || 1);
+  if (allClassesText.includes('paladin') && charLevel >= 5) return true; // Special Mount / Find Steed
+  if (allClassesText.includes('ranger') && charLevel >= 3) return true; // Animal Companion / Beast Master
 
   // Sorcerer, Cleric, Bard at Level 3+ or 5+ (Summon Celestial, Animate Dead, Find Familiar via Magical Secrets/Feats)
-  const secondarySummonCasters = ['sorcerer', 'cleric', 'bard'];
-  if (secondarySummonCasters.some(c => allClassesText.includes(c)) && (character.level >= 3 || (character.optionalRules?.secondaryLevel || 0) >= 3)) {
+  const secondarySummonCasters = ['cleric', 'bard'];
+  if (secondarySummonCasters.some(c => allClassesText.includes(c)) && charLevel >= 3) {
     return true;
   }
 
@@ -110,11 +129,18 @@ export function canCharacterSummonCompanion(character: CharacterData): boolean {
     return true;
   }
 
-  // 2. Class Features or Feats
+  // 2. Class Features, Feats, Traits, or Skills
   if (character.classFeatures && character.classFeatures.some(f => isCompanionSummonAbility(f.name, f.description))) {
     return true;
   }
   if (character.feats && character.feats.some(f => isCompanionSummonAbility(f.name, f.description))) {
+    return true;
+  }
+  const anyTraits = (character as unknown as { traits?: Array<{ name: string; description?: string }> }).traits;
+  if (anyTraits && anyTraits.some(t => isCompanionSummonAbility(t.name, t.description))) {
+    return true;
+  }
+  if (character.skills && character.skills.some(s => isCompanionSummonAbility(s.name))) {
     return true;
   }
 

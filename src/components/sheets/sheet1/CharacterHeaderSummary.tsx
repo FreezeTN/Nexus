@@ -85,7 +85,13 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
       hpMax: newMaxHp,
       hpCurrent: newCurrentHp,
       hitDiceTotal: newHitDiceTotal,
-      hitDiceCurrent: Math.max(0, Math.min(clamped, (character.hitDiceCurrent ?? clamped) + (isUp ? 1 : -1)))
+      hitDiceCurrent: Math.max(0, Math.min(clamped, (character.hitDiceCurrent ?? clamped) + (isUp ? 1 : -1))),
+      ...(character.optionalRules?.useGestaltUA72 ? {
+        optionalRules: {
+          ...character.optionalRules,
+          secondaryLevel: clamped
+        }
+      } : {})
     };
 
     const synced = syncClassFeaturesForCharacter(updated, updated.characterClass, clamped, updated.edition);
@@ -142,7 +148,9 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
               <div className="flex items-center gap-1.5 bg-amber-950 border border-amber-600/50 px-3 py-1.5 rounded-2xl text-xs text-amber-300 font-sans font-bold flex-wrap shadow-md">
                 {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass ? (
                   <span className="font-mono font-extrabold text-amber-200 bg-amber-900/80 px-2 py-0.5 rounded-lg border border-amber-400/50">
-                    Comb. Lvl {getCombinedLevel(character)}
+                    {character.optionalRules?.useGestaltUA72
+                      ? `Gestalt Lvl ${character.level}`
+                      : `Comb. Lvl ${getCombinedLevel(character)}`}
                   </span>
                 ) : (
                   <span>Level</span>
@@ -177,21 +185,32 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
                       <span className="text-[11px] text-stone-300 font-serif font-bold">
                         {character.optionalRules.secondaryClass}:
                       </span>
-                      <button
-                        onClick={() => handleSecondaryLevelChange((character.optionalRules?.secondaryLevel || 1) - 1)}
-                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
-                        title="Decrease Secondary Level"
-                      >
-                        -
-                      </button>
-                      <span className="font-mono text-sm px-0.5 text-amber-100">{character.optionalRules.secondaryLevel || 1}</span>
-                      <button
-                        onClick={() => handleSecondaryLevelChange((character.optionalRules?.secondaryLevel || 1) + 1)}
-                        className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
-                        title="Increase Secondary Level"
-                      >
-                        +
-                      </button>
+                      {!character.optionalRules?.useGestaltUA72 ? (
+                        <>
+                          <button
+                            onClick={() => handleSecondaryLevelChange((character.optionalRules?.secondaryLevel || 1) - 1)}
+                            className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
+                            title="Decrease Secondary Level"
+                          >
+                            -
+                          </button>
+                          <span className="font-mono text-sm px-0.5 text-amber-100">{character.optionalRules.secondaryLevel || 1}</span>
+                          <button
+                            onClick={() => handleSecondaryLevelChange((character.optionalRules?.secondaryLevel || 1) + 1)}
+                            className="w-4 h-4 rounded bg-amber-900 hover:bg-amber-800 text-amber-100 flex items-center justify-center font-mono text-[11px] font-extrabold transition cursor-pointer"
+                            title="Increase Secondary Level"
+                          >
+                            +
+                          </button>
+                        </>
+                      ) : (
+                        <span
+                          className="font-mono text-xs px-1 text-amber-300 font-bold bg-amber-950/60 rounded border border-amber-500/30"
+                          title="Gestalt UA p. 72: Both classes advance synchronously with character level"
+                        >
+                          Lvl {character.level} (Gestalt)
+                        </span>
+                      )}
                     </div>
 
                     {/* Active Class Switcher */}
@@ -319,14 +338,22 @@ export const CharacterHeaderSummary: React.FC<CharacterHeaderSummaryProps> = ({
                 <strong>Class:</strong> {character.characterClass} ({character.subclass || 'None'})
                 {character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass && (
                   <span className="text-amber-300 font-semibold ml-1.5 bg-amber-950/80 border border-amber-600/50 px-2 py-0.5 rounded text-[11px] inline-flex items-center gap-1">
-                    <span>/ {character.optionalRules.secondaryClass}</span>
+                    <span>{character.optionalRules?.useGestaltUA72 ? '//' : '/'} {character.optionalRules.secondaryClass}</span>
                     {character.optionalRules.secondarySubclass && (
                       <span>({character.optionalRules.secondarySubclass})</span>
                     )}
-                    <span className="font-mono text-amber-200">Lvl {character.optionalRules.secondaryLevel || 1}</span>
-                    <span className="font-mono font-extrabold text-amber-400 text-[10px]">
-                      (Comb. Lvl {getCombinedLevel(character)})
-                    </span>
+                    {character.optionalRules?.useGestaltUA72 ? (
+                      <span className="font-mono font-extrabold text-amber-300 bg-amber-900/80 px-1.5 py-0.2 rounded border border-amber-500/50 text-[10px]">
+                        Gestalt Lv. {character.level} (UA p. 72)
+                      </span>
+                    ) : (
+                      <>
+                        <span className="font-mono text-amber-200">Lvl {character.optionalRules.secondaryLevel || 1}</span>
+                        <span className="font-mono font-extrabold text-amber-400 text-[10px]">
+                          (Comb. Lvl {getCombinedLevel(character)})
+                        </span>
+                      </>
+                    )}
                   </span>
                 )}
               </span>

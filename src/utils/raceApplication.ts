@@ -1,5 +1,5 @@
 import { CharacterData, ClassFeature, RuleEdition, RacialSkillBonus, AbilityName } from '../types';
-import { CompendiumItem, loadCustomCompendiumEntries } from '../data/compendiumData';
+import { CompendiumItem, loadCustomCompendiumEntries, BASE_COMPENDIUM_RACES, BASE_35E_COMPENDIUM_RACES } from '../data/compendiumData';
 import {
   parseAbilityScoreBonuses,
   getScalingStatAtLevel,
@@ -18,6 +18,16 @@ import {
   HalfBreedTemplate35e,
   resolve35eHalfBreedTemplate
 } from '../data/halfBreedData';
+
+export interface RacialSpeedDetails {
+  speed: number;
+  speedFly?: number;
+  speedSwim?: number;
+  speedClimb?: number;
+  speedBurrow?: number;
+  specialNotes?: string;
+  source: string;
+}
 
 export interface CalculatedRaceStats {
   raceName: string;
@@ -42,6 +52,11 @@ export interface CalculatedRaceStats {
   damageImmunities: string[];
   conditionImmunities: string[];
   speed: number;
+  speedFly?: number;
+  speedSwim?: number;
+  speedClimb?: number;
+  speedBurrow?: number;
+  speedNotes?: string;
   sizeCategory: 'Tiny' | 'Small' | 'Medium' | 'Large';
   darkvision: boolean | number | string;
   senses: string;
@@ -53,6 +68,138 @@ export interface CalculatedRaceStats {
     range: string;
     notes?: string;
   }>;
+}
+
+/**
+ * Returns the standard racial movement profile for any race in 3.5e or 5e.
+ */
+export function getRacialBaseSpeed(raceName?: string, edition?: RuleEdition): RacialSpeedDetails {
+  if (!raceName || !raceName.trim()) {
+    return { speed: 30, source: 'Default Humanoid' };
+  }
+
+  const raw = raceName.trim();
+  const lower = raw.toLowerCase();
+  const is35e = edition === '3.5e';
+
+  // Specific Racial Speed Rules & Subraces
+  if (lower.includes('centaur')) {
+    return {
+      speed: is35e ? 50 : 40,
+      specialNotes: is35e ? '3.5e Large monstrous humanoid 50 ft. base land speed' : '5e Centaur 40 ft. base walking speed',
+      source: is35e ? '3.5e Centaur (50 ft)' : '5e Centaur (40 ft)'
+    };
+  }
+
+  if (lower.includes('aarakocra')) {
+    return {
+      speed: 25,
+      speedFly: 50,
+      specialNotes: 'Fly 50 ft. (cannot wear medium or heavy armor)',
+      source: 'Aarakocra (25 ft / Fly 50 ft)'
+    };
+  }
+
+  if (lower.includes('wood elf')) {
+    return {
+      speed: is35e ? 30 : 35,
+      specialNotes: is35e ? '3.5e Wood Elf (30 ft)' : 'Fleet of Foot: Base walking speed is 35 ft',
+      source: is35e ? '3.5e Wood Elf' : '5e Wood Elf (35 ft)'
+    };
+  }
+
+  if (lower.includes('tabaxi') || lower.includes('catfolk')) {
+    return {
+      speed: 30,
+      speedClimb: 20,
+      specialNotes: 'Feline Agility & 20 ft. Climb Speed',
+      source: 'Tabaxi (30 ft / Climb 20 ft)'
+    };
+  }
+
+  if (lower.includes('triton') || lower.includes('sea elf') || lower.includes('water genasi')) {
+    return {
+      speed: 30,
+      speedSwim: 30,
+      specialNotes: 'Amphibious with 30 ft. Swim Speed',
+      source: `${raw} (30 ft / Swim 30 ft)`
+    };
+  }
+
+  if (lower.includes('lizardfolk')) {
+    return {
+      speed: 30,
+      speedSwim: 30,
+      specialNotes: '30 ft. Swim Speed',
+      source: 'Lizardfolk (30 ft / Swim 30 ft)'
+    };
+  }
+
+  if (lower.includes('winged tiefling') || (lower.includes('tiefling') && lower.includes('winged'))) {
+    return {
+      speed: 30,
+      speedFly: 30,
+      specialNotes: 'Bat wings with 30 ft. Fly speed',
+      source: 'Winged Tiefling (30 ft / Fly 30 ft)'
+    };
+  }
+
+  // Dwarf (all subraces: Hill Dwarf, Mountain Dwarf, Deep Dwarf, Duergar)
+  if (lower.includes('dwarf')) {
+    return {
+      speed: is35e ? 20 : 25,
+      specialNotes: is35e
+        ? '3.5e Land speed 20 ft. Speed is never reduced by medium/heavy armor or encumbrance.'
+        : '5e Land speed 25 ft. Speed is not reduced by wearing heavy armor.',
+      source: is35e ? '3.5e Dwarf (20 ft)' : '5e Dwarf (25 ft)'
+    };
+  }
+
+  // Halfling (Lightfoot, Stout, Deep, Tallfellow, Ghostwise)
+  if (lower.includes('halfling')) {
+    return {
+      speed: is35e ? 20 : 25,
+      specialNotes: is35e ? '3.5e Small size base land speed 20 ft.' : '5e Small size base walking speed 25 ft.',
+      source: is35e ? '3.5e Halfling (20 ft)' : '5e Halfling (25 ft)'
+    };
+  }
+
+  // Gnome (Rock Gnome, Forest Gnome, Deep Gnome / Svirfneblin)
+  if (lower.includes('gnome') || lower.includes('svirfneblin')) {
+    return {
+      speed: is35e ? 20 : 25,
+      specialNotes: is35e ? '3.5e Small size base land speed 20 ft.' : '5e Small size base walking speed 25 ft.',
+      source: is35e ? '3.5e Gnome (20 ft)' : '5e Gnome (25 ft)'
+    };
+  }
+
+  if (lower.includes('goblin') || lower.includes('kobold')) {
+    return {
+      speed: 30,
+      source: `${raw} (30 ft)`
+    };
+  }
+
+  if (edition === 'shadowrun') {
+    return {
+      speed: 10,
+      specialNotes: 'Walking Rate 10m / Running Rate 25m base',
+      source: 'Shadowrun Metatype'
+    };
+  }
+
+  if (edition === 'cthulhu') {
+    return {
+      speed: 8,
+      specialNotes: 'Movement Rate (MOV 8)',
+      source: 'CoC 7e Investigator'
+    };
+  }
+
+  return {
+    speed: 30,
+    source: 'Standard Humanoid (30 ft)'
+  };
 }
 
 /**
@@ -87,8 +234,10 @@ export function findRaceInCompendiumOrSRD(
   const rawTarget = raceName.trim().toLowerCase();
   const target = cleanName.toLowerCase();
 
-  // 1. Search provided or loaded custom compendium entries
-  const entries = customEntries || loadCustomCompendiumEntries();
+  // 1. Search provided or loaded custom compendium entries + base SRD races according to edition
+  const custom = customEntries || loadCustomCompendiumEntries();
+  const baseRaces = edition === '3.5e' ? BASE_35E_COMPENDIUM_RACES : BASE_COMPENDIUM_RACES;
+  const entries = [...custom, ...baseRaces];
   const isRaceCat = (cat?: string) => cat === 'races' || cat === 'race' || cat?.toLowerCase() === 'races' || cat?.toLowerCase() === 'race';
 
   const foundCustom = entries.find(
@@ -197,9 +346,17 @@ function convertSrdHalfBreedToCompendiumItem(srd: ClassicSRDHalfBreed): Compendi
  */
 function generateStandardRaceCompendiumFallback(raceName: string, edition?: RuleEdition): CompendiumItem | null {
   const rLower = raceName.toLowerCase();
+  const is35e = edition === '3.5e';
+  const racialSpeed = getRacialBaseSpeed(raceName, edition);
+
   let abilityBonuses: Array<{ ability: string; bonus: number }> = [];
   let size = 'Medium';
-  let speed = 30;
+  let speed = racialSpeed.speed;
+  let speedFly = racialSpeed.speedFly;
+  let speedSwim = racialSpeed.speedSwim;
+  let speedClimb = racialSpeed.speedClimb;
+  let speedBurrow = racialSpeed.speedBurrow;
+  let speedNotes = racialSpeed.specialNotes;
   let darkvision: boolean | number = false;
   let naturalArmorBonus: number | undefined;
   let energyResistances: Array<{ energyType: string; value: number }> = [];
@@ -207,24 +364,62 @@ function generateStandardRaceCompendiumFallback(raceName: string, edition?: Rule
   const traits: Array<{ name: string; description: string }> = [];
 
   if (rLower.includes('human')) {
-    abilityBonuses = [{ ability: 'ALL', bonus: 1 }];
-    traits.push({ name: 'Versatile', description: '+1 to all ability scores, extra skill/feat.' });
-  } else if (rLower.includes('elf')) {
-    abilityBonuses = [{ ability: 'DEX', bonus: 2 }];
+    if (is35e) {
+      abilityBonuses = [];
+      traits.push({ name: 'Extra Feat', description: '1 extra feat at 1st level.' });
+      traits.push({ name: 'Bonus Skill Points', description: '4 extra skill points at 1st level, and 1 extra skill point at each additional level.' });
+    } else {
+      abilityBonuses = [{ ability: 'ALL', bonus: 1 }];
+      traits.push({ name: 'Versatile', description: '+1 to all ability scores, extra skill/feat.' });
+    }
+  } else if (rLower.includes('wood elf')) {
+    if (is35e) {
+      abilityBonuses = [{ ability: 'DEX', bonus: 2 }, { ability: 'CON', bonus: -2 }];
+    } else {
+      abilityBonuses = [{ ability: 'DEX', bonus: 2 }, { ability: 'WIS', bonus: 1 }];
+    }
     darkvision = 60;
+    traits.push({ name: 'Fleet of Foot', description: is35e ? 'Base land speed is 30 ft.' : 'Base walking speed is 35 ft.' });
     traits.push({ name: 'Fey Ancestry', description: 'Advantage on saving throws against charm, magic cannot sleep you.' });
-    traits.push({ name: 'Keen Senses', description: 'Proficiency in Perception skill.' });
+    traits.push({ name: 'Mask of the Wild', description: 'Can attempt to hide even when only lightly obscured.' });
+  } else if (rLower.includes('elf')) {
+    if (is35e) {
+      abilityBonuses = [{ ability: 'DEX', bonus: 2 }, { ability: 'CON', bonus: -2 }];
+      traits.push({ name: 'Immunity to Magic Sleep', description: 'Immune to magical sleep spells and effects.' });
+      traits.push({ name: 'Enchantment Resistance', description: '+2 racial save bonus vs enchantment spells/effects.' });
+      traits.push({ name: 'Keen Senses', description: '+2 racial bonus on Listen, Search, and Spot checks.' });
+    } else {
+      abilityBonuses = [{ ability: 'DEX', bonus: 2 }];
+      darkvision = 60;
+      traits.push({ name: 'Fey Ancestry', description: 'Advantage on saving throws against charm, magic cannot sleep you.' });
+      traits.push({ name: 'Keen Senses', description: 'Proficiency in Perception skill.' });
+    }
   } else if (rLower.includes('dwarf')) {
-    abilityBonuses = [{ ability: 'CON', bonus: 2 }];
-    speed = 25;
+    if (is35e) {
+      abilityBonuses = [{ ability: 'CON', bonus: 2 }, { ability: 'CHA', bonus: -2 }];
+      speed = 20;
+    } else {
+      abilityBonuses = [{ ability: 'CON', bonus: 2 }];
+    }
     darkvision = 60;
     energyResistances.push({ energyType: 'poison', value: 5 });
-    traits.push({ name: 'Dwarven Resilience', description: 'Advantage on saves vs poison, resistance against poison damage.' });
+    traits.push({ name: 'Dwarven Resilience', description: is35e ? '+2 racial save bonus vs poison and spells.' : 'Advantage on saves vs poison, resistance against poison damage.' });
+    traits.push({
+      name: is35e ? 'Steady Footing' : 'Dwarven Toughness',
+      description: is35e
+        ? 'Base land speed 20 ft. Speed is never reduced by medium or heavy armor or encumbrance.'
+        : 'Base walking speed 25 ft. Speed is not reduced by wearing heavy armor.'
+    });
   } else if (rLower.includes('halfling')) {
-    abilityBonuses = [{ ability: 'DEX', bonus: 2 }];
+    if (is35e) {
+      abilityBonuses = [{ ability: 'DEX', bonus: 2 }, { ability: 'STR', bonus: -2 }];
+      speed = 20;
+    } else {
+      abilityBonuses = [{ ability: 'DEX', bonus: 2 }];
+    }
     size = 'Small';
-    speed = 25;
-    traits.push({ name: 'Lucky', description: 'Reroll 1s on d20 attacks, checks, or saves.' });
+    traits.push({ name: 'Lucky', description: is35e ? '+1 racial bonus on all saving throws.' : 'Reroll 1s on d20 attacks, checks, or saves.' });
+    traits.push({ name: 'Halfling Nimbleness', description: 'Can move through space of creatures of a larger size.' });
   } else if (rLower.includes('dragonborn')) {
     abilityBonuses = [{ ability: 'STR', bonus: 2 }, { ability: 'CHA', bonus: 1 }];
     traits.push({ name: 'Draconic Breath Weapon', description: 'Exhale elemental destructive energy in an area.' });
@@ -235,22 +430,73 @@ function generateStandardRaceCompendiumFallback(raceName: string, edition?: Rule
     energyResistances.push({ energyType: 'fire', value: 5 });
     traits.push({ name: 'Hellish Resistance', description: 'Resistance against fire damage.' });
     traits.push({ name: 'Infernal Legacy', description: 'Innate thaumaturgy, hellish rebuke, darkness spells.' });
-  } else if (rLower.includes('gnome')) {
-    abilityBonuses = [{ ability: 'INT', bonus: 2 }];
+  } else if (rLower.includes('gnome') || rLower.includes('svirfneblin')) {
+    if (is35e) {
+      abilityBonuses = [{ ability: 'CON', bonus: 2 }, { ability: 'STR', bonus: -2 }];
+      speed = 20;
+    } else {
+      abilityBonuses = [{ ability: 'INT', bonus: 2 }];
+    }
     size = 'Small';
-    speed = 25;
     darkvision = 60;
     traits.push({ name: 'Gnome Cunning', description: 'Advantage on INT, WIS, CHA saves against magic.' });
-  } else if (rLower.includes('orc')) {
-    abilityBonuses = [{ ability: 'STR', bonus: 2 }, { ability: 'CON', bonus: 1 }];
+  } else if (rLower.includes('half-orc') || rLower.includes('orc')) {
+    if (is35e) {
+      abilityBonuses = [{ ability: 'STR', bonus: 2 }, { ability: 'INT', bonus: -2 }, { ability: 'CHA', bonus: -2 }];
+    } else {
+      abilityBonuses = [{ ability: 'STR', bonus: 2 }, { ability: 'CON', bonus: 1 }];
+    }
     darkvision = 60;
-    traits.push({ name: 'Relentless Endurance', description: 'Drop to 1 HP instead of 0 once per long rest.' });
+    traits.push({ name: is35e ? 'Orc Blood' : 'Relentless Endurance', description: is35e ? 'Considered an orc for all effects related to race.' : 'Drop to 1 HP instead of 0 once per long rest.' });
+  } else if (rLower.includes('half-elf')) {
+    abilityBonuses = [];
+    traits.push({ name: 'Immunity to Magic Sleep', description: 'Immune to magical sleep spells and effects.' });
+    traits.push({ name: 'Enchantment Resistance', description: '+2 racial save bonus vs enchantment spells/effects.' });
+    traits.push({ name: 'Keen Senses', description: '+1 racial bonus on Listen, Search, and Spot checks.' });
+    traits.push({ name: 'Diplomatic Grace', description: '+2 racial bonus on Diplomacy and Gather Information checks.' });
+  } else if (rLower.includes('centaur')) {
+    abilityBonuses = [{ ability: 'STR', bonus: 2 }, { ability: 'WIS', bonus: 1 }];
+    traits.push({ name: 'Equine Mobility', description: is35e ? '50 ft. base land speed' : '40 ft. base walking speed' });
+  } else if (rLower.includes('tabaxi') || rLower.includes('catfolk')) {
+    abilityBonuses = [{ ability: 'DEX', bonus: 2 }, { ability: 'CHA', bonus: 1 }];
+    traits.push({ name: 'Feline Agility', description: 'When moving on your turn in combat, you can double your speed until end of turn.' });
+    traits.push({ name: "Cat's Claws", description: 'Climbing speed of 20 feet and 1d4 slashing unarmed strikes.' });
+  } else if (rLower.includes('aarakocra')) {
+    abilityBonuses = [{ ability: 'DEX', bonus: 2 }, { ability: 'WIS', bonus: 1 }];
+    traits.push({ name: 'Flight', description: 'You have a flying speed of 50 feet while not wearing medium or heavy armor.' });
+  } else if (rLower.includes('triton') || rLower.includes('sea elf')) {
+    abilityBonuses = [{ ability: 'CON', bonus: 1 }, { ability: 'STR', bonus: 1 }, { ability: 'CHA', bonus: 1 }];
+    traits.push({ name: 'Amphibious', description: 'Can breathe air and water, swim speed 30 ft.' });
   } else if (rLower.includes('lizardfolk')) {
     abilityBonuses = [{ ability: 'CON', bonus: 2 }, { ability: 'WIS', bonus: 1 }];
-    naturalArmorBonus = edition === '3.5e' ? 5 : 3;
+    naturalArmorBonus = is35e ? 5 : 3;
     traits.push({ name: 'Natural Armor', description: 'Tough scaly hide provides natural armor bonus.' });
+    traits.push({ name: 'Swim Speed', description: 'Swimming speed of 30 feet.' });
   } else {
-    return null;
+    // If not specifically matched, use default humanoid with racial speed lookup
+    return {
+      id: `comp-std-${rLower.replace(/\s+/g, '-')}`,
+      name: raceName,
+      category: 'races',
+      edition: edition || '5e',
+      source: 'Standard System Reference',
+      description: `Standard ${raceName} race option.`,
+      raceData: {
+        size,
+        speed,
+        speedFly,
+        speedSwim,
+        speedClimb,
+        speedBurrow,
+        speedNotes,
+        darkvision,
+        abilityBonuses,
+        naturalArmorBonus,
+        energyResistances,
+        immunities,
+        traits: []
+      }
+    };
   }
 
   return {
@@ -263,6 +509,11 @@ function generateStandardRaceCompendiumFallback(raceName: string, edition?: Rule
     raceData: {
       size,
       speed,
+      speedFly,
+      speedSwim,
+      speedClimb,
+      speedBurrow,
+      speedNotes,
       darkvision,
       abilityBonuses,
       naturalArmorBonus,
@@ -654,7 +905,20 @@ export function calculateRaceBonusesAndDefenses(
     damageResistances,
     damageImmunities,
     conditionImmunities,
-    speed: rd?.speed || 30,
+    speed: (() => {
+      const racialSpeedInfo = getRacialBaseSpeed(raceName, (rd?.edition || raceItemOrData.edition) as any);
+      let sp = (rd?.speed !== undefined && rd.speed > 0) ? rd.speed : racialSpeedInfo.speed;
+      // Enforce 3.5e specific racial movement rules (Dwarves, Halflings, Gnomes are 20 ft)
+      if ((rd?.edition === '3.5e' || raceItemOrData.edition === '3.5e') && (raceName.toLowerCase().includes('dwarf') || raceName.toLowerCase().includes('halfling') || raceName.toLowerCase().includes('gnome'))) {
+        sp = 20;
+      }
+      return sp;
+    })(),
+    speedFly: rd?.speedFly ?? getRacialBaseSpeed(raceName, (rd?.edition || raceItemOrData.edition) as any).speedFly,
+    speedSwim: rd?.speedSwim ?? getRacialBaseSpeed(raceName, (rd?.edition || raceItemOrData.edition) as any).speedSwim,
+    speedClimb: rd?.speedClimb ?? getRacialBaseSpeed(raceName, (rd?.edition || raceItemOrData.edition) as any).speedClimb,
+    speedBurrow: rd?.speedBurrow ?? getRacialBaseSpeed(raceName, (rd?.edition || raceItemOrData.edition) as any).speedBurrow,
+    speedNotes: rd?.speedNotes ?? getRacialBaseSpeed(raceName, (rd?.edition || raceItemOrData.edition) as any).specialNotes,
     sizeCategory: (rd?.size as any) || 'Medium',
     darkvision,
     senses,
@@ -779,7 +1043,19 @@ export function applyRaceToCharacter(
   }
 
   // 9. Speed & Senses
-  const speed = calculated.speed > 0 ? calculated.speed : (character.speed || 30);
+  const racialSpeedInfo = getRacialBaseSpeed(raceName, character.edition);
+  const isRaceChanged = !character.race || character.race.trim().toLowerCase() !== raceName.trim().toLowerCase();
+  
+  // If the race changed, or user hasn't manually overridden speed, or is new character, apply the new race speed
+  let speed = calculated.speed > 0 ? calculated.speed : racialSpeedInfo.speed;
+  if (!isRaceChanged && character.speedOverridden && character.speed > 0) {
+    speed = character.speed; // Preserve manual speed override if race hasn't changed
+  }
+  const speedFly = calculated.speedFly ?? racialSpeedInfo.speedFly;
+  const speedSwim = calculated.speedSwim ?? racialSpeedInfo.speedSwim;
+  const speedClimb = calculated.speedClimb ?? racialSpeedInfo.speedClimb;
+  const speedBurrow = calculated.speedBurrow ?? racialSpeedInfo.speedBurrow;
+  const baseRacialSpeed = calculated.speed > 0 ? calculated.speed : racialSpeedInfo.speed;
   const sizeCategory = calculated.sizeCategory || character.sizeCategory || 'Medium';
   const senses = character.senses && character.senses !== 'Normal'
     ? `${character.senses}, ${calculated.senses}`
@@ -810,6 +1086,12 @@ export function applyRaceToCharacter(
     racialSkillBonuses: calculated.racialSkillBonuses,
     skills: updatedSkills,
     speed,
+    speedFly,
+    speedSwim,
+    speedClimb,
+    speedBurrow,
+    baseRacialSpeed,
+    speedOverridden: isRaceChanged ? false : Boolean(character.speedOverridden),
     sizeCategory,
     senses,
     damageReductionValue,
@@ -882,19 +1164,9 @@ export function recalculateScalingRaceStats(
   if ((!updated.racialSkillBonuses || updated.racialSkillBonuses.length === 0) && calculated.racialSkillBonuses.length > 0) {
     updated.racialSkillBonuses = calculated.racialSkillBonuses;
   }
+  // Record applied racial ability bonuses for UI badges and tooltips without modifying ability scores.
+  // Racial ability score bonuses are applied only once at character creation and must never be re-added on level up.
   if (!updated.appliedRacialAbilityBonuses && Object.values(calculated.abilityBonuses).some(v => v !== 0)) {
-    const updatedAbilities = { ...updated.abilities };
-    for (const [ab, bonus] of Object.entries(calculated.abilityBonuses)) {
-      if (bonus !== 0) {
-        const abilityKey = ab as AbilityName;
-        const currentScore = updatedAbilities[abilityKey]?.score ?? 10;
-        updatedAbilities[abilityKey] = {
-          ...updatedAbilities[abilityKey],
-          score: Math.max(1, currentScore + bonus)
-        };
-      }
-    }
-    updated.abilities = updatedAbilities as any;
     updated.appliedRacialAbilityBonuses = { ...calculated.abilityBonuses };
   }
 
@@ -1097,6 +1369,7 @@ export function applyHalfBreedTemplate35eToCharacter(
     ...character,
     race: finalRaceName,
     abilities: updatedAbilities as any,
+    appliedRacialAbilityBonuses: { ...resolved.abilities },
     speed: resolved.speed,
     sizeCategory: resolved.size,
     senses,

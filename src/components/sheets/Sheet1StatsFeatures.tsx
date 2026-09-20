@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { CharacterData } from '../../types';
+import { CharacterData, GestaltTrack, GestaltTrackClass } from '../../types';
 import { GameSession } from '../../lib/firebase';
 import { ShadowrunStatsPanel } from '../shadowrun/ShadowrunStatsPanel';
 import { ShadowrunSkillsPanel } from '../shadowrun/ShadowrunSkillsPanel';
@@ -16,7 +16,14 @@ import {
   OFFICIAL_35E_PRESTIGE_CLASSES,
   validateCharacterForPrestigeClass,
   validate35eClassAlignment,
-  calculate35eMulticlassXpPenalty
+  calculate35eMulticlassXpPenalty,
+  getGestaltHitDie,
+  getGestaltBaseSkillPoints,
+  getCharacterBab,
+  calculate35eBaseSaves,
+  getCharacterGestaltTracks,
+  format35eBabProgression,
+  apply35eDefaultClassSkills
 } from '../../utils/dndCalculations';
 import {
   getClassesForSystem,
@@ -30,9 +37,11 @@ import { syncClassFeaturesForCharacter } from '../../data/srdRulesLibrary';
 import {
   findRaceInCompendiumOrSRD,
   applyRaceToCharacter,
-  calculateRaceBonusesAndDefenses
+  calculateRaceBonusesAndDefenses,
+  getRacialBaseSpeed
 } from '../../utils/raceApplication';
-import { Crown, AlertTriangle, Eye, Sparkles, RefreshCw } from 'lucide-react';
+import { Crown, AlertTriangle, Eye, Sparkles, RefreshCw, Footprints, RotateCcw, Info, Plus, Trash2, Pause, Play, Check, Layers } from 'lucide-react';
+import { EditMovementSpeedModal } from '../modals/EditMovementSpeedModal';
 
 import { CharacterHeaderSummary } from './sheet1/CharacterHeaderSummary';
 import { WorkspaceCustomizer } from '../common/WorkspaceCustomizer';
@@ -79,6 +88,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
   const [customRaceMode, setCustomRaceMode] = useState(false);
   const [customSubclassMode, setCustomSubclassMode] = useState(false);
   const [customAlignmentMode, setCustomAlignmentMode] = useState(false);
+  const [showSpeedModal, setShowSpeedModal] = useState(false);
 
   const { isVisible } = useLayoutCustomization();
   const { uiMode } = useUiMode();
@@ -795,67 +805,123 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
               )}
 
               {/* Movement Speeds Configuration */}
-              <div className="sm:col-span-2 lg:col-span-4 bg-stone-900/80 border border-stone-800 p-3 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-stone-300 text-xs flex items-center gap-1.5">
-                    <span>🏃</span> Movement Speeds (ft / round)
-                  </span>
-                  <span className="text-[11px] text-stone-500">
-                    Tactical speeds for ground, aerial, aquatic, climbing, and subterranean travel
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
-                  <div>
-                    <label className="block text-[11px] text-stone-400 font-medium mb-1">Walk (Base)</label>
-                    <input
-                      type="number"
-                      value={character.speed ?? 30}
-                      onChange={(e) => onUpdateCharacter({ ...character, speed: parseInt(e.target.value) || 0 })}
-                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-stone-100 font-mono text-center"
-                    />
+              {(() => {
+                const racialSpeed = getRacialBaseSpeed(character.race, character.edition);
+                const isOverridden = character.speedOverridden || (character.speed !== undefined && character.speed !== racialSpeed.speed);
+
+                const handleResetToRacial = () => {
+                  onUpdateCharacter({
+                    ...character,
+                    speed: racialSpeed.speed,
+                    speedFly: racialSpeed.speedFly,
+                    speedSwim: racialSpeed.speedSwim,
+                    speedClimb: racialSpeed.speedClimb,
+                    speedBurrow: racialSpeed.speedBurrow,
+                    baseRacialSpeed: racialSpeed.speed,
+                    speedOverridden: false
+                  });
+                };
+
+                return (
+                  <div className="sm:col-span-2 lg:col-span-4 bg-stone-900/80 border border-stone-800 p-3 rounded-xl space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-stone-300 text-xs flex items-center gap-1.5">
+                          <Footprints className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Movement Speeds (ft / round)</span>
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-stone-800 border border-stone-700 text-stone-300 text-[10px] font-mono">
+                          Racial Base: {racialSpeed.speed} ft ({character.race || 'Standard'})
+                        </span>
+                        {isOverridden && (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-950/60 border border-blue-600/40 text-blue-300 text-[10px] font-mono">
+                            Manual Override Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleResetToRacial}
+                          className="px-2.5 py-1 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-stone-100 text-[11px] font-medium border border-stone-700 flex items-center gap-1 transition"
+                          title={`Reset to default racial base speed (${racialSpeed.speed} ft)`}
+                        >
+                          <RotateCcw className="w-3 h-3 text-amber-400" />
+                          <span>Reset to Racial ({racialSpeed.speed} ft)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowSpeedModal(true)}
+                          className="px-2.5 py-1 rounded-lg bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-[11px] font-medium border border-amber-600/40 flex items-center gap-1 transition"
+                          title="Open detailed movement & tactical mobility inspector"
+                        >
+                          <Sparkles className="w-3 h-3 text-amber-400" />
+                          <span>Mobility Inspector</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-xs">
+                      <div>
+                        <label className="block text-[11px] text-stone-400 font-medium mb-1">Walk (Base)</label>
+                        <input
+                          type="number"
+                          value={character.speed ?? racialSpeed.speed}
+                          onChange={(e) => {
+                            const newSpeed = parseInt(e.target.value) || 0;
+                            onUpdateCharacter({
+                              ...character,
+                              speed: newSpeed,
+                              speedOverridden: newSpeed !== racialSpeed.speed,
+                              baseRacialSpeed: racialSpeed.speed
+                            });
+                          }}
+                          className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-stone-100 font-mono text-center focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-sky-400 font-medium mb-1">Fly Speed</label>
+                        <input
+                          type="number"
+                          value={character.speedFly ?? ''}
+                          onChange={(e) => onUpdateCharacter({ ...character, speedFly: e.target.value ? parseInt(e.target.value) : undefined })}
+                          placeholder="0"
+                          className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-sky-200 font-mono text-center placeholder-stone-600 focus:border-sky-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-cyan-400 font-medium mb-1">Swim Speed</label>
+                        <input
+                          type="number"
+                          value={character.speedSwim ?? ''}
+                          onChange={(e) => onUpdateCharacter({ ...character, speedSwim: e.target.value ? parseInt(e.target.value) : undefined })}
+                          placeholder="0"
+                          className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-cyan-200 font-mono text-center placeholder-stone-600 focus:border-cyan-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-emerald-400 font-medium mb-1">Climb Speed</label>
+                        <input
+                          type="number"
+                          value={character.speedClimb ?? ''}
+                          onChange={(e) => onUpdateCharacter({ ...character, speedClimb: e.target.value ? parseInt(e.target.value) : undefined })}
+                          placeholder="0"
+                          className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-emerald-200 font-mono text-center placeholder-stone-600 focus:border-emerald-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-amber-400 font-medium mb-1">Burrow Speed</label>
+                        <input
+                          type="number"
+                          value={character.speedBurrow ?? ''}
+                          onChange={(e) => onUpdateCharacter({ ...character, speedBurrow: e.target.value ? parseInt(e.target.value) : undefined })}
+                          placeholder="0"
+                          className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-amber-200 font-mono text-center placeholder-stone-600 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] text-sky-400 font-medium mb-1">Fly Speed</label>
-                    <input
-                      type="number"
-                      value={character.speedFly ?? ''}
-                      onChange={(e) => onUpdateCharacter({ ...character, speedFly: e.target.value ? parseInt(e.target.value) : undefined })}
-                      placeholder="0"
-                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-sky-200 font-mono text-center placeholder-stone-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-cyan-400 font-medium mb-1">Swim Speed</label>
-                    <input
-                      type="number"
-                      value={character.speedSwim ?? ''}
-                      onChange={(e) => onUpdateCharacter({ ...character, speedSwim: e.target.value ? parseInt(e.target.value) : undefined })}
-                      placeholder="0"
-                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-cyan-200 font-mono text-center placeholder-stone-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-emerald-400 font-medium mb-1">Climb Speed</label>
-                    <input
-                      type="number"
-                      value={character.speedClimb ?? ''}
-                      onChange={(e) => onUpdateCharacter({ ...character, speedClimb: e.target.value ? parseInt(e.target.value) : undefined })}
-                      placeholder="0"
-                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-emerald-200 font-mono text-center placeholder-stone-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] text-amber-400 font-medium mb-1">Burrow Speed</label>
-                    <input
-                      type="number"
-                      value={character.speedBurrow ?? ''}
-                      onChange={(e) => onUpdateCharacter({ ...character, speedBurrow: e.target.value ? parseInt(e.target.value) : undefined })}
-                      placeholder="0"
-                      className="w-full bg-stone-950 border border-stone-700 rounded-lg p-1.5 text-amber-200 font-mono text-center placeholder-stone-600"
-                    />
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Multiclassing Quick Setup */}
               <div className="sm:col-span-2 lg:col-span-4 bg-stone-900 p-3 rounded-xl border border-amber-600/30 flex flex-col gap-3 mt-1">
@@ -926,7 +992,9 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                           ))
                         )}
                       </select>
-                      <span className="text-stone-400 font-semibold">Secondary Lvl:</span>
+                      <span className="text-stone-400 font-semibold">
+                        Secondary Lvl:
+                      </span>
                       <input
                         type="number"
                         min="1"
@@ -951,6 +1019,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                           onUpdateCharacter(synced);
                         }}
                         className="bg-stone-950 border border-stone-700 rounded px-2 py-1 text-amber-200 font-mono w-14 font-bold text-center"
+                        title="Secondary class level"
                       />
                     </div>
                   )}
@@ -980,6 +1049,412 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                   </div>
                 )}
               </div>
+
+              {/* Gestalt Character Mode (Unearthed Arcana p. 72) - Comprehensive Multi-Track System */}
+              {(is35e || character.edition === '5e') && (
+                <div className="sm:col-span-2 lg:col-span-4 bg-stone-900 p-3.5 rounded-xl border border-amber-500/40 flex flex-col gap-3 mt-1 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer text-amber-300 font-bold">
+                      <input
+                        type="checkbox"
+                        checked={character.optionalRules?.useGestaltUA72 || false}
+                        onChange={(e) => {
+                          const isGestalt = e.target.checked;
+                          const currentTracks = getCharacterGestaltTracks(character);
+                          const updated: CharacterData = {
+                            ...character,
+                            optionalRules: {
+                              ...character.optionalRules,
+                              useGestaltUA72: isGestalt,
+                              gestaltTrackCount: isGestalt ? (character.optionalRules?.gestaltTrackCount || currentTracks.length || 2) : character.optionalRules?.gestaltTrackCount,
+                              gestaltTracks: isGestalt ? currentTracks : character.optionalRules?.gestaltTracks
+                            }
+                          };
+                          const synced = syncClassFeaturesForCharacter(
+                            updated,
+                            updated.characterClass,
+                            updated.level,
+                            updated.edition,
+                            updated.subclass
+                          );
+                          onUpdateCharacter(synced);
+                        }}
+                        className="accent-amber-500 w-4 h-4 rounded"
+                      />
+                      <span className="flex items-center gap-1.5 text-sm">
+                        <Sparkles className="w-4 h-4 text-amber-400" />
+                        <span>Gestalt Character Mode (Unearthed Arcana p. 72)</span>
+                      </span>
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-600/50 font-semibold">
+                        Multi-Track Parallel Progression (Up to 4 Simultaneous Classes)
+                      </span>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-stone-400 leading-relaxed">
+                    Gestalt characters advance two, three, or four simultaneous tracks in parallel at each level. Characters gain the best Hit Die, highest Base Attack Bonus, best saving throws for each category, and highest skill points per level across all active classes.
+                  </p>
+
+                  {character.optionalRules?.useGestaltUA72 && (() => {
+                    const tracks = getCharacterGestaltTracks(character);
+                    const trackCount = character.optionalRules?.gestaltTrackCount || tracks.length || 2;
+
+                    const updateTracks = (newTracks: GestaltTrack[], newCount?: number) => {
+                      const updated: CharacterData = {
+                        ...character,
+                        optionalRules: {
+                          ...character.optionalRules,
+                          useGestaltUA72: true,
+                          gestaltTrackCount: newCount !== undefined ? newCount : newTracks.length,
+                          gestaltTracks: newTracks
+                        }
+                      };
+                      const synced = syncClassFeaturesForCharacter(
+                        updated,
+                        updated.characterClass,
+                        updated.level,
+                        updated.edition,
+                        updated.subclass
+                      );
+                      onUpdateCharacter(synced);
+                    };
+
+                    const handleTrackCountChange = (count: 2 | 3 | 4) => {
+                      let nextTracks = [...tracks];
+                      if (count > nextTracks.length) {
+                        const fallbackClasses = ['Wizard', 'Cleric', 'Rogue', 'Fighter'];
+                        for (let i = nextTracks.length; i < count; i++) {
+                          const defaultClass = fallbackClasses[i] || 'Fighter';
+                          nextTracks.push({
+                            id: `track-${i + 1}`,
+                            name: `Track ${i + 1}`,
+                            classes: [
+                              {
+                                id: `t${i + 1}-c1`,
+                                className: defaultClass,
+                                subclass: '',
+                                level: character.level,
+                                isPaused: false
+                              }
+                            ]
+                          });
+                        }
+                      } else if (count < nextTracks.length) {
+                        nextTracks = nextTracks.slice(0, count);
+                      }
+                      updateTracks(nextTracks, count);
+                    };
+
+                    const handleClassChange = (tIdx: number, cIdx: number, field: keyof GestaltTrackClass, val: any) => {
+                      const nextTracks = tracks.map((t, trkI) => {
+                        if (trkI !== tIdx) return t;
+                        const nextClasses = t.classes.map((c, clsI) => {
+                          if (clsI !== cIdx) return c;
+                          return { ...c, [field]: val };
+                        });
+                        return { ...t, classes: nextClasses };
+                      });
+                      updateTracks(nextTracks);
+                    };
+
+                    const handleTogglePause = (tIdx: number, cIdx: number) => {
+                      const nextTracks = tracks.map((t, trkI) => {
+                        if (trkI !== tIdx) return t;
+                        const targetClass = t.classes[cIdx];
+                        const willPause = !targetClass.isPaused;
+                        const nextClasses = t.classes.map((c, clsI) => {
+                          if (clsI === cIdx) {
+                            return { ...c, isPaused: willPause };
+                          }
+                          if (!willPause && clsI !== cIdx) {
+                            return { ...c, isPaused: true };
+                          }
+                          return c;
+                        });
+                        return { ...t, classes: nextClasses };
+                      });
+                      updateTracks(nextTracks);
+                    };
+
+                    const handleAddClassToTrack = (tIdx: number) => {
+                      const nextTracks = tracks.map((t, trkI) => {
+                        if (trkI !== tIdx) return t;
+                        const pausedExisting = t.classes.map(c => ({ ...c, isPaused: true }));
+                        const newClassEntry: GestaltTrackClass = {
+                          id: `t${tIdx + 1}-c${t.classes.length + 1}-${Date.now()}`,
+                          className: 'Rogue',
+                          subclass: '',
+                          level: 1,
+                          isPaused: false
+                        };
+                        return { ...t, classes: [...pausedExisting, newClassEntry] };
+                      });
+                      updateTracks(nextTracks);
+                    };
+
+                    const handleRemoveClassFromTrack = (tIdx: number, cIdx: number) => {
+                      const nextTracks = tracks.map((t, trkI) => {
+                        if (trkI !== tIdx) return t;
+                        const remaining = t.classes.filter((_, clsI) => clsI !== cIdx);
+                        if (remaining.length > 0 && remaining.every(c => c.isPaused)) {
+                          remaining[0].isPaused = false;
+                        }
+                        return { ...t, classes: remaining };
+                      });
+                      updateTracks(nextTracks);
+                    };
+
+                    const gestaltHd = getGestaltHitDie(character);
+                    const gestaltSp = getGestaltBaseSkillPoints(character);
+                    const gestaltBab = getCharacterBab(character);
+                    const gestaltSaves = calculate35eBaseSaves(character);
+                    const multiclassStatus = calculate35eMulticlassXpPenalty(character);
+
+                    return (
+                      <div className="space-y-3 pt-2 border-t border-stone-800">
+                        {/* Track Count Selector */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 bg-stone-950 p-2.5 rounded-lg border border-stone-800">
+                          <span className="text-xs font-bold text-stone-300">
+                            Number of Simultaneous Gestalt Tracks:
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {([2, 3, 4] as const).map(num => (
+                              <button
+                                key={num}
+                                type="button"
+                                onClick={() => handleTrackCountChange(num)}
+                                className={`px-2.5 py-1 rounded text-xs font-bold transition flex items-center gap-1 ${
+                                  trackCount === num
+                                    ? 'bg-amber-600 text-stone-950 shadow-sm'
+                                    : 'bg-stone-900 text-stone-300 border border-stone-700 hover:border-amber-500/50'
+                                }`}
+                              >
+                                <span>{num} Tracks</span>
+                                {trackCount === num && <Check className="w-3 h-3" />}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Tracks Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {tracks.slice(0, trackCount).map((track, tIdx) => {
+                            const totalTrackLevel = track.classes.reduce((sum, c) => sum + (c.level || 0), 0);
+                            return (
+                              <div key={track.id} className="bg-stone-950 p-3 rounded-lg border border-stone-800 flex flex-col gap-2.5">
+                                <div className="flex items-center justify-between border-b border-stone-800/80 pb-1.5">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-[10px] bg-amber-950 text-amber-300 px-2 py-0.5 rounded border border-amber-600/50 font-bold">
+                                      Track {tIdx + 1}
+                                    </span>
+                                    <span className="font-semibold text-xs text-stone-200">
+                                      {track.classes.find(c => !c.isPaused)?.className || track.classes[0]?.className || 'None'}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] font-mono">
+                                    <span className="text-stone-400">Total Lv:</span>
+                                    <span className={`font-bold ${totalTrackLevel === character.level ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                      {totalTrackLevel} / {character.level}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Classes on this Track */}
+                                <div className="space-y-2">
+                                  {track.classes.map((cls, cIdx) => (
+                                    <div
+                                      key={cls.id || cIdx}
+                                      className={`p-2 rounded border text-xs flex flex-col gap-1.5 transition ${
+                                        cls.isPaused
+                                          ? 'bg-stone-900/40 border-stone-800/80 opacity-75'
+                                          : 'bg-stone-900/90 border-amber-600/40'
+                                      }`}
+                                    >
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                          <select
+                                            value={cls.className}
+                                            onChange={(e) => handleClassChange(tIdx, cIdx, 'className', e.target.value)}
+                                            className="bg-stone-950 border border-stone-700 rounded px-1.5 py-1 text-xs text-stone-100 font-medium focus:border-amber-500 cursor-pointer flex-1 min-w-[110px]"
+                                          >
+                                            {is35e ? (
+                                              <>
+                                                <optgroup label="Base Classes">
+                                                  {baseClasses.map(c => (
+                                                    <option key={c} value={c}>{c}</option>
+                                                  ))}
+                                                </optgroup>
+                                                <optgroup label="Prestige Classes">
+                                                  {OFFICIAL_35E_PRESTIGE_CLASSES.map(pc => (
+                                                    <option key={pc.name} value={pc.name}>
+                                                      {unlockedPrestigeNames.has(pc.name) ? `⭐ ${pc.name}` : pc.name}
+                                                    </option>
+                                                  ))}
+                                                </optgroup>
+                                              </>
+                                            ) : (
+                                              baseClasses.map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                              ))
+                                            )}
+                                          </select>
+
+                                          <input
+                                            type="text"
+                                            value={cls.subclass || ''}
+                                            onChange={(e) => handleClassChange(tIdx, cIdx, 'subclass', e.target.value)}
+                                            placeholder="Subclass..."
+                                            className="bg-stone-950 border border-stone-700 rounded px-1.5 py-1 text-xs text-stone-200 w-24"
+                                            title="Subclass or archetype"
+                                          />
+                                        </div>
+
+                                        <div className="flex items-center gap-1">
+                                          <span className="text-[10px] text-stone-400 font-mono">Lv</span>
+                                          <input
+                                            type="number"
+                                            min="1"
+                                            max="20"
+                                            value={cls.level}
+                                            onChange={(e) => handleClassChange(tIdx, cIdx, 'level', Math.max(1, parseInt(e.target.value) || 1))}
+                                            className="bg-stone-950 border border-stone-700 rounded px-1 py-0.5 text-amber-200 font-mono w-11 font-bold text-center text-xs"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center justify-between text-[11px] pt-1 border-t border-stone-800/60">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleTogglePause(tIdx, cIdx)}
+                                          className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 transition ${
+                                            cls.isPaused
+                                              ? 'bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-700'
+                                              : 'bg-emerald-950 text-emerald-300 border border-emerald-600/50'
+                                          }`}
+                                          title={cls.isPaused ? 'Click to make this class active on this track' : 'Click to pause this class progression on this track'}
+                                        >
+                                          {cls.isPaused ? (
+                                            <>
+                                              <Pause className="w-2.5 h-2.5 text-amber-400" />
+                                              <span>Paused</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Play className="w-2.5 h-2.5 text-emerald-400" />
+                                              <span>Active Class</span>
+                                            </>
+                                          )}
+                                        </button>
+
+                                        {track.classes.length > 1 && (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveClassFromTrack(tIdx, cIdx)}
+                                            className="text-stone-500 hover:text-rose-400 p-0.5 transition"
+                                            title="Remove this multiclass from track"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddClassToTrack(tIdx)}
+                                  className="w-full mt-1 py-1 px-2 rounded border border-dashed border-stone-700 hover:border-amber-500/60 text-stone-400 hover:text-amber-300 text-[11px] font-medium flex items-center justify-center gap-1 transition"
+                                >
+                                  <Plus className="w-3 h-3 text-amber-400" />
+                                  <span>Multiclass Track {tIdx + 1} (Pause & Branch)</span>
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Gestalt Live Calculated Progression Metrics */}
+                        <div className="bg-stone-950 p-3 rounded-lg border border-amber-600/40 space-y-2.5">
+                          <div className="flex items-center justify-between flex-wrap gap-1 text-[11px]">
+                            <span className="text-amber-300 font-semibold font-serif flex items-center gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Gestalt Best-of-Class Calculations (Lv. {character.level})</span>
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 font-mono text-[10px]">
+                              ✓ Gestalt Tracks Advance Simultaneously
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center font-mono text-[11px]">
+                            <div className="bg-stone-900/90 p-1.5 rounded border border-stone-800">
+                              <div className="text-stone-400 text-[10px]">Gestalt Hit Die</div>
+                              <div className="text-amber-300 font-bold">{gestaltHd}</div>
+                            </div>
+                            <div className="bg-stone-900/90 p-1.5 rounded border border-stone-800">
+                              <div className="text-stone-400 text-[10px]">Base Attack Bonus</div>
+                              <div className="text-amber-300 font-bold" title={`Iterative attacks: ${format35eBabProgression(gestaltBab)}`}>
+                                {gestaltBab > 5 ? format35eBabProgression(gestaltBab) : `+${gestaltBab}`}
+                              </div>
+                            </div>
+                            <div className="bg-stone-900/90 p-1.5 rounded border border-stone-800">
+                              <div className="text-stone-400 text-[10px]">Base Saves</div>
+                              <div className="text-amber-300 font-bold">
+                                F+{gestaltSaves.fort} / R+{gestaltSaves.ref} / W+{gestaltSaves.will}
+                              </div>
+                            </div>
+                            <div className="bg-stone-900/90 p-1.5 rounded border border-stone-800">
+                              <div className="text-stone-400 text-[10px]">Base Skill Points</div>
+                              <div className="text-amber-300 font-bold">{gestaltSp} + INT / lvl</div>
+                            </div>
+                          </div>
+
+                          <div className="text-[11px] text-stone-400 border-t border-stone-800/80 pt-2 flex flex-col gap-2">
+                            <div className="flex items-center justify-between flex-wrap gap-2">
+                              <p className="flex-1">
+                                Per Unearthed Arcana p. 72, Gestalt characters combine the best attributes of their simultaneous classes: highest Hit Die, highest BAB progression, best base saving throw for each category, highest skill points per level, and merged class skill lists.
+                              </p>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updatedWithSkills = apply35eDefaultClassSkills(character);
+                                  const synced = syncClassFeaturesForCharacter(
+                                    updatedWithSkills,
+                                    updatedWithSkills.characterClass,
+                                    updatedWithSkills.level,
+                                    updatedWithSkills.edition,
+                                    updatedWithSkills.subclass
+                                  );
+                                  onUpdateCharacter(synced);
+                                }}
+                                className="px-2.5 py-1 bg-stone-900 hover:bg-stone-800 text-amber-300 border border-amber-600/50 hover:border-amber-400 rounded text-xs font-mono flex items-center gap-1.5 transition shrink-0"
+                                title="Re-synchronize all class features and combined class skill lists across all Gestalt tracks"
+                              >
+                                <RefreshCw className="w-3 h-3 text-amber-400" />
+                                <span>Sync Features & Skills</span>
+                              </button>
+                            </div>
+                            <p className="text-stone-300 font-medium">
+                              {multiclassStatus?.hasPenalty ? (
+                                <span className="text-rose-400">
+                                  ⚠️ Note: One of your Gestalt tracks contains paused/multiclassed classes with an active -{multiclassStatus.penaltyPercent}% multiclass XP penalty.
+                                </span>
+                              ) : (
+                                <span className="text-emerald-400">
+                                  ✓ Standard Gestalt parallel progression is exempt from multiclass XP penalties. Pausing a class on a track to advance another adheres to standard 3.5e multiclass rules.
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
           )}
         </>
@@ -1175,6 +1650,16 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
           character={character}
           onUpdateCharacter={onUpdateCharacter}
           onClose={() => setShowPrestigeModal(false)}
+        />
+      )}
+
+      {/* Movement Speeds & Tactical Mobility Modal */}
+      {showSpeedModal && (
+        <EditMovementSpeedModal
+          character={character}
+          isOpen={showSpeedModal}
+          onClose={() => setShowSpeedModal(false)}
+          onSave={onUpdateCharacter}
         />
       )}
     </div>

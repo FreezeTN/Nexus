@@ -83,7 +83,7 @@ export function getMaxUnlockedSpellSlotLevel(char: CharacterData): number {
 }
 
 /**
- * Calculates the Prepared Spells limit according to D&D 5e Rules
+ * Calculates the Prepared Spells limit according to D&D 5e or D&D 3.5e Rules
  */
 export function getPreparedSpellsDetails(char: CharacterData): PreparedSpellsDetails {
   const spells = char.spells || [];
@@ -95,7 +95,48 @@ export function getPreparedSpellsDetails(char: CharacterData): PreparedSpellsDet
   const effectiveAbilities = getEffectiveAbilities(char);
   const cls = (char.characterClass || '').toLowerCase();
   const lvl = char.level || 1;
+  const is35e = char.edition === '3.5e';
 
+  // -------------------------------------------------------------
+  // D&D 3.5e RULES BRANCH (Vancian Slot Preparation vs Spontaneous)
+  // -------------------------------------------------------------
+  if (is35e) {
+    const is35eSpontaneous = cls.includes('sorcerer') || cls.includes('bard');
+    const is35ePrepared = cls.includes('wizard') || cls.includes('cleric') || cls.includes('druid') || cls.includes('paladin') || cls.includes('ranger');
+
+    if (is35ePrepared) {
+      // In 3.5e, prepared casters prepare spells directly into their daily slots
+      const slots = char.spellSlots || [];
+      const totalDailySlots = slots.reduce((sum, s) => sum + (s.max || 0), 0);
+      const effectiveLimit = Math.max(1, totalDailySlots);
+
+      return {
+        isPreparedCaster: true,
+        maxPrepared: effectiveLimit,
+        currentPrepared,
+        cantripsCount,
+        formula: `3.5e Vancian Slots (${totalDailySlots} Daily Spell Slots Allocated)`,
+        className: char.characterClass || 'Prepared Caster',
+        isOverLimit: currentPrepared > effectiveLimit
+      };
+    }
+
+    if (is35eSpontaneous) {
+      return {
+        isPreparedCaster: false,
+        maxPrepared: leveledSpells.length,
+        currentPrepared,
+        cantripsCount,
+        formula: '3.5e Spontaneous Caster (All Known Spells Ready)',
+        className: char.characterClass || 'Spontaneous Caster',
+        isOverLimit: false
+      };
+    }
+  }
+
+  // -------------------------------------------------------------
+  // D&D 5e RULES BRANCH
+  // -------------------------------------------------------------
   let isPreparedCaster = false;
   let maxPrepared = 0;
   let formula = '';

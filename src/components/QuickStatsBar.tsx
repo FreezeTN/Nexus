@@ -12,6 +12,7 @@ import {
 import { CharacterData, RuleEdition } from '../types';
 import { HpOrb, getHpColorClass } from './HpOrb';
 import { MaxHpInspectorModal } from './modals/MaxHpInspectorModal';
+import { EditMovementSpeedModal } from './modals/EditMovementSpeedModal';
 import { RuleBadge } from './common/RuleBadge';
 import { useLanguage } from '../i18n/LanguageContext';
 import {
@@ -45,6 +46,7 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
   const { t } = useLanguage();
   const [hpDelta, setHpDelta] = useState<string>('');
   const [showMaxHpInspector, setShowMaxHpInspector] = useState<boolean>(false);
+  const [showSpeedModal, setShowSpeedModal] = useState<boolean>(false);
 
   const effectiveMaxHp = getEffectiveMaxHp(activeCharacter);
   const currentEdition = edition || activeCharacter.edition || '5e';
@@ -178,30 +180,41 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
 
         {/* Speed */}
         <div
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition ${
+          id="quickstat-speed-btn"
+          role="button"
+          tabIndex={0}
+          onClick={() => setShowSpeedModal(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              setShowSpeedModal(true);
+            }
+          }}
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition cursor-pointer group hover:border-sky-500/70 hover:shadow-md ${
             speedInfo.isModified
               ? 'bg-amber-950/80 border-amber-600/70 text-amber-200 shadow-md'
               : 'bg-stone-900 border-stone-800'
           }`}
           title={
             speedInfo.isModified
-              ? `Effective Speed: ${speedInfo.effectiveSpeed} ft (Base Speed: ${speedInfo.baseSpeed} ft | -${speedInfo.speedPenalty} ft ${speedInfo.reasons.join(', ')})`
-              : `Base Walking Speed: ${speedInfo.baseSpeed} ft`
+              ? `Effective Speed: ${speedInfo.effectiveSpeed} ft (Base Speed: ${speedInfo.baseSpeed} ft | -${speedInfo.speedPenalty} ft ${speedInfo.reasons.join(', ')}) - Click to edit`
+              : `Base Walking Speed: ${speedInfo.baseSpeed} ft - Click to edit`
           }
         >
-          <Footprints className={`w-4 h-4 ${speedInfo.isModified ? 'text-amber-400 animate-pulse' : 'text-blue-400'}`} />
+          <Footprints className={`w-4 h-4 ${speedInfo.isModified ? 'text-amber-400 animate-pulse' : 'text-blue-400 group-hover:text-sky-300'}`} />
           <div>
             <div className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
-              <span>{t('stats.speed', 'Speed')}</span>
+              <span className="group-hover:text-stone-200 transition">{t('stats.speed', 'Speed')}</span>
               <RuleBadge ruleId="speed" size="xs" iconOnly placement="bottom" />
               {speedInfo.isModified && (
                 <span className="text-[8px] bg-amber-500/30 text-amber-300 border border-amber-500/50 px-1 rounded font-mono font-bold uppercase">
                   {t('stats.penalized', 'Penalized')}
                 </span>
               )}
+              <Pencil className="w-2.5 h-2.5 text-stone-500 opacity-0 group-hover:opacity-100 transition ml-0.5" />
             </div>
             <div className="font-mono text-sm font-bold flex items-center gap-1">
-              <span className={speedInfo.isModified ? 'text-amber-300 font-extrabold' : 'text-stone-200'}>
+              <span className={speedInfo.isModified ? 'text-amber-300 font-extrabold' : 'text-stone-200 group-hover:text-sky-200'}>
                 {speedInfo.effectiveSpeed} ft
               </span>
               {speedInfo.isModified && (
@@ -365,6 +378,16 @@ export const QuickStatsBar: React.FC<QuickStatsBarProps> = ({
           onClose={() => setShowMaxHpInspector(false)}
           character={activeCharacter}
           onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* Movement Speeds & Tactical Mobility Modal */}
+      {showSpeedModal && (
+        <EditMovementSpeedModal
+          character={activeCharacter}
+          isOpen={showSpeedModal}
+          onClose={() => setShowSpeedModal(false)}
+          onSave={onUpdateCharacter}
         />
       )}
     </div>

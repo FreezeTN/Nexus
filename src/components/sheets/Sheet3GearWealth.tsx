@@ -8,7 +8,7 @@ import { InventoryListPanel } from './sheet3/InventoryListPanel';
 import { useLayoutCustomization } from '../../utils/layoutCustomization';
 import { EmptyLayoutState } from '../common/EmptyLayoutState';
 import { XpCraftAndSpellLedgerModal } from '../modals/XpCraftAndSpellLedgerModal';
-import { calculate35eMinLevelXpBuffer } from '../../utils/dndCalculations';
+import { calculate35eMinLevelXpBuffer, isEncumbranceRuleActive } from '../../utils/dndCalculations';
 import { Hammer, Sparkles, Scroll, Coins, Shield, AlertTriangle } from 'lucide-react';
 
 interface Sheet3Props {
@@ -18,6 +18,7 @@ interface Sheet3Props {
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage?: (label: string, expression: string) => void;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  activeSession?: any;
 }
 
 export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
@@ -26,9 +27,11 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
   onAddItemToInventory,
   onRoll,
   onRollDamage,
-  onOpenGenerators
+  onOpenGenerators,
+  activeSession
 }) => {
   const { isVisible } = useLayoutCustomization();
+  const isEncumbranceEnabled = isEncumbranceRuleActive(character, activeSession);
 
   if (character.edition === 'shadowrun') {
     if (!isVisible('sr_matrix')) {
@@ -147,10 +150,11 @@ export const Sheet3GearWealth: React.FC<Sheet3Props> = ({
       )}
 
       {/* SECTION 3: Carrying Capacity & Encumbrance */}
-      {showEncumbrance && (
+      {showEncumbrance && isEncumbranceEnabled && (
         <EncumbranceCapacityPanel
           character={character}
           onUpdateCharacter={onUpdateCharacter}
+          activeSession={activeSession}
         />
       )}
 

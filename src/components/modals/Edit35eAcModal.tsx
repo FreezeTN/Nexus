@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { CharacterData } from '../../types';
 import { get35eArmorClass } from '../../utils/calculators/dnd35eCalculators';
-import { Shield, X, CheckCircle2, Info, HelpCircle, Layers, Sparkles } from 'lucide-react';
+import { Shield, X, CheckCircle2, Info, HelpCircle, Layers, Sparkles, Maximize2 } from 'lucide-react';
+import { CreatureSizeScaleModal } from './CreatureSizeScaleModal';
 
 interface Edit35eAcModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export const Edit35eAcModal: React.FC<Edit35eAcModalProps> = ({
   const [spellResist, setSpellResist] = useState<string>(character.spellResist !== undefined ? String(character.spellResist) : '');
   const [touchAcOverride, setTouchAcOverride] = useState<string>(character.touchAcOverride !== undefined ? String(character.touchAcOverride) : '');
   const [flatFootedOverride, setFlatFootedOverride] = useState<string>(character.flatFootedAcOverride !== undefined ? String(character.flatFootedAcOverride) : '');
+  const [showSizeTableModal, setShowSizeTableModal] = useState(false);
 
   if (!isOpen) return null;
 
@@ -180,14 +182,24 @@ export const Edit35eAcModal: React.FC<Edit35eAcModalProps> = ({
         {/* Input Fields Form */}
         <div className="p-4 space-y-4 flex-1">
           {/* Size Category */}
-          <div>
-            <label className="block text-amber-300 text-xs font-semibold mb-1">
-              Character Size Category (Modifies AC & Attack)
-            </label>
+          <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-amber-300 text-xs font-semibold">
+                Character Size Category (Modifies AC & Attack)
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowSizeTableModal(true)}
+                className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-stone-900 border border-amber-600/40 px-2 py-0.5 rounded flex items-center gap-1 transition"
+              >
+                <Maximize2 className="w-3 h-3" />
+                <span>View Full Size & Scale Table</span>
+              </button>
+            </div>
             <select
               value={sizeCategory || 'Medium'}
               onChange={(e) => setSizeCategory(e.target.value as CharacterData['sizeCategory'])}
-              className="w-full bg-stone-950 border border-stone-700 rounded-lg p-2 text-stone-200 text-xs font-mono"
+              className="w-full bg-stone-900 border border-stone-700 rounded-lg p-2 text-stone-200 text-xs font-mono"
             >
               {SIZE_OPTIONS.map(opt => (
                 <option key={opt.size} value={opt.size}>{opt.label}</option>
@@ -325,6 +337,17 @@ export const Edit35eAcModal: React.FC<Edit35eAcModalProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Embedded Creature Size and Scale Table Modal */}
+      <CreatureSizeScaleModal
+        isOpen={showSizeTableModal}
+        onClose={() => setShowSizeTableModal(false)}
+        character={{ ...previewChar, sizeCategory }}
+        onUpdateCharacter={(up) => {
+          if (up.sizeCategory) setSizeCategory(up.sizeCategory);
+          onUpdateCharacter(up);
+        }}
+      />
     </div>
   );
 };

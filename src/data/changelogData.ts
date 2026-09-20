@@ -14,6 +14,39 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.13',
+    date: 'Today',
+    title: 'Edition Ruleset Separation, 3.5e Mechanics Engine & Vancian Spellcasting',
+    badge: 'Ruleset Isolation & 3.5e Parity',
+    badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40',
+    highlights: [
+      {
+        category: '⚖️ D&D 3.5e vs. 5e Ruleset Isolation',
+        detail: 'Eliminated ruleset cross-contamination across sheets and dialogs. When operating in 3.5e mode, all calculations, tables, and progression curves strictly follow 3.5e SRD standards rather than falling back to 5e defaults.'
+      },
+      {
+        category: '🎒 Authentic 3.5e Carrying Capacity & Encumbrance',
+        detail: 'Integrated official D&D 3.5e PHB Table 9-1 weight brackets (Light, Medium, and Heavy loads, Lift Overhead, Lift Off Ground, Push or Drag) with dynamic size multipliers (Fine through Colossal, Biped vs Quadruped), Maximum DEX bonus caps to AC, Armor Check Penalty (ACP) loads, and speed reduction rules.'
+      },
+      {
+        category: '📈 3.5e Experience & Level Progression Tables',
+        detail: 'Updated the Character Advancement modal with the authentic 3.5e XP curve (cumulative Level × 1,000 XP), skill rank ceilings (Level + 3 for Class Skills, [Level + 3]/2 for Cross-Class Skills), and full tabular reference replacing 5e proficiency bonus charts.'
+      },
+      {
+        category: '🎯 3.5e ASI & Feat Milestones',
+        detail: 'Separated 3.5e ability score progression (+1 to any single ability at levels 4, 8, 12, 16, 20 without the 20-point ceiling) and general feats (levels 1, 3, 6, 9, 12, 15, 18) from the 5e combined ASI / Feat choice system.'
+      },
+      {
+        category: '✨ 3.5e Class Spell Slot Tables & High Ability Bonus Spells',
+        detail: 'Implemented full 3.5e spell slot progression tables for Wizard/Cleric/Druid, Sorcerer, Bard, and Paladin/Ranger, combined with PHB Table 1-1 bonus spells derived from high casting ability scores. In 3.5e multiclassing, caster slots now track independently per class rather than pooling into a 5e unified progression.'
+      },
+      {
+        category: '📜 3.5e Vancian Spell Preparation vs. 5e Preparation Pools',
+        detail: 'Adapted the prepared spells manager to distinguish between 3.5e Vancian slot preparation (allocating spells across total daily spell slots), spontaneous casters (all known spells ready), and 5e flexible preparation pools (Level + Modifier).'
+      }
+    ]
+  },
+  {
     version: 'v0.9.12',
     date: 'Today',
     title: 'Hybrid Heritage Synchronization, Custom Template Integration & Skills Engine Polish',

@@ -14,7 +14,9 @@ import {
   evaluate35eMissChance,
   DND35E_MISS_CHANCE_PRESETS,
   MissChanceResult,
-  evaluateUnderwaterCombatModifiers
+  evaluateUnderwaterCombatModifiers,
+  calculate35eAttackBonus,
+  calculate35eDamageFormula
 } from '../../utils/dndCalculations';
 import { playDiceSound, playHitSound, playMissSound, playDamageAppliedSound, playFireSound, playIceColdSound, playLightningSound, playAcidPoisonSound } from '../../utils/diceAudio';
 import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2, EyeOff, Waves } from 'lucide-react';
@@ -176,7 +178,7 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   const rawAttackBonus = selectedSpell
     ? spellAtkBonus
     : selectedAttack
-    ? selectedAttack.attackBonus
+    ? (is35e ? calculate35eAttackBonus(character, selectedAttack).totalAttackBonus : selectedAttack.attackBonus)
     : customAttackBonus;
 
   const activeAttackBonus = rawAttackBonus + (isPowerAttack ? -5 : 0);
@@ -184,12 +186,15 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   const rawDamageExpr = selectedSpell
     ? extractSpellDamage(selectedSpell)
     : selectedAttack
-    ? (selectedAttack.damageType && !selectedAttack.damage.toLowerCase().includes(selectedAttack.damageType.split('/')[0].trim().toLowerCase())
-        ? `${selectedAttack.damage} ${selectedAttack.damageType}`
-        : selectedAttack.damage)
+    ? (is35e
+        ? calculate35eDamageFormula(character, selectedAttack).damageFormula
+        : (selectedAttack.damageType && !selectedAttack.damage.toLowerCase().includes(selectedAttack.damageType.split('/')[0].trim().toLowerCase())
+            ? `${selectedAttack.damage} ${selectedAttack.damageType}`
+            : selectedAttack.damage))
     : customDamageExpr;
 
-  const activeDamageExpr = isPowerAttack ? `${rawDamageExpr} + 10` : rawDamageExpr;
+  const powerAttackBonus = is35e ? (selectedAttack?.isTwoHanded ? 10 : 5) : 10;
+  const activeDamageExpr = isPowerAttack ? `${rawDamageExpr} + ${powerAttackBonus}` : rawDamageExpr;
 
   const activeAttackRange = selectedSpell
     ? selectedSpell.range || '60 ft'

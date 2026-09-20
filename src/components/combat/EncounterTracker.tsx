@@ -28,7 +28,8 @@ import {
   Flame,
   Zap,
   Store,
-  BookOpen
+  BookOpen,
+  Map as MapIcon
 } from 'lucide-react';
 import { voiceManager, VoicePeerState } from '../../lib/voiceChatService';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
@@ -36,6 +37,8 @@ import { ENVIRONMENT_CONFIGS } from '../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound } from '../../utils/diceAudio';
 import { CollapsibleBox } from '../common/CollapsibleBox';
 
+import { BattlemapCanvas } from '../battlemap/BattlemapCanvas';
+import { BattlemapConfig, DEFAULT_BATTLEMAP_CONFIG, BattlemapLayout } from '../battlemap/battlemapTypes';
 import { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData } from './encounter/encounterTypes';
 import { EncounterLogModal } from './encounter/EncounterLogModal';
 import { AddCombatantModal } from './encounter/AddCombatantModal';
@@ -127,6 +130,28 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     handleSetMerchantEncounter,
     handlePivotMerchantToCombat,
     handlePlayerSubmitInitiative,
+    handleRemoveCombatantFromMap,
+    handleResetMapTokens,
+    handleResetBattlemap,
+    handleUpdateCombatantPosition,
+    handleMoveCombatant,
+    handleApplyBattlemapLayout,
+    handleDashCombatant,
+    handleResetCombatantMovement,
+    handleUpdateCombatantSpeed,
+    terrainMap,
+    doors,
+    setDoors,
+    handleUpdateTerrain,
+    handleToggleDoor,
+    handleClearAllTerrain,
+    fogOfWar,
+    useFogOfWar,
+    activeAoETemplate,
+    handleUpdateFogOfWar,
+    handleUpdateAoETemplate,
+    handleRollSavesForTargets,
+    handleApplyAoEDamage,
     syncEncounterToSession,
     isDm,
     hasActiveSession
@@ -135,7 +160,35 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addModalInitialType, setAddModalInitialType] = useState<'ally' | 'enemy' | 'merchant'>('enemy');
-  const [viewMode, setViewMode] = useState<'teams' | 'timeline'>('teams');
+  const [viewMode, setViewMode] = useState<'teams' | 'timeline' | 'battlemap'>('teams');
+  const [selectedMapTokenId, setSelectedMapTokenId] = useState<string | null>(null);
+  const [targetMapTokenId, setTargetMapTokenId] = useState<string | null>(null);
+  const [mapConfig, setMapConfig] = useState<BattlemapConfig>(() => {
+    // Check if session or localStorage has battlemap properties
+    if (activeSession?.activeEncounter?.battlemapColumns) {
+      return {
+        ...DEFAULT_BATTLEMAP_CONFIG,
+        gridColumns: activeSession.activeEncounter.battlemapColumns,
+        gridRows: activeSession.activeEncounter.battlemapRows || 16,
+        theme: activeSession.activeEncounter.battlemapTheme || 'dungeon',
+        feetPerSquare: activeSession.activeEncounter.battlemapFeetPerSquare || 5,
+        diagonalRule: activeSession.activeEncounter.battlemapDiagonalRule || 'standard5e'
+      };
+    }
+    return DEFAULT_BATTLEMAP_CONFIG;
+  });
+
+  const handleLoadBattlemapLayout = (
+    layout: BattlemapLayout,
+    options: {
+      includeTokens: boolean;
+      includeFog: boolean;
+      replaceTerrain: boolean;
+    }
+  ) => {
+    setMapConfig(layout.config);
+    handleApplyBattlemapLayout(layout, options, (cfg) => setMapConfig(cfg));
+  };
   const [editingMaxHpId, setEditingMaxHpId] = useState<string | null>(null);
   const [editingMaxHpValue, setEditingMaxHpValue] = useState<number | string>('');
 
@@ -367,6 +420,18 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             >
               <ListFilter className="w-3.5 h-3.5" />
               <span>Timeline</span>
+            </button>
+            <button
+              onClick={() => setViewMode('battlemap')}
+              className={`flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg font-bold transition ${
+                viewMode === 'battlemap'
+                  ? 'bg-amber-600 text-stone-950 shadow'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+              title="Tactical 2D Battlemap & Grid Tokens"
+            >
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Battlemap (2D)</span>
             </button>
           </div>
 
@@ -831,7 +896,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             </div>
           </div>
         </div>
-      ) : (
+      ) : viewMode === 'timeline' ? (
         /* Unified Timeline View (Optional Switcher) */
         <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
           {combatants.map((c, idx) => {
@@ -957,6 +1022,56 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               </div>
             );
           })}
+        </div>
+      ) : (
+        /* Tactical 2D Battlemap View */
+        <div className="space-y-3">
+          <BattlemapCanvas
+            combatants={combatants}
+            activeTurnIndex={activeTurnIndex}
+            currentUserId={currentUser?.uid}
+            isDm={isDm}
+            character={character}
+            allCharacters={allCharacters}
+            onUpdateCombatantPosition={handleUpdateCombatantPosition}
+            onMoveCombatant={handleMoveCombatant}
+            onDashCombatant={handleDashCombatant}
+            onResetMovement={handleResetCombatantMovement}
+            onUpdateSpeed={handleUpdateCombatantSpeed}
+            onSelectCombatant={setSelectedMapTokenId}
+            selectedCombatantId={selectedMapTokenId}
+            onSetTargetCombatant={setTargetMapTokenId}
+            targetCombatantId={targetMapTokenId}
+            config={mapConfig}
+            terrainMap={terrainMap}
+            doors={doors}
+            onUpdateTerrain={handleUpdateTerrain}
+            onToggleDoor={handleToggleDoor}
+            onClearAllTerrain={handleClearAllTerrain}
+            fogOfWar={fogOfWar}
+            useFogOfWar={useFogOfWar}
+            onUpdateFogOfWar={handleUpdateFogOfWar}
+            activeAoE={activeAoETemplate}
+            onUpdateAoE={handleUpdateAoETemplate}
+            onRollSavesForTargets={handleRollSavesForTargets}
+            onApplyDamageToTargets={handleApplyAoEDamage}
+            onRemoveCombatant={handleRemoveCombatant}
+            onRemoveCombatantFromMap={handleRemoveCombatantFromMap}
+            onResetBattlemap={handleResetBattlemap}
+            onResetMapTokens={handleResetMapTokens}
+            onOpenAddCombatantModal={(type) => {
+              setAddModalInitialType(type || 'enemy');
+              setShowAddModal(true);
+            }}
+            onLoadLayout={handleLoadBattlemapLayout}
+            onUpdateConfig={(newCfg) => {
+              setMapConfig(newCfg);
+              if (isDm && activeSession?.code) {
+                // sync to session if DM
+                syncEncounterToSession(combatants, activeTurnIndex, roundNumber);
+              }
+            }}
+          />
         </div>
       )}
 

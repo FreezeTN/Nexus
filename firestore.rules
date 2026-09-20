@@ -42,6 +42,14 @@ service cloud.firestore {
              (!('sessionCode' in data) || (data.sessionCode is string && data.sessionCode.size() <= 32));
     }
 
+    function isValidBattlemapLayout(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.authorId is string && data.authorId.size() <= 128 &&
+             data.name is string && data.name.size() <= 128 &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 64)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000));
+    }
+
     function isValidVoicePeer(data) {
       return data.uid is string && data.uid.size() <= 128 &&
              data.displayName is string && data.displayName.size() <= 128;
@@ -144,6 +152,15 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidId(saveId) && request.resource.data.hostUid == request.auth.uid && isValidCampaignSave(request.resource.data);
       allow update: if isSignedIn() && isValidId(saveId) && resource.data.hostUid == request.auth.uid && request.resource.data.hostUid == resource.data.hostUid && isValidCampaignSave(request.resource.data);
       allow delete: if isSignedIn() && isValidId(saveId) && resource.data.hostUid == request.auth.uid;
+    }
+
+    // Battlemap Layouts
+    match /battlemap_layouts/{layoutId} {
+      allow get: if isSignedIn() && isValidId(layoutId);
+      allow list: if isSignedIn() && (resource.data.authorId == request.auth.uid || resource.data.isPublic == true);
+      allow create: if isSignedIn() && isValidId(layoutId) && request.resource.data.authorId == request.auth.uid && isValidBattlemapLayout(request.resource.data);
+      allow update: if isSignedIn() && isValidId(layoutId) && resource.data.authorId == request.auth.uid && request.resource.data.authorId == resource.data.authorId && isValidBattlemapLayout(request.resource.data);
+      allow delete: if isSignedIn() && isValidId(layoutId) && resource.data.authorId == request.auth.uid;
     }
   }
 }

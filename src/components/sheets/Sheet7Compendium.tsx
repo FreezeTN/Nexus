@@ -1,6 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { CharacterData, Spell, Feat, ClassFeature, GearItem, RuleEdition } from '../../types';
-import { getAbilityModifier, formatModifier, recalculateCharacterAC } from '../../utils/dndCalculations';
+import {
+  getAbilityModifier,
+  formatModifier,
+  recalculateCharacterAC,
+  get35eSpaceAndReach,
+  get35eSizeModifier,
+  get35eGrappleModifier
+} from '../../utils/dndCalculations';
 import { eventBus } from '../../events/eventBus';
 import { isDuplicateSpell } from '../../utils/spellUtils';
 import { getMonsterPortraitUrl } from '../../data/monsterPortraits';
@@ -1270,48 +1277,69 @@ export const Sheet7Compendium: React.FC<Sheet7CompendiumProps> = ({
                   </div>
 
                   {/* 3.5e Combat & Defenses Bar */}
-                  {m.edition === '3.5e' && (
-                    <div className="bg-stone-900/90 border border-amber-500/20 p-3 rounded-2xl space-y-2">
-                      <div className="text-[11px] font-mono text-amber-300 font-bold uppercase tracking-wider flex items-center justify-between">
-                        <span>🛡️ 3.5e Combat & Defenses</span>
-                        {m.senses && <span className="text-stone-400 font-normal lowercase">{m.senses}</span>}
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
-                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
-                          <div className="text-[10px] text-stone-400 font-mono">Touch AC</div>
-                          <div className="font-bold text-stone-200">{m.touchAcOverride ?? 10}</div>
+                  {m.edition === '3.5e' && (() => {
+                    const reachType = (m as any).reachType || ((m as any).isQuadruped ? 'Long' : 'Tall');
+                    const sizeInfo = get35eSpaceAndReach(m.sizeCategory, reachType);
+                    const sizeMod = get35eSizeModifier(m.sizeCategory);
+                    const grappleMod = get35eGrappleModifier(m.sizeCategory);
+                    return (
+                      <div className="bg-stone-900/90 border border-amber-500/20 p-3 rounded-2xl space-y-2">
+                        <div className="text-[11px] font-mono text-amber-300 font-bold uppercase tracking-wider flex items-center justify-between">
+                          <span>🛡️ 3.5e Combat & Defenses</span>
+                          {m.senses && <span className="text-stone-400 font-normal lowercase">{m.senses}</span>}
                         </div>
-                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
-                          <div className="text-[10px] text-stone-400 font-mono">Flat-Footed AC</div>
-                          <div className="font-bold text-stone-200">{m.flatFootedAcOverride ?? m.armorClass ?? 10}</div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                          <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                            <div className="text-[10px] text-stone-400 font-mono">Touch AC</div>
+                            <div className="font-bold text-stone-200">{m.touchAcOverride ?? 10}</div>
+                          </div>
+                          <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                            <div className="text-[10px] text-stone-400 font-mono">Flat-Footed AC</div>
+                            <div className="font-bold text-stone-200">{m.flatFootedAcOverride ?? m.armorClass ?? 10}</div>
+                          </div>
+                          <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                            <div className="text-[10px] text-stone-400 font-mono">Base Attack (BAB)</div>
+                            <div className="font-bold text-amber-400">+{m.bab ?? 0}</div>
+                          </div>
+                          <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
+                            <div className="text-[10px] text-stone-400 font-mono">DR / SR</div>
+                            <div className="font-bold text-emerald-400">
+                              {m.damageReductionValue ? `DR ${m.damageReductionValue}/${m.damageReductionBypass}` : m.spellResist ? `SR ${m.spellResist}` : '—'}
+                            </div>
+                          </div>
                         </div>
-                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
-                          <div className="text-[10px] text-stone-400 font-mono">Base Attack (BAB)</div>
-                          <div className="font-bold text-amber-400">+{m.bab ?? 0}</div>
+
+                        {/* 3.5e Space / Reach / Size row */}
+                        <div className="bg-stone-950/70 border border-stone-800 p-2 rounded-xl flex items-center justify-between flex-wrap gap-2 text-xs font-mono">
+                          <div className="flex items-center gap-2">
+                            <span className="text-amber-300 font-bold">{m.sizeCategory || 'Medium'} ({reachType})</span>
+                            <span className="text-stone-600">•</span>
+                            <span>Space: <strong className="text-sky-300">{sizeInfo.spaceDisplay}</strong></span>
+                            <span className="text-stone-600">•</span>
+                            <span>Reach: <strong className={sizeInfo.isZeroReach ? 'text-amber-400' : 'text-purple-300'}>{sizeInfo.reachDisplay}</strong></span>
+                          </div>
+                          <div className="text-[10px] text-stone-400">
+                            Atk/AC: <strong className="text-stone-200">{formatModifier(sizeMod)}</strong> | Grapple: <strong className="text-stone-200">{formatModifier(grappleMod)}</strong>
+                          </div>
                         </div>
-                        <div className="bg-stone-950/80 border border-stone-800/80 p-1.5 rounded-xl">
-                          <div className="text-[10px] text-stone-400 font-mono">DR / SR</div>
-                          <div className="font-bold text-emerald-400">
-                            {m.damageReductionValue ? `DR ${m.damageReductionValue}/${m.damageReductionBypass}` : m.spellResist ? `SR ${m.spellResist}` : '—'}
+
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
+                          <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
+                            <span className="text-[10px] font-mono text-stone-400">Fort:</span>
+                            <span className="font-bold text-stone-100">{formatModifier((m.fortSaveBase || 0) + getAbilityModifier(m.abilities?.CON?.score || 10))}</span>
+                          </div>
+                          <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
+                            <span className="text-[10px] font-mono text-stone-400">Ref:</span>
+                            <span className="font-bold text-stone-100">{formatModifier((m.refSaveBase || 0) + getAbilityModifier(m.abilities?.DEX?.score || 10))}</span>
+                          </div>
+                          <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
+                            <span className="text-[10px] font-mono text-stone-400">Will:</span>
+                            <span className="font-bold text-stone-100">{formatModifier((m.willSaveBase || 0) + getAbilityModifier(m.abilities?.WIS?.score || 10))}</span>
                           </div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-2 text-center text-xs pt-1">
-                        <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
-                          <span className="text-[10px] font-mono text-stone-400">Fort:</span>
-                          <span className="font-bold text-stone-100">{formatModifier((m.fortSaveBase || 0) + getAbilityModifier(m.abilities?.CON?.score || 10))}</span>
-                        </div>
-                        <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
-                          <span className="text-[10px] font-mono text-stone-400">Ref:</span>
-                          <span className="font-bold text-stone-100">{formatModifier((m.refSaveBase || 0) + getAbilityModifier(m.abilities?.DEX?.score || 10))}</span>
-                        </div>
-                        <div className="bg-stone-950/60 border border-stone-800/60 p-1.5 rounded-lg flex items-center justify-center gap-1.5">
-                          <span className="text-[10px] font-mono text-stone-400">Will:</span>
-                          <span className="font-bold text-stone-100">{formatModifier((m.willSaveBase || 0) + getAbilityModifier(m.abilities?.WIS?.score || 10))}</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Ability Scores Grid */}
                   {m.abilities && (

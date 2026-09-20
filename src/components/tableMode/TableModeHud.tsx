@@ -56,7 +56,9 @@ import {
   getSpellSaveDC,
   getSpellAttackBonus,
   getCharacterBab,
-  format35eBabProgression
+  format35eBabProgression,
+  calculate35eAttackBonus,
+  calculate35eDamageFormula
 } from '../../utils/dndCalculations';
 import { DND_CONDITIONS } from '../../data/conditionsData';
 import { RestModal } from '../combat/RestModal';
@@ -1088,46 +1090,63 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {character.attacks.map((atk) => (
-                  <div
-                    key={atk.id}
-                    className="bg-stone-900/80 border border-stone-800 hover:border-amber-500/40 p-3.5 rounded-xl shadow-md transition flex flex-col justify-between space-y-3"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-sm font-bold text-amber-100">{atk.name}</h4>
-                        <div className="text-xs text-stone-400 flex items-center gap-2 mt-0.5">
-                          <span>{atk.range || '5 ft'}</span>
-                          <span>•</span>
-                          <span className="text-amber-300/80">{atk.damageType || 'Physical'}</span>
+                {character.attacks.map((atk) => {
+                  const is35e = character.edition === '3.5e';
+                  const effectiveAtkBonus = is35e
+                    ? calculate35eAttackBonus(character, atk).totalAttackBonus
+                    : atk.attackBonus;
+                  const effectiveDmg = is35e
+                    ? calculate35eDamageFormula(character, atk).damageFormula
+                    : atk.damage;
+
+                  return (
+                    <div
+                      key={atk.id}
+                      className="bg-stone-900/80 border border-stone-800 hover:border-amber-500/40 p-3.5 rounded-xl shadow-md transition flex flex-col justify-between space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <h4 className="text-sm font-bold text-amber-100">{atk.name}</h4>
+                            {is35e && (atk.isTwoHanded || atk.isOffhand) && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded border bg-stone-950 text-amber-300 border-amber-800/60">
+                                {atk.isTwoHanded ? '2H (1.5× STR)' : 'Off-Hand (½ STR)'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-stone-400 flex items-center gap-2 mt-0.5">
+                            <span>{atk.range || '5 ft'}</span>
+                            <span>•</span>
+                            <span className="text-amber-300/80">{atk.damageType || 'Physical'}</span>
+                          </div>
                         </div>
+                        <span className="bg-stone-950 px-2 py-0.5 rounded border border-stone-800 font-mono text-xs font-bold text-amber-400">
+                          {formatModifier(effectiveAtkBonus)} To Hit
+                        </span>
                       </div>
-                      <span className="bg-stone-950 px-2 py-0.5 rounded border border-stone-800 font-mono text-xs font-bold text-amber-400">
-                        {formatModifier(atk.attackBonus)} To Hit
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onRoll(`Attack: ${atk.name}`, 20, 1, atk.attackBonus, rollMode)}
-                        className="py-1.5 px-3 bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                      >
-                        <Swords className="w-3.5 h-3.5 text-amber-400" />
-                        <span>Roll Attack</span>
-                      </button>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onRoll(`Attack: ${atk.name}`, 20, 1, effectiveAtkBonus, rollMode)}
+                          className="py-1.5 px-3 bg-amber-950/80 hover:bg-amber-900 border border-amber-600/50 text-amber-200 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                        >
+                          <Swords className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Roll Attack</span>
+                        </button>
 
-                      <button
-                        type="button"
-                        onClick={() => onRollDamage(`Damage: ${atk.name} (${atk.damageType || 'Physical'})`, atk.damage)}
-                        className="py-1.5 px-3 bg-rose-950/80 hover:bg-rose-900 border border-rose-600/50 text-rose-200 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
-                      >
-                        <Flame className="w-3.5 h-3.5 text-rose-400" />
-                        <span>{atk.damage} Dmg</span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => onRollDamage(`Damage: ${atk.name} (${atk.damageType || 'Physical'})`, effectiveDmg)}
+                          className="py-1.5 px-3 bg-rose-950/80 hover:bg-rose-900 border border-rose-600/50 text-rose-200 font-bold text-xs rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shadow-sm"
+                        >
+                          <Flame className="w-3.5 h-3.5 text-rose-400" />
+                          <span>{effectiveDmg} Dmg</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

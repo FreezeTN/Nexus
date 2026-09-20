@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { CharacterData, AbilityName } from '../../types';
 import {
   DND_5E_LEVEL_TABLE,
+  DND_35E_LEVEL_TABLE,
+  getProgressionTable,
   getXpProgressDetails,
   getClassHitDie,
   getLevelFromTotalXp,
@@ -47,6 +49,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
   const isDualClass = !!(character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass);
   const activeChoiceInRules = getActiveClassChoice(character);
   const [selectedClassKey, setSelectedClassKey] = useState<'primary' | 'secondary'>(activeChoiceInRules);
+  const is35e = character.edition === '3.5e';
 
   const totalGenXp = character.experiencePoints || 0;
   const primaryXp = getPrimaryXp(character);
@@ -66,12 +69,16 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
     : secondaryXp;
 
   // XP Progress Calculations for Selected Class
-  const xpDetails = getXpProgressDetails(activeClassXp, activeClassLevel);
-  const calculatedLevelFromXp = getLevelFromTotalXp(activeClassXp);
+  const xpDetails = getXpProgressDetails(activeClassXp, activeClassLevel, character.edition);
+  const calculatedLevelFromXp = getLevelFromTotalXp(activeClassXp, character.edition);
 
   // Wizard State
   const [targetLevel, setTargetLevel] = useState<number>(() => Math.min(20, activeClassLevel + 1));
-  const [hpMethod, setHpMethod] = useState<'average' | 'roll'>('average');
+  const [hpMethod, setHpMethod] = useState<'average' | 'roll' | 'max'>(() => {
+    if (character.hpCalcMode === 'Max') return 'max';
+    if (character.hpCalcMode === 'Rolled') return 'roll';
+    return 'average';
+  });
   const [rolledHpDie, setRolledHpDie] = useState<number | null>(null);
   const [customHpGain, setCustomHpGain] = useState<number | null>(null);
 
@@ -103,7 +110,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
     if (targetClass === 'primary') {
       const currentPx = getPrimaryXp(character);
       const newPx = currentPx + allocAmount;
-      const newLvl = getLevelFromTotalXp(newPx);
+      const newLvl = getLevelFromTotalXp(newPx, character.edition);
       const autoLvlUp = newLvl > character.level;
 
       onUpdateCharacter({
@@ -125,7 +132,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
       const currentSx = getSecondaryXp(character);
       const newSx = currentSx + allocAmount;
       const secLvl = character.optionalRules?.secondaryLevel || 1;
-      const newLvl = getLevelFromTotalXp(newSx);
+      const newLvl = getLevelFromTotalXp(newSx, character.edition);
       const autoLvlUp = newLvl > secLvl;
 
       onUpdateCharacter({
@@ -158,8 +165,8 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
     const newPx = currentPx + half + remainder;
     const newSx = currentSx + half;
 
-    const pLvl = getLevelFromTotalXp(newPx);
-    const sLvl = getLevelFromTotalXp(newSx);
+    const pLvl = getLevelFromTotalXp(newPx, character.edition);
+    const sLvl = getLevelFromTotalXp(newSx, character.edition);
 
     onUpdateCharacter({
       ...character,
@@ -173,7 +180,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
     });
   };
 
-  // ASI State
+  // ASI & Feat State
   const [selectedAsiType, setSelectedAsiType] = useState<'ability' | 'feat'>('ability');
   const [asiBoosts, setAsiBoosts] = useState<Record<AbilityName, number>>({
     STR: 0,
@@ -193,8 +200,15 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
   const hitDieMeta = getClassHitDie(activeClassName);
   const conMod = getAbilityModifier(character.abilities.CON?.score || 10);
   const averageGainPerLevel = Math.max(1, hitDieMeta.averageHp + conMod);
+  const maxGainPerLevel = Math.max(1, hitDieMeta.dieType + conMod);
 
-  const isAsiLevel = [4, 8, 12, 16, 19].includes(targetLevel);
+  // 3.5e vs 5e progression rules
+  const has35eAbilityIncrease = is35e && [4, 8, 12, 16, 20].includes(targetLevel);
+  const has35eFeat = is35e && [1, 3, 6, 9, 12, 15, 18].includes(targetLevel);
+  const is5eAsiLevel = !is35e && [4, 8, 12, 16, 19].includes(targetLevel);
+  const isAsiLevel = is35e ? (has35eAbilityIncrease || has35eFeat) : is5eAsiLevel;
+  const maxAsiPointsAllowed = is35e ? (has35eAbilityIncrease ? 1 : 0) : 2;
+
   const totalAsiPointsUsed = (Object.values(asiBoosts) as number[]).reduce((acc: number, val: number) => acc + val, 0);
 
   const handleRollHp = () => {
@@ -204,6 +218,9 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
 
   const getEffectiveHpGain = () => {
     if (customHpGain !== null) return customHpGain;
+    if (hpMethod === 'max') {
+      return maxGainPerLevel;
+    }
     if (hpMethod === 'roll' && rolledHpDie !== null) {
       return Math.max(1, rolledHpDie + conMod);
     }
@@ -218,7 +235,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
     const newHitDiceTotal = `${targetLevel}d${hitDieMeta.dieType}`;
 
     let updatedAbilities = { ...character.abilities };
-    if (isAsiLevel && selectedAsiType === 'ability') {
+    if ((!is35e && is5eAsiLevel && selectedAsiType === 'ability') || (is35e && has35eAbilityIncrease)) {
       (Object.keys(asiBoosts) as AbilityName[]).forEach((ab) => {
         const bonus = asiBoosts[ab];
         if (bonus > 0) {
@@ -231,15 +248,15 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
     }
 
     let updatedFeats = [...character.feats];
-    if (isAsiLevel && selectedAsiType === 'feat' && selectedFeatName.trim()) {
+    if ((!is35e && is5eAsiLevel && selectedAsiType === 'feat' && selectedFeatName.trim()) || (is35e && has35eFeat && selectedFeatName.trim())) {
       updatedFeats.push({
         id: 'feat-' + Date.now(),
         name: selectedFeatName.trim(),
-        description: selectedFeatDesc.trim() || `Custom feat unlocked at Level ${targetLevel} (${activeClassName})`
+        description: selectedFeatDesc.trim() || `${is35e ? '3.5e' : '5e'} Feat unlocked at Level ${targetLevel} (${activeClassName})`
       });
     }
 
-    const minXpNeeded = getMinXpForLevel(targetLevel);
+    const minXpNeeded = getMinXpForLevel(targetLevel, character.edition);
 
     if (selectedClassKey === 'secondary') {
       const currentSecXp = getSecondaryXp(character);
@@ -251,6 +268,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
         ...character,
         hpMax: newMaxHp,
         hpCurrent: newCurrentHp,
+        hpCalcMode: hpMethod === 'max' ? 'Max' : (hpMethod === 'roll' ? 'Rolled' : 'Average'),
         hitDiceTotal: newHitDiceTotal,
         abilities: updatedAbilities,
         feats: updatedFeats,
@@ -266,7 +284,6 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
       const syncedChar = syncClassFeaturesForCharacter(updatedChar, activeClassName, targetLevel, character.edition);
       const withRaceScaling = recalculateScalingRaceStats(syncedChar);
       onUpdateCharacter(withRaceScaling);
-      alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
     } else {
       const currentPriXp = getPrimaryXp(character);
       const newPriXp = Math.max(currentPriXp, minXpNeeded);
@@ -278,6 +295,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
         level: targetLevel,
         hpMax: newMaxHp,
         hpCurrent: newCurrentHp,
+        hpCalcMode: hpMethod === 'max' ? 'Max' : (hpMethod === 'roll' ? 'Rolled' : 'Average'),
         hitDiceTotal: newHitDiceTotal,
         hitDiceCurrent: Math.min(targetLevel, character.hitDiceCurrent + 1),
         experiencePoints: newGenXp,
@@ -295,7 +313,6 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
       const syncedChar = syncClassFeaturesForCharacter(updatedChar, character.characterClass, targetLevel, character.edition);
       const withRaceScaling = recalculateScalingRaceStats(syncedChar);
       onUpdateCharacter(withRaceScaling);
-      alert(`🎉 Level Up Complete! ${character.name}'s ${activeClassName} is now Level ${targetLevel}! (+${hpGain} Max HP)`);
     }
     onClose();
   };
@@ -304,7 +321,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
     const newTotalGenXp = (character.experiencePoints || 0) + amount;
 
     if (!isDualClass) {
-      const newCalculatedLevel = getLevelFromTotalXp(newTotalGenXp);
+      const newCalculatedLevel = getLevelFromTotalXp(newTotalGenXp, character.edition);
       const autoLevelUp = newCalculatedLevel > character.level;
 
       onUpdateCharacter({
@@ -369,7 +386,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                 )}
               </div>
               <p className="text-xs text-stone-400 mt-0.5">
-                D&D 5e Character Advancement • Viewing: <strong className="text-amber-300 font-mono">{activeClassName} (Lv. {activeClassLevel})</strong>
+                {is35e ? 'D&D 3.5e Character Advancement' : 'D&D 5e Character Advancement'} • Viewing: <strong className="text-amber-300 font-mono">{activeClassName} (Lv. {activeClassLevel})</strong>
               </p>
             </div>
           </div>
@@ -627,17 +644,20 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-950/80 p-4 rounded-2xl border border-stone-800">
                 <div>
                   <h4 className="font-serif font-bold text-sm text-stone-200 flex items-center gap-2">
-                    <Info className="w-4 h-4 text-amber-400" /> D&D 5e Official Character Advancement Table
+                    <Info className="w-4 h-4 text-amber-400" />
+                    {is35e ? 'D&D 3.5e Official Character Advancement Table (PHB Table 3-2)' : 'D&D 5e Official Character Advancement Table'}
                   </h4>
                   <p className="text-xs text-stone-400 mt-0.5">
-                    Defines total XP thresholds, step sizes, relative progress percentages, and proficiency bonus scaling.
+                    {is35e
+                      ? 'Defines total XP thresholds (Current Level × 1,000 XP), max skill ranks (Class: Lv+3 / Cross-Class: (Lv+3)/2), and feat/ability milestones.'
+                      : 'Defines total XP thresholds, step sizes, relative progress percentages, and proficiency bonus scaling.'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => {
-                      const newXp = getMinXpForLevel(calculatedLevelFromXp);
+                      const newXp = getMinXpForLevel(calculatedLevelFromXp, character.edition);
                       onUpdateCharacter({ ...character, experiencePoints: newXp, level: calculatedLevelFromXp });
                     }}
                     className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-600/40 rounded-xl text-xs font-bold transition flex items-center gap-1"
@@ -656,15 +676,24 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                       <th className="p-3 text-center">Level</th>
                       <th className="p-3">Experience Points</th>
                       <th className="p-3">XP to Next Level</th>
-                      <th className="p-3">Relative % Exp. to Progress</th>
-                      <th className="p-3 text-center">Proficiency Bonus</th>
+                      {is35e ? (
+                        <>
+                          <th className="p-3 text-center">Max Skill Ranks (Class / Cross)</th>
+                          <th className="p-3 text-center">Feat / Stat Milestone</th>
+                        </>
+                      ) : (
+                        <>
+                          <th className="p-3">Relative % Exp. to Progress</th>
+                          <th className="p-3 text-center">Proficiency Bonus</th>
+                        </>
+                      )}
                       <th className="p-3">Milestone Features & Benefits</th>
                       <th className="p-3 text-center">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-800/60 font-mono">
-                    {DND_5E_LEVEL_TABLE.map((row) => {
-                      const isCurrentLevel = row.level === character.level;
+                    {getProgressionTable(character.edition).map((row) => {
+                      const isCurrentLevel = row.level === activeClassLevel;
                       const isTargetLevel = row.level === calculatedLevelFromXp;
 
                       return (
@@ -691,15 +720,42 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                           <td className="p-3 text-stone-300">
                             {row.xpToNextLevel ? `${row.xpToNextLevel.toLocaleString()} XP` : 'MAX'}
                           </td>
-                          <td className="p-3 text-stone-400">
-                            {row.relativePercentageIncrease !== null ? `${row.relativePercentageIncrease.toFixed(1)}%` : '—'}
-                          </td>
-                          <td className="p-3 text-center font-bold text-amber-400">
-                            +{row.proficiencyBonus}
-                          </td>
+                          {is35e ? (
+                            <>
+                              <td className="p-3 text-center font-mono text-cyan-300 font-bold">
+                                {row.maxClassSkillRanks} <span className="text-stone-500 font-normal">/</span> {row.maxCrossClassSkillRanks}
+                              </td>
+                              <td className="p-3 text-center">
+                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                  {row.hasAbilityIncrease && (
+                                    <span className="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-[10px] rounded font-mono font-bold">
+                                      +1 Stat
+                                    </span>
+                                  )}
+                                  {row.hasFeat && (
+                                    <span className="px-1.5 py-0.5 bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 text-[10px] rounded font-mono font-bold">
+                                      Feat
+                                    </span>
+                                  )}
+                                  {!row.hasAbilityIncrease && !row.hasFeat && (
+                                    <span className="text-stone-600">—</span>
+                                  )}
+                                </div>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-3 text-stone-400">
+                                {row.relativePercentageIncrease !== null ? `${row.relativePercentageIncrease.toFixed(1)}%` : '—'}
+                              </td>
+                              <td className="p-3 text-center font-bold text-amber-400">
+                                +{row.proficiencyBonus}
+                              </td>
+                            </>
+                          )}
                           <td className="p-3 font-sans text-stone-300 max-w-xs">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {row.asiOrFeat && (
+                              {!is35e && row.asiOrFeat && (
                                 <span className="px-1.5 py-0.5 bg-amber-500/20 border border-amber-500/50 text-amber-300 text-[10px] rounded font-mono font-bold">
                                   ASI / Feat
                                 </span>
@@ -769,16 +825,18 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                 <div className="space-y-3 bg-stone-900/60 p-4 rounded-xl border border-stone-800">
                   <div className="flex items-center justify-between">
                     <h5 className="font-serif font-bold text-sm text-stone-200 flex items-center gap-2">
-                      <Shield className="w-4 h-4 text-amber-400" /> 1. Hit Point Increase ({character.characterClass} Hit Die: d{hitDieMeta.dieType})
+                      <Shield className="w-4 h-4 text-amber-400" /> 1. Hit Point Increase ({activeClassName} Hit Die: d{hitDieMeta.dieType})
                     </h5>
                     <span className="text-xs font-mono text-amber-300">CON Modifier: {formatModifier(conMod)}</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Take Average */}
                     <button
+                      type="button"
+                      id="btn-hp-method-average"
                       onClick={() => setHpMethod('average')}
-                      className={`p-4 rounded-xl border text-left transition space-y-1 ${
+                      className={`p-4 rounded-xl border text-left transition space-y-1 cursor-pointer ${
                         hpMethod === 'average'
                           ? 'bg-amber-950/60 border-amber-500 ring-1 ring-amber-500/50 text-amber-200'
                           : 'bg-stone-950 border-stone-800 hover:border-stone-700 text-stone-400'
@@ -793,8 +851,32 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                       </p>
                     </button>
 
+                    {/* Max Value HP */}
+                    <button
+                      type="button"
+                      id="btn-hp-method-max"
+                      onClick={() => setHpMethod('max')}
+                      className={`p-4 rounded-xl border text-left transition space-y-1 cursor-pointer ${
+                        hpMethod === 'max'
+                          ? 'bg-amber-950/60 border-amber-500 ring-1 ring-amber-500/50 text-amber-200'
+                          : 'bg-stone-950 border-stone-800 hover:border-stone-700 text-stone-400'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between font-serif font-bold text-xs">
+                        <span className="flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                          <span>Max Value HP</span>
+                        </span>
+                        <span className="font-mono text-amber-300">+{maxGainPerLevel} HP</span>
+                      </div>
+                      <p className="text-[11px] text-stone-400">
+                        Max die ({hitDieMeta.dieType}) + CON mod ({formatModifier(conMod)}) = +{maxGainPerLevel} Max HP
+                      </p>
+                    </button>
+
                     {/* Roll Hit Die */}
                     <div
+                      id="btn-hp-method-roll"
                       onClick={() => setHpMethod('roll')}
                       className={`p-4 rounded-xl border text-left transition space-y-2 cursor-pointer ${
                         hpMethod === 'roll'
@@ -807,6 +889,7 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                           <Dices className="w-4 h-4 text-amber-400" /> Roll Hit Die (1d{hitDieMeta.dieType})
                         </span>
                         <button
+                          type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             setHpMethod('roll');
@@ -838,21 +921,144 @@ export const LevelProgressionModal: React.FC<LevelProgressionModalProps> = ({
                   </div>
                 </div>
 
-                {/* Step 2: Proficiency Bonus Updates */}
-                <div className="p-4 bg-stone-900/60 rounded-xl border border-stone-800 flex items-center justify-between text-xs">
-                  <div>
-                    <h5 className="font-serif font-bold text-stone-200">2. Proficiency Bonus Scaling</h5>
-                    <p className="text-stone-400 mt-0.5">Calculated automatically for Level {targetLevel}</p>
+                {/* Step 2: Proficiency Bonus (5e) or Skill Ranks Cap (3.5e) */}
+                {is35e ? (
+                  <div className="p-4 bg-stone-900/60 rounded-xl border border-stone-800 flex items-center justify-between text-xs">
+                    <div>
+                      <h5 className="font-serif font-bold text-stone-200">2. Skill Ranks Cap Scaling</h5>
+                      <p className="text-stone-400 mt-0.5">3.5e maximum skill rank limits scale automatically</p>
+                    </div>
+                    <div className="text-right font-mono space-y-0.5">
+                      <div>
+                        <span className="text-stone-400">Class Skills: </span>
+                        <span className="text-stone-300">Max {character.level + 3}</span>
+                        <span className="mx-1.5 text-stone-600">➔</span>
+                        <span className="text-amber-300 font-bold">Max {targetLevel + 3}</span>
+                      </div>
+                      <div>
+                        <span className="text-stone-400">Cross-Class: </span>
+                        <span className="text-stone-300">Max {((character.level + 3) / 2).toFixed(1)}</span>
+                        <span className="mx-1.5 text-stone-600">➔</span>
+                        <span className="text-amber-300 font-bold">Max {((targetLevel + 3) / 2).toFixed(1)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-right font-mono">
-                    <span className="text-stone-400">Level {character.level}: +{getProficiencyBonus(character.level)}</span>
-                    <span className="mx-2 text-stone-600">➔</span>
-                    <span className="text-amber-300 font-bold text-sm">Level {targetLevel}: +{getProficiencyBonus(targetLevel)}</span>
+                ) : (
+                  <div className="p-4 bg-stone-900/60 rounded-xl border border-stone-800 flex items-center justify-between text-xs">
+                    <div>
+                      <h5 className="font-serif font-bold text-stone-200">2. Proficiency Bonus Scaling</h5>
+                      <p className="text-stone-400 mt-0.5">Calculated automatically for Level {targetLevel}</p>
+                    </div>
+                    <div className="text-right font-mono">
+                      <span className="text-stone-400">Level {character.level}: +{getProficiencyBonus(character.level)}</span>
+                      <span className="mx-2 text-stone-600">➔</span>
+                      <span className="text-amber-300 font-bold text-sm">Level {targetLevel}: +{getProficiencyBonus(targetLevel)}</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Step 3: Ability Score Improvement (ASI) or Feat */}
-                {isAsiLevel && (
+                {/* Step 3 (3.5e): Ability Score Increase */}
+                {is35e && has35eAbilityIncrease && (
+                  <div className="space-y-4 bg-stone-900/80 p-5 rounded-xl border border-amber-500/50">
+                    <div>
+                      <h5 className="font-serif font-bold text-sm text-amber-200 flex items-center gap-2">
+                        <Award className="w-4 h-4 text-amber-400" /> 3. Level {targetLevel} Ability Score Increase (+1 to Any Stat)
+                      </h5>
+                      <p className="text-xs text-stone-400 mt-0.5">
+                        3.5e RAW (PHB Table 3-2): Allocate +1 to any single ability score (no max 20 limitation applies in 3.5e).
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between text-xs font-mono">
+                        <span className="text-stone-400">Point Allocated:</span>
+                        <span className={`font-bold ${totalAsiPointsUsed === 1 ? 'text-emerald-400' : 'text-amber-400'}`}>
+                          {totalAsiPointsUsed} / 1 Point
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                        {(['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as AbilityName[]).map((ab) => {
+                          const score = character.abilities[ab]?.score || 10;
+                          const bonus = asiBoosts[ab];
+
+                          return (
+                            <div key={ab} className="bg-stone-950 p-3 rounded-xl border border-stone-800 text-center space-y-2">
+                              <span className="text-xs font-serif font-bold text-stone-300 block">{ab}</span>
+                              <div className="text-base font-mono font-bold text-amber-300">
+                                {score} {bonus > 0 ? <span className="text-emerald-400">(+{bonus})</span> : ''}
+                              </div>
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => {
+                                    if (bonus > 0) {
+                                      setAsiBoosts(prev => ({ ...prev, [ab]: prev[ab] - 1 }));
+                                    }
+                                  }}
+                                  disabled={bonus <= 0}
+                                  className="w-6 h-6 rounded bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-stone-200 font-bold"
+                                >
+                                  -
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    if (totalAsiPointsUsed < 1) {
+                                      setAsiBoosts(prev => ({ ...prev, [ab]: prev[ab] + 1 }));
+                                    }
+                                  }}
+                                  disabled={totalAsiPointsUsed >= 1}
+                                  className="w-6 h-6 rounded bg-amber-600 hover:bg-amber-500 disabled:opacity-30 text-stone-950 font-bold"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3 (3.5e) or Step 4: Feat Milestone */}
+                {is35e && has35eFeat && (
+                  <div className="space-y-4 bg-stone-900/80 p-5 rounded-xl border border-indigo-500/50">
+                    <div>
+                      <h5 className="font-serif font-bold text-sm text-indigo-200 flex items-center gap-2">
+                        <Award className="w-4 h-4 text-indigo-400" /> {has35eAbilityIncrease ? '4.' : '3.'} Level {targetLevel} Feat Milestone
+                      </h5>
+                      <p className="text-xs text-stone-400 mt-0.5">
+                        3.5e RAW (PHB Table 3-2): Gain a general feat at 1st, 3rd, 6th, 9th, 12th, 15th, and 18th level.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-stone-400 mb-1">Feat Title</label>
+                        <input
+                          type="text"
+                          placeholder="e.g., Power Attack, Cleave, Dodge, Improved Initiative, Weapon Focus..."
+                          value={selectedFeatName}
+                          onChange={(e) => setSelectedFeatName(e.target.value)}
+                          className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-xs text-stone-100"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-stone-400 mb-1">Feat Benefits & Description</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Enter 3.5e feat prerequisites and mechanical benefits..."
+                          value={selectedFeatDesc}
+                          onChange={(e) => setSelectedFeatDesc(e.target.value)}
+                          className="w-full bg-stone-950 border border-stone-700 rounded-xl p-2.5 text-xs text-stone-100"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3 (5e): Ability Score Improvement (ASI) or Feat */}
+                {!is35e && is5eAsiLevel && (
                   <div className="space-y-4 bg-stone-900/80 p-5 rounded-xl border border-amber-500/50">
                     <div className="flex items-center justify-between">
                       <div>

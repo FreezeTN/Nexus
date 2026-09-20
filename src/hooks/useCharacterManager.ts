@@ -488,20 +488,23 @@ export function useCharacterManager({
       quantity: itemWithId.quantity || 1
     });
 
-    try {
-      saveCustomCompendiumEntry({
-        id: 'comp-gear-' + itemWithId.id,
-        name: itemWithId.name,
-        category: 'items',
-        edition: activeCharacter?.edition || '5e',
-        description: `${itemWithId.itemType || 'General'} item weighing ${itemWithId.weight} lbs. ${itemWithId.notes || ''}`,
-        source: 'AI Forge',
-        isCustom: true,
-        tags: [activeCharacter?.edition || '5e', itemWithId.itemType || 'General'],
-        itemData: itemWithId
-      });
-    } catch (e) {
-      console.warn('Failed to auto-save forged item to compendium:', e);
+    // Only save to custom compendium if explicitly flagged as a custom homebrew item with saveToCompendium
+    if (itemWithId.isCustom && (itemWithId as any).saveToCompendium) {
+      try {
+        saveCustomCompendiumEntry({
+          id: 'comp-gear-' + itemWithId.id,
+          name: itemWithId.name,
+          category: 'items',
+          edition: activeCharacter?.edition || '5e',
+          description: `${itemWithId.itemType || 'General'} item weighing ${itemWithId.weight} lbs. ${itemWithId.notes || ''}`,
+          source: (itemWithId as any).source || 'AI Forge',
+          isCustom: true,
+          tags: [activeCharacter?.edition || '5e', itemWithId.itemType || 'General'],
+          itemData: itemWithId
+        });
+      } catch (e) {
+        console.warn('Failed to auto-save custom item to compendium:', e);
+      }
     }
   };
 
@@ -565,20 +568,23 @@ export function useCharacterManager({
     eventBus.emit('CharacterUpdated', { character: updatedChar });
     eventBus.emit('SpellLearned', { characterId: resolvedTargetId, spellName: spellWithId.name, level: spellWithId.level });
 
-    try {
-      saveCustomCompendiumEntry({
-        id: 'comp-spell-' + spellWithId.id,
-        name: spellWithId.name,
-        category: 'spells',
-        edition: activeCharacter?.edition || '5e',
-        description: spellWithId.description || spellWithId.shortDescription || '',
-        source: 'AI Forge',
-        isCustom: true,
-        tags: [activeCharacter?.edition || '5e', `Level ${spellWithId.level}`, spellWithId.school || 'Magic'],
-        spellData: spellWithId
-      });
-    } catch (e) {
-      console.warn('Failed to auto-save forged spell to compendium:', e);
+    // Only save to custom compendium if explicitly flagged as a custom homebrew spell with saveToCompendium
+    if ((spellWithId as any).isCustom && (spellWithId as any).saveToCompendium) {
+      try {
+        saveCustomCompendiumEntry({
+          id: 'comp-spell-' + spellWithId.id,
+          name: spellWithId.name,
+          category: 'spells',
+          edition: activeCharacter?.edition || '5e',
+          description: spellWithId.description || spellWithId.shortDescription || '',
+          source: (spellWithId as any).source || 'AI Forge',
+          isCustom: true,
+          tags: [activeCharacter?.edition || '5e', `Level ${spellWithId.level}`, spellWithId.school || 'Magic'],
+          spellData: spellWithId
+        });
+      } catch (e) {
+        console.warn('Failed to auto-save custom spell to compendium:', e);
+      }
     }
   };
 

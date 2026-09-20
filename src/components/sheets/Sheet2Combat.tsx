@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CharacterData, Party } from '../../types';
+import { CharacterData, Party, RuleEdition } from '../../types';
 import { UserProfile, GameSession } from '../../lib/firebase';
 import { ShadowrunCombatPanel } from '../shadowrun/ShadowrunCombatPanel';
 import { EncounterTracker } from '../combat/EncounterTracker';
@@ -19,6 +19,7 @@ import { ModifierTarget } from '../../domain/modifierEngine';
 
 interface Sheet2Props {
   character: CharacterData;
+  edition?: RuleEdition;
   allCharacters?: CharacterData[];
   parties?: Party[];
   currentUser?: UserProfile | null;
@@ -34,6 +35,7 @@ interface Sheet2Props {
 
 export const Sheet2Combat: React.FC<Sheet2Props> = ({
   character,
+  edition,
   allCharacters = [],
   parties = [],
   currentUser,
@@ -189,6 +191,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
       {hasAttacksVisible && (
         <AttacksSpellsPanel
           character={character}
+          edition={edition}
           onUpdateCharacter={onUpdateCharacter}
           onRoll={onRoll}
           onRollDamage={onRollDamage}

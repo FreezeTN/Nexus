@@ -12,11 +12,16 @@ import {
   apply35eDefaultClassSkills,
   check35eSkillRankCap,
   DND35E_SKILL_SYNERGIES,
+  getSynergiesGrantedBySkill,
+  isSkillGrantingSynergy,
+  getActiveGrantingSynergySkills,
   calculate35eTotalArmorCheckPenalty,
   DND35E_ACP_SKILLS,
   getSizeHideModifier,
   resolveRacialSkillBonus,
-  getRacialSkillBonusForSkill
+  getRacialSkillBonusForSkill,
+  getGestaltBaseSkillPoints,
+  get35eClassBaseSkillPoints
 } from '../../../utils/dndCalculations';
 import {
   Shield,
@@ -28,7 +33,9 @@ import {
   AlertTriangle,
   Info,
   Filter,
-  Dna
+  Dna,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { ConditionalSkillRollModal } from '../../modals/ConditionalSkillRollModal';
 import { CharacterRacialBonusesModal } from '../../modals/CharacterRacialBonusesModal';
@@ -76,7 +83,8 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
   const effectiveAbilities = getEffectiveAbilities(character);
   const acpInfo = calculate35eTotalArmorCheckPenalty(character);
 
-  const [filterMode, setFilterMode] = useState<'all' | 'class' | 'cross' | 'trained' | 'synergy'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'class' | 'cross' | 'trained' | 'synergy' | 'knowledge'>('all');
+  const [isTallView, setIsTallView] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showRacialBonusesModal, setShowRacialBonusesModal] = useState(false);
   const [conditionalRollModalSkill, setConditionalRollModalSkill] = useState<{
@@ -133,8 +141,8 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
     onUpdateCharacter(updated);
   };
 
-  // Find all skills that currently grant synergies
-  const skillsGrantingSynergies = character.skills.filter(s => (s.ranks || 0) >= 5);
+  // Find all skills that currently grant synergies according to 3.5e rules
+  const skillsGrantingSynergies = character.edition === '3.5e' ? getActiveGrantingSynergySkills(character.skills) : [];
 
   return (
     <CollapsibleBox
@@ -163,8 +171,11 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
       <div className="space-y-2 pt-2">
         {/* 3.5e Skill Point Calculator Summary Panel */}
         {character.edition === '3.5e' && (() => {
-          const defaultBaseSP = ['Rogue'].includes(character.characterClass) ? 8 : ['Bard', 'Ranger'].includes(character.characterClass) ? 6 : ['Barbarian', 'Druid', 'Monk'].includes(character.characterClass) ? 4 : 2;
-          const baseSP = character.classBaseSkillPoints ?? defaultBaseSP;
+          const isGestalt = Boolean(character.optionalRules?.useGestaltUA72);
+          const defaultBaseSP = isGestalt
+            ? getGestaltBaseSkillPoints(character)
+            : get35eClassBaseSkillPoints(character.characterClass);
+          const baseSP = Math.max(character.classBaseSkillPoints ?? 0, defaultBaseSP);
           const intMod = getAbilityModifier(character.abilities.INT?.score || 10);
           const isHuman = character.race.toLowerCase().includes('human') || (character.hybridHeritage?.isTemplateMode && character.hybridHeritage?.baseRaceId === 'human');
 
@@ -185,16 +196,23 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
           return (
             <div className="mb-2 bg-stone-950 p-3 rounded-xl border border-amber-600/40 space-y-2 text-xs">
               <div className="flex items-center justify-between">
-                <span className="font-serif font-bold text-amber-300 flex items-center gap-1.5">
+                <span className="font-serif font-bold text-amber-300 flex items-center gap-1.5 flex-wrap">
                   <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  3.5e Skill Points & Caps
+                  <span>3.5e Skill Points & Caps</span>
+                  {isGestalt && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950/80 text-amber-300 border border-amber-500/50" title="Gestalt UA p. 72: Gains higher skill points and combined class skills of all simultaneous tracks">
+                      Gestalt ({baseSP} SP/lvl)
+                    </span>
+                  )}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={handleApplyDefaultClassSkills}
                     className="px-2 py-0.5 bg-stone-900 hover:bg-stone-800 text-amber-300 border border-amber-700/40 rounded text-[10px] font-mono flex items-center gap-1 transition"
-                    title={`Auto-check Class Skills according to 3.5e PHB rules for ${character.characterClass}`}
+                    title={isGestalt
+                      ? `Auto-check combined Class Skills for all Gestalt tracks (UA p. 72)`
+                      : `Auto-check Class Skills according to 3.5e PHB rules for ${character.characterClass}`}
                   >
                     <RefreshCw className="w-2.5 h-2.5" /> Class Skills
                   </button>
@@ -213,16 +231,16 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 text-center font-mono py-1.5 bg-stone-900/80 rounded-lg border border-stone-800">
-                <div>
+              <div className="grid grid-cols-3 gap-2 text-center font-mono py-2 bg-stone-900/80 rounded-lg border border-stone-800">
+                <div className="flex flex-col items-center justify-center">
                   <div className="text-[10px] text-stone-400 uppercase">Available</div>
                   <div className="text-sm font-bold text-amber-300">{totalAvailableSP} SP</div>
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <div className="text-[10px] text-stone-400 uppercase">Spent</div>
                   <div className="text-sm font-bold text-stone-200">{totalSpentSP} SP</div>
                 </div>
-                <div>
+                <div className="flex flex-col items-center justify-center">
                   <div className="text-[10px] text-stone-400 uppercase">Remaining</div>
                   <div className={`text-sm font-bold ${remainingSP < 0 ? 'text-rose-400 animate-pulse' : 'text-emerald-400'}`}>
                     {remainingSP} SP
@@ -230,9 +248,14 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                 </div>
               </div>
 
-              <div className="text-[10px] text-stone-400 flex items-center justify-between pt-0.5 font-mono">
-                <span>Class Max: <strong className="text-amber-300">{maxClassRanks} Ranks</strong> (1 SP/Rank)</span>
-                <span>Cross Max: <strong className="text-stone-300">{maxCrossRanks} Ranks</strong> (2 SP/Rank)</span>
+              <div className="text-[10px] text-stone-400 flex flex-wrap items-center justify-around gap-2 py-1.5 px-2 bg-stone-900/50 rounded-lg border border-stone-800/60 font-mono text-center">
+                <span title="Class Skill maximum ranks = Character Level + 3. 1 Skill Point buys 1 full Rank.">
+                  Class Skill Max: <strong className="text-amber-300">{maxClassRanks} Ranks</strong> (1 SP = 1 Rank)
+                </span>
+                <span className="text-stone-600 hidden sm:inline">•</span>
+                <span title="D&D 3.5e PHB p. 62: Cross-Class maximum rank = (Level + 3) / 2. 1 SP buys ½ Rank (2 SP for 1 full Rank). At Level 6, max is 4.5 ranks, costing 9 SP total.">
+                  Cross-Class Max: <strong className="text-stone-200">{maxCrossRanks} Ranks</strong> (2 SP = 1 Rank / 1 SP = ½ Rank)
+                </span>
               </div>
 
               {/* 3.5e Half-Breed Template Notice if active */}
@@ -243,13 +266,17 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                 </div>
               )}
 
-              {/* Active Synergies summary banner if any 5+ rank skills exist */}
+              {/* Active Synergies summary banner if any skills actively grant synergies */}
               {skillsGrantingSynergies.length > 0 && (
                 <div className="pt-1 border-t border-stone-800/80 text-[10px] text-emerald-400 font-mono flex items-center gap-1.5 overflow-x-auto">
                   <span className="text-stone-400 font-bold shrink-0">Active Synergies (5+ Ranks):</span>
-                  {skillsGrantingSynergies.map(s => (
-                    <span key={s.id} className="px-1.5 py-0.2 bg-emerald-950/60 border border-emerald-700/50 rounded text-emerald-300 shrink-0">
-                      {s.name} ({s.ranks})
+                  {skillsGrantingSynergies.map(item => (
+                    <span
+                      key={item.skill.id}
+                      title={item.description}
+                      className="px-1.5 py-0.2 bg-emerald-950/60 border border-emerald-700/50 rounded text-emerald-300 shrink-0 cursor-help"
+                    >
+                      {item.skill.name} ({item.skill.ranks})
                     </span>
                   ))}
                 </div>
@@ -275,16 +302,16 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
 
         {/* Search & Filter Controls for 3.5e */}
         {character.edition === '3.5e' && (
-          <div className="flex items-center gap-1.5 pb-1">
+          <div className="flex items-center gap-1.5 pb-1 flex-wrap">
             <input
               type="text"
               placeholder="Search skills..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 bg-stone-950 border border-stone-800 rounded-lg px-2.5 py-1 text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-amber-600"
+              className="flex-1 min-w-[120px] bg-stone-950 border border-stone-800 rounded-lg px-2.5 py-1 text-xs text-stone-200 placeholder-stone-600 focus:outline-none focus:border-amber-600"
             />
-            <div className="flex items-center gap-1 text-[10px] font-mono">
-              {(['all', 'class', 'trained', 'synergy'] as const).map((mode) => (
+            <div className="flex items-center gap-1 text-[10px] font-mono flex-wrap">
+              {(['all', 'class', 'cross', 'trained', 'synergy', 'knowledge'] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -295,14 +322,26 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                       : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-white'
                   }`}
                 >
-                  {mode}
+                  {mode === 'cross' ? 'Cross-Class' : mode}
                 </button>
               ))}
+              <button
+                type="button"
+                onClick={() => setIsTallView(!isTallView)}
+                className={`p-1 rounded border transition ${
+                  isTallView
+                    ? 'bg-amber-700/60 border-amber-500 text-amber-200'
+                    : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                }`}
+                title={isTallView ? 'Collapse skill list view' : 'Expand full height skill list'}
+              >
+                {isTallView ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              </button>
             </div>
           </div>
         )}
 
-        <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
+        <div className={`space-y-1.5 ${isTallView ? 'max-h-none' : 'max-h-[560px]'} overflow-y-auto pr-1`}>
           {character.skills
             .filter((skill) => {
               if (searchQuery && !skill.name.toLowerCase().includes(searchQuery.toLowerCase())) {
@@ -310,10 +349,12 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
               }
               if (character.edition === '3.5e') {
                 if (filterMode === 'class' && skill.isClassSkill === false) return false;
+                if (filterMode === 'cross' && skill.isClassSkill !== false) return false;
                 if (filterMode === 'trained' && (!skill.ranks || skill.ranks === 0)) return false;
+                if (filterMode === 'knowledge' && !skill.name.toLowerCase().startsWith('knowledge')) return false;
                 if (filterMode === 'synergy') {
                   const syn = get35eSkillSynergyBonus(skill.name, character.skills);
-                  const isGranting = (skill.ranks || 0) >= 5;
+                  const isGranting = isSkillGrantingSynergy(skill.name, skill.ranks || 0);
                   if (syn.totalBonus === 0 && !isGranting) return false;
                 }
               }
@@ -324,6 +365,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
 
               if (character.edition === '3.5e') {
                 const synergyInfo = get35eSkillSynergyBonus(skill.name, character.skills);
+                const grantedSynergies = getSynergiesGrantedBySkill(skill.name, skill.ranks || 0);
                 const isAcpSkill = DND35E_ACP_SKILLS.includes(skill.name);
                 const isSwim = skill.name.toLowerCase() === 'swim';
                 const isHide = skill.name.toLowerCase() === 'hide';
@@ -398,13 +440,23 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                           </button>
                         ))}
 
-                        {/* Synergy Badge */}
+                        {/* Synergy Received Badge */}
                         {synergyInfo.totalBonus > 0 && (
                           <span
                             className="px-1.5 py-0.5 bg-emerald-950 border border-emerald-600/60 text-emerald-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
                             title={`+${synergyInfo.totalBonus} Synergy Bonus from: ${synergyInfo.sources.join(', ')}`}
                           >
                             +{synergyInfo.totalBonus} Syn
+                          </span>
+                        )}
+
+                        {/* Synergy Granted Badge */}
+                        {grantedSynergies.length > 0 && (
+                          <span
+                            className="px-1.5 py-0.5 bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 text-[9px] font-mono font-bold rounded shrink-0 cursor-help"
+                            title={`${skill.name} (${skill.ranks || 0} ranks) grants synergy to: ${grantedSynergies.map(g => `${g.targetSkill} (+${g.bonus}${g.conditionDesc ? ` ${g.conditionDesc}` : ''})`).join(', ')}`}
+                          >
+                            Grants Syn
                           </span>
                         )}
 
@@ -444,14 +496,15 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 text-[11px] font-mono shrink-0">
-                      <div className="flex items-center gap-0.5 bg-stone-900 border border-stone-800 rounded px-1.5 py-0.5" title="Skill Ranks (R)">
+                      <div className="flex items-center gap-0.5 bg-stone-900 border border-stone-800 rounded px-1.5 py-0.5" title="Skill Ranks (R) — 1 SP = 1 Class Rank, 2 SP = 1 Cross-Class Rank (1 SP = ½ Rank)">
                         <span className="text-stone-500 text-[9px]">R:</span>
                         <input
                           type="number"
                           min="0"
+                          step="0.5"
                           value={skill.ranks || 0}
-                          onChange={(e) => handle35eSkillChange(skill.id, 'ranks', parseInt(e.target.value) || 0)}
-                          className="w-6 bg-transparent text-center font-bold text-amber-300 focus:outline-none"
+                          onChange={(e) => handle35eSkillChange(skill.id, 'ranks', parseFloat(e.target.value) || 0)}
+                          className="w-8 bg-transparent text-center font-bold text-amber-300 focus:outline-none"
                         />
                       </div>
 

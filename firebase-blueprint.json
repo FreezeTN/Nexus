@@ -147,12 +147,34 @@
         "updatedAt": { "type": "string", "maxLength": 64 }
       },
       "required": ["id", "ownerId", "name", "category"]
+    },
+    "BattlemapLayout": {
+      "title": "Battlemap Layout",
+      "description": "Pre-built tactical battlemap layout with terrain, doors, fog, and token spawn placements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "authorId": { "type": "string", "maxLength": 128 },
+        "authorName": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "category": { "type": "string", "maxLength": 64 },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "data": { "type": "object" }
+      },
+      "required": ["id", "authorId", "name"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "User profile records with strict owner-only update and auth-verified access"
+    },
+    "/battlemap_layouts/{layoutId}": {
+      "schema": { "$ref": "#/entities/BattlemapLayout" },
+      "description": "Pre-built tactical battlemap layouts saved and loaded by DMs"
     },
     "/users/{userId}/custom_compendium/{entryId}": {
       "schema": { "$ref": "#/entities/CustomCompendiumEntry" },

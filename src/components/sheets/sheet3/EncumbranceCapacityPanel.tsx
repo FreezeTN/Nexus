@@ -5,7 +5,8 @@ import {
   getCarryingCapacity,
   getTotalWeight,
   getEncumbranceDetails,
-  getWeightBreakdown
+  getWeightBreakdown,
+  isEncumbranceRuleActive
 } from '../../../utils/dndCalculations';
 import { getContainerWeightSummaries } from '../../../utils/containerUtils';
 import { Weight, ShieldAlert, Scale, Sparkles, Coins, Package, Check, Info } from 'lucide-react';
@@ -14,21 +15,29 @@ import { useLanguage } from '../../../i18n/LanguageContext';
 interface EncumbranceCapacityPanelProps {
   character: CharacterData;
   onUpdateCharacter?: (updated: CharacterData) => void;
+  activeSession?: any;
 }
 
 export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> = ({
   character,
-  onUpdateCharacter
+  onUpdateCharacter,
+  activeSession
 }) => {
   const { t } = useLanguage();
+  
+  if (!isEncumbranceRuleActive(character, activeSession)) {
+    return null;
+  }
+
   const carryingCap = getCarryingCapacity(character);
   const totalWeight = getTotalWeight(character);
-  const encumbrance = getEncumbranceDetails(character);
+  const encumbrance = getEncumbranceDetails(character, activeSession);
   const weightBreakdown = getWeightBreakdown(character);
   const containerSummaries = getContainerWeightSummaries(character);
 
   const isEncumbered = encumbrance.status !== 'Normal';
   const isCoinWeightActive = character.optionalRules?.includeCoinWeight ?? true;
+  const is35e = character.edition === '3.5e';
 
   const toggleCoinWeight = () => {
     if (!onUpdateCharacter) return;
@@ -41,12 +50,14 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
     });
   };
 
-  const penaltyDescription = `Speed Penalty: -${encumbrance.speedPenalty} ft${encumbrance.hasDisadvantage ? ' & Disadvantage on physical checks/saves' : ''}`;
+  const penaltyDescription = is35e
+    ? `3.5e Load Penalties: Max DEX to AC: ${encumbrance.maxDexBonus35e !== null ? `+${encumbrance.maxDexBonus35e}` : 'None'} | Armor Check Penalty: ${encumbrance.loadAcp35e} | Speed: ${encumbrance.load35e === 'overburdened' ? '5 ft max' : 'Reduced (30ft➔20ft, 20ft➔15ft)'} | Run: ${encumbrance.runMultiplier35e}x`
+    : `Speed Penalty: -${encumbrance.speedPenalty} ft${encumbrance.hasDisadvantage ? ' & Disadvantage on physical checks/saves' : ''}`;
   const weightPercentage = Math.min(100, Math.round((totalWeight / (carryingCap || 1)) * 100));
 
   return (
     <CollapsibleBox
-      title={t('inventory.carryingCapacity', 'Carrying Capacity & Encumbrance Rules')}
+      title={is35e ? '3.5e Carrying Capacity & Encumbrance (PHB Table 9-1 & 9-2)' : t('inventory.carryingCapacity', 'Carrying Capacity & Encumbrance Rules')}
       icon={<Weight className="w-5 h-5 text-amber-500" />}
       storageKey="sheet3_encumbrance"
       headerExtra={
@@ -62,7 +73,7 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
               ? 'bg-rose-950 text-rose-300 border-rose-600/60 animate-pulse'
               : 'bg-emerald-950 text-emerald-300 border-emerald-600/50'
           }`}>
-            {encumbrance.status} ({totalWeight.toFixed(1)} / {carryingCap} lbs)
+            {is35e ? (encumbrance.load35eLabel || encumbrance.status) : encumbrance.status} ({totalWeight.toFixed(1)} / {carryingCap} lbs)
           </div>
         </div>
       }
@@ -74,9 +85,9 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
             <span className="flex items-center gap-1.5">
               <Scale className="w-4 h-4 text-amber-400" />
               Weight Carried: <strong className="text-amber-200">{totalWeight.toFixed(1)} lbs</strong>
-              <span className="text-[10px] text-stone-500">({weightPercentage}% cap)</span>
+              <span className="text-[10px] text-stone-500">({weightPercentage}% {is35e ? 'heavy load' : 'cap'})</span>
             </span>
-            <span>Max Capacity: <strong className="text-stone-200">{carryingCap} lbs</strong></span>
+            <span>{is35e ? 'Max Heavy Load:' : 'Max Capacity:'} <strong className="text-stone-200">{carryingCap} lbs</strong></span>
           </div>
 
           <div className="w-full h-3.5 bg-stone-900 rounded-full border border-stone-800 overflow-hidden relative shadow-inner">
@@ -84,7 +95,7 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
               className={`h-full transition-all duration-300 ${
                 weightPercentage > 100
                   ? 'bg-rose-600'
-                  : weightPercentage > 75
+                  : weightPercentage > (is35e ? Math.round((encumbrance.heavilyEncumberedThreshold / carryingCap) * 100) : 75)
                     ? 'bg-amber-500'
                     : 'bg-emerald-500'
               }`}
@@ -92,11 +103,27 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
             />
           </div>
 
-          <div className="flex items-center justify-between text-[10px] text-stone-500 pt-0.5">
-            <span>0 lbs (Light)</span>
-            <span>{Math.round(carryingCap / 3)} lbs (Encumbered threshold)</span>
-            <span>{carryingCap} lbs (Max Push/Drag/Lift: {carryingCap * 2} lbs)</span>
-          </div>
+          {is35e ? (
+            <div className="flex items-center justify-between text-[10px] text-stone-500 pt-0.5">
+              <span>Light (≤ {encumbrance.encumberedThreshold} lbs)</span>
+              <span>Medium ({encumbrance.encumberedThreshold + 1}–{encumbrance.heavilyEncumberedThreshold} lbs)</span>
+              <span>Heavy ({encumbrance.heavilyEncumberedThreshold + 1}–{encumbrance.maxCapacity} lbs)</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-[10px] text-stone-500 pt-0.5">
+              <span>0 lbs (Light)</span>
+              <span>{Math.round(carryingCap / 3)} lbs (Encumbered threshold)</span>
+              <span>{carryingCap} lbs (Max Push/Drag/Lift: {carryingCap * 2} lbs)</span>
+            </div>
+          )}
+
+          {is35e && (
+            <div className="pt-1 border-t border-stone-900 text-[10px] text-stone-400 flex flex-wrap items-center justify-between gap-1">
+              <span>Lift Overhead: <strong className="text-amber-300">{encumbrance.liftOverhead35e} lbs</strong></span>
+              <span>Lift Off Ground: <strong className="text-amber-300">{encumbrance.liftOffGround35e} lbs</strong></span>
+              <span>Push / Drag: <strong className="text-amber-300">{encumbrance.pushDragLift} lbs</strong></span>
+            </div>
+          )}
         </div>
 
         {/* Encumbrance Details Warning */}
@@ -104,7 +131,9 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
           <div className="bg-rose-950/60 border border-rose-600/50 p-3 rounded-xl flex items-center gap-2 text-rose-200 text-xs">
             <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0" />
             <div>
-              <strong className="block font-sans font-bold">Encumbrance Penalty Active!</strong>
+              <strong className="block font-sans font-bold">
+                {is35e ? `${encumbrance.load35eLabel || 'Encumbrance'} Penalty Active!` : 'Encumbrance Penalty Active!'}
+              </strong>
               <p className="text-[11px] text-rose-300 font-sans">{penaltyDescription}</p>
             </div>
           </div>
@@ -133,7 +162,7 @@ export const EncumbranceCapacityPanel: React.FC<EncumbranceCapacityPanelProps> =
                 type="button"
                 onClick={toggleCoinWeight}
                 className="mt-1 text-[9px] px-1.5 py-0.5 rounded bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700 block mx-auto transition"
-                title="Toggle D&D 5e Variant 50 coins = 1 lb rule"
+                title={is35e ? "Toggle 3.5e standard 50 coins = 1 lb rule" : "Toggle D&D 5e Variant 50 coins = 1 lb rule"}
               >
                 {isCoinWeightActive ? 'Active (50/lb)' : 'Off (0 lbs)'}
               </button>

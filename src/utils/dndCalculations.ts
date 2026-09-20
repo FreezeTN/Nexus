@@ -1,4 +1,4 @@
-import { AbilityName, AbilityScores, Attack, CharacterData, Feat, GearItem, RuleEdition, Skill, Spell, Wealth } from '../types';
+import { AbilityName, AbilityScores, Attack, CharacterData, Feat, GearItem, GestaltTrack, GestaltTrackClass, OptionalRulesConfig, RuleEdition, Skill, Spell, Wealth } from '../types';
 import { parseAbilityScoreBonuses } from './homebrewValidator';
 import {
   getCombinedLevel,
@@ -19,7 +19,11 @@ export * from './handSlotCalculations';
 export * from './dnd35eAdvancedMechanics';
 export * from './environmentRules';
 export * from './racialSkillBonusEngine';
+export * from './rules/sizeScaleRules35e';
+export { get35eSizeModifier } from './rules/sizeScaleRules35e';
 import { getRacialSkillBonusForSkill } from './racialSkillBonusEngine';
+import { get35eSizeModifier, get35eSpaceAndReach } from './rules/sizeScaleRules35e';
+import { calculate35eWeaponSizePenalty } from './dnd35eAdvancedMechanics';
 
 
 export {
@@ -29,6 +33,20 @@ export {
 } from '../data/damageTypeData';
 
 export function getEffectiveClassTitle(char: CharacterData): string {
+  if (char.optionalRules?.useGestaltUA72) {
+    const tracks = getCharacterGestaltTracks(char);
+    const trackLabels = tracks.map(track => {
+      const activeClass = track.classes.find(c => !c.isPaused) || track.classes[track.classes.length - 1];
+      const pausedClasses = track.classes.filter(c => c.isPaused);
+      if (pausedClasses.length > 0) {
+        const pausedStr = pausedClasses.map(c => `${c.className} ${c.level} (p)`).join(', ');
+        return `${activeClass.className} ${activeClass.level} [${pausedStr}]`;
+      }
+      return `${activeClass.className} ${activeClass.level}`;
+    });
+    return `${trackLabels.join(' // ')} (Gestalt Lv. ${char.level || 1})`;
+  }
+
   if (char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass) {
     const secLvl = char.optionalRules.secondaryLevel || 1;
     const secSub = char.optionalRules.secondarySubclass ? ` (${char.optionalRules.secondarySubclass})` : '';
@@ -453,19 +471,167 @@ export function getArmorClassBreakdown(char: CharacterData): ACBreakdown {
 // UNEARTHED ARCANA p. 72 & p. 109 HELPERS
 // ==========================================
 
-export function getHitDieValue(className: string): number {
+export function getHitDieValue(className: string, edition?: RuleEdition): number {
   const c = className.toLowerCase();
+  const is35e = edition === '3.5e';
   if (c.includes('barbarian')) return 12;
-  if (c.includes('fighter') || c.includes('paladin') || c.includes('ranger')) return 10;
-  if (c.includes('sorcerer') || c.includes('wizard')) return 6;
-  return 8; // Cleric, Rogue, Bard, Druid, Monk, Warlock, Artificer
+  if (c.includes('fighter') || c.includes('paladin')) return 10;
+  if (c.includes('ranger')) return is35e ? 8 : 10;
+  if (c.includes('sorcerer') || c.includes('wizard')) return is35e ? 4 : 6;
+  if (is35e && (c.includes('rogue') || c.includes('bard'))) return 6;
+  return 8; // Cleric, Rogue (5e), Bard (5e), Druid, Monk, Warlock, Artificer
 }
 
-export function getGestaltHitDie(primaryClass: string, secondaryClass?: string): string {
-  const val1 = getHitDieValue(primaryClass);
-  const val2 = secondaryClass ? getHitDieValue(secondaryClass) : 0;
-  const bestVal = Math.max(val1, val2);
+/**
+ * Normalizes Gestalt tracks for a character.
+ * Gestalt characters can start with up to 4 simultaneous classes (Unearthed Arcana p. 72).
+ * Each track can independently advance or pause classes to multiclass.
+ */
+export function getCharacterGestaltTracks(char: CharacterData): GestaltTrack[] {
+  if (char.optionalRules?.gestaltTracks && char.optionalRules.gestaltTracks.length > 0) {
+    return char.optionalRules.gestaltTracks;
+  }
+
+  // Synthesize from secondaryClass if present, or default 2 tracks
+  const trackCount = char.optionalRules?.gestaltTrackCount || (char.optionalRules?.secondaryClass ? 2 : 2);
+  const tracks: GestaltTrack[] = [
+    {
+      id: 'track-1',
+      name: 'Track 1',
+      classes: [
+        {
+          id: 't1-c1',
+          className: char.characterClass || 'Fighter',
+          subclass: char.subclass || '',
+          level: char.level || 1,
+          isPaused: false
+        }
+      ]
+    },
+    {
+      id: 'track-2',
+      name: 'Track 2',
+      classes: [
+        {
+          id: 't2-c1',
+          className: char.optionalRules?.secondaryClass || 'Wizard',
+          subclass: char.optionalRules?.secondarySubclass || '',
+          level: char.optionalRules?.secondaryLevel || char.level || 1,
+          isPaused: false
+        }
+      ]
+    }
+  ];
+
+  if (trackCount >= 3) {
+    tracks.push({
+      id: 'track-3',
+      name: 'Track 3',
+      classes: [
+        {
+          id: 't3-c1',
+          className: 'Rogue',
+          subclass: '',
+          level: char.level || 1,
+          isPaused: false
+        }
+      ]
+    });
+  }
+
+  if (trackCount >= 4) {
+    tracks.push({
+      id: 'track-4',
+      name: 'Track 4',
+      classes: [
+        {
+          id: 't4-c1',
+          className: 'Cleric',
+          subclass: '',
+          level: char.level || 1,
+          isPaused: false
+        }
+      ]
+    });
+  }
+
+  return tracks.slice(0, trackCount);
+}
+
+/**
+ * Returns all classes across all Gestalt tracks for the character.
+ */
+export function getGestaltAllClasses(char: CharacterData): GestaltTrackClass[] {
+  if (!char.optionalRules?.useGestaltUA72) {
+    return [];
+  }
+  const tracks = getCharacterGestaltTracks(char);
+  return tracks.flatMap(t => t.classes);
+}
+
+/**
+ * Returns active (unpaused) class on each Gestalt track.
+ */
+export function getGestaltActiveClasses(char: CharacterData): GestaltTrackClass[] {
+  if (!char.optionalRules?.useGestaltUA72) {
+    return [];
+  }
+  const tracks = getCharacterGestaltTracks(char);
+  return tracks.map(t => {
+    const active = t.classes.find(c => !c.isPaused) || t.classes[t.classes.length - 1];
+    return active || { id: `${t.id}-def`, className: 'Fighter', level: 1 };
+  });
+}
+
+export function getGestaltHitDie(
+  primaryOrChar: string | CharacterData,
+  secondaryClass?: string,
+  edition?: RuleEdition,
+  additionalClasses?: string[]
+): string {
+  if (typeof primaryOrChar === 'object') {
+    const char = primaryOrChar;
+    const activeClasses = getGestaltActiveClasses(char);
+    if (activeClasses.length > 0) {
+      const bestVal = Math.max(...activeClasses.map(c => getHitDieValue(c.className, char.edition)));
+      return `1d${bestVal}`;
+    }
+    return `1d${getHitDieValue(char.characterClass, char.edition)}`;
+  }
+
+  const val1 = getHitDieValue(primaryOrChar, edition);
+  const val2 = secondaryClass ? getHitDieValue(secondaryClass, edition) : 0;
+  const moreVals = (additionalClasses || []).map(c => getHitDieValue(c, edition));
+  const bestVal = Math.max(val1, val2, ...moreVals);
   return `1d${bestVal}`;
+}
+
+export function get35eClassBaseSkillPoints(className: string): number {
+  const c = (className || '').toLowerCase();
+  if (c.includes('rogue')) return 8;
+  if (c.includes('bard') || c.includes('ranger') || c.includes('scout')) return 6;
+  if (c.includes('barbarian') || c.includes('druid') || c.includes('monk')) return 4;
+  return 2; // Fighter, Paladin, Cleric, Sorcerer, Wizard, etc.
+}
+
+export function getGestaltBaseSkillPoints(
+  primaryOrChar: string | CharacterData,
+  secondaryClass?: string,
+  additionalClasses?: string[]
+): number {
+  if (typeof primaryOrChar === 'object') {
+    const char = primaryOrChar;
+    const activeClasses = getGestaltActiveClasses(char);
+    if (activeClasses.length > 0) {
+      return Math.max(...activeClasses.map(c => get35eClassBaseSkillPoints(c.className)));
+    }
+    return get35eClassBaseSkillPoints(char.characterClass);
+  }
+
+  const p = get35eClassBaseSkillPoints(primaryOrChar);
+  const s = secondaryClass ? get35eClassBaseSkillPoints(secondaryClass) : 0;
+  const more = (additionalClasses || []).map(c => get35eClassBaseSkillPoints(c));
+  return Math.max(p, s, ...more);
 }
 
 export function getClassDefenseTier(className: string): 'good' | 'average' | 'poor' {
@@ -1026,8 +1192,47 @@ export function getTotalWeight(char: CharacterData): number {
 export function getCarryingCapacity(char: CharacterData): number {
   const effectiveAbilities = getEffectiveAbilities(char);
   const strScore = effectiveAbilities.STR?.score || 10;
+  if (char.edition === '3.5e') {
+    const isQuad = Boolean((char as any).isQuadruped || char.race?.toLowerCase().includes('centaur'));
+    const cap35 = calculate35eCarryingCapacity(strScore, char.sizeCategory || 'Medium', isQuad);
+    return cap35.heavyMax;
+  }
   const { multiplier } = getSizeCarryingMultiplier(char);
   return Math.floor(strScore * 15 * multiplier);
+}
+
+/**
+ * Determines whether carrying capacity and encumbrance rules are active for a character,
+ * respecting DM campaign/session overrides first, then character-level optional rules.
+ * When this rule is disabled or unselected, all weight calculations, carrying capacity bars,
+ * and encumbrance speed penalties are deactivated.
+ */
+export function isEncumbranceRuleActive(
+  char: CharacterData,
+  activeSession?: { optionalRules?: OptionalRulesConfig } | null
+): boolean {
+  if (!char) return false;
+
+  // 1. DM Session Overwrite takes absolute precedence if defined in campaign/session
+  if (activeSession?.optionalRules) {
+    const sessionRules = activeSession.optionalRules;
+    if (typeof sessionRules.trackEncumbrance === 'boolean') {
+      return sessionRules.trackEncumbrance;
+    }
+    if (typeof sessionRules.useVariantEncumbrance === 'boolean') {
+      return sessionRules.useVariantEncumbrance;
+    }
+  }
+
+  // 2. Character-level optional rules
+  const rules = char.optionalRules;
+  if (!rules) return false;
+
+  if (typeof rules.trackEncumbrance === 'boolean') {
+    return rules.trackEncumbrance;
+  }
+
+  return !!rules.useVariantEncumbrance;
 }
 
 export interface EncumbranceDetails {
@@ -1045,12 +1250,100 @@ export interface EncumbranceDetails {
   effectiveSize: string;
   hasPowerfulBuild: boolean;
   sizeMultiplier: number;
+  is35e?: boolean;
+  load35e?: 'light' | 'medium' | 'heavy' | 'overburdened';
+  load35eLabel?: string;
+  maxDexBonus35e?: number | null;
+  loadAcp35e?: number;
+  runMultiplier35e?: number;
+  liftOverhead35e?: number;
+  liftOffGround35e?: number;
 }
 
-export function getEncumbranceDetails(char: CharacterData): EncumbranceDetails {
+export function getEncumbranceDetails(
+  char: CharacterData,
+  activeSession?: { optionalRules?: OptionalRulesConfig } | null
+): EncumbranceDetails {
+  const isRuleActive = isEncumbranceRuleActive(char, activeSession);
+  if (!isRuleActive) {
+    const sizeInfo = getSizeCarryingMultiplier(char);
+    return {
+      totalWeight: 0,
+      standardCapacity: 9999,
+      isVariant: false,
+      encumberedThreshold: 9999,
+      heavilyEncumberedThreshold: 9999,
+      maxCapacity: 9999,
+      pushDragLift: 9999,
+      status: 'Normal',
+      speedPenalty: 0,
+      hasDisadvantage: false,
+      sizeCategory: char.sizeCategory || 'Medium',
+      effectiveSize: char.sizeCategory || 'Medium',
+      hasPowerfulBuild: false,
+      sizeMultiplier: sizeInfo.multiplier,
+      is35e: char.edition === '3.5e',
+      load35e: 'light',
+      load35eLabel: 'Light Load',
+      maxDexBonus35e: null,
+      loadAcp35e: 0,
+      runMultiplier35e: 4,
+      liftOverhead35e: 9999,
+      liftOffGround35e: 9999
+    };
+  }
+
   const totalWeight = getTotalWeight(char);
   const effectiveAbilities = getEffectiveAbilities(char);
   const strScore = effectiveAbilities.STR?.score || 10;
+
+  if (char.edition === '3.5e') {
+    const isQuad = Boolean((char as any).isQuadruped || char.race?.toLowerCase().includes('centaur'));
+    const cap35 = calculate35eCarryingCapacity(strScore, char.sizeCategory || 'Medium', isQuad);
+    const load35 = calculate35eEncumbranceLoad(totalWeight, cap35);
+    let status: 'Normal' | 'Encumbered' | 'Heavily Encumbered' | 'Over Capacity' = 'Normal';
+    let speedPenalty = 0;
+    let hasDisadvantage = false;
+
+    if (load35.load === 'medium') {
+      status = 'Encumbered';
+      speedPenalty = 10;
+    } else if (load35.load === 'heavy') {
+      status = 'Heavily Encumbered';
+      speedPenalty = 10;
+      hasDisadvantage = true;
+    } else if (load35.load === 'overburdened') {
+      status = 'Over Capacity';
+      speedPenalty = 25;
+      hasDisadvantage = true;
+    }
+
+    return {
+      totalWeight,
+      standardCapacity: cap35.heavyMax,
+      isVariant: false,
+      encumberedThreshold: cap35.lightMax,
+      heavilyEncumberedThreshold: cap35.mediumMax,
+      maxCapacity: cap35.heavyMax,
+      pushDragLift: cap35.pushOrDrag,
+      status,
+      speedPenalty,
+      hasDisadvantage,
+      sizeCategory: char.sizeCategory || 'Medium',
+      effectiveSize: char.sizeCategory || 'Medium',
+      hasPowerfulBuild: false,
+      sizeMultiplier: cap35.multiplier,
+      is35e: true,
+      load35e: load35.load,
+      load35eLabel: load35.label,
+      maxDexBonus35e: load35.maxDexBonus,
+      loadAcp35e: load35.loadAcp,
+      runMultiplier35e: load35.runMultiplier,
+      liftOverhead35e: cap35.liftOverhead,
+      liftOffGround35e: cap35.liftOffGround
+    };
+  }
+
   const isVariant = !!char.optionalRules?.useVariantEncumbrance;
   const sizeInfo = getSizeCarryingMultiplier(char);
   const mult = sizeInfo.multiplier;
@@ -2348,8 +2641,10 @@ export interface Save35eBreakdown {
  * Poor Save = floor(level / 3)
  */
 export function calculate35eBaseSaves(
-  characterClass: string,
-  level: number
+  primaryOrChar: string | CharacterData,
+  level?: number,
+  secondaryClass?: string,
+  additionalClasses?: string[]
 ): {
   fort: number;
   ref: number;
@@ -2358,49 +2653,122 @@ export function calculate35eBaseSaves(
   isGoodRef: boolean;
   isGoodWill: boolean;
 } {
-  const lvl = Math.max(1, level || 1);
-  const cls = (characterClass || '').toLowerCase();
+  let charLvl = 1;
+  let primaryClass = 'Fighter';
+  let secondaries: string[] = [];
 
-  const good = 2 + Math.floor(lvl / 2);
-  const poor = Math.floor(lvl / 3);
+  const getSingleSaves = (clsName: string, classLevel?: number) => {
+    const lvl = Math.max(1, classLevel !== undefined ? classLevel : charLvl);
+    const cls = (clsName || '').toLowerCase();
 
-  let isGoodFort = false;
-  let isGoodRef = false;
-  let isGoodWill = false;
+    const good = 2 + Math.floor(lvl / 2);
+    const poor = Math.floor(lvl / 3);
 
-  if (cls.includes('fighter') || cls.includes('barbarian')) {
-    isGoodFort = true;
-  } else if (cls.includes('paladin')) {
-    isGoodFort = true;
-  } else if (cls.includes('cleric') || cls.includes('druid')) {
-    isGoodFort = true;
-    isGoodWill = true;
-  } else if (cls.includes('monk')) {
-    isGoodFort = true;
-    isGoodRef = true;
-    isGoodWill = true;
-  } else if (cls.includes('ranger')) {
-    isGoodFort = true;
-    isGoodRef = true;
-  } else if (cls.includes('rogue')) {
-    isGoodRef = true;
-  } else if (cls.includes('bard')) {
-    isGoodRef = true;
-    isGoodWill = true;
-  } else if (cls.includes('sorcerer') || cls.includes('wizard')) {
-    isGoodWill = true;
+    let isGoodFort = false;
+    let isGoodRef = false;
+    let isGoodWill = false;
+
+    if (cls.includes('fighter') || cls.includes('barbarian')) {
+      isGoodFort = true;
+    } else if (cls.includes('paladin')) {
+      isGoodFort = true;
+    } else if (cls.includes('cleric') || cls.includes('druid')) {
+      isGoodFort = true;
+      isGoodWill = true;
+    } else if (cls.includes('monk')) {
+      isGoodFort = true;
+      isGoodRef = true;
+      isGoodWill = true;
+    } else if (cls.includes('ranger')) {
+      isGoodFort = true;
+      isGoodRef = true;
+    } else if (cls.includes('rogue')) {
+      isGoodRef = true;
+    } else if (cls.includes('bard')) {
+      isGoodRef = true;
+      isGoodWill = true;
+    } else if (cls.includes('sorcerer') || cls.includes('wizard')) {
+      isGoodWill = true;
+    } else {
+      // Default fallback: medium progression
+      isGoodFort = true;
+    }
+
+    return {
+      fort: isGoodFort ? good : poor,
+      ref: isGoodRef ? good : poor,
+      will: isGoodWill ? good : poor,
+      isGoodFort,
+      isGoodRef,
+      isGoodWill
+    };
+  };
+
+  if (typeof primaryOrChar === 'object') {
+    const char = primaryOrChar;
+    charLvl = char.level || 1;
+    if (char.optionalRules?.useGestaltUA72) {
+      const tracks = getCharacterGestaltTracks(char);
+      if (tracks.length > 0) {
+        // Gestalt UA p. 72: A gestalt character takes the best base save bonus in each category from his two classes/tracks
+        const trackSaves = tracks.map(t => {
+          let fort = 0;
+          let ref = 0;
+          let will = 0;
+          let isGoodFort = false;
+          let isGoodRef = false;
+          let isGoodWill = false;
+          for (const c of t.classes) {
+            const s = getSingleSaves(c.className, c.level || charLvl);
+            fort += s.fort;
+            ref += s.ref;
+            will += s.will;
+            if (s.isGoodFort) isGoodFort = true;
+            if (s.isGoodRef) isGoodRef = true;
+            if (s.isGoodWill) isGoodWill = true;
+          }
+          return { fort, ref, will, isGoodFort, isGoodRef, isGoodWill };
+        });
+        return {
+          fort: Math.max(...trackSaves.map(s => s.fort)),
+          ref: Math.max(...trackSaves.map(s => s.ref)),
+          will: Math.max(...trackSaves.map(s => s.will)),
+          isGoodFort: trackSaves.some(s => s.isGoodFort),
+          isGoodRef: trackSaves.some(s => s.isGoodRef),
+          isGoodWill: trackSaves.some(s => s.isGoodWill)
+        };
+      }
+      const active = getGestaltActiveClasses(char);
+      if (active.length > 0) {
+        primaryClass = active[0].className;
+        secondaries = active.slice(1).map(c => c.className);
+      } else {
+        primaryClass = char.characterClass || 'Fighter';
+      }
+    } else {
+      primaryClass = char.characterClass || 'Fighter';
+      if (char.optionalRules?.secondaryClass) {
+        secondaries = [char.optionalRules.secondaryClass];
+      }
+    }
   } else {
-    // Default fallback: medium progression
-    isGoodFort = true;
+    primaryClass = primaryOrChar;
+    charLvl = level || 1;
+    secondaries = [secondaryClass, ...(additionalClasses || [])].filter((c): c is string => Boolean(c));
   }
 
+  const primary = getSingleSaves(primaryClass);
+  if (secondaries.length === 0) return primary;
+
+  // Gestalt UA 72: Character gains the best saving throw progression across all classes
+  const secSaves = secondaries.map(c => getSingleSaves(c));
   return {
-    fort: isGoodFort ? good : poor,
-    ref: isGoodRef ? good : poor,
-    will: isGoodWill ? good : poor,
-    isGoodFort,
-    isGoodRef,
-    isGoodWill
+    fort: Math.max(primary.fort, ...secSaves.map(s => s.fort)),
+    ref: Math.max(primary.ref, ...secSaves.map(s => s.ref)),
+    will: Math.max(primary.will, ...secSaves.map(s => s.will)),
+    isGoodFort: primary.isGoodFort || secSaves.some(s => s.isGoodFort),
+    isGoodRef: primary.isGoodRef || secSaves.some(s => s.isGoodRef),
+    isGoodWill: primary.isGoodWill || secSaves.some(s => s.isGoodWill)
   };
 }
 
@@ -2408,7 +2776,7 @@ export function get35eSaveBreakdown(
   char: CharacterData,
   saveType: 'fort' | 'ref' | 'will'
 ): Save35eBreakdown {
-  const baseCalculated = calculate35eBaseSaves(char.characterClass, char.level || 1);
+  const baseCalculated = calculate35eBaseSaves(char);
   const chaMod = getAbilityModifier(char.abilities.CHA?.score || 10);
   const isPaladin2Plus =
     (char.characterClass || '').toLowerCase().includes('paladin') &&
@@ -2433,7 +2801,9 @@ export function get35eSaveBreakdown(
   }
 
   if (saveType === 'fort') {
-    const base = char.fortSaveBase ?? baseCalculated.fort;
+    const base = char.optionalRules?.useGestaltUA72
+      ? Math.max(char.fortSaveBase ?? 0, baseCalculated.fort)
+      : (char.fortSaveBase ?? baseCalculated.fort);
     const abilityMod = getAbilityModifier(char.abilities.CON?.score || 10);
     const magicMod = char.fortSaveMagic || 0;
     const miscMod = char.fortSaveMisc || 0;
@@ -2454,7 +2824,9 @@ export function get35eSaveBreakdown(
   }
 
   if (saveType === 'ref') {
-    const base = char.refSaveBase ?? baseCalculated.ref;
+    const base = char.optionalRules?.useGestaltUA72
+      ? Math.max(char.refSaveBase ?? 0, baseCalculated.ref)
+      : (char.refSaveBase ?? baseCalculated.ref);
     const abilityMod = getAbilityModifier(char.abilities.DEX?.score || 10);
     const magicMod = char.refSaveMagic || 0;
     const miscMod = char.refSaveMisc || 0;
@@ -2475,7 +2847,9 @@ export function get35eSaveBreakdown(
   }
 
   // Will
-  const base = char.willSaveBase ?? baseCalculated.will;
+  const base = char.optionalRules?.useGestaltUA72
+    ? Math.max(char.willSaveBase ?? 0, baseCalculated.will)
+    : (char.willSaveBase ?? baseCalculated.will);
   const abilityMod = getAbilityModifier(char.abilities.WIS?.score || 10);
   const magicMod = char.willSaveMagic || 0;
   const miscMod = char.willSaveMisc || 0;
@@ -2564,6 +2938,7 @@ export const DND35E_SKILL_SYNERGIES: SkillSynergyRule[] = [
   { sourceSkill: 'Spellcraft', requiredRanks: 5, targetSkill: 'Use Magic Device', bonus: 2, conditionDesc: 'scrolls' },
   { sourceSkill: 'Use Magic Device', requiredRanks: 5, targetSkill: 'Spellcraft', bonus: 2, conditionDesc: 'decipher scrolls' },
   { sourceSkill: 'Handle Animal', requiredRanks: 5, targetSkill: 'Ride', bonus: 2 },
+  { sourceSkill: 'Handle Animal', requiredRanks: 5, targetSkill: 'Wild Empathy', bonus: 2, conditionDesc: 'wild empathy checks' },
   { sourceSkill: 'Survival', requiredRanks: 5, targetSkill: 'Knowledge (Nature)', bonus: 2 },
   { sourceSkill: 'Knowledge (Nature)', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'in aboveground natural terrain' },
   { sourceSkill: 'Knowledge (Dungeoneering)', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'underground' },
@@ -2572,6 +2947,7 @@ export const DND35E_SKILL_SYNERGIES: SkillSynergyRule[] = [
   { sourceSkill: 'Knowledge (Nobility and Royalty)', requiredRanks: 5, targetSkill: 'Diplomacy', bonus: 2 },
   { sourceSkill: 'Search', requiredRanks: 5, targetSkill: 'Survival', bonus: 2, conditionDesc: 'tracking' },
   { sourceSkill: 'Escape Artist', requiredRanks: 5, targetSkill: 'Use Rope', bonus: 2, conditionDesc: 'bindings' },
+  { sourceSkill: 'Sleight of Hand', requiredRanks: 5, targetSkill: 'Use Rope', bonus: 2, conditionDesc: 'bindings' },
   { sourceSkill: 'Use Rope', requiredRanks: 5, targetSkill: 'Climb', bonus: 2, conditionDesc: 'with ropes' },
   { sourceSkill: 'Use Rope', requiredRanks: 5, targetSkill: 'Escape Artist', bonus: 2, conditionDesc: 'bound with rope' },
   { sourceSkill: 'Knowledge (Religion)', requiredRanks: 5, targetSkill: 'Turn Undead', bonus: 2, conditionDesc: 'turning check' },
@@ -2583,6 +2959,66 @@ export const DND35E_SKILL_SYNERGIES: SkillSynergyRule[] = [
   { sourceSkill: 'Knowledge (Psionics)', requiredRanks: 5, targetSkill: 'Psicraft', bonus: 2 }
 ];
 
+/**
+ * Returns all synergy rules where the given skill is the source (i.e. grants a bonus to another skill or check).
+ */
+export function getSynergiesGrantedBySkill(
+  skillName: string,
+  ranks?: number
+): SkillSynergyRule[] {
+  const clean = (skillName || '').trim().toLowerCase();
+  return DND35E_SKILL_SYNERGIES.filter((rule) => {
+    if (rule.sourceSkill.toLowerCase() !== clean) return false;
+    if (ranks !== undefined && ranks < rule.requiredRanks) return false;
+    return true;
+  });
+}
+
+/**
+ * Checks if a skill grants any synergy to any other skill/check.
+ * If ranks is provided, checks if ranks >= requiredRanks.
+ */
+export function isSkillGrantingSynergy(
+  skillName: string,
+  ranks?: number
+): boolean {
+  return getSynergiesGrantedBySkill(skillName, ranks).length > 0;
+}
+
+/**
+ * Returns the list of character skills that actively grant at least one synergy to another skill,
+ * along with detailed descriptions of what they grant.
+ */
+export function getActiveGrantingSynergySkills(skills?: Skill[]): Array<{
+  skill: Skill;
+  synergies: SkillSynergyRule[];
+  description: string;
+}> {
+  if (!skills || skills.length === 0) return [];
+  const results: Array<{
+    skill: Skill;
+    synergies: SkillSynergyRule[];
+    description: string;
+  }> = [];
+
+  for (const s of skills) {
+    const ranks = s.ranks || 0;
+    const granted = getSynergiesGrantedBySkill(s.name, ranks);
+    if (granted.length > 0) {
+      const targets = granted
+        .map((g) => `+${g.bonus} to ${g.targetSkill}${g.conditionDesc ? ` (${g.conditionDesc})` : ''}`)
+        .join(', ');
+      results.push({
+        skill: s,
+        synergies: granted,
+        description: `${s.name} (${ranks} ranks) grants: ${targets}`
+      });
+    }
+  }
+
+  return results;
+}
+
 export const DND35E_CORE_CLASS_SKILLS: Record<string, string[]> = {
   Barbarian: ['Climb', 'Craft', 'Handle Animal', 'Intimidate', 'Jump', 'Listen', 'Ride', 'Survival', 'Swim'],
   Bard: [
@@ -2592,7 +3028,7 @@ export const DND35E_CORE_CLASS_SKILLS: Record<string, string[]> = {
   ],
   Cleric: [
     'Concentration', 'Craft', 'Diplomacy', 'Heal', 'Knowledge (Arcana)', 'Knowledge (History)',
-    'Knowledge (Religion)', 'Knowledge (the planes)', 'Profession', 'Spellcraft'
+    'Knowledge (Religion)', 'Knowledge (The Planes)', 'Profession', 'Spellcraft'
   ],
   Druid: [
     'Concentration', 'Craft', 'Diplomacy', 'Handle Animal', 'Heal', 'Knowledge (Nature)',
@@ -2623,22 +3059,54 @@ export const DND35E_CORE_CLASS_SKILLS: Record<string, string[]> = {
   Wizard: ['Concentration', 'Craft', 'Decipher Script', 'Knowledge (all)', 'Profession', 'Spellcraft']
 };
 
-export function is35eClassSkill(characterClass: string, skillName: string): boolean {
-  const cls = characterClass?.trim() || '';
-  const list = DND35E_CORE_CLASS_SKILLS[cls];
-  if (!list) return true; // Default to class if unknown
+export function is35eClassSkill(characterClass: string, skillName: string, secondaryClass?: string, additionalClasses?: string[]): boolean {
+  const checkSingle = (clsName: string): boolean => {
+    const cls = clsName?.trim() || '';
+    const list = DND35E_CORE_CLASS_SKILLS[cls];
+    if (!list) return false;
 
-  const lower = skillName.trim().toLowerCase();
-  if (list.includes('Knowledge (all)') && lower.startsWith('knowledge')) {
+    const lower = skillName.trim().toLowerCase();
+    if (list.includes('Knowledge (all)') && lower.startsWith('knowledge')) {
+      return true;
+    }
+    return list.some((item) => item.toLowerCase() === lower);
+  };
+
+  if (!characterClass) return true;
+  if (checkSingle(characterClass)) return true;
+  if (secondaryClass && checkSingle(secondaryClass)) return true;
+  if (additionalClasses) {
+    for (const c of additionalClasses) {
+      if (checkSingle(c)) return true;
+    }
+  }
+
+  // Fallback for custom or homebrew classes not in core SRD dictionary
+  const allClasses = [characterClass, secondaryClass, ...(additionalClasses || [])].filter(Boolean);
+  if (allClasses.every(c => !DND35E_CORE_CLASS_SKILLS[(c || '').trim()])) {
     return true;
   }
-  return list.some((item) => item.toLowerCase() === lower);
+  return false;
 }
 
 export function apply35eDefaultClassSkills(char: CharacterData): CharacterData {
+  let secClass: string | undefined;
+  let addClasses: string[] | undefined;
+
+  if (char.optionalRules?.useGestaltUA72) {
+    const allClasses = getGestaltAllClasses(char);
+    if (allClasses.length > 0) {
+      const classNames = Array.from(new Set(allClasses.map(c => c.className)));
+      secClass = classNames[1];
+      addClasses = classNames.slice(2);
+    }
+  } else if (char.optionalRules?.useMulticlassing) {
+    secClass = char.optionalRules?.secondaryClass;
+  }
+
   const updatedSkills = char.skills.map((skill) => ({
     ...skill,
-    isClassSkill: is35eClassSkill(char.characterClass, skill.name)
+    isClassSkill: is35eClassSkill(char.characterClass, skill.name, secClass, addClasses)
   }));
   return {
     ...char,
@@ -2929,29 +3397,53 @@ export function get35eFlatFootedAC(char: CharacterData): number {
 }
 
 export function getCharacterBab(char: CharacterData): number {
-  if (typeof char.bab === 'number') return char.bab;
-  if (typeof char.baseAttackBonus === 'number') return char.baseAttackBonus;
+  const isGestalt = Boolean(char.optionalRules?.useGestaltUA72);
+
+  if (!isGestalt) {
+    if (typeof char.bab === 'number') return char.bab;
+    if (typeof char.baseAttackBonus === 'number') return char.baseAttackBonus;
+  }
 
   const level = Math.max(1, char.level || 1);
-  const className = (char.characterClass || '').toLowerCase();
 
-  // Full BAB (1.0x Level): Fighter, Paladin, Ranger, Barbarian
-  if (
-    className.includes('fighter') ||
-    className.includes('paladin') ||
-    className.includes('ranger') ||
-    className.includes('barbarian')
-  ) {
-    return level;
+  const getBabForClass = (clsName: string, clsLevel: number = level): number => {
+    const className = (clsName || '').toLowerCase();
+    // Full BAB (1.0x Level): Fighter, Paladin, Ranger, Barbarian
+    if (
+      className.includes('fighter') ||
+      className.includes('paladin') ||
+      className.includes('ranger') ||
+      className.includes('barbarian')
+    ) {
+      return clsLevel;
+    }
+
+    // Poor BAB (0.5x Level): Wizard, Sorcerer
+    if (className.includes('wizard') || className.includes('sorcerer')) {
+      return Math.floor(clsLevel * 0.5);
+    }
+
+    // Medium BAB (0.75x Level): Cleric, Druid, Monk, Rogue, Bard
+    return Math.floor(clsLevel * 0.75);
+  };
+
+  const primaryBab = getBabForClass(char.characterClass, level);
+
+  // Gestalt UA 72: Characters use the better base attack bonus across their tracks
+  if (isGestalt) {
+    const tracks = getCharacterGestaltTracks(char);
+    const trackBabs = tracks.map(t => {
+      // Calculate BAB for this track
+      // If a track has multiclassed, sum the BAB of each class on that track
+      return t.classes.reduce((sum, c) => {
+        const clsLevel = Math.max(1, c.level || level);
+        return sum + getBabForClass(c.className, clsLevel);
+      }, 0);
+    });
+    const calculatedGestaltBab = Math.max(primaryBab, ...trackBabs);
+    return Math.max(typeof char.bab === 'number' ? char.bab : 0, calculatedGestaltBab);
   }
-
-  // Poor BAB (0.5x Level): Wizard, Sorcerer
-  if (className.includes('wizard') || className.includes('sorcerer')) {
-    return Math.floor(level * 0.5);
-  }
-
-  // Medium BAB (0.75x Level): Cleric, Druid, Monk, Rogue, Bard
-  return Math.floor(level * 0.75);
+  return primaryBab;
 }
 
 export function get35eGrappleSizeModifier(size?: string): number {
@@ -3048,6 +3540,300 @@ export function format35eIterativeString(primaryBonus: number, bab: number): str
 
 export function format35eBabProgression(bab: number): string {
   return format35eIterativeString(bab, bab);
+}
+
+export interface Calculated35eAttackBonus {
+  totalAttackBonus: number;
+  bab: number;
+  abilityUsed: AbilityName;
+  abilityMod: number;
+  sizeMod: number;
+  weaponSizePenalty: number;
+  enhancementBonus: number;
+  miscBonus: number;
+  profPenalty: number;
+  iterativeAttacks: IterativeAttackEntry[];
+  fullAttackDisplay: string;
+  breakdown: string;
+}
+
+export function calculate35eAttackBonus(
+  char: CharacterData,
+  attack: Attack
+): Calculated35eAttackBonus {
+  const bab = getCharacterBab(char);
+  const abilities = getEffectiveAbilities(char);
+  const strMod = getAbilityModifier(abilities.STR?.score ?? 10);
+  const dexMod = getAbilityModifier(abilities.DEX?.score ?? 10);
+
+  // If manual override is explicitly requested
+  if (attack.useManualBonus) {
+    const total = attack.attackBonus ?? 0;
+    const iteratives = get35eIterativeAttacks(total, bab);
+    return {
+      totalAttackBonus: total,
+      bab,
+      abilityUsed: attack.abilityUsed || 'STR',
+      abilityMod: 0,
+      sizeMod: 0,
+      weaponSizePenalty: 0,
+      enhancementBonus: 0,
+      miscBonus: 0,
+      profPenalty: 0,
+      iterativeAttacks: iteratives,
+      fullAttackDisplay: iteratives.map(i => i.display).join(' / ') || formatModifier(total),
+      breakdown: `Manual Override (${formatModifier(total)})`
+    };
+  }
+
+  // If monster with pre-baked stat block attack
+  if (char.isMonster || char.characterClass === 'Monster') {
+    const total = attack.attackBonus ?? 0;
+    const iteratives = get35eIterativeAttacks(total, bab);
+    return {
+      totalAttackBonus: total,
+      bab,
+      abilityUsed: attack.abilityUsed || 'STR',
+      abilityMod: 0,
+      sizeMod: 0,
+      weaponSizePenalty: 0,
+      enhancementBonus: 0,
+      miscBonus: 0,
+      profPenalty: 0,
+      iterativeAttacks: iteratives,
+      fullAttackDisplay: iteratives.map(i => i.display).join(' / ') || formatModifier(total),
+      breakdown: `Monster Stat Block (${formatModifier(total)})`
+    };
+  }
+
+  // Determine ability to use
+  let abilityUsed: AbilityName = 'STR';
+  const nameLower = (attack.name || '').toLowerCase();
+  const rangeLower = (attack.range || '').toLowerCase();
+  const notesLower = (attack.notes || '').toLowerCase();
+
+  const isRanged = rangeLower.includes('ranged') || rangeLower.includes('range') ||
+                   nameLower.includes('bow') || nameLower.includes('crossbow') ||
+                   nameLower.includes('sling') || nameLower.includes('dart') ||
+                   nameLower.includes('shuriken') || nameLower.includes('blowgun');
+
+  const isLightOrFinesse = nameLower.includes('rapier') || nameLower.includes('dagger') ||
+                           nameLower.includes('shortsword') || nameLower.includes('whip') ||
+                           notesLower.includes('finesse') || notesLower.includes('light');
+
+  const hasWeaponFinesse = Boolean(
+    char.feats?.some(f => f.name.toLowerCase().includes('weapon finesse') || f.name.toLowerCase().includes('finesse'))
+  );
+
+  if (attack.abilityUsed) {
+    abilityUsed = attack.abilityUsed;
+  } else if (isRanged && !rangeLower.includes('thrown')) {
+    abilityUsed = 'DEX';
+  } else if (hasWeaponFinesse && isLightOrFinesse && dexMod > strMod) {
+    abilityUsed = 'DEX';
+  } else {
+    abilityUsed = 'STR';
+  }
+
+  const abilityMod = getAbilityModifier(abilities[abilityUsed]?.score ?? 10);
+  const sizeMod = get35eSizeModifier(char.sizeCategory, char.race);
+  const weaponSizePenalty = attack.weaponSize
+    ? calculate35eWeaponSizePenalty(char.sizeCategory || 'Medium', attack.weaponSize).penalty
+    : 0;
+
+  // Enhancement bonus:
+  let enhancementBonus = attack.enhancementBonus ?? 0;
+  if (attack.enhancementBonus === undefined) {
+    const match = nameLower.match(/\+(\d+)/) || notesLower.match(/\+(\d+)/);
+    if (match) {
+      enhancementBonus = parseInt(match[1], 10);
+    }
+  }
+
+  // Misc bonus (e.g. Weapon Focus):
+  let miscBonus = attack.miscBonus ?? 0;
+  const hasWeaponFocus = Boolean(
+    char.feats?.some(f => {
+      const fn = f.name.toLowerCase();
+      return fn.includes('weapon focus') && (fn.includes(nameLower) || nameLower.includes(fn.replace('weapon focus', '').replace(/[\(\)]/g, '').trim()));
+    })
+  );
+  if (hasWeaponFocus && attack.miscBonus === undefined) {
+    miscBonus += 1;
+  }
+
+  const profPenalty = attack.isProficient === false ? -4 : 0;
+  const hasMultiattack = Boolean(
+    char.feats?.some(f => (f.name || '').toLowerCase().includes('multiattack'))
+  );
+  const naturalPenalty = attack.isSecondaryNatural ? (hasMultiattack ? -2 : -5) : 0;
+
+  const totalAttackBonus = bab + abilityMod + sizeMod + weaponSizePenalty + enhancementBonus + miscBonus + profPenalty + naturalPenalty;
+  
+  // 3.5e Monster Manual p. 312: Natural attacks do not gain iterative attacks from high BAB
+  const iterativeAttacks: IterativeAttackEntry[] = attack.isNatural
+    ? [{ attackIndex: 0, attackNumber: 1, penalty: 0, bonus: totalAttackBonus, label: '1st Attack', display: formatModifier(totalAttackBonus) }]
+    : get35eIterativeAttacks(totalAttackBonus, bab);
+  const fullAttackDisplay = iterativeAttacks.map(i => i.display).join(' / ') || formatModifier(totalAttackBonus);
+
+  const parts = [
+    `BAB ${formatModifier(bab)}`,
+    `${abilityUsed} ${formatModifier(abilityMod)}`
+  ];
+  if (sizeMod !== 0) parts.push(`Size ${formatModifier(sizeMod)}`);
+  if (weaponSizePenalty !== 0) parts.push(`Size Penalty ${weaponSizePenalty}`);
+  if (enhancementBonus !== 0) parts.push(`Magic +${enhancementBonus}`);
+  if (miscBonus !== 0) parts.push(`Misc ${formatModifier(miscBonus)}`);
+  if (profPenalty !== 0) parts.push(`Non-Proficient ${profPenalty}`);
+  if (naturalPenalty !== 0) parts.push(`Secondary Natural ${naturalPenalty}`);
+
+  const breakdown = parts.join(' + ') + ` = ${formatModifier(totalAttackBonus)}`;
+
+  return {
+    totalAttackBonus,
+    bab,
+    abilityUsed,
+    abilityMod,
+    sizeMod,
+    weaponSizePenalty,
+    enhancementBonus,
+    miscBonus,
+    profPenalty,
+    iterativeAttacks,
+    fullAttackDisplay,
+    breakdown
+  };
+}
+
+export interface Calculated35eDamageFormula {
+  damageFormula: string;
+  baseDice: string;
+  effectiveStrBonus: number;
+  enhancementBonus: number;
+  miscBonus: number;
+  breakdown: string;
+}
+
+export function calculate35eDamageFormula(
+  char: CharacterData,
+  attack: Attack
+): Calculated35eDamageFormula {
+  // If manual override or monster stat block, use attack.damage directly
+  if (attack.useManualBonus || char.isMonster || char.characterClass === 'Monster') {
+    return {
+      damageFormula: attack.damage || '1d6',
+      baseDice: attack.damage || '1d6',
+      effectiveStrBonus: 0,
+      enhancementBonus: 0,
+      miscBonus: 0,
+      breakdown: attack.damage || '1d6'
+    };
+  }
+
+  const abilities = getEffectiveAbilities(char);
+  const strMod = getAbilityModifier(abilities.STR?.score ?? 10);
+
+  // Extract base dice from attack.baseDamageDice or attack.damage (e.g. "1d6" from "1d6 + 0" or "1d6" or "1d8 + 3")
+  let baseDice = attack.baseDamageDice || '';
+  if (!baseDice && attack.damage) {
+    const diceMatch = String(attack.damage).match(/^([0-9]+d[0-9]+)/i);
+    if (diceMatch) {
+      baseDice = diceMatch[1];
+    } else {
+      baseDice = attack.damage.split(' ')[0] || '1d6';
+    }
+  }
+  if (!baseDice) baseDice = '1d6';
+
+  const nameLower = (attack.name || '').toLowerCase();
+  const rangeLower = (attack.range || '').toLowerCase();
+  const notesLower = (attack.notes || '').toLowerCase();
+
+  const isCrossbow = nameLower.includes('crossbow') || notesLower.includes('crossbow');
+  const isSling = nameLower.includes('sling');
+  const isBow = (nameLower.includes('bow') && !isCrossbow) || rangeLower.includes('bow');
+  const isComposite = nameLower.includes('composite') || notesLower.includes('composite');
+  const isThrown = rangeLower.includes('thrown') || notesLower.includes('thrown');
+  const isRanged = rangeLower.includes('ranged') || isCrossbow || isBow || isSling;
+
+  let effectiveStrBonus = strMod;
+
+  const twoHandedMult = attack.twoHandedMultiplier ?? 1.5;
+  const offhandMult = attack.offhandMultiplier ?? 0.5;
+
+  if (attack.isSecondaryNatural) {
+    // Secondary natural attack adds 0.5x STR bonus (rounded down). Negative STR applies in full.
+    effectiveStrBonus = strMod > 0 ? Math.floor(strMod * 0.5) : strMod;
+  } else if (attack.isNatural && (attack.isSoleNaturalAttack || (attack.twoHandedMultiplier && attack.twoHandedMultiplier > 1))) {
+    // Sole primary natural attack adds 1.5x STR bonus
+    const mult = attack.twoHandedMultiplier ?? 1.5;
+    effectiveStrBonus = strMod > 0 ? Math.floor(strMod * mult) : strMod;
+  } else if (attack.isOffhand || attack.wieldGrip === 'OH') {
+    // Off-hand adds offhandMult x STR bonus (rounded down). Negative STR applies in full.
+    effectiveStrBonus = strMod > 0 ? Math.floor(strMod * offhandMult) : strMod;
+  } else if (attack.isTwoHanded || attack.wieldGrip === '2H') {
+    // Two-handed adds twoHandedMult x STR bonus (rounded down). Negative STR applies in full.
+    effectiveStrBonus = strMod > 0 ? Math.floor(strMod * twoHandedMult) : strMod;
+  } else if (isRanged && !isThrown) {
+    if (isCrossbow) {
+      effectiveStrBonus = 0; // Crossbows add no STR
+    } else if (isSling) {
+      effectiveStrBonus = strMod; // Slings add STR mod in 3.5e
+    } else if (isBow) {
+      if (isComposite) {
+        effectiveStrBonus = strMod; // Composite bows add STR bonus (up to bow rating)
+      } else {
+        effectiveStrBonus = strMod < 0 ? strMod : 0; // Standard bows only take penalties for low STR
+      }
+    } else {
+      effectiveStrBonus = 0;
+    }
+  }
+
+  // Enhancement bonus to damage:
+  let enhancementBonus = attack.enhancementBonus ?? 0;
+  if (attack.enhancementBonus === undefined) {
+    const match = nameLower.match(/\+(\d+)/) || notesLower.match(/\+(\d+)/);
+    if (match) {
+      enhancementBonus = parseInt(match[1], 10);
+    }
+  }
+
+  // Misc damage bonus (e.g. Weapon Specialization):
+  let miscBonus = attack.miscBonusDamage ?? 0;
+  const hasWeaponSpec = Boolean(
+    char.feats?.some(f => {
+      const fn = f.name.toLowerCase();
+      return fn.includes('weapon specialization') && (fn.includes(nameLower) || nameLower.includes(fn.replace('weapon specialization', '').replace(/[\(\)]/g, '').trim()));
+    })
+  );
+  if (hasWeaponSpec && attack.miscBonusDamage === undefined) {
+    miscBonus += 2;
+  }
+
+  const totalFlatMod = effectiveStrBonus + enhancementBonus + miscBonus;
+  const damageFormula = totalFlatMod !== 0
+    ? `${baseDice} ${totalFlatMod >= 0 ? '+' : '-'} ${Math.abs(totalFlatMod)}`
+    : baseDice;
+
+  const parts = [baseDice];
+  if (effectiveStrBonus !== 0) {
+    const label = attack.isOffhand ? '½ STR' : attack.isTwoHanded ? '1.5× STR' : 'STR';
+    parts.push(`${formatModifier(effectiveStrBonus)} (${label})`);
+  }
+  if (enhancementBonus !== 0) parts.push(`+${enhancementBonus} Magic`);
+  if (miscBonus !== 0) parts.push(`${formatModifier(miscBonus)} Misc`);
+
+  const breakdown = parts.join(' ');
+
+  return {
+    damageFormula,
+    baseDice,
+    effectiveStrBonus,
+    enhancementBonus,
+    miscBonus,
+    breakdown
+  };
 }
 
 export interface DamagePart {
@@ -4066,10 +4852,15 @@ export function calculate35eAoOPool(character: CharacterData): AoOPoolInfo {
 
   let threatReachFt = character.threatReachFt || 5;
   if (!character.threatReachFt) {
-    if (character.sizeCategory === 'Large') threatReachFt = 10;
-    if (character.sizeCategory === 'Huge') threatReachFt = 15;
-    if (character.sizeCategory === 'Gargantuan') threatReachFt = 20;
-    if (character.sizeCategory === 'Colossal') threatReachFt = 30;
+    if (character.edition === '3.5e') {
+      const reachInfo = get35eSpaceAndReach(character.sizeCategory, character.reachType || character.isQuadruped);
+      threatReachFt = reachInfo.naturalReachFt;
+    } else {
+      if (character.sizeCategory === 'Large') threatReachFt = 10;
+      if (character.sizeCategory === 'Huge') threatReachFt = 15;
+      if (character.sizeCategory === 'Gargantuan') threatReachFt = 20;
+      if (character.sizeCategory === 'Colossal') threatReachFt = 30;
+    }
   }
 
   return {

@@ -68,6 +68,10 @@ export interface CompendiumItem {
   raceData?: {
     size?: string;
     speed?: number;
+    speedFly?: number;
+    speedSwim?: number;
+    speedClimb?: number;
+    speedBurrow?: number;
     speedNotes?: string;
     creatureType?: string;
     abilityBonuses?: Array<{ ability: string; bonus: number }>;
@@ -754,6 +758,301 @@ export const BASE_COMPENDIUM_RACES: CompendiumItem[] = [
   }
 ];
 
+export const BASE_35E_COMPENDIUM_RACES: CompendiumItem[] = [
+  {
+    id: 'race-35e-human',
+    name: 'Human',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Adaptable, ambitious, and versatile. Humans gain bonus feats and skill points without racial ability adjustments.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid', 'Medium', 'Bonus Feat', 'Bonus Skills'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid (Human)',
+      abilityBonuses: [],
+      abilityBonusesStr: 'No ability score adjustments',
+      languages: ['Common', 'Any bonus languages (except secret languages)'],
+      traits: [
+        { name: 'Extra Feat', description: '1 extra feat at 1st level.' },
+        { name: 'Bonus Skill Points', description: '4 extra skill points at 1st level and 1 extra skill point at each additional level.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-elf',
+    name: 'Elf',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Graceful and perceptive champions of the natural world. +2 Dexterity, -2 Constitution.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid', 'Medium', 'Low-Light Vision', 'Fey Blood'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid (Elf)',
+      abilityBonuses: [
+        { ability: 'DEX', bonus: 2 },
+        { ability: 'CON', bonus: -2 }
+      ],
+      abilityBonusesStr: '+2 Dexterity, -2 Constitution',
+      senses: 'Low-Light Vision',
+      languages: ['Common', 'Elven'],
+      traits: [
+        { name: 'Immunity to Magic Sleep', description: 'Immunity to magic sleep effects.' },
+        { name: 'Enchantment Resistance', description: '+2 racial saving throw bonus against enchantment spells or effects.' },
+        { name: 'Low-Light Vision', description: 'An elf can see twice as far as a human in starlight, moonlight, torchlight, and similar conditions of poor illumination.' },
+        { name: 'Weapon Proficiency', description: 'Proficient with longsword, rapier, longbow (including composite), and shortbow (including composite).' },
+        { name: 'Keen Senses', description: '+2 racial bonus on Listen, Search, and Spot checks. An elf who merely passes within 5 feet of a secret or concealed door is entitled to a Search check to notice it as if actively looking.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-dwarf',
+    name: 'Dwarf',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Stalwart miners and master artisans of stone and metal. +2 Constitution, -2 Charisma.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid', 'Medium', 'Darkvision', 'Stonecunning'],
+    raceData: {
+      size: 'Medium',
+      speed: 20,
+      speedNotes: '20 ft. (can move at this speed even when wearing medium or heavy armor or when carrying a medium or heavy load)',
+      creatureType: 'Humanoid (Dwarf)',
+      abilityBonuses: [
+        { ability: 'CON', bonus: 2 },
+        { ability: 'CHA', bonus: -2 }
+      ],
+      abilityBonusesStr: '+2 Constitution, -2 Charisma',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      languages: ['Common', 'Dwarven'],
+      traits: [
+        { name: 'Darkvision', description: 'Darkvision up to 60 feet in total darkness.' },
+        { name: 'Stonecunning', description: '+2 racial bonus on Search checks to notice unusual stonework.' },
+        { name: 'Weapon Familiarity', description: 'Dwarven waraxes and urgroshes are martial weapons rather than exotic.' },
+        { name: 'Stability', description: '+4 bonus on ability checks made to resist being bull rushed or tripped when standing firmly on the ground.' },
+        { name: 'Resilience vs. Poison', description: '+2 racial bonus on saving throws against poison.' },
+        { name: 'Resilience vs. Spells', description: '+2 racial bonus on saving throws against spells and spell-like effects.' },
+        { name: 'Combat Training vs. Orcs/Goblins', description: '+1 racial bonus on attack rolls against orcs and goblinoids.' },
+        { name: 'Giant Defense', description: '+4 dodge bonus to AC against monsters of the giant type.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-halfling',
+    name: 'Halfling',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Nimble and clever scavengers and wanderers. Small size. +2 Dexterity, -2 Strength.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid', 'Small', 'Lucky', 'Fearless'],
+    raceData: {
+      size: 'Small',
+      speed: 20,
+      creatureType: 'Humanoid (Halfling)',
+      abilityBonuses: [
+        { ability: 'DEX', bonus: 2 },
+        { ability: 'STR', bonus: -2 }
+      ],
+      abilityBonusesStr: '+2 Dexterity, -2 Strength',
+      languages: ['Common', 'Halfling'],
+      traits: [
+        { name: 'Small Size', description: '+1 size bonus to AC, +1 size bonus on attack rolls, +4 size bonus on Hide checks; uses smaller weapons; carrying limits 3/4 of Medium.' },
+        { name: 'Athletic Agility', description: '+2 racial bonus on Climb, Jump, Listen, and Move Silently checks.' },
+        { name: 'Halfling Luck', description: '+1 racial bonus on all saving throws.' },
+        { name: 'Fearless', description: '+2 morale bonus on saving throws against fear (stacks with Halfling Luck for +3 vs fear).' },
+        { name: 'Thrown Weapon Master', description: '+1 racial bonus on attack rolls with thrown weapons and slings.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-gnome',
+    name: 'Gnome',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Curious alchemists, illusionists, and inventors. Small size. +2 Constitution, -2 Strength.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid', 'Small', 'Low-Light Vision', 'Illusion Mastery'],
+    raceData: {
+      size: 'Small',
+      speed: 20,
+      creatureType: 'Humanoid (Gnome)',
+      abilityBonuses: [
+        { ability: 'CON', bonus: 2 },
+        { ability: 'STR', bonus: -2 }
+      ],
+      abilityBonusesStr: '+2 Constitution, -2 Strength',
+      senses: 'Low-Light Vision',
+      languages: ['Common', 'Gnome'],
+      traits: [
+        { name: 'Small Size', description: '+1 size bonus to AC, +1 size bonus on attack rolls, +4 size bonus on Hide checks.' },
+        { name: 'Low-Light Vision', description: 'Can see twice as far as humans in dim light.' },
+        { name: 'Weapon Familiarity', description: 'Gnome hooked hammers are martial weapons rather than exotic.' },
+        { name: 'Illusion Resistance', description: '+2 racial bonus on saving throws against illusions.' },
+        { name: 'Hatred vs. Kobolds/Goblins', description: '+1 racial bonus on attack rolls against kobolds and goblinoids.' },
+        { name: 'Giant Defense', description: '+4 dodge bonus to AC against monsters of the giant type.' },
+        { name: 'Keen Hearing & Alchemy', description: '+2 racial bonus on Listen and Craft (alchemy) checks.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-half-elf',
+    name: 'Half-Elf',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Diplomatic wanderers walking between human drive and elven longevity. No ability penalties.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid', 'Medium', 'Low-Light Vision', 'Diplomacy'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid (Elf, Human)',
+      abilityBonuses: [],
+      abilityBonusesStr: 'No ability score adjustments',
+      senses: 'Low-Light Vision',
+      languages: ['Common', 'Elven'],
+      traits: [
+        { name: 'Immunity to Magic Sleep', description: 'Immunity to magic sleep spells and effects.' },
+        { name: 'Enchantment Resistance', description: '+2 racial saving throw bonus against enchantment spells or effects.' },
+        { name: 'Low-Light Vision', description: 'Can see twice as far as humans in dim light.' },
+        { name: 'Elven Blood', description: 'For all effects related to race, a half-elf is considered an elf.' },
+        { name: 'Keen Senses', description: '+1 racial bonus on Listen, Search, and Spot checks.' },
+        { name: 'Diplomatic Grace', description: '+2 racial bonus on Diplomacy and Gather Information checks.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-half-orc',
+    name: 'Half-Orc',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Fierce warriors bearing brutal strength and endurance. +2 Strength, -2 Intelligence, -2 Charisma.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid', 'Medium', 'Darkvision', 'Brutal Strength'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid (Orc, Human)',
+      abilityBonuses: [
+        { ability: 'STR', bonus: 2 },
+        { ability: 'INT', bonus: -2 },
+        { ability: 'CHA', bonus: -2 }
+      ],
+      abilityBonusesStr: '+2 Strength, -2 Intelligence, -2 Charisma',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      languages: ['Common', 'Orc'],
+      traits: [
+        { name: 'Darkvision', description: 'Darkvision out to 60 feet.' },
+        { name: 'Orc Blood', description: 'For all effects related to race, a half-orc is considered an orc.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-aasimar',
+    name: 'Aasimar',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Humanoids touched by celestial heritage. +2 Wisdom, +2 Charisma. Resistance to acid 5, cold 5, and electricity 5.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid (Planetouched)', 'Medium', 'Darkvision', 'Celestial Resistance'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid (Planetouched)',
+      abilityBonuses: [
+        { ability: 'WIS', bonus: 2 },
+        { ability: 'CHA', bonus: 2 }
+      ],
+      abilityBonusesStr: '+2 Wisdom, +2 Charisma',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      energyResistances: [
+        { energyType: 'acid', value: 5 },
+        { energyType: 'cold', value: 5 },
+        { energyType: 'electricity', value: 5 }
+      ],
+      languages: ['Common', 'Celestial'],
+      traits: [
+        { name: 'Darkvision', description: 'Darkvision up to 60 feet.' },
+        { name: 'Celestial Resistance', description: 'Resistance to acid 5, cold 5, and electricity 5.' },
+        { name: 'Daylight', description: 'Can use daylight once per day as a spell-like ability (caster level equals character level).' },
+        { name: 'Keen Senses', description: '+2 racial bonus on Listen and Spot checks.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-tiefling',
+    name: 'Tiefling',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Humanoids infused with the taint of fiendish blood. +2 Dexterity, +2 Intelligence, -2 Charisma. Resistance to cold 5, electricity 5, and fire 5.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid (Planetouched)', 'Medium', 'Darkvision', 'Fiendish Resistance'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid (Planetouched)',
+      abilityBonuses: [
+        { ability: 'DEX', bonus: 2 },
+        { ability: 'INT', bonus: 2 },
+        { ability: 'CHA', bonus: -2 }
+      ],
+      abilityBonusesStr: '+2 Dexterity, +2 Intelligence, -2 Charisma',
+      darkvision: true,
+      senses: 'Darkvision 60 ft.',
+      energyResistances: [
+        { energyType: 'cold', value: 5 },
+        { energyType: 'electricity', value: 5 },
+        { energyType: 'fire', value: 5 }
+      ],
+      languages: ['Common', 'Infernal'],
+      traits: [
+        { name: 'Darkvision', description: 'Darkvision up to 60 feet.' },
+        { name: 'Fiendish Resistance', description: 'Resistance to cold 5, electricity 5, and fire 5.' },
+        { name: 'Darkness', description: 'Can use darkness once per day as a spell-like ability (caster level equals character level).' },
+        { name: 'Deceptive Agility', description: '+2 racial bonus on Bluff and Hide checks.' }
+      ]
+    }
+  },
+  {
+    id: 'race-35e-drow',
+    name: 'Drow (Dark Elf)',
+    category: 'races',
+    edition: '3.5e',
+    description: 'Subterranean elves with innate spell resistance and spell-like abilities. +2 Dexterity, -2 Constitution, +2 Intelligence, +2 Charisma. Spell Resistance: 11 + character level.',
+    source: 'SRD 3.5e',
+    tags: ['Humanoid (Elf)', 'Medium', 'Darkvision 120 ft.', 'Spell Resistance'],
+    raceData: {
+      size: 'Medium',
+      speed: 30,
+      creatureType: 'Humanoid (Elf)',
+      abilityBonuses: [
+        { ability: 'DEX', bonus: 2 },
+        { ability: 'CON', bonus: -2 },
+        { ability: 'INT', bonus: 2 },
+        { ability: 'CHA', bonus: 2 }
+      ],
+      abilityBonusesStr: '+2 Dexterity, -2 Constitution, +2 Intelligence, +2 Charisma',
+      darkvision: true,
+      senses: 'Darkvision 120 ft.',
+      spellResistanceBase: 11,
+      spellResistanceScalingProgression: '11 + Character Level',
+      languages: ['Common', 'Elven', 'Undercommon'],
+      traits: [
+        { name: 'Superior Darkvision', description: 'Darkvision out to 120 feet.' },
+        { name: 'Spell Resistance', description: 'Spell resistance equal to 11 + class levels.' },
+        { name: 'Immunity to Magic Sleep', description: 'Immunity to magic sleep effects and +2 racial bonus on saves vs enchantment.' },
+        { name: 'Light Blindness', description: 'Abrupt exposure to bright light blinds a drow for 1 round; takes -1 circumstance penalty on attacks, saves, and checks in bright light.' },
+        { name: 'Spell-Like Abilities', description: '1/day dancing lights, darkness, and faerie fire (caster level equal to character level).' }
+      ]
+    }
+  }
+];
+
 // Base Equipment / Items
 export const BASE_COMPENDIUM_ITEMS: CompendiumItem[] = [
   {
@@ -1048,6 +1347,10 @@ export function loadCustomCompendiumEntries(): CompendiumItem[] {
           if (baseMonsterNames.includes(item.name.trim().toLowerCase()) && item.category !== 'monsters') {
             return false;
           }
+          // Filter out accidental auto-saved compendium entries from "+Add" on official items
+          if (item.source === 'AI Forge' && (item.id.startsWith('comp-gear-gear-') || item.id.startsWith('comp-spell-'))) {
+            return false;
+          }
           return true;
         });
         if (clean.length !== parsed.length) {
@@ -1075,6 +1378,11 @@ export function saveCustomCompendiumEntry(
   }
 ): CompendiumItem[] {
   if (!newItem || !newItem.name || !newItem.category) return loadCustomCompendiumEntries();
+
+  // If item is explicitly marked as non-custom or from official SRD, never add it to the custom compendium
+  if (newItem.isCustom === false || newItem.source?.startsWith('SRD') || newItem.source?.includes('Core')) {
+    return loadCustomCompendiumEntries();
+  }
 
   const baseMonsterNames = ['ogre', 'the tarrasque', 'tarrasque', 'minotaur', 'adult red dragon', 'orc', 'kobold spear hunter'];
   if (baseMonsterNames.includes(newItem.name.trim().toLowerCase()) && newItem.category !== 'monsters') {

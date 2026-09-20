@@ -370,6 +370,10 @@ export function isContainerItem(item: GearItem): boolean {
  */
 export function isTwoHandedWeapon(item: GearItem): boolean {
   if (!item) return false;
+  // Player explicit grip choice takes top precedence
+  if (item.wieldGrip === '2H') return true;
+  if (item.wieldGrip === '1H') return false;
+
   if (item.slot === 'Two-Handed') return true;
   if (item.weaponStats?.isTwoHanded === true) return true;
   if (item.weaponStats?.range?.toLowerCase().includes('two-handed')) return true;
@@ -442,6 +446,19 @@ export function isWeaponItem(item: GearItem): boolean {
   return false;
 }
 
+export function getEffectiveGrip(item: GearItem): '1H' | '2H' {
+  if (!item) return '1H';
+  if (item.wieldGrip === '2H') return '2H';
+  if (item.wieldGrip === '1H') return '1H';
+  return isTwoHandedWeapon(item) ? '2H' : '1H';
+}
+
+export function canToggleWeaponGrip(item: GearItem): boolean {
+  if (!item || !isWeaponItem(item)) return false;
+  if (isShieldItem(item) || isArmorItem(item)) return false;
+  return true;
+}
+
 export interface ItemBadgeInfo {
   label: string;
   icon: string;
@@ -468,19 +485,20 @@ export function getItemEquipmentBadge(item: GearItem): ItemBadgeInfo | null {
 
   // 2. Weapons (Two-Handed vs One-Handed)
   if (isWeaponItem(item)) {
-    if (isTwoHandedWeapon(item)) {
+    const grip = getEffectiveGrip(item);
+    if (grip === '2H') {
       return {
-        icon: '✋',
-        label: '2 Hands',
-        className: 'text-amber-300 bg-amber-950/80 border-amber-600/60',
-        title: 'Two-Handed Weapon (Requires 2 hands to wield)'
+        icon: '✋✋',
+        label: '2-Hands Grip',
+        className: 'text-amber-300 bg-amber-950/80 border-amber-600/60 font-bold',
+        title: 'Two-Handed Grip (Occupies 2 hands. In 3.5e: 1.5× STR damage bonus; in 5e: versatile damage die)'
       };
     }
     return {
       icon: '✋',
-      label: '1 Hand',
+      label: '1-Hand Grip',
       className: 'text-amber-200/90 bg-amber-950/50 border-amber-800/60',
-      title: 'One-Handed Weapon (Occupies 1 hand)'
+      title: 'One-Handed Grip (Occupies 1 hand. Leaves other hand free)'
     };
   }
 
