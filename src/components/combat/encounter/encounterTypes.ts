@@ -102,6 +102,8 @@ export interface EncounterTrackerProps {
   onUpdateCharacter?: (updated: CharacterData) => void;
   encounterState?: any;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  initialViewMode?: 'teams' | 'timeline' | 'battlemap';
+  isStandaloneBattlemap?: boolean;
 }
 
 export interface SavedEncounterData {

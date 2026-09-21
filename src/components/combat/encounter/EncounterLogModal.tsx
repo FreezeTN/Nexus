@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollText, Search, Download, FileText, Check, MessageSquarePlus, X } from 'lucide-react';
+import { ScrollText, Search, Download, FileText, Check, MessageSquarePlus, X, Trash2 } from 'lucide-react';
 import { CombatLogEntry } from './encounterTypes';
 
 interface EncounterLogModalProps {
@@ -25,6 +25,7 @@ export const EncounterLogModal: React.FC<EncounterLogModalProps> = ({
   const [logSearchText, setLogSearchText] = useState('');
   const [customNoteInput, setCustomNoteInput] = useState('');
   const [copiedLog, setCopiedLog] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const filteredLogs = combatLogs.filter(log => {
     const matchesCategory = logFilterCategory === 'all' || log.category === logFilterCategory;
@@ -178,20 +179,47 @@ export const EncounterLogModal: React.FC<EncounterLogModalProps> = ({
           )}
         </div>
 
-        <div className="pt-2 border-t border-stone-800 flex items-center justify-between">
+        <div className="pt-2 border-t border-stone-800 flex items-center justify-between gap-2">
+          {confirmClear ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-rose-300 font-medium">Clear all {combatLogs.length} entries?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  onClearLogs();
+                  setConfirmClear(false);
+                }}
+                className="bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow transition"
+              >
+                Yes, Clear All
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmClear(false)}
+                className="bg-stone-800 hover:bg-stone-700 text-stone-300 font-medium text-xs px-2.5 py-1.5 rounded-lg transition"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={combatLogs.length === 0}
+              onClick={() => setConfirmClear(true)}
+              className={`text-xs font-bold transition flex items-center gap-1.5 ${
+                combatLogs.length === 0
+                  ? 'text-stone-600 cursor-not-allowed'
+                  : 'text-rose-400 hover:text-rose-300'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Clear Log History</span>
+            </button>
+          )}
           <button
-            onClick={() => {
-              if (window.confirm('Clear all combat logs for this encounter?')) {
-                onClearLogs();
-              }
-            }}
-            className="text-xs text-rose-400 hover:text-rose-300 font-bold"
-          >
-            Clear Log History
-          </button>
-          <button
+            type="button"
             onClick={onClose}
-            className="bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs px-4 py-2 rounded-xl"
+            className="bg-stone-800 hover:bg-stone-700 text-stone-200 font-bold text-xs px-4 py-2 rounded-xl transition"
           >
             Close
           </button>

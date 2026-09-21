@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Sparkles,
   Flame,
@@ -16,16 +16,14 @@ import {
   Unlock,
   Dices,
   Ruler,
-  Eye,
-  CheckCircle2
+  BookOpen
 } from 'lucide-react';
 import {
   AoETemplate,
-  AoEShape,
-  STANDARD_SPELL_AOE_PRESETS,
-  SpellAoEPreset
+  AoEShape
 } from './battlemapTypes';
 import { Combatant } from '../combat/encounter/encounterTypes';
+import { CharacterData, Spell } from '../../types';
 
 interface AoEControlPaletteProps {
   activeTemplate: AoETemplate | null;
@@ -36,6 +34,99 @@ interface AoEControlPaletteProps {
   onRollSavesForTargets?: (saveType: string, dc: number, targets: Combatant[]) => void;
   onApplyDamageToTargets?: (damageDice: string, damageType: string, targets: Combatant[]) => void;
   onClose: () => void;
+  selectedCharacter?: CharacterData | null;
+  selectedCombatant?: Combatant | null;
+}
+
+// Helper to intelligently infer shape, size, and styling from a character's spell
+export function inferSpellAoE(
+  spell: Spell,
+  originX: number = 10,
+  originY: number = 8,
+  overrideDc?: number
+): AoETemplate {
+  const desc = `${spell.description || ''} ${spell.shortDescription || ''} ${spell.range || ''}`.toLowerCase();
+
+  let shape: AoEShape = 'circle';
+  let sizeFeet = 20;
+  let widthFeet = 5;
+
+  // Infer shape and dimensions
+  if (desc.includes('cone')) {
+    shape = 'cone';
+    const match = desc.match(/(\d+)[- ]foot cone/);
+    sizeFeet = match ? parseInt(match[1], 10) : 30;
+  } else if (desc.includes('line')) {
+    shape = 'line';
+    const match = desc.match(/(\d+)[- ]foot line/);
+    sizeFeet = match ? parseInt(match[1], 10) : 60;
+    const widthMatch = desc.match(/(\d+)[- ]foot wide/);
+    widthFeet = widthMatch ? parseInt(widthMatch[1], 10) : 5;
+  } else if (desc.includes('cube') || desc.includes('square')) {
+    shape = 'cube';
+    const match = desc.match(/(\d+)[- ]foot cube/) || desc.match(/(\d+)[- ]foot square/);
+    sizeFeet = match ? parseInt(match[1], 10) : 20;
+    widthFeet = sizeFeet;
+  } else {
+    shape = 'circle';
+    const match = desc.match(/(\d+)[- ]foot[- ]radius/) || desc.match(/(\d+)[- ]foot sphere/);
+    sizeFeet = match ? parseInt(match[1], 10) : 20;
+  }
+
+  // Color mapping based on damage type / school
+  const dmg = (spell.damageType || '').toLowerCase();
+  const school = (spell.school || '').toLowerCase();
+  let color = 'rgba(239, 68, 68, 0.35)';
+  let borderColor = '#ef4444';
+
+  if (dmg.includes('fire') || school.includes('evoc')) {
+    color = 'rgba(249, 115, 22, 0.35)';
+    borderColor = '#f97316';
+  } else if (dmg.includes('cold') || dmg.includes('ice')) {
+    color = 'rgba(56, 189, 248, 0.35)';
+    borderColor = '#38bdf8';
+  } else if (dmg.includes('lightning') || dmg.includes('thunder')) {
+    color = 'rgba(234, 179, 8, 0.35)';
+    borderColor = '#eab308';
+  } else if (dmg.includes('acid') || dmg.includes('poison')) {
+    color = 'rgba(34, 197, 94, 0.35)';
+    borderColor = '#22c55e';
+  } else if (dmg.includes('necrotic')) {
+    color = 'rgba(168, 85, 247, 0.35)';
+    borderColor = '#a855f7';
+  } else if (dmg.includes('radiant')) {
+    color = 'rgba(250, 204, 21, 0.4)';
+    borderColor = '#facc15';
+  } else if (dmg.includes('force') || dmg.includes('psychic')) {
+    color = 'rgba(129, 140, 248, 0.35)';
+    borderColor = '#818cf8';
+  }
+
+  const validSaves = ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA'] as const;
+  const rawSave = (spell.saveType || 'DEX').toUpperCase();
+  const saveType: 'STR' | 'DEX' | 'CON' | 'INT' | 'WIS' | 'CHA' = validSaves.includes(rawSave as any)
+    ? (rawSave as any)
+    : 'DEX';
+
+  return {
+    id: `aoe-spell-${spell.id || Date.now()}`,
+    name: spell.name,
+    shape,
+    originX,
+    originY,
+    radiusFeet: shape === 'circle' ? sizeFeet : sizeFeet / 2,
+    lengthFeet: sizeFeet,
+    widthFeet: shape === 'cube' ? sizeFeet : widthFeet,
+    angleDegrees: 0,
+    color,
+    borderColor,
+    saveType,
+    saveDc: overrideDc || 14,
+    damageDice: spell.damage || '',
+    damageType: spell.damageType || '',
+    description: spell.shortDescription || spell.description || `${spell.name} (${spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`})`,
+    isLocked: false
+  };
 }
 
 export const AoEControlPalette: React.FC<AoEControlPaletteProps> = ({
@@ -46,34 +137,42 @@ export const AoEControlPalette: React.FC<AoEControlPaletteProps> = ({
   onToggleRuler,
   onRollSavesForTargets,
   onApplyDamageToTargets,
-  onClose
+  onClose,
+  selectedCharacter,
+  selectedCombatant
 }) => {
-  const [selectedPresetId, setSelectedPresetId] = React.useState<string | null>('fireball');
-  const [saveDc, setSaveDc] = React.useState<number>(14);
+  const [selectedSpellId, setSelectedSpellId] = React.useState<string | null>(null);
 
-  // Apply a spell preset
-  const handleApplyPreset = (preset: SpellAoEPreset) => {
-    setSelectedPresetId(preset.id);
-    const newTemplate: AoETemplate = {
-      id: `aoe-${Date.now()}`,
-      name: preset.name,
-      shape: preset.shape,
-      originX: activeTemplate ? activeTemplate.originX : 10,
-      originY: activeTemplate ? activeTemplate.originY : 8,
-      radiusFeet: preset.shape === 'circle' ? preset.sizeFeet : preset.sizeFeet / 2,
-      lengthFeet: preset.sizeFeet,
-      widthFeet: preset.widthFeet || (preset.shape === 'cube' ? preset.sizeFeet : 5),
-      angleDegrees: activeTemplate ? activeTemplate.angleDegrees : 0,
-      color: preset.color,
-      borderColor: preset.borderColor,
-      saveType: preset.saveType,
-      saveDc: saveDc,
-      damageDice: preset.damageDice,
-      damageType: preset.damageType,
-      description: preset.description,
-      isLocked: false
-    };
-    onUpdateTemplate(newTemplate);
+  // Compute spell save DC for selected character
+  const calculatedSaveDc = useMemo(() => {
+    if (selectedCharacter?.spellSaveDCOverride) return selectedCharacter.spellSaveDCOverride;
+    if (!selectedCharacter) return 14;
+    const prof = Math.floor(((selectedCharacter.level || 1) - 1) / 4) + 2;
+    const intScore = selectedCharacter.abilities?.INT?.score ?? 10;
+    const wisScore = selectedCharacter.abilities?.WIS?.score ?? 10;
+    const chaScore = selectedCharacter.abilities?.CHA?.score ?? 10;
+    const maxMentalMod = Math.floor((Math.max(intScore, wisScore, chaScore) - 10) / 2);
+    return 8 + prof + maxMentalMod;
+  }, [selectedCharacter]);
+
+  const [saveDc, setSaveDc] = React.useState<number>(calculatedSaveDc);
+
+  // Sync DC when character changes
+  React.useEffect(() => {
+    setSaveDc(calculatedSaveDc);
+  }, [calculatedSaveDc]);
+
+  const characterSpells = useMemo(() => {
+    return selectedCharacter?.spells || [];
+  }, [selectedCharacter]);
+
+  // Apply a character's spell to the AoE template
+  const handleApplyCharacterSpell = (spell: Spell) => {
+    setSelectedSpellId(spell.id);
+    const originX = activeTemplate ? activeTemplate.originX : 10;
+    const originY = activeTemplate ? activeTemplate.originY : 8;
+    const template = inferSpellAoE(spell, originX, originY, saveDc);
+    onUpdateTemplate(template);
   };
 
   // Change basic shape
@@ -134,40 +233,64 @@ export const AoEControlPalette: React.FC<AoEControlPaletteProps> = ({
   const alliesCaught = caughtCombatants.filter((c) => c.type === 'player' || c.type === 'ally');
   const enemiesCaught = caughtCombatants.filter((c) => c.type === 'enemy');
 
+  const actorName = selectedCombatant?.name || selectedCharacter?.name || 'Character';
+
   return (
     <div
       id="aoe-control-palette"
       className="bg-stone-900 border-b border-stone-800 p-3 text-xs text-stone-300 shadow-xl animate-fadeIn z-20"
     >
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-        {/* Left: Presets & Shape Selector */}
+        {/* Left: Selected Character's Current Spells & Shape Selector */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 font-bold text-amber-300 pr-2 border-r border-stone-700">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            <span className="font-serif">Tactical Spells & AoE</span>
+            <span className="font-serif truncate max-w-[170px]" title={actorName}>
+              {actorName}'s Spells
+            </span>
           </div>
 
-          {/* Quick Spell Presets */}
-          <div className="flex items-center gap-1 overflow-x-auto py-0.5 max-w-[420px] scrollbar-none">
-            {STANDARD_SPELL_AOE_PRESETS.slice(0, 6).map((preset) => {
-              const isSelected = selectedPresetId === preset.id && activeTemplate;
-              return (
-                <button
-                  key={preset.id}
-                  type="button"
-                  onClick={() => handleApplyPreset(preset)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium transition whitespace-nowrap ${
-                    isSelected
-                      ? 'bg-amber-500 text-stone-950 font-bold shadow'
-                      : 'bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700'
-                  }`}
-                  title={`${preset.name} (${preset.sizeFeet}ft ${preset.shape}): ${preset.description}`}
-                >
-                  <span>{preset.icon}</span>
-                  <span>{preset.name}</span>
-                </button>
-              );
-            })}
+          {/* Current Spells of Selected Character */}
+          <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 max-w-[480px] scrollbar-none">
+            {characterSpells.length === 0 ? (
+              <div className="flex items-center gap-1.5 text-stone-400 italic px-1 text-[11px]">
+                <BookOpen className="w-3.5 h-3.5 text-stone-500" />
+                <span>No prepared spells found for {actorName}.</span>
+              </div>
+            ) : (
+              characterSpells.map((spell) => {
+                const isSelected = selectedSpellId === spell.id && activeTemplate?.name === spell.name;
+                const levelLabel = spell.level === 0 ? 'Cantrip' : `L${spell.level}`;
+
+                return (
+                  <button
+                    key={spell.id}
+                    type="button"
+                    onClick={() => handleApplyCharacterSpell(spell)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition whitespace-nowrap border shadow-sm ${
+                      isSelected
+                        ? 'bg-amber-500 text-stone-950 border-amber-400 font-bold shadow-amber-500/20'
+                        : 'bg-stone-800/90 hover:bg-stone-700 text-stone-200 border-stone-700 hover:border-amber-500/60'
+                    }`}
+                    title={`${spell.name} (${levelLabel} • ${spell.school || 'Magic'} • Range: ${spell.range || 'Self'}):\n${
+                      spell.shortDescription || spell.description
+                    }`}
+                  >
+                    <span
+                      className={`text-[9px] px-1 py-0.2 rounded font-mono font-bold ${
+                        spell.level === 0 ? 'bg-sky-950 text-sky-300 border border-sky-800' : 'bg-purple-950 text-purple-300 border border-purple-800'
+                      }`}
+                    >
+                      {levelLabel}
+                    </span>
+                    <span className="font-semibold">{spell.name}</span>
+                    {spell.damage && (
+                      <span className="text-[10px] text-amber-400/90 font-mono">({spell.damage})</span>
+                    )}
+                  </button>
+                );
+              })
+            )}
           </div>
 
           {/* Custom Shape Buttons */}

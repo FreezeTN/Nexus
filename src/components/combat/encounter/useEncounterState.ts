@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { CharacterData, Party, EncounterEnvironment, AbilityName } from '../../../types';
 import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp, getEffectiveSaves } from '../../../utils/dndCalculations';
 import { getLevelFromTotalXp } from '../../../data/levelProgressionData';
@@ -8,6 +8,7 @@ import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDea
 import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState, ConcentrationPrompt, MassiveDamagePrompt } from './encounterTypes';
 import { TerrainType, DoorState, AoETemplate, BattlemapLayout, BattlemapConfig, ActiveTeleportState, ActiveSpellTargetingState, isCellImpassable } from '../../battlemap/battlemapTypes';
 import { eventBus } from '../../../events/eventBus';
+import { broadcastEncounterState } from '../../../utils/useDetachedSync';
 import { 
   UserProfile, 
   GameSession, 
@@ -58,6 +59,10 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.combatants) && parsed.combatants.length > 0) {
         const syncedCombatants = parsed.combatants.map((c: Combatant) => {
+          let pUrl = c.portraitUrl;
+          if (pUrl && pUrl.includes('raw.githubusercontent.com')) {
+            pUrl = getMonsterPortraitUrl(c.name, c.id);
+          }
           if (c.isPlayerChar) {
             return {
               ...c,
@@ -66,10 +71,15 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
               hpMax: getEffectiveMaxHp(char),
               armorClass: char.armorClass,
               conditions: char.conditions || [],
-              portraitUrl: char.portraitUrl || (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined)
+              portraitUrl: (char.portraitUrl && !char.portraitUrl.includes('raw.githubusercontent.com'))
+                ? char.portraitUrl
+                : (char.isMonster ? getMonsterPortraitUrl(char.name, char.id) : undefined)
             };
           }
-          return c;
+          return {
+            ...c,
+            portraitUrl: pUrl
+          };
         });
 
         return {
@@ -83,7 +93,7 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
           battlemapDoors: parsed.battlemapDoors || {},
           battlemapFogOfWar: parsed.battlemapFogOfWar || {},
           battlemapUseFogOfWar: Boolean(parsed.battlemapUseFogOfWar),
-          combatLogs: Array.isArray(parsed.combatLogs) && parsed.combatLogs.length > 0 ? parsed.combatLogs : defaultState.combatLogs
+          combatLogs: Array.isArray(parsed.combatLogs) ? parsed.combatLogs : defaultState.combatLogs
         };
       }
     }
@@ -103,6 +113,38 @@ export interface UseEncounterStateProps {
   activeSessionCode?: string | null;
   onUpdateCharacter?: (updated: CharacterData) => void;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
+}
+
+function findAdjacentDismountCell(
+  mountX: number,
+  mountY: number,
+  mountSize: number,
+  occupied: Set<string>,
+  terrainMap?: Record<string, TerrainType>,
+  doors?: Record<string, DoorState>,
+  gridCols = 30,
+  gridRows = 30
+): { x: number; y: number } {
+  const candidates: { x: number; y: number }[] = [];
+  for (let dx = -1; dx <= mountSize; dx++) {
+    for (let dy = -1; dy <= mountSize; dy++) {
+      if (dx >= 0 && dx < mountSize && dy >= 0 && dy < mountSize) continue;
+      const cx = mountX + dx;
+      const cy = mountY + dy;
+      if (cx >= 0 && cy >= 0 && cx < gridCols && cy < gridRows) {
+        if (!isCellImpassable(cx, cy, terrainMap, doors) && !occupied.has(`${cx},${cy}`)) {
+          candidates.push({ x: cx, y: cy });
+        }
+      }
+    }
+  }
+  if (candidates.length > 0) {
+    return candidates[0];
+  }
+  return {
+    x: Math.max(0, Math.min(gridCols - 1, mountX + 1)),
+    y: Math.max(0, Math.min(gridRows - 1, mountY))
+  };
 }
 
 export function useEncounterState({
@@ -129,6 +171,8 @@ export function useEncounterState({
   const [fogOfWar, setFogOfWar] = useState<Record<string, boolean>>(() => (loadSavedEncounter(character).battlemapFogOfWar as Record<string, boolean>) || {});
   const [useFogOfWar, setUseFogOfWar] = useState<boolean>(() => Boolean(loadSavedEncounter(character).battlemapUseFogOfWar));
   const [activeAoETemplate, setActiveAoETemplate] = useState<AoETemplate | null>(null);
+  const instanceId = useRef(Math.random().toString(36).substring(2, 9) + Date.now().toString(36)).current;
+  const isRemoteUpdateRef = useRef(false);
 
   const isDm = Boolean(currentUser && activeSession && activeSession.dmUid === currentUser.uid);
 
@@ -163,6 +207,7 @@ export function useEncounterState({
           controlledBy: sc.controlledBy,
           mapX: sc.mapX,
           mapY: sc.mapY,
+          isOnMap: sc.isOnMap !== undefined ? sc.isOnMap : (typeof sc.mapX === 'number' && typeof sc.mapY === 'number'),
           tokenSize: sc.tokenSize,
           reachFeet: sc.reachFeet,
           elevationFeet: sc.elevationFeet,
@@ -178,14 +223,14 @@ export function useEncounterState({
       if (remoteEnc.environment) {
         setEncounterEnvironment(remoteEnc.environment);
       }
-      if (remoteEnc.battlemapTerrain) {
-        setTerrainMap(remoteEnc.battlemapTerrain as Record<string, TerrainType>);
+      if (remoteEnc.battlemapTerrain !== undefined) {
+        setTerrainMap((remoteEnc.battlemapTerrain as Record<string, TerrainType>) || {});
       }
-      if (remoteEnc.battlemapDoors) {
-        setDoors(remoteEnc.battlemapDoors as Record<string, DoorState>);
+      if (remoteEnc.battlemapDoors !== undefined) {
+        setDoors((remoteEnc.battlemapDoors as Record<string, DoorState>) || {});
       }
-      if (remoteEnc.battlemapFogOfWar) {
-        setFogOfWar(remoteEnc.battlemapFogOfWar);
+      if (remoteEnc.battlemapFogOfWar !== undefined) {
+        setFogOfWar(remoteEnc.battlemapFogOfWar || {});
       }
       if (typeof remoteEnc.battlemapUseFogOfWar === 'boolean') {
         setUseFogOfWar(remoteEnc.battlemapUseFogOfWar);
@@ -242,6 +287,7 @@ export function useEncounterState({
       controlledBy: c.controlledBy,
       mapX: c.mapX,
       mapY: c.mapY,
+      isOnMap: c.isOnMap !== false,
       tokenSize: c.tokenSize,
       reachFeet: c.reachFeet,
       elevationFeet: c.elevationFeet,
@@ -348,8 +394,12 @@ export function useEncounterState({
     };
   }, [character.id]);
 
-  // Save encounter state to localStorage
+  // Save encounter state to localStorage and broadcast to other open windows (such as popped-out battlemap)
   useEffect(() => {
+    if (isRemoteUpdateRef.current) {
+      isRemoteUpdateRef.current = false;
+      return;
+    }
     const charKey = character.id || 'default';
     try {
       const dataToSave: SavedEncounterData = {
@@ -366,10 +416,67 @@ export function useEncounterState({
         battlemapUseFogOfWar: useFogOfWar
       };
       localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
+      broadcastEncounterState(charKey, dataToSave, instanceId);
     } catch (err) {
       console.error("Error saving encounter state to localStorage:", err);
     }
-  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, terrainMap, doors, fogOfWar, useFogOfWar, character.id]);
+  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, terrainMap, doors, fogOfWar, useFogOfWar, character.id, instanceId]);
+
+  // Real-time cross-window synchronization listener (BroadcastChannel & storage event)
+  useEffect(() => {
+    const charKey = character.id || 'default';
+    const applyRemoteData = (data: SavedEncounterData) => {
+      if (!data || !Array.isArray(data.combatants)) return;
+      isRemoteUpdateRef.current = true;
+      setCombatants(data.combatants);
+      if (typeof data.activeTurnIndex === 'number') setActiveTurnIndex(data.activeTurnIndex);
+      if (typeof data.roundNumber === 'number') setRoundNumber(data.roundNumber);
+      if (Array.isArray(data.combatLogs)) setCombatLogs(data.combatLogs);
+      if (data.encounterEnvironment) setEncounterEnvironment(data.encounterEnvironment);
+      if (data.encounterMode) setEncounterMode(data.encounterMode);
+      if (data.activeMerchant !== undefined) setActiveMerchant(data.activeMerchant);
+      if (data.battlemapTerrain) setTerrainMap(data.battlemapTerrain as Record<string, TerrainType>);
+      if (data.battlemapDoors) setDoors(data.battlemapDoors as Record<string, DoorState>);
+      if (data.battlemapFogOfWar) setFogOfWar(data.battlemapFogOfWar);
+      if (typeof data.battlemapUseFogOfWar === 'boolean') setUseFogOfWar(data.battlemapUseFogOfWar);
+    };
+
+    let channel: BroadcastChannel | null = null;
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      try {
+        channel = new BroadcastChannel('penpaper_encounter_sync_v1');
+        channel.onmessage = (e) => {
+          if (
+            e.data &&
+            e.data.type === 'ENCOUNTER_SYNC' &&
+            e.data.instanceId !== instanceId &&
+            (e.data.charKey === charKey || e.data.charKey === 'default')
+          ) {
+            applyRemoteData(e.data.encounterData);
+          }
+        };
+      } catch {
+        // BroadcastChannel unavailable
+      }
+    }
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === `dnd_encounter_state_v1_${charKey}` && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          applyRemoteData(parsed);
+        } catch {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      if (channel) channel.close();
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [character.id, instanceId]);
 
 
   // Keep player combatant synced with character
@@ -464,6 +571,41 @@ export function useEncounterState({
     };
     setCombatLogs(prev => [newEntry, ...prev]);
   }, [roundNumber, activeCombatant?.name, character.name]);
+
+  const handleClearCombatLogs = useCallback(() => {
+    setCombatLogs([]);
+    const charKey = character.id || 'default';
+    try {
+      const dataToSave: SavedEncounterData = {
+        combatants,
+        activeTurnIndex,
+        roundNumber,
+        combatLogs: [],
+        encounterEnvironment,
+        encounterMode,
+        activeMerchant,
+        battlemapTerrain: terrainMap,
+        battlemapDoors: doors,
+        battlemapFogOfWar: fogOfWar,
+        battlemapUseFogOfWar: useFogOfWar
+      };
+      localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
+    } catch (err) {
+      console.error("Error saving cleared combat logs to localStorage:", err);
+    }
+  }, [
+    character.id,
+    combatants,
+    activeTurnIndex,
+    roundNumber,
+    encounterEnvironment,
+    encounterMode,
+    activeMerchant,
+    terrainMap,
+    doors,
+    fogOfWar,
+    useFogOfWar
+  ]);
 
   const awardDefeatedMonsterXp = useCallback((target: Combatant) => {
     if (target.type !== 'enemy' || target.isDefeated) return;
@@ -599,6 +741,38 @@ export function useEncounterState({
         addLogEntry('damage', `💀 ${target.name} took damage at 0 HP! Automatic Death Save Failure added.`, target.name);
       } else {
         addLogEntry('damage', `${target.name} took ${damageTaken} damage (${nextHp}/${target.hpMax} HP)`, target.name);
+      }
+
+      // Mounted Combat Watchdog: If mount drops to 0 HP, dismount all riders to adjacent squares and knock them Prone!
+      if (nextHp === 0) {
+        const riders = combatants.filter(c => c.mountedOnId === target.id);
+        if (riders.length > 0) {
+          const occupied = new Set(combatants.filter(c => c.isOnMap !== false && typeof c.mapX === 'number').map(c => `${c.mapX},${c.mapY}`));
+          setCombatants(prev => {
+            return prev.map(c => {
+              if (c.mountedOnId === target.id) {
+                const mX = target.mapX ?? 0;
+                const mY = target.mapY ?? 0;
+                const safeCell = findAdjacentDismountCell(mX, mY, target.tokenSize || 1, occupied, terrainMap, doors);
+                occupied.add(`${safeCell.x},${safeCell.y}`);
+                const currentConds = c.conditions || [];
+                const newConds = currentConds.includes('Prone') ? currentConds : [...currentConds, 'Prone'];
+                return {
+                  ...c,
+                  mountedOnId: undefined,
+                  mapX: safeCell.x,
+                  mapY: safeCell.y,
+                  conditions: newConds
+                };
+              }
+              return c;
+            });
+          });
+
+          riders.forEach(r => {
+            addLogEntry('condition', `🐎 ${r.name} was thrown from ${target.name} into an adjacent square and knocked Prone as the mount dropped to 0 HP! (5e Mounted Rules)`, r.name);
+          });
+        }
       }
 
       // Concentration Watchdog: Check if target is actively concentrating
@@ -950,6 +1124,37 @@ export function useEncounterState({
     const durStr = durationRounds ? ` (${durationRounds} round${durationRounds > 1 ? 's' : ''})` : '';
     addLogEntry('condition', `Applied condition "${conditionName}"${durStr} to ${targetName}`, targetName);
 
+    // Mounted Combat Watchdog: If a mount falls prone or becomes incapacitated/unconscious, dismount riders!
+    const incapacitating = ['prone', 'unconscious', 'incapacitated', 'paralyzed', 'petrified', 'stunned', 'dead'];
+    if (incapacitating.includes(conditionName.toLowerCase())) {
+      const riders = combatants.filter(c => c.mountedOnId === combatantId);
+      if (riders.length > 0) {
+        const occupied = new Set(combatants.filter(c => c.isOnMap !== false && typeof c.mapX === 'number').map(c => `${c.mapX},${c.mapY}`));
+        setCombatants(prev => prev.map(c => {
+          if (c.mountedOnId === combatantId) {
+            const mX = target?.mapX ?? 0;
+            const mY = target?.mapY ?? 0;
+            const safeCell = findAdjacentDismountCell(mX, mY, target?.tokenSize || 1, occupied, terrainMap, doors);
+            occupied.add(`${safeCell.x},${safeCell.y}`);
+            const currentConds = c.conditions || [];
+            const newConds = currentConds.includes('Prone') ? currentConds : [...currentConds, 'Prone'];
+            return {
+              ...c,
+              mountedOnId: undefined,
+              mapX: safeCell.x,
+              mapY: safeCell.y,
+              conditions: newConds
+            };
+          }
+          return c;
+        }));
+
+        riders.forEach(r => {
+          addLogEntry('condition', `🐎 ${r.name} was thrown off ${targetName} and knocked Prone as the mount fell ${conditionName}! (5e Mounted Rules)`, r.name);
+        });
+      }
+    }
+
     if (target?.isPlayerChar && onUpdateCharacter) {
       const cur = character.conditions || [];
       if (!cur.includes(conditionName)) {
@@ -1147,12 +1352,30 @@ export function useEncounterState({
 
   const handleUpdateCombatantPosition = useCallback((id: string, x?: number, y?: number) => {
     setCombatants(prev => {
+      const target = prev.find(p => p.id === id);
+      const isMountWithRiders = prev.some(c => c.mountedOnId === id);
+      const isRiderMounted = Boolean(target?.mountedOnId);
+      const mountId = target?.mountedOnId;
+
       const next = prev.map(c => {
         if (c.id === id) {
           if (typeof x !== 'number' || typeof y !== 'number') {
-            return { ...c, mapX: undefined, mapY: undefined, isOnMap: false };
+            return { ...c, mapX: undefined, mapY: undefined, isOnMap: false, mountedOnId: undefined };
           }
           return { ...c, mapX: x, mapY: y, isOnMap: true };
+        }
+        // If updating a mount's position, sync all its riders
+        if (isMountWithRiders && c.mountedOnId === id) {
+          if (typeof x !== 'number' || typeof y !== 'number') {
+            return { ...c, mountedOnId: undefined };
+          }
+          return { ...c, mapX: x, mapY: y, isOnMap: true };
+        }
+        // If updating a mounted rider's position, sync the mount
+        if (isRiderMounted && c.id === mountId) {
+          if (typeof x === 'number' && typeof y === 'number') {
+            return { ...c, mapX: x, mapY: y, isOnMap: true };
+          }
         }
         return c;
       });
@@ -1172,39 +1395,13 @@ export function useEncounterState({
       }
       const next = prev.map(c => {
         if (c.id === id) {
-          return { ...c, mapX: undefined, mapY: undefined, isOnMap: false };
+          return { ...c, mapX: undefined, mapY: undefined, isOnMap: false, mountedOnId: undefined };
+        }
+        if (c.mountedOnId === id) {
+          return { ...c, mountedOnId: undefined };
         }
         return c;
       });
-      if (activeSessionCode) {
-        syncEncounterToSession(next, activeTurnIndex, roundNumber);
-      }
-      return next;
-    });
-  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry]);
-
-  const handleResetMapTokens = useCallback((mode: 'spawn_points' | 'recall_all' = 'spawn_points') => {
-    setCombatants(prev => {
-      let allyIdx = 0;
-      let enemyIdx = 0;
-      const next = prev.map(c => {
-        if (mode === 'recall_all') {
-          return { ...c, mapX: undefined, mapY: undefined, isOnMap: false };
-        }
-        const isEnemy = c.type === 'enemy';
-        const x = isEnemy ? (24 - 3 - (enemyIdx % 4)) : (2 + (allyIdx % 4));
-        const y = isEnemy ? (2 + Math.floor(enemyIdx / 4) * 2) : (2 + Math.floor(allyIdx / 4) * 2);
-        if (isEnemy) enemyIdx++; else allyIdx++;
-        return {
-          ...c,
-          mapX: x,
-          mapY: y,
-          isOnMap: true,
-          movementRemaining: c.speed || 30,
-          hasDashed: false
-        };
-      });
-      addLogEntry('turn', mode === 'recall_all' ? 'All combatant tokens recalled to reserve' : 'All combatant tokens reset to spawn points');
       if (activeSessionCode) {
         syncEncounterToSession(next, activeTurnIndex, roundNumber);
       }
@@ -1218,27 +1415,139 @@ export function useEncounterState({
     resetFog?: 'shroud' | 'reveal' | 'none';
     resetTokens?: 'spawn_points' | 'recall_all' | 'none';
     clearAoE?: boolean;
+    gridColumns?: number;
+    gridRows?: number;
   }) => {
+    let nextTerrain = terrainMap;
+    let nextDoors = doors;
+    let nextFog = fogOfWar;
+    let nextUseFog = useFogOfWar;
+    let nextAoE = activeAoETemplate;
+
     if (options.clearTerrain) {
       setTerrainMap({});
+      nextTerrain = {};
     }
     if (options.clearDoors) {
       setDoors({});
+      nextDoors = {};
     }
     if (options.resetFog === 'shroud') {
       setFogOfWar({});
       setUseFogOfWar(true);
+      nextFog = {};
+      nextUseFog = true;
     } else if (options.resetFog === 'reveal') {
       setUseFogOfWar(false);
+      nextUseFog = false;
     }
     if (options.clearAoE) {
       setActiveAoETemplate(null);
+      nextAoE = null;
     }
+
+    const cols = options.gridColumns || 24;
+
+    let updatedCombatants = combatants;
     if (options.resetTokens && options.resetTokens !== 'none') {
-      handleResetMapTokens(options.resetTokens);
+      let allyIdx = 0;
+      let enemyIdx = 0;
+      updatedCombatants = combatants.map(c => {
+        if (options.resetTokens === 'recall_all') {
+          return { ...c, mapX: undefined, mapY: undefined, isOnMap: false, mountedOnId: undefined };
+        }
+        const isEnemy = c.type === 'enemy';
+        const x = isEnemy ? (cols - 3 - (enemyIdx % 4)) : (2 + (allyIdx % 4));
+        const y = isEnemy ? (2 + Math.floor(enemyIdx / 4) * 2) : (2 + Math.floor(allyIdx / 4) * 2);
+        if (isEnemy) enemyIdx++; else allyIdx++;
+        return {
+          ...c,
+          mapX: x,
+          mapY: y,
+          isOnMap: true,
+          movementRemaining: c.speed || 30,
+          hasDashed: false
+        };
+      });
+      setCombatants(updatedCombatants);
     }
-    addLogEntry('turn', 'Tactical battlemap was reset.');
-  }, [handleResetMapTokens, addLogEntry]);
+
+    // Direct synchronous localStorage persistence so state is preserved across re-renders
+    try {
+      const charKey = character.id || 'default';
+      const dataToSave: SavedEncounterData = {
+        combatants: updatedCombatants,
+        activeTurnIndex,
+        roundNumber,
+        combatLogs,
+        encounterEnvironment,
+        encounterMode,
+        activeMerchant,
+        battlemapTerrain: nextTerrain,
+        battlemapDoors: nextDoors,
+        battlemapFogOfWar: nextFog,
+        battlemapUseFogOfWar: nextUseFog
+      };
+      localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
+    } catch (err) {
+      console.error("Error saving reset encounter state to localStorage:", err);
+    }
+
+    // Sync to active session
+    if (activeSessionCode) {
+      syncEncounterToSession(
+        updatedCombatants,
+        activeTurnIndex,
+        roundNumber,
+        undefined,
+        nextTerrain,
+        nextDoors,
+        nextFog,
+        nextUseFog,
+        nextAoE
+      );
+    }
+
+    // Add clear, user-facing combat log entry
+    if (options.clearTerrain && options.resetTokens === 'spawn_points' && options.resetFog === 'shroud') {
+      addLogEntry('turn', '🔄 Full battlemap reset: terrain cleared, tokens reset to spawn points, fog shrouded, templates cleared.', 'DM');
+    } else if (options.resetTokens === 'recall_all') {
+      addLogEntry('turn', '📥 All combatant tokens recalled to Reserve Staging Dock.', 'DM');
+    } else if (options.resetTokens === 'spawn_points') {
+      addLogEntry('turn', '👥 All combatant tokens reset to starting spawn zones with movement restored.', 'DM');
+    } else if (options.clearTerrain) {
+      addLogEntry('turn', '🧹 All terrain walls, obstacles, and doors cleared from battlemap.', 'DM');
+    } else if (options.clearAoE) {
+      addLogEntry('turn', '📏 Line of Sight measurement ruler and spell AoE blast templates cleared.', 'DM');
+    } else if (options.resetFog === 'shroud') {
+      addLogEntry('turn', '🌫️ Entire battlemap shrouded in Fog of War.', 'DM');
+    } else if (options.resetFog === 'reveal') {
+      addLogEntry('turn', '👁️ Fog of War revealed for all combatants.', 'DM');
+    } else {
+      addLogEntry('turn', 'Tactical battlemap was reset.', 'DM');
+    }
+  }, [
+    terrainMap,
+    doors,
+    fogOfWar,
+    useFogOfWar,
+    activeAoETemplate,
+    activeSessionCode,
+    combatants,
+    activeTurnIndex,
+    roundNumber,
+    syncEncounterToSession,
+    addLogEntry,
+    character.id,
+    combatLogs,
+    encounterEnvironment,
+    encounterMode,
+    activeMerchant
+  ]);
+
+  const handleResetMapTokens = useCallback((mode: 'spawn_points' | 'recall_all' = 'spawn_points') => {
+    handleResetBattlemap({ resetTokens: mode });
+  }, [handleResetBattlemap]);
 
   const handleMoveCombatant = useCallback((
     id: string,
@@ -1251,12 +1560,18 @@ export function useEncounterState({
       const target = prev.find(c => c.id === id);
       if (!target) return prev;
 
+      const isRiderMounted = Boolean(target.mountedOnId);
+      const mountCombatant = isRiderMounted ? prev.find(c => c.id === target.mountedOnId) : null;
+      const riders = prev.filter(c => c.mountedOnId === id);
+
       const isTeleport = Boolean(options?.isTeleport);
       const isDmFree = Boolean(options?.isDmFreeMove && isDm);
 
-      const currentRemaining = typeof target.movementRemaining === 'number'
-        ? target.movementRemaining
-        : (target.speed || 30);
+      // When mounted, the movement uses the mount's speed pool!
+      const moverToDebit = mountCombatant || target;
+      const currentRemaining = typeof moverToDebit.movementRemaining === 'number'
+        ? moverToDebit.movementRemaining
+        : (moverToDebit.speed || 30);
 
       // Teleportation and DM adjustments do not consume ground walk speed
       const newRemaining = (isTeleport || isDmFree)
@@ -1269,7 +1584,24 @@ export function useEncounterState({
             ...c,
             mapX: x,
             mapY: y,
+            movementRemaining: isRiderMounted ? c.movementRemaining : newRemaining
+          };
+        }
+        // If moving a rider, also move its mount and debit the mount's movement budget
+        if (mountCombatant && c.id === mountCombatant.id) {
+          return {
+            ...c,
+            mapX: x,
+            mapY: y,
             movementRemaining: newRemaining
+          };
+        }
+        // If moving a mount, also move its riders to the same coordinate
+        if (c.mountedOnId === id) {
+          return {
+            ...c,
+            mapX: x,
+            mapY: y
           };
         }
         return c;
@@ -1279,22 +1611,26 @@ export function useEncounterState({
       const colLetter = String.fromCharCode(65 + (x % 26));
       const coordStr = `${colLetter}${y + 1}`;
 
+      const actorDesc = mountCombatant
+        ? `${target.name} (riding ${mountCombatant.name})`
+        : (riders.length > 0 ? `${target.name} (carrying ${riders.map(r => r.name).join(', ')})` : target.name);
+
       if (isTeleport) {
         addLogEntry(
           'ability',
-          `✨ ${target.name} teleported ${distanceFeet} ft to ${coordStr} using ${options?.abilityName || 'Teleport'}!`,
+          `✨ ${actorDesc} teleported ${distanceFeet} ft to ${coordStr} using ${options?.abilityName || 'Teleport'}!`,
           target.name
         );
       } else if (isDmFree) {
         addLogEntry(
           'turn',
-          `👑 [DM] Repositioned ${target.name} to ${coordStr}.`,
+          `👑 [DM] Repositioned ${actorDesc} to ${coordStr}.`,
           'DM'
         );
       } else {
         addLogEntry(
           'turn',
-          `🏃 ${target.name} moved ${distanceFeet} ft to ${coordStr} (${newRemaining} ft remaining)`,
+          `🏃 ${actorDesc} moved ${distanceFeet} ft to ${coordStr} (${newRemaining} ft remaining)`,
           target.name
         );
       }
@@ -1453,14 +1789,17 @@ export function useEncounterState({
       const target = prev.find(c => c.id === id);
       if (!target) return prev;
 
-      const baseSpeed = target.speed || 30;
-      const currentRemaining = typeof target.movementRemaining === 'number'
-        ? target.movementRemaining
+      // If rider is mounted, dash the mount!
+      const targetToDash = target.mountedOnId ? (prev.find(m => m.id === target.mountedOnId) || target) : target;
+
+      const baseSpeed = targetToDash.speed || 30;
+      const currentRemaining = typeof targetToDash.movementRemaining === 'number'
+        ? targetToDash.movementRemaining
         : baseSpeed;
       const newRemaining = currentRemaining + baseSpeed;
 
       const next = prev.map(c => {
-        if (c.id === id) {
+        if (c.id === targetToDash.id) {
           return {
             ...c,
             movementRemaining: newRemaining,
@@ -1472,7 +1811,7 @@ export function useEncounterState({
 
       addLogEntry(
         'ability',
-        `⚡ ${target.name} took the Dash action! (+${baseSpeed} ft speed, now ${newRemaining} ft remaining)`,
+        `⚡ ${targetToDash.name} took the Dash action! (+${baseSpeed} ft speed, now ${newRemaining} ft remaining)${target.mountedOnId ? ` (used by rider ${target.name})` : ''}`,
         target.name
       );
 
@@ -1488,9 +1827,12 @@ export function useEncounterState({
       const target = prev.find(c => c.id === id);
       if (!target) return prev;
 
-      const baseSpeed = target.speed || 30;
+      // If rider is mounted, reset the mount!
+      const targetToReset = target.mountedOnId ? (prev.find(m => m.id === target.mountedOnId) || target) : target;
+
+      const baseSpeed = targetToReset.speed || 30;
       const next = prev.map(c => {
-        if (c.id === id) {
+        if (c.id === targetToReset.id) {
           return {
             ...c,
             movementRemaining: baseSpeed,
@@ -1502,10 +1844,126 @@ export function useEncounterState({
 
       addLogEntry(
         'turn',
-        `🔄 Reset movement for ${target.name} to ${baseSpeed} ft`,
+        `🔄 Reset movement for ${targetToReset.name} to ${baseSpeed} ft`,
         target.name
       );
 
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry]);
+
+  const handleMountCombatant = useCallback((riderId: string, mountId: string) => {
+    setCombatants(prev => {
+      const rider = prev.find(c => c.id === riderId);
+      const mount = prev.find(c => c.id === mountId);
+      if (!rider || !mount) return prev;
+
+      if (mount.isOnMap === false || typeof mount.mapX !== 'number' || typeof mount.mapY !== 'number') {
+        return prev;
+      }
+
+      // Mounting costs half of rider's movement speed (5e rules)
+      const riderSpeed = rider.speed || 30;
+      const mountCost = Math.floor(riderSpeed / 2);
+      const currentRemaining = typeof rider.movementRemaining === 'number' ? rider.movementRemaining : riderSpeed;
+      const newRemaining = Math.max(0, currentRemaining - mountCost);
+
+      const next = prev.map(c => {
+        if (c.id === riderId) {
+          return {
+            ...c,
+            mountedOnId: mountId,
+            mapX: mount.mapX,
+            mapY: mount.mapY,
+            isOnMap: true,
+            movementRemaining: newRemaining
+          };
+        }
+        if (c.id === mountId) {
+          return {
+            ...c,
+            isMount: true
+          };
+        }
+        return c;
+      });
+
+      addLogEntry('turn', `🐎 ${rider.name} mounted ${mount.name} (cost ${mountCost} ft movement).`, rider.name);
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry]);
+
+  const handleDismountCombatant = useCallback((riderId: string, customDest?: { x: number; y: number }) => {
+    setCombatants(prev => {
+      const rider = prev.find(c => c.id === riderId);
+      if (!rider || !rider.mountedOnId) return prev;
+
+      const mount = prev.find(c => c.id === rider.mountedOnId);
+      const mountX = mount?.mapX ?? rider.mapX ?? 0;
+      const mountY = mount?.mapY ?? rider.mapY ?? 0;
+      const mountSize = mount?.tokenSize || 1;
+
+      let destX = customDest?.x;
+      let destY = customDest?.y;
+
+      if (typeof destX !== 'number' || typeof destY !== 'number') {
+        const occupied = new Set(
+          prev
+            .filter(c => c.id !== riderId && c.isOnMap !== false && typeof c.mapX === 'number')
+            .map(c => `${c.mapX},${c.mapY}`)
+        );
+        const safeCell = findAdjacentDismountCell(mountX, mountY, mountSize, occupied, terrainMap, doors);
+        destX = safeCell.x;
+        destY = safeCell.y;
+      }
+
+      // Dismounting costs half of rider's movement speed (5e rules)
+      const riderSpeed = rider.speed || 30;
+      const dismountCost = Math.floor(riderSpeed / 2);
+      const currentRemaining = typeof rider.movementRemaining === 'number' ? rider.movementRemaining : riderSpeed;
+      const newRemaining = Math.max(0, currentRemaining - dismountCost);
+
+      const next = prev.map(c => {
+        if (c.id === riderId) {
+          return {
+            ...c,
+            mountedOnId: undefined,
+            mapX: destX,
+            mapY: destY,
+            isOnMap: true,
+            movementRemaining: newRemaining
+          };
+        }
+        return c;
+      });
+
+      const colLetter = String.fromCharCode(65 + (destX % 26));
+      addLogEntry('turn', `🐎 ${rider.name} dismounted from ${mount ? mount.name : 'mount'} to ${colLetter}${destY + 1} (cost ${dismountCost} ft movement).`, rider.name);
+      if (activeSessionCode) {
+        syncEncounterToSession(next, activeTurnIndex, roundNumber);
+      }
+      return next;
+    });
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry, terrainMap, doors]);
+
+  const handleToggleCombatantMountRole = useCallback((id: string) => {
+    setCombatants(prev => {
+      const target = prev.find(c => c.id === id);
+      if (!target) return prev;
+      const nextIsMount = !target.isMount;
+      const next = prev.map(c => {
+        if (c.id === id) {
+          return { ...c, isMount: nextIsMount };
+        }
+        return c;
+      });
+      addLogEntry('turn', nextIsMount ? `🐎 Designated ${target.name} as a Mount/Steed.` : `Removed Mount designation from ${target.name}.`, target.name);
       if (activeSessionCode) {
         syncEncounterToSession(next, activeTurnIndex, roundNumber);
       }
@@ -1707,13 +2165,8 @@ export function useEncounterState({
   }, [doors, addLogEntry, activeSessionCode, combatants, activeTurnIndex, roundNumber, terrainMap, syncEncounterToSession]);
 
   const handleClearAllTerrain = useCallback(() => {
-    setTerrainMap({});
-    setDoors({});
-    addLogEntry('turn', '🧹 Battlemap terrain and doors were cleared by DM.', 'DM');
-    if (isDm && activeSessionCode) {
-      syncEncounterToSession(combatants, activeTurnIndex, roundNumber, undefined, {}, {});
-    }
-  }, [isDm, activeSessionCode, combatants, activeTurnIndex, roundNumber, addLogEntry, syncEncounterToSession]);
+    handleResetBattlemap({ clearTerrain: true, clearDoors: true });
+  }, [handleResetBattlemap]);
 
   // Phase 4: Fog of War and AoE Handlers
   const handleUpdateFogOfWar = useCallback((newFog: Record<string, boolean>, enabled?: boolean) => {
@@ -1826,6 +2279,7 @@ export function useEncounterState({
     setRoundNumber,
     combatLogs,
     setCombatLogs,
+    handleClearCombatLogs,
     encounterEnvironment,
     setEncounterEnvironment,
     encounterMode,
@@ -1867,6 +2321,9 @@ export function useEncounterState({
     handleDashCombatant,
     handleResetCombatantMovement,
     handleUpdateCombatantSpeed,
+    handleMountCombatant,
+    handleDismountCombatant,
+    handleToggleCombatantMountRole,
     handleClearEncounter,
     handleAddPartyToEncounter,
     terrainMap,

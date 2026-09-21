@@ -14,6 +14,31 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.14',
+    date: 'Today',
+    title: 'Dual-Screen Battlemap Popout & Tactical Grid Drag Engine Polish',
+    badge: 'Battlemap Popout & Drag Polish',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🪟 Dedicated Battlemap Popout & Dual-Screen Combat',
+        detail: 'Added a dedicated Popout control directly on the battlemap toolbar to detach the tactical combat map into a separate standalone window (1400x900 default canvas). Perfect for dual-monitor setups where the DM or player keeps the character/combat sheet on one display and the tactical battlemap on another.'
+      },
+      {
+        category: '⚡ Real-Time Cross-Window Encounter Synchronization',
+        detail: 'Engineered bi-directional synchronization via BroadcastChannel and cross-window storage events (penpaper_encounter_sync_v1). Token moves, initiative order, combatant hit points, conditions, Fog of War reveals, doors, and terrain modifications update instantaneously across windows with zero latency.'
+      },
+      {
+        category: '🎯 Tactical Token Drag & Drop Anti-Snap Architecture',
+        detail: 'Resolved issue where releasing a dragged token would leave the map in panning mode or snap/drag the entire canvas with subsequent mouse movement. Added token-level mousedown isolation, dedicated dragend cleanup, global drop listeners, and mouse button state verification (e.buttons === 0).'
+      },
+      {
+        category: '🧹 Streamlined Interface & Popout Controls',
+        detail: 'Eliminated redundant popout buttons in the tracker navigation header, concentrating the popout trigger cleanly inside the battlemap top controls bar alongside the fullscreen toggle. Added live dual-screen status badge and quick-focus button.'
+      }
+    ]
+  },
+  {
     version: 'v0.9.13',
     date: 'Today',
     title: 'Edition Ruleset Separation, 3.5e Mechanics Engine & Vancian Spellcasting',

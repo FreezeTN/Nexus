@@ -15,8 +15,8 @@ export function getDetachedParams(): { detachedTab: string | null; initialCharId
   try {
     const urlParams = new URLSearchParams(window.location.search);
     return {
-      detachedTab: urlParams.get('detached'),
-      initialCharId: urlParams.get('charId'),
+      detachedTab: urlParams.get('detached') || urlParams.get('detachedTab'),
+      initialCharId: urlParams.get('charId') || urlParams.get('initialCharId'),
       sessionCode: urlParams.get('session')
     };
   } catch (e) {
@@ -27,23 +27,61 @@ export function getDetachedParams(): { detachedTab: string | null; initialCharId
 export function openDetachedWindow(tabId: string, activeCharId?: string, sessionCode?: string | null) {
   const url = new URL(window.location.href);
   url.searchParams.set('detached', tabId);
-  if (activeCharId) url.searchParams.set('charId', activeCharId);
+  url.searchParams.set('detachedTab', tabId);
+  if (activeCharId) {
+    url.searchParams.set('charId', activeCharId);
+    url.searchParams.set('initialCharId', activeCharId);
+  }
   if (sessionCode) url.searchParams.set('session', sessionCode);
 
-  const width = Math.min(1280, window.screen.width * 0.85);
-  const height = Math.min(850, window.screen.height * 0.85);
+  const isMap = tabId === 'battlemap';
+  const width = isMap
+    ? Math.min(1600, Math.round(window.screen.width * 0.95))
+    : Math.min(1280, Math.round(window.screen.width * 0.85));
+  const height = isMap
+    ? Math.min(1000, Math.round(window.screen.height * 0.95))
+    : Math.min(850, Math.round(window.screen.height * 0.85));
   const left = window.screenX + (window.outerWidth - width) / 2;
   const top = window.screenY + (window.outerHeight - height) / 2;
 
   const features = `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`;
   
-  const popWin = window.open(url.toString(), `detached_sheet_${tabId}`, features);
+  const popWin = window.open(url.toString(), `detached_${tabId}`, features);
   
   if (!popWin || popWin.closed || typeof popWin.closed === 'undefined') {
-    // If popup was blocked by browser policies, fallback to opening in new tab or alerting user
+    // If popup was blocked by browser policies, fallback to opening in new tab
     window.open(url.toString(), '_blank');
   } else {
     popWin.focus();
+  }
+  return popWin;
+}
+
+export const ENCOUNTER_SYNC_CHANNEL_NAME = 'penpaper_encounter_sync_v1';
+
+export interface EncounterSyncMessage {
+  type: 'ENCOUNTER_SYNC';
+  charKey: string;
+  encounterData: any;
+  instanceId: string;
+  timestamp: number;
+}
+
+export function broadcastEncounterState(charKey: string, encounterData: any, instanceId: string) {
+  try {
+    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+      const channel = new BroadcastChannel(ENCOUNTER_SYNC_CHANNEL_NAME);
+      channel.postMessage({
+        type: 'ENCOUNTER_SYNC',
+        charKey,
+        encounterData,
+        instanceId,
+        timestamp: Date.now()
+      });
+      channel.close();
+    }
+  } catch (e) {
+    // ignore
   }
 }
 

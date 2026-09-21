@@ -10,7 +10,7 @@ export interface ResetBattlemapModalProps {
   onClearTerrain: () => void;
   onClearOverlays: () => void;
   onResetFog: (mode: 'shroud' | 'reveal') => void;
-  onResetCamera: () => void;
+  onResetCamera?: () => void;
   onOpenLayouts?: () => void;
 }
 
@@ -23,7 +23,6 @@ export const ResetBattlemapModal: React.FC<ResetBattlemapModalProps> = ({
   onClearTerrain,
   onClearOverlays,
   onResetFog,
-  onResetCamera,
   onOpenLayouts
 }) => {
   if (!isOpen) return null;
@@ -225,17 +224,7 @@ export const ResetBattlemapModal: React.FC<ResetBattlemapModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="mt-5 pt-3 border-t border-stone-800 flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => {
-              onResetCamera();
-              onClose();
-            }}
-            className="text-xs text-stone-400 hover:text-stone-200 transition"
-          >
-            Re-center Camera Only
-          </button>
+        <div className="mt-5 pt-3 border-t border-stone-800 flex items-center justify-end">
           <button
             type="button"
             onClick={onClose}

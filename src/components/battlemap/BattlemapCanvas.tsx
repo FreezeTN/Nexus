@@ -27,8 +27,10 @@ import {
   Plus,
   Armchair,
   FolderOpen,
-  AlertCircle
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
+import { openDetachedWindow } from '../../utils/useDetachedSync';
 import { Combatant } from '../combat/encounter/encounterTypes';
 import { CharacterData, Spell } from '../../types';
 import {
@@ -97,6 +99,8 @@ export interface BattlemapCanvasProps {
     resetFog?: 'shroud' | 'reveal' | 'none';
     resetTokens?: 'spawn_points' | 'recall_all' | 'none';
     clearAoE?: boolean;
+    gridColumns?: number;
+    gridRows?: number;
   }) => void;
   onResetMapTokens?: (mode: 'spawn_points' | 'recall_all') => void;
   onOpenAddCombatantModal?: (type?: 'ally' | 'enemy') => void;
@@ -119,6 +123,12 @@ export interface BattlemapCanvasProps {
   onUpdateAoE?: (aoe: AoETemplate | null) => void;
   onRollSavesForTargets?: (saveType: string, dc: number, targets: Combatant[]) => void;
   onApplyDamageToTargets?: (damageDice: string, damageType: string, targets: Combatant[]) => void;
+  onMountCombatant?: (riderId: string, mountId: string) => void;
+  onDismountCombatant?: (riderId: string, customDest?: { x: number; y: number }) => void;
+  onToggleMountRole?: (combatantId: string) => void;
+  isStandalone?: boolean;
+  heightClass?: string;
+  onPopoutBattlemap?: () => void;
 }
 
 const CELL_SIZE_PX = 48; // Base pixels per grid cell
@@ -134,7 +144,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   onMoveCombatant,
   onDashCombatant,
   onResetMovement,
-  onUpdateSpeed,
+  onUpdateSpeed: _onUpdateSpeed,
   onSelectCombatant,
   selectedCombatantId,
   targetCombatantId,
@@ -158,13 +168,22 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   activeAoE,
   onUpdateAoE,
   onRollSavesForTargets,
-  onApplyDamageToTargets
+  onApplyDamageToTargets,
+  onMountCombatant,
+  onDismountCombatant,
+  onToggleMountRole,
+  isStandalone = false,
+  heightClass,
+  onPopoutBattlemap
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 20, y: 20 });
   const [isPanning, setIsPanning] = useState<boolean>(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const hasDraggedRef = useRef<boolean>(false);
+  const dragStartClientRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false);
 
   const zoomRef = useRef<number>(zoom);
   zoomRef.current = zoom;
@@ -311,6 +330,15 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         let x = c.mapX;
         let y = c.mapY;
 
+        const isMounted = Boolean(c.mountedOnId);
+        const mount = isMounted ? combatants.find((m) => m.id === c.mountedOnId) : null;
+
+        // If rider is mounted on a placed mount, sync coordinate to mount
+        if (mount && typeof mount.mapX === 'number' && typeof mount.mapY === 'number') {
+          x = mount.mapX;
+          y = mount.mapY;
+        }
+
         if (typeof x !== 'number' || typeof y !== 'number') {
           const isEnemy = c.type === 'enemy';
           if (isEnemy) {
@@ -329,8 +357,15 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         y = Math.max(0, Math.min(config.gridRows - 1, y));
 
         const size = c.tokenSize || 1; // 1 = 1x1, 2 = 2x2, etc.
-        const baseSpeed = c.speed || 30;
-        const remainingSpeed = typeof c.movementRemaining === 'number' ? c.movementRemaining : baseSpeed;
+
+        // Speed & Movement Inheritance:
+        // A mounted combatant uses the mount's speed and remaining movement
+        const effectiveMover = mount || c;
+        const baseSpeed = effectiveMover.speed || (mount ? 60 : 30);
+        const remainingSpeed = typeof effectiveMover.movementRemaining === 'number'
+          ? effectiveMover.movementRemaining
+          : baseSpeed;
+        const effectiveElevation = mount?.elevationFeet ?? c.elevationFeet;
 
         return {
           ...c,
@@ -338,7 +373,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           calculatedY: y,
           calculatedSize: size,
           calculatedBaseSpeed: baseSpeed,
-          calculatedRemainingSpeed: remainingSpeed
+          calculatedRemainingSpeed: remainingSpeed,
+          elevationFeet: effectiveElevation,
+          mountEntity: mount
         };
       });
   }, [combatants, config.gridColumns, config.gridRows]);
@@ -636,13 +673,15 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       }
     }
     setLocalFogOfWar(allRevealed);
-    onUpdateFogOfWar?.(allRevealed, currentUseFogOfWar);
-  }, [config.gridRows, config.gridColumns, currentUseFogOfWar, onUpdateFogOfWar]);
+    setLocalUseFogOfWar(false);
+    onUpdateFogOfWar?.(allRevealed, false);
+  }, [config.gridRows, config.gridColumns, onUpdateFogOfWar]);
 
   const handleShroudAllFog = useCallback(() => {
     setLocalFogOfWar({});
-    onUpdateFogOfWar?.({}, currentUseFogOfWar);
-  }, [currentUseFogOfWar, onUpdateFogOfWar]);
+    setLocalUseFogOfWar(true);
+    onUpdateFogOfWar?.({}, true);
+  }, [onUpdateFogOfWar]);
 
   const handleToggleUseFog = useCallback(
     (enabled: boolean) => {
@@ -806,8 +845,86 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
     };
   }, []);
 
+  // Spacebar tracking for panning convenience
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (e.code === 'Space' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+        setIsSpacePressed(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Global window listeners while panning so dragging off-canvas never gets stuck
+  useEffect(() => {
+    if (!isPanning) return;
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      // If mouse button is no longer held down, immediately stop panning
+      if (e.buttons === 0) {
+        setIsPanning(false);
+        hasDraggedRef.current = false;
+        return;
+      }
+      const dist = Math.hypot(e.clientX - dragStartClientRef.current.x, e.clientY - dragStartClientRef.current.y);
+      if (dist > 4) {
+        hasDraggedRef.current = true;
+      }
+      setPan({
+        x: e.clientX - panStart.x,
+        y: e.clientY - panStart.y
+      });
+    };
+
+    const handleWindowMouseUp = () => {
+      setIsPanning(false);
+      setTimeout(() => {
+        hasDraggedRef.current = false;
+      }, 60);
+    };
+
+    window.addEventListener('mousemove', handleWindowMouseMove);
+    window.addEventListener('mouseup', handleWindowMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleWindowMouseMove);
+      window.removeEventListener('mouseup', handleWindowMouseUp);
+    };
+  }, [isPanning, panStart]);
+
+  // Global dragend and drop listeners to guarantee map panning never gets stuck after token drag
+  useEffect(() => {
+    const handleGlobalDragEnd = () => {
+      setIsPanning(false);
+      setDraggedCombatantId(null);
+      setDragHoverCell(null);
+      hasDraggedRef.current = false;
+    };
+
+    window.addEventListener('dragend', handleGlobalDragEnd);
+    window.addEventListener('drop', handleGlobalDragEnd);
+    return () => {
+      window.removeEventListener('dragend', handleGlobalDragEnd);
+      window.removeEventListener('drop', handleGlobalDragEnd);
+    };
+  }, []);
+
   // Dragging / Panning the map canvas
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    // If target is inside a token or already dragging a token, do NOT pan the map!
+    if (draggedCombatantId || (e.target as HTMLElement)?.closest?.('[data-token-draggable="true"]')) {
+      return;
+    }
     // If in terrain editing mode and left clicking, painting is handled by cell events
     if (isTerrainEditorOpen && isDm && e.button === 0) {
       return;
@@ -816,15 +933,66 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
     if (isFogEditorOpen && isDm && e.button === 0) {
       return;
     }
-    // If middle click or holding space / clicking empty board, start panning
-    if (e.button === 1 || (e.button === 0 && (e.target as HTMLElement).tagName === 'svg')) {
+    // If placing ruler or unlocked AoE template with left click, let click handler place it
+    if (e.button === 0 && (isRulerActive || (isAoEEditorOpen && currentAoETemplate && !currentAoETemplate.isLocked))) {
+      return;
+    }
+
+    // Left click (0), middle click (1), or right click (2) on the map or empty space starts dragging
+    if (e.button === 0 || e.button === 1 || e.button === 2 || isSpacePressed) {
+      if (e.button === 2) {
+        e.preventDefault();
+      }
       setIsPanning(true);
+      hasDraggedRef.current = false;
+      dragStartClientRef.current = { x: e.clientX, y: e.clientY };
       setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
   };
 
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      setIsPanning(true);
+      hasDraggedRef.current = false;
+      dragStartClientRef.current = { x: touch.clientX, y: touch.clientY };
+      setPanStart({ x: touch.clientX - pan.x, y: touch.clientY - pan.y });
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isPanning && e.touches.length === 1) {
+      const touch = e.touches[0];
+      const dist = Math.hypot(touch.clientX - dragStartClientRef.current.x, touch.clientY - dragStartClientRef.current.y);
+      if (dist > 4) {
+        hasDraggedRef.current = true;
+      }
+      setPan({
+        x: touch.clientX - panStart.x,
+        y: touch.clientY - panStart.y
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsPanning(false);
+    setTimeout(() => {
+      hasDraggedRef.current = false;
+    }, 60);
+  };
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isPanning) {
+      // If primary mouse button is no longer pressed, cancel panning immediately
+      if (e.buttons === 0 || draggedCombatantId) {
+        setIsPanning(false);
+        hasDraggedRef.current = false;
+        return;
+      }
+      const dist = Math.hypot(e.clientX - dragStartClientRef.current.x, e.clientY - dragStartClientRef.current.y);
+      if (dist > 4) {
+        hasDraggedRef.current = true;
+      }
       setPan({
         x: e.clientX - panStart.x,
         y: e.clientY - panStart.y
@@ -863,6 +1031,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
   const handleMouseUp = () => {
     setIsPanning(false);
+    setTimeout(() => {
+      hasDraggedRef.current = false;
+    }, 60);
 
     if (isTerrainEditorOpen && isDm) {
       if (activeTerrainTool === 'box' && boxStartCell && hoverCell) {
@@ -939,6 +1110,26 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       }
       return;
     }
+
+    // If placing ruler or unlocked AoE, let click handle it
+    if (e.button === 0 && (isRulerActive || (isAoEEditorOpen && currentAoETemplate && !currentAoETemplate.isLocked))) {
+      return;
+    }
+
+    // In normal mode, mouse down on any cell initiates map dragging, UNLESS user clicked a token or is dragging a token
+    if (draggedCombatantId || (e.target as HTMLElement)?.closest?.('[data-token-draggable="true"]')) {
+      return;
+    }
+
+    if (e.button === 0 || e.button === 1 || e.button === 2 || isSpacePressed) {
+      if (e.button === 2) {
+        e.preventDefault();
+      }
+      setIsPanning(true);
+      hasDraggedRef.current = false;
+      dragStartClientRef.current = { x: e.clientX, y: e.clientY };
+      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    }
   };
 
   const handleCellMouseEnter = (cellX: number, cellY: number) => {
@@ -960,6 +1151,10 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
   // Handle Token Drag Start
   const handleTokenDragStart = (e: React.DragEvent, combatantId: string) => {
+    // Explicitly reset map panning so token drag does not pan or snap the canvas
+    setIsPanning(false);
+    hasDraggedRef.current = false;
+
     const c = combatants.find((item) => item.id === combatantId);
     if (!c) return;
 
@@ -988,12 +1183,21 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
     e.dataTransfer.effectAllowed = 'move';
   };
 
+  const handleTokenDragEnd = () => {
+    setDraggedCombatantId(null);
+    setDragHoverCell(null);
+    setIsPanning(false);
+    hasDraggedRef.current = false;
+  };
+
   // Handle Drop on Cell
   const handleCellDrop = (cellX: number, cellY: number, e?: React.DragEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
+    setIsPanning(false);
+    hasDraggedRef.current = false;
     const combatantId =
       draggedCombatantId ||
       e?.dataTransfer?.getData('text/plain') ||
@@ -1014,6 +1218,48 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       setMovementNotice({
         type: 'error',
         message: 'Cannot place creature on impassable terrain or closed door.'
+      });
+      setDraggedCombatantId(null);
+      setDragHoverCell(null);
+      return;
+    }
+
+    // Mounted Combat: Check if dropped onto an eligible mount!
+    const targetMount = combatants.find((other) => {
+      if (other.id === combatantId) return false;
+      if (other.isOnMap === false) return false;
+      const isEligibleMount = other.isMount || (other.tokenSize && other.tokenSize >= 2) || (other.speed && other.speed >= 40);
+      const otherX = other.mapX;
+      const otherY = other.mapY;
+      const otherSize = other.tokenSize || 1;
+      return (
+        isEligibleMount &&
+        typeof otherX === 'number' &&
+        typeof otherY === 'number' &&
+        cellX >= otherX &&
+        cellX < otherX + otherSize &&
+        cellY >= otherY &&
+        cellY < otherY + otherSize
+      );
+    });
+
+    if (targetMount && !c.mountedOnId && c.id !== targetMount.id && onMountCombatant) {
+      onMountCombatant(combatantId, targetMount.id);
+      setMovementNotice({
+        type: 'info',
+        message: `🐎 ${c.name} mounted ${targetMount.name}!`
+      });
+      setDraggedCombatantId(null);
+      setDragHoverCell(null);
+      return;
+    }
+
+    // Mounted Combat: If currently mounted and dropped onto an adjacent square, dismount!
+    if (c.mountedOnId && onDismountCombatant) {
+      onDismountCombatant(combatantId, { x: cellX, y: cellY });
+      setMovementNotice({
+        type: 'info',
+        message: `🐎 ${c.name} dismounted into space (${String.fromCharCode(65 + (cellX % 26))}${cellY + 1})!`
       });
       setDraggedCombatantId(null);
       setDragHoverCell(null);
@@ -1097,6 +1343,8 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   const handleBenchDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsPanning(false);
+    hasDraggedRef.current = false;
     const combatantId =
       draggedCombatantId ||
       e.dataTransfer.getData('text/plain') ||
@@ -1109,6 +1357,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       }
     }
     setDraggedCombatantId(null);
+    setDragHoverCell(null);
   };
 
   // Center view on active combatant
@@ -1172,6 +1421,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
   // Waypoint Path Planning Interaction
   const handleCellClick = (cellX: number, cellY: number, e: React.MouseEvent) => {
+    // If user was dragging / panning the map, suppress the click
+    if (hasDraggedRef.current) return;
+
     // Shift click is reserved for targeting
     if (e.shiftKey) return;
 
@@ -1822,6 +2074,25 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           >
             {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
+
+          {/* Popout Battlemap into individual window */}
+          {!isStandalone && (
+            <button
+              type="button"
+              onClick={() => {
+                if (onPopoutBattlemap) {
+                  onPopoutBattlemap();
+                } else {
+                  openDetachedWindow('battlemap', character?.id);
+                }
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg font-bold bg-stone-950 hover:bg-amber-950/60 text-amber-300 hover:text-amber-200 border border-amber-600/40 hover:border-amber-500 transition shadow"
+              title="Pop out Battlemap into a separate window (Dual-screen tabletop mode: keep combat sheet in this window and map in another)"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Popout</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1876,8 +2147,26 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         onRemoveCombatantFromMap={onRemoveCombatantFromMap}
         onRemoveCombatant={onRemoveCombatant}
         onOpenAddModal={onOpenAddCombatantModal}
-        onRecallAllToReserve={() => onResetMapTokens?.('recall_all')}
-        onResetSpawnPoints={() => onResetMapTokens?.('spawn_points')}
+        onRecallAllToReserve={() => {
+          onSelectCombatant?.(null);
+          onSetTargetCombatant?.(null);
+          if (onResetBattlemap) {
+            onResetBattlemap({ resetTokens: 'recall_all' });
+          } else {
+            onResetMapTokens?.('recall_all');
+          }
+        }}
+        onResetSpawnPoints={() => {
+          if (onResetBattlemap) {
+            onResetBattlemap({
+              resetTokens: 'spawn_points',
+              gridColumns: config.gridColumns,
+              gridRows: config.gridRows
+            });
+          } else {
+            onResetMapTokens?.('spawn_points');
+          }
+        }}
         isDm={isDm}
         onTokenDragStart={handleTokenDragStart}
         onBenchDrop={handleBenchDrop}
@@ -1899,6 +2188,8 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           onRollSavesForTargets={onRollSavesForTargets}
           onApplyDamageToTargets={onApplyDamageToTargets}
           onClose={() => setIsAoEEditorOpen(false)}
+          selectedCharacter={selectedCharacterData}
+          selectedCombatant={activeMover}
         />
       )}
 
@@ -2110,8 +2401,15 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        className={`relative w-full h-[540px] select-none overflow-hidden cursor-grab active:cursor-grabbing overscroll-contain ${
-          isFullscreen ? 'h-screen' : ''
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className={`relative w-full ${
+          isFullscreen
+            ? 'h-screen'
+            : (heightClass || (isStandalone ? 'h-[calc(100vh-220px)] min-h-[580px]' : 'h-[540px]'))
+        } select-none overflow-hidden overscroll-contain ${
+          isPanning ? 'cursor-grabbing' : isSpacePressed ? 'cursor-grab' : 'cursor-default'
         }`}
         style={{
           backgroundColor: themeConfig.bg
@@ -3371,7 +3669,11 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                         ? 'cursor-pointer hover:bg-amber-500/15'
                         : isMovePlanning
                         ? 'cursor-crosshair hover:bg-emerald-500/10'
-                        : ''
+                        : isPanning
+                        ? 'cursor-grabbing'
+                        : isSpacePressed
+                        ? 'cursor-grab'
+                        : 'cursor-grab hover:bg-white/[0.02]'
                     }`}
                   />
                 );
@@ -3417,8 +3719,17 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             return (
               <div
                 key={c.id}
+                data-token-draggable="true"
                 draggable={canControl && !isDefeated}
+                onMouseDown={(e) => {
+                  if (e.button === 0) {
+                    e.stopPropagation();
+                    setIsPanning(false);
+                    hasDraggedRef.current = false;
+                  }
+                }}
                 onDragStart={(e) => handleTokenDragStart(e, c.id)}
+                onDragEnd={handleTokenDragEnd}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (e.shiftKey) {
@@ -3500,12 +3811,16 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                   }}
                 >
                   <img
-                    src={c.portraitUrl || getMonsterPortraitUrl(c.name)}
-                    alt={c.name}
+                    src={
+                      c.portraitUrl && !c.portraitUrl.includes('raw.githubusercontent.com')
+                        ? c.portraitUrl
+                        : generateMonsterSvgPortrait(c.name)
+                    }
+                    alt=""
                     className="w-full h-full rounded-full object-cover bg-stone-900"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      const img = e.target as HTMLImageElement;
+                      const img = e.currentTarget as HTMLImageElement;
                       img.onerror = null;
                       img.src = generateMonsterSvgPortrait(c?.name);
                     }}
@@ -3545,6 +3860,38 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                       title={`Elevation: ${c.elevationFeet} ft`}
                     >
                       ✈️{c.elevationFeet > 0 ? `+${c.elevationFeet}` : c.elevationFeet}
+                    </div>
+                  )}
+
+                  {/* Mounted Saddle Indicator */}
+                  {c.mountedOnId && (
+                    <div
+                      className="absolute -top-2 left-1/2 -translate-x-1/2 px-1.5 py-0.2 bg-amber-950/95 border border-amber-400 text-amber-300 rounded-full text-[8px] font-mono font-bold flex items-center gap-0.5 shadow-lg z-30 pointer-events-none"
+                      title={`Mounted on ${combatants.find((m) => m.id === c.mountedOnId)?.name || 'Mount'}`}
+                    >
+                      <span>🐎</span>
+                      <span className="max-w-[50px] truncate">{combatants.find((m) => m.id === c.mountedOnId)?.name || 'Mounted'}</span>
+                    </div>
+                  )}
+
+                  {/* Carrying Riders Indicator on Mount */}
+                  {combatants.some((r) => r.mountedOnId === c.id) && (
+                    <div
+                      className="absolute -top-2 right-0 px-1.5 py-0.2 bg-amber-900 border border-amber-300 text-amber-200 rounded-full text-[8px] font-mono font-bold flex items-center gap-0.5 shadow z-30"
+                      title={`Mount carrying: ${combatants.filter((r) => r.mountedOnId === c.id).map((r) => r.name).join(', ')}`}
+                    >
+                      <span>🏇</span>
+                      <span>{combatants.filter((r) => r.mountedOnId === c.id).length}</span>
+                    </div>
+                  )}
+
+                  {/* Designated Steed Badge */}
+                  {c.isMount && !c.mountedOnId && (
+                    <div
+                      className="absolute top-0 -left-1 px-1 py-0.2 bg-stone-900/90 border border-amber-500/70 text-amber-400 rounded text-[8px] font-mono font-bold flex items-center shadow"
+                      title="Designated Steed / Mount"
+                    >
+                      🐎
                     </div>
                   )}
 
@@ -3663,10 +4010,19 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         {activeMover && canControlActiveMover && (
           <div className="absolute bottom-3 left-3 bg-stone-950/95 backdrop-blur-md border border-stone-800 rounded-xl px-3 py-2 text-xs font-mono text-stone-300 flex items-center gap-3 shadow-2xl z-20 pointer-events-auto">
             <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full border border-stone-700 overflow-hidden shrink-0">
+              <div className="w-7 h-7 rounded-full border border-stone-700 overflow-hidden shrink-0 bg-stone-900 flex items-center justify-center">
                 <img
-                  src={activeMover.portraitUrl || getMonsterPortraitUrl(activeMover.name)}
-                  alt={activeMover.name}
+                  src={
+                    activeMover.portraitUrl && !activeMover.portraitUrl.includes('raw.githubusercontent.com')
+                      ? activeMover.portraitUrl
+                      : generateMonsterSvgPortrait(activeMover.name)
+                  }
+                  alt=""
+                  onError={(e) => {
+                    const img = e.currentTarget as HTMLImageElement;
+                    img.onerror = null;
+                    img.src = generateMonsterSvgPortrait(activeMover.name);
+                  }}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
@@ -3679,14 +4035,89 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                       DASHED
                     </span>
                   )}
+                  {activeMover.mountedOnId && (
+                    <span className="text-amber-300 font-bold text-[9px] bg-amber-950/90 px-1.5 py-0.2 rounded border border-amber-700">
+                      🐎 Mounted
+                    </span>
+                  )}
+                  {combatants.some((r) => r.mountedOnId === activeMover.id) && (
+                    <span className="text-amber-300 font-bold text-[9px] bg-amber-950/90 px-1.5 py-0.2 rounded border border-amber-700">
+                      🏇 Carrying Rider
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs font-bold text-stone-100 flex items-center gap-1.5">
                   <span className="text-emerald-400">{activeMover.calculatedRemainingSpeed} ft</span>
                   <span className="text-stone-500">/</span>
                   <span className="text-stone-400">{activeMover.calculatedBaseSpeed} ft speed</span>
+                  {activeMover.mountedOnId && (
+                    <span className="text-[10px] text-amber-400 font-normal">
+                      (using {combatants.find((m) => m.id === activeMover.mountedOnId)?.name || 'mount'}'s speed)
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
+
+            {/* Mount & Dismount Controls */}
+            {activeMover.mountedOnId && onDismountCombatant && (
+              <div className="flex items-center border-l border-stone-800 pl-2">
+                <button
+                  type="button"
+                  onClick={() => onDismountCombatant(activeMover.id)}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold rounded bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-600/60 shadow transition"
+                  title="Dismount from your steed into an adjacent space"
+                >
+                  <span>🐎 Dismount</span>
+                </button>
+              </div>
+            )}
+
+            {combatants.some((r) => r.mountedOnId === activeMover.id) && onDismountCombatant && (
+              <div className="flex items-center border-l border-stone-800 pl-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const rider = combatants.find((r) => r.mountedOnId === activeMover.id);
+                    if (rider) onDismountCombatant(rider.id);
+                  }}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold rounded bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-600/60 shadow transition"
+                  title="Dismount rider"
+                >
+                  <span>🐎 Dismount Rider</span>
+                </button>
+              </div>
+            )}
+
+            {!activeMover.mountedOnId && onMountCombatant && (() => {
+              const adjacentMount = combatants.find((m) => {
+                if (m.id === activeMover.id || m.isOnMap === false) return false;
+                const isEligible = m.isMount || (m.tokenSize && m.tokenSize >= 2) || (m.speed && m.speed >= 40);
+                if (!isEligible) return false;
+                const dist = calculateGridDistanceFeet(
+                  activeMover.calculatedX,
+                  activeMover.calculatedY,
+                  m.mapX ?? 0,
+                  m.mapY ?? 0,
+                  config.feetPerSquare,
+                  config.diagonalRule
+                );
+                return dist <= 5 * (m.tokenSize || 1);
+              });
+              if (!adjacentMount) return null;
+              return (
+                <div className="flex items-center border-l border-stone-800 pl-2">
+                  <button
+                    type="button"
+                    onClick={() => onMountCombatant(activeMover.id, adjacentMount.id)}
+                    className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold rounded bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600/60 shadow transition"
+                    title={`Mount ${adjacentMount.name}`}
+                  >
+                    <span>🐎 Mount {adjacentMount.name}</span>
+                  </button>
+                </div>
+              );
+            })()}
 
             {/* Dash & Reset Buttons */}
             <div className="flex items-center gap-1 border-l border-stone-800 pl-2">
@@ -3717,26 +4148,6 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
               )}
-
-              {/* Edit Speed (for Monk, Haste, Heavy Armor, etc.) */}
-              {isDm && onUpdateSpeed && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const newSpeed = prompt(`Set base speed (ft) for ${activeMover.name}:`, `${activeMover.calculatedBaseSpeed}`);
-                    if (newSpeed) {
-                      const num = parseInt(newSpeed, 10);
-                      if (!isNaN(num) && num >= 0) {
-                        onUpdateSpeed(activeMover.id, num);
-                      }
-                    }
-                  }}
-                  className="text-[10px] text-stone-500 hover:text-stone-300 px-1 py-0.5 rounded hover:bg-stone-800 font-sans"
-                  title="Edit base movement speed"
-                >
-                  Edit Speed
-                </button>
-              )}
             </div>
           </div>
         )}
@@ -3749,10 +4160,19 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (!sel) return null;
               return (
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full border-2 border-sky-400 overflow-hidden shrink-0">
+                  <div className="w-8 h-8 rounded-full border-2 border-sky-400 overflow-hidden shrink-0 bg-stone-900 flex items-center justify-center">
                     <img
-                      src={sel.portraitUrl || getMonsterPortraitUrl(sel.name)}
-                      alt={sel.name}
+                      src={
+                        sel.portraitUrl && !sel.portraitUrl.includes('raw.githubusercontent.com')
+                          ? sel.portraitUrl
+                          : generateMonsterSvgPortrait(sel.name)
+                      }
+                      alt=""
+                      onError={(e) => {
+                        const img = e.currentTarget as HTMLImageElement;
+                        img.onerror = null;
+                        img.src = generateMonsterSvgPortrait(sel.name);
+                      }}
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -3777,10 +4197,19 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (!tgt) return null;
               return (
                 <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full border-2 border-rose-500 overflow-hidden shrink-0">
+                  <div className="w-8 h-8 rounded-full border-2 border-rose-500 overflow-hidden shrink-0 bg-stone-900 flex items-center justify-center">
                     <img
-                      src={tgt.portraitUrl || getMonsterPortraitUrl(tgt.name)}
-                      alt={tgt.name}
+                      src={
+                        tgt.portraitUrl && !tgt.portraitUrl.includes('raw.githubusercontent.com')
+                          ? tgt.portraitUrl
+                          : generateMonsterSvgPortrait(tgt.name)
+                      }
+                      alt=""
+                      onError={(e) => {
+                        const img = e.currentTarget as HTMLImageElement;
+                        img.onerror = null;
+                        img.src = generateMonsterSvgPortrait(tgt.name);
+                      }}
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -3872,6 +4301,60 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             <span>Target Token</span>
           </button>
 
+          {/* Mount Actions */}
+          {contextMenu.combatant.mountedOnId && onDismountCombatant && (
+            <button
+              type="button"
+              onClick={() => {
+                onDismountCombatant(contextMenu.combatant.id);
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-amber-950/80 hover:text-amber-300 flex items-center gap-2 transition text-amber-400 font-medium"
+            >
+              <span>🐎 Dismount from Steed</span>
+            </button>
+          )}
+
+          {combatants.some((r) => r.mountedOnId === contextMenu.combatant.id) && onDismountCombatant && (
+            <button
+              type="button"
+              onClick={() => {
+                const riders = combatants.filter((r) => r.mountedOnId === contextMenu.combatant.id);
+                riders.forEach((r) => onDismountCombatant(r.id));
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-amber-950/80 hover:text-amber-300 flex items-center gap-2 transition text-amber-400 font-medium"
+            >
+              <span>🐎 Dismount Rider</span>
+            </button>
+          )}
+
+          {selectedCombatantId && selectedCombatantId !== contextMenu.combatant.id && onMountCombatant && (
+            <button
+              type="button"
+              onClick={() => {
+                onMountCombatant(selectedCombatantId, contextMenu.combatant.id);
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-emerald-950/80 hover:text-emerald-300 flex items-center gap-2 transition text-emerald-400 font-medium"
+            >
+              <span>🐎 Mount on {contextMenu.combatant.name}</span>
+            </button>
+          )}
+
+          {onToggleMountRole && (
+            <button
+              type="button"
+              onClick={() => {
+                onToggleMountRole(contextMenu.combatant.id);
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-stone-800 hover:text-amber-300 flex items-center gap-2 transition text-stone-300"
+            >
+              <span>🐎 {contextMenu.combatant.isMount ? 'Remove Steed Role' : 'Designate as Steed / Mount'}</span>
+            </button>
+          )}
+
           <div className="h-px bg-stone-800 my-1" />
 
           <button
@@ -3920,40 +4403,83 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         isOpen={showResetModal}
         onClose={() => setShowResetModal(false)}
         onFullReset={() => {
-          onResetBattlemap?.({
-            clearTerrain: true,
-            clearDoors: true,
-            resetFog: 'shroud',
-            resetTokens: 'spawn_points',
-            clearAoE: true
-          });
-          handleResetView();
           setIsRulerActive(false);
           setRulerOrigin(null);
           handleUpdateAoEInternal(null);
+          setLocalFogOfWar({});
+          setLocalUseFogOfWar(true);
+          handleResetView();
+          onSelectCombatant?.(null);
+          onSetTargetCombatant?.(null);
+
+          if (onResetBattlemap) {
+            onResetBattlemap({
+              clearTerrain: true,
+              clearDoors: true,
+              resetFog: 'shroud',
+              resetTokens: 'spawn_points',
+              clearAoE: true,
+              gridColumns: config.gridColumns,
+              gridRows: config.gridRows
+            });
+          } else {
+            onClearAllTerrain?.();
+            onResetMapTokens?.('spawn_points');
+            onUpdateFogOfWar?.({}, true);
+            onUpdateAoE?.(null);
+          }
         }}
         onResetSpawnPoints={() => {
-          onResetMapTokens?.('spawn_points');
+          if (onResetBattlemap) {
+            onResetBattlemap({
+              resetTokens: 'spawn_points',
+              gridColumns: config.gridColumns,
+              gridRows: config.gridRows
+            });
+          } else {
+            onResetMapTokens?.('spawn_points');
+          }
         }}
         onRecallAllToReserve={() => {
-          onResetMapTokens?.('recall_all');
+          onSelectCombatant?.(null);
+          onSetTargetCombatant?.(null);
+          if (onResetBattlemap) {
+            onResetBattlemap({ resetTokens: 'recall_all' });
+          } else {
+            onResetMapTokens?.('recall_all');
+          }
         }}
         onClearTerrain={() => {
-          handleClearAllTerrainInternal();
+          if (onResetBattlemap) {
+            onResetBattlemap({ clearTerrain: true, clearDoors: true });
+          } else {
+            handleClearAllTerrainInternal();
+          }
         }}
         onClearOverlays={() => {
           setIsRulerActive(false);
           setRulerOrigin(null);
           handleUpdateAoEInternal(null);
+          if (onResetBattlemap) {
+            onResetBattlemap({ clearAoE: true });
+          } else {
+            onUpdateAoE?.(null);
+          }
         }}
         onResetFog={(mode) => {
           if (mode === 'shroud') {
-            handleShroudAllFog();
+            setLocalFogOfWar({});
+            setLocalUseFogOfWar(true);
           } else {
-            handleRevealAllFog();
+            setLocalUseFogOfWar(false);
+          }
+          if (onResetBattlemap) {
+            onResetBattlemap({ resetFog: mode });
+          } else {
+            if (mode === 'shroud') handleShroudAllFog();
+            else handleRevealAllFog();
           }
         }}
-        onResetCamera={handleResetView}
         onOpenLayouts={() => setShowLayoutsModal(true)}
       />
 

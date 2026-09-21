@@ -282,6 +282,7 @@ export const MONSTER_PORTRAITS_MAP: Record<string, string> = {
 
 /**
  * Returns a high-resolution monster artwork portrait URL or generated vector token SVG.
+ * All monsters automatically receive instant, reliable vector SVG portraits with custom glyphs and themes.
  */
 export function getMonsterPortraitUrl(monsterName?: string, _id?: string): string {
   if (!monsterName) {
@@ -289,19 +290,6 @@ export function getMonsterPortraitUrl(monsterName?: string, _id?: string): strin
   }
 
   const trimmed = monsterName.trim();
-
-  // 1. Check exact map match
-  if (MONSTER_PORTRAITS_MAP[trimmed]) {
-    return MONSTER_PORTRAITS_MAP[trimmed];
-  }
-
-  // 2. Check partial name match in map
-  for (const [key, url] of Object.entries(MONSTER_PORTRAITS_MAP)) {
-    if (trimmed.toLowerCase().includes(key.toLowerCase())) {
-      return url;
-    }
-  }
-
-  // 3. Instant vector SVG token avatar fallback
   return generateMonsterSvgPortrait(trimmed);
 }
+

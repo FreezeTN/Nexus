@@ -215,7 +215,13 @@ export const CombatantsDock: React.FC<CombatantsDockProps> = ({
                 return (
                   <div
                     key={c.id}
+                    data-token-draggable="true"
                     draggable={true}
+                    onMouseDown={(e) => {
+                      if (e.button === 0) {
+                        e.stopPropagation();
+                      }
+                    }}
                     onDragStart={(e) => onTokenDragStart(e, c.id)}
                     onClick={() => {
                       if (isPlaced) {
@@ -240,11 +246,17 @@ export const CombatantsDock: React.FC<CombatantsDockProps> = ({
                     <div className="relative w-8 h-8 rounded-full shrink-0 overflow-hidden bg-stone-800 border border-stone-700 flex items-center justify-center">
                       {portrait ? (
                         <img
-                          src={portrait}
-                          alt={c.name}
+                          src={
+                            portrait && !portrait.includes('raw.githubusercontent.com')
+                              ? portrait
+                              : generateMonsterSvgPortrait(c.name)
+                          }
+                          alt=""
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            (e.target as HTMLImageElement).src = generateMonsterSvgPortrait(c.name);
+                            const img = e.currentTarget as HTMLImageElement;
+                            img.onerror = null;
+                            img.src = generateMonsterSvgPortrait(c.name);
                           }}
                         />
                       ) : (
@@ -267,6 +279,16 @@ export const CombatantsDock: React.FC<CombatantsDockProps> = ({
                         <span className="text-xs font-bold text-stone-200 truncate leading-tight">
                           {c.name}
                         </span>
+                        {c.mountedOnId && (
+                          <span className="text-[9px] text-amber-300 shrink-0 font-mono" title="Mounted">
+                            🐎
+                          </span>
+                        )}
+                        {c.isMount && !c.mountedOnId && (
+                          <span className="text-[9px] text-amber-400/80 shrink-0 font-mono" title="Steed / Mount">
+                            🐎
+                          </span>
+                        )}
                       </div>
 
                       {/* HP Bar */}

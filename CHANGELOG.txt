@@ -574,6 +574,44 @@ MILESTONE 32: HYBRID HERITAGE SYNCHRONIZATION, CUSTOM TEMPLATE INTEGRATION & SKI
   - Skill Name Protection: Configured skill names with `shrink-0 max-w-[130px] truncate` so standard skill names (`Climb`, `Concentration`, `Handle Animal`) render in full without premature truncation.
   - Responsive Grid Expansion: Expanded Sheet 1 Skills panel layout to `lg:col-span-6 xl:col-span-5`, providing ample horizontal breathing room on medium and large viewports.
 
+--------------------------------------------------------------------------------
+MILESTONE 33: EDITION RULESET SEPARATION, 3.5e MECHANICS ENGINE & VANCIAN SPELLCASTING (v0.9.13)
+--------------------------------------------------------------------------------
+* Authentic 3.5e Carrying Capacity & Encumbrance Engine (`src/utils/carryingCapacity35e.ts`):
+  - Integrated official D&D 3.5e PHB Table 9-1 weight brackets (Light, Medium, and Heavy loads, Lift Overhead, Lift Off Ground, Push or Drag).
+  - Dynamic size multipliers (Fine through Colossal, Biped vs Quadruped), Maximum DEX bonus caps to AC, Armor Check Penalty (ACP) loads, and speed reduction rules.
+
+* 3.5e Experience & Level Advancement Tables (`src/components/modals/LevelUpAdvancementModal.tsx`):
+  - Implemented authentic 3.5e XP milestone curve (Level × 1,000 XP cumulative progression) replacing 5e XP tables.
+  - Skill rank ceilings: Class Skills capped at Level + 3; Cross-Class Skills capped at (Level + 3) / 2.
+  - ASI & Feat Milestones: +1 ability score increase every 4 levels without a 20-point ceiling, and general feats at levels 1, 3, 6, 9, 12, 15, 18.
+
+* 3.5e Class Spell Slot Tables & High Ability Bonus Spells (`src/utils/spellSlotProgression.ts`):
+  - Added full 3.5e spell slot tables for Wizard, Cleric, Druid, Sorcerer, Bard, Paladin, and Ranger.
+  - PHB Table 1-1 bonus spell calculation derived from high casting ability scores.
+  - Independent multiclass spell slot tracking per class rather than unified 5e caster slot pooling.
+  - Vancian spell slot preparation allocating prepared spells across individual spell slots.
+
+--------------------------------------------------------------------------------
+MILESTONE 34: DUAL-SCREEN BATTLEMAP POPOUT & TACTICAL GRID DRAG POLISH (v0.9.14)
+--------------------------------------------------------------------------------
+* Dedicated Battlemap Popout & Dual-Screen Combat (`src/components/battlemap/BattlemapCanvas.tsx`, `src/components/combat/EncounterTracker.tsx`, `src/App.tsx`):
+  - Added dedicated "Popout" button directly in the tactical battlemap controls toolbar alongside fullscreen toggle.
+  - Opens a dedicated standalone browser window (`/battlemap` / `tab=battlemap`) sized at 1400x900 for multi-monitor tabletop play.
+  - Streamlined controls by removing redundant popout buttons in the tracker header, keeping the single contextual trigger within the map canvas.
+  - Integrated live dual-screen status badge and "Focus Combat Sheet" quick navigation.
+
+* Real-Time Cross-Window Encounter Synchronization (`src/components/combat/encounter/useEncounterState.ts`):
+  - Engineered zero-latency bi-directional synchronization across windows via BroadcastChannel and window storage events (`penpaper_encounter_sync_v1`).
+  - Automatically mirrors token positions, active initiative turn, combatant HP and condition changes, Fog of War shroud/reveals, door states, and terrain modifications in real-time between sheet and popped-out battlemap.
+
+* Tactical Token Drag & Drop Anti-Snap Architecture (`src/components/battlemap/BattlemapCanvas.tsx`, `src/components/battlemap/CombatantsDock.tsx`):
+  - Fixed issue where releasing a dragged combatant token caused the canvas to grab/snap to the mouse cursor or get stuck in panning mode.
+  - Implemented token-level `onMouseDown` event isolation (`e.stopPropagation()` and `setIsPanning(false)`).
+  - Added dedicated `onDragEnd` cleanup handler and global `dragend` / `drop` window event listeners to reset panning states reliably even if browsers suppress `mouseup` after native HTML5 drag-and-drop.
+  - Added mouse button safety verification (`e.buttons === 0`) in `handleMouseMove` and window mouse handlers to immediately cancel canvas panning if mouse buttons are released.
+  - Corrected stage cursor class to `cursor-default` when spacebar is not pressed.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

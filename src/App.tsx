@@ -15,6 +15,7 @@ import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
 import { SheetDmOverview } from './components/sheets/SheetDmOverview';
 import { DetachedHeaderBanner } from './components/common/DetachedHeaderBanner';
 import { getDetachedParams } from './utils/useDetachedSync';
+import { EncounterTracker } from './components/combat/EncounterTracker';
 import { MainMenu } from './components/MainMenu';
 import { CommandPaletteModal } from './components/common/CommandPaletteModal';
 import { GuidedTourModal } from './components/common/GuidedTourModal';
@@ -92,6 +93,9 @@ const normalizeTabId = (tab: string): TabId => {
     case 'dm':
     case 'sheetDm':
       return 'sheetDm';
+    case 'battlemap':
+    case 'map':
+      return 'battlemap';
     case 'menu':
       return 'menu';
     default:
@@ -570,6 +574,22 @@ function AppWorkspace() {
             />
           )}
 
+          {activeTab === 'battlemap' && activeCharacter && (
+            <EncounterTracker
+              character={activeCharacter}
+              allCharacters={characters}
+              parties={parties}
+              currentUser={currentUser}
+              activeSession={activeSession}
+              activeSessionCode={activeSessionCode}
+              onOpenPartyManager={handleOpenPartyModal}
+              onUpdateCharacter={handleUpdateCharacter}
+              onRoll={handleRoll}
+              initialViewMode="battlemap"
+              isStandaloneBattlemap={true}
+            />
+          )}
+
           {activeTab === 'sheet3' && activeCharacter && (
             <Sheet3GearWealth
               character={activeCharacter}
@@ -822,6 +842,24 @@ function AppWorkspace() {
                       onRoll={handleRoll}
                       onRollDamage={handleRollDamage}
                       onOpenGenerators={handleOpenGenerators}
+                    />
+                  </div>
+                )}
+
+                {activeTab === 'battlemap' && activeCharacter && (
+                  <div id="tabpanel-battlemap" role="tabpanel" aria-labelledby="tab-battlemap" tabIndex={0}>
+                    <EncounterTracker
+                      character={activeCharacter}
+                      allCharacters={characters}
+                      parties={parties}
+                      currentUser={currentUser}
+                      activeSession={activeSession}
+                      activeSessionCode={activeSessionCode}
+                      onOpenPartyManager={handleOpenPartyModal}
+                      onUpdateCharacter={handleUpdateCharacter}
+                      onRoll={handleRoll}
+                      initialViewMode="battlemap"
+                      isStandaloneBattlemap={true}
                     />
                   </div>
                 )}

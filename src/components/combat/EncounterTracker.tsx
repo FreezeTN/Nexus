@@ -31,6 +31,7 @@ import {
   BookOpen,
   Map as MapIcon
 } from 'lucide-react';
+import { openDetachedWindow } from '../../utils/useDetachedSync';
 import { voiceManager, VoicePeerState } from '../../lib/voiceChatService';
 import { getMonsterPortraitUrl, generateMonsterSvgPortrait } from '../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../utils/environmentRules';
@@ -66,7 +67,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   onRoll,
   onUpdateCharacter,
   encounterState: externalState,
-  onOpenGenerators
+  onOpenGenerators,
+  initialViewMode,
+  isStandaloneBattlemap
 }) => {
   const { t } = useLanguage();
   const localEncounter = useEncounterState({
@@ -91,6 +94,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     setRoundNumber,
     combatLogs,
     setCombatLogs,
+    handleClearCombatLogs,
     encounterEnvironment,
     setEncounterEnvironment,
     activeCombatant,
@@ -152,6 +156,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     handleUpdateAoETemplate,
     handleRollSavesForTargets,
     handleApplyAoEDamage,
+    handleMountCombatant,
+    handleDismountCombatant,
+    handleToggleCombatantMountRole,
     syncEncounterToSession,
     isDm,
     hasActiveSession
@@ -160,7 +167,11 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [addModalInitialType, setAddModalInitialType] = useState<'ally' | 'enemy' | 'merchant'>('enemy');
-  const [viewMode, setViewMode] = useState<'teams' | 'timeline' | 'battlemap'>('teams');
+  const [viewMode, setViewMode] = useState<'teams' | 'timeline' | 'battlemap'>(initialViewMode || (isStandaloneBattlemap ? 'battlemap' : 'teams'));
+
+  const handlePopoutBattlemap = () => {
+    openDetachedWindow('battlemap', character.id, activeSessionCode);
+  };
   const [selectedMapTokenId, setSelectedMapTokenId] = useState<string | null>(null);
   const [targetMapTokenId, setTargetMapTokenId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<BattlemapConfig>(() => {
@@ -339,6 +350,43 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
       }
       className="bg-stone-900 border border-stone-800 rounded-2xl p-4 md:p-5 shadow-xl space-y-4"
     >
+      {/* Standalone Detached Battlemap Dual-Screen Banner */}
+      {isStandaloneBattlemap && (
+        <div className="bg-amber-950/40 border border-amber-500/40 rounded-xl px-4 py-2.5 flex items-center justify-between flex-wrap gap-3 shadow-inner">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+            </span>
+            <div>
+              <div className="text-xs font-bold text-amber-200 flex items-center gap-2">
+                <span>TACTICAL BATTLEMAP (DETACHED WINDOW)</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                  Live Synced
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-400">
+                Operating in dual-screen mode. Token movements, terrain edits, and initiatives are synchronized in real-time with your main combat sheet.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.focus();
+                }
+              }}
+              className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg border border-stone-700 transition flex items-center gap-1 cursor-pointer"
+              title="Bring main character sheet window to foreground"
+            >
+              <span>Focus Combat Sheet</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Controls */}
       <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
         <div className="flex items-center gap-2 flex-wrap">
@@ -1055,6 +1103,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             onUpdateAoE={handleUpdateAoETemplate}
             onRollSavesForTargets={handleRollSavesForTargets}
             onApplyDamageToTargets={handleApplyAoEDamage}
+            onMountCombatant={handleMountCombatant}
+            onDismountCombatant={handleDismountCombatant}
+            onToggleMountRole={handleToggleCombatantMountRole}
             onRemoveCombatant={handleRemoveCombatant}
             onRemoveCombatantFromMap={handleRemoveCombatantFromMap}
             onResetBattlemap={handleResetBattlemap}
@@ -1071,6 +1122,8 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
                 syncEncounterToSession(combatants, activeTurnIndex, roundNumber);
               }
             }}
+            isStandalone={isStandaloneBattlemap}
+            onPopoutBattlemap={handlePopoutBattlemap}
           />
         </div>
       )}
@@ -1084,7 +1137,13 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           characterName={character.name}
           onClose={() => setShowLogModal(false)}
           onAddLogEntry={addLogEntry}
-          onClearLogs={() => setCombatLogs([])}
+          onClearLogs={() => {
+            if (handleClearCombatLogs) {
+              handleClearCombatLogs();
+            } else {
+              setCombatLogs([]);
+            }
+          }}
         />
       )}
 

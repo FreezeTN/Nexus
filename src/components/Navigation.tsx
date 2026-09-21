@@ -13,7 +13,7 @@ import {
   EVENT_NAV_TAB_ORDER_CHANGED
 } from '../utils/layoutCustomization';
 
-export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm';
+export type TabId = 'menu' | 'sheet1' | 'sheet2' | 'sheet3' | 'sheet4' | 'sheet5' | 'sheet6' | 'sheet7' | 'sheetDm' | 'battlemap';
 
 interface NavigationProps {
   activeTab: TabId;

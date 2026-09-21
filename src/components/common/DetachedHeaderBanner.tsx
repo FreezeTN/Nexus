@@ -1,5 +1,5 @@
 import React from 'react';
-import { ExternalLink, RefreshCw, Monitor, X, Layers, Shield, Crown, User } from 'lucide-react';
+import { ExternalLink, RefreshCw, Monitor, X, Layers, Shield, Crown, User, Map as MapIcon } from 'lucide-react';
 import { TabId } from '../Navigation';
 import { CharacterData } from '../../types';
 
@@ -24,6 +24,7 @@ export const DetachedHeaderBanner: React.FC<DetachedHeaderBannerProps> = ({
 }) => {
   const getTabLabel = (tab: TabId) => {
     switch (tab) {
+      case 'battlemap': return 'Tactical 2D Battlemap';
       case 'sheetDm': return 'DM Overview & Party Monitor';
       case 'sheet1': return 'Stats, Features & Attributes';
       case 'sheet2': return 'Combat & Turn Order';
@@ -46,12 +47,15 @@ export const DetachedHeaderBanner: React.FC<DetachedHeaderBannerProps> = ({
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 font-mono text-xs shadow-inner">
           <Monitor className="w-4 h-4 text-amber-400 animate-pulse" />
-          <span className="font-bold tracking-wide">DETACHED MONITOR VIEW</span>
+          <span className="font-bold tracking-wide">
+            {detachedTab === 'battlemap' ? 'DETACHED BATTLEMAP' : 'DETACHED MONITOR VIEW'}
+          </span>
         </div>
 
         <div className="h-4 w-[1px] bg-stone-800 hidden sm:block" />
 
         <h1 className="text-sm sm:text-base font-serif font-bold text-amber-100 flex items-center gap-2">
+          {detachedTab === 'battlemap' && <MapIcon className="w-4 h-4 text-amber-400" />}
           {detachedTab === 'sheetDm' && <Crown className="w-4 h-4 text-purple-400" />}
           <span>{getTabLabel(detachedTab)}</span>
         </h1>
@@ -79,18 +83,25 @@ export const DetachedHeaderBanner: React.FC<DetachedHeaderBannerProps> = ({
         {/* Tab Switcher in Popup */}
         <div className="flex items-center bg-stone-900 border border-stone-800 rounded-lg p-0.5 text-xs">
           <button
+            onClick={() => onTabChange('battlemap')}
+            className={`px-2 py-1 rounded transition ${detachedTab === 'battlemap' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-stone-400 hover:text-stone-200'}`}
+            title="Tactical 2D Battlemap"
+          >
+            Battlemap
+          </button>
+          <button
+            onClick={() => onTabChange('sheet2')}
+            className={`px-2 py-1 rounded transition ${detachedTab === 'sheet2' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-stone-400 hover:text-stone-200'}`}
+            title="Combat & Actions"
+          >
+            Combat
+          </button>
+          <button
             onClick={() => onTabChange('sheet1')}
             className={`px-2 py-1 rounded transition ${detachedTab === 'sheet1' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-stone-400 hover:text-stone-200'}`}
             title="Stats & Features"
           >
             Stats
-          </button>
-          <button
-            onClick={() => onTabChange('sheet2')}
-            className={`px-2 py-1 rounded transition ${detachedTab === 'sheet2' ? 'bg-amber-500/20 text-amber-300 font-bold' : 'text-stone-400 hover:text-stone-200'}`}
-            title="Combat"
-          >
-            Combat
           </button>
           <button
             onClick={() => onTabChange('sheet4')}

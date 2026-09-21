@@ -853,6 +853,7 @@ export interface SyncedCombatant {
   controlledBy?: string;
   mapX?: number;
   mapY?: number;
+  isOnMap?: boolean;
   tokenSize?: number;
   reachFeet?: number;
   elevationFeet?: number;
@@ -1059,8 +1060,13 @@ export async function updateSessionEncounter(
 ): Promise<void> {
   const normalizedCode = sessionCode.trim().toUpperCase();
   const sessionRef = doc(db, 'sessions', normalizedCode);
+  const sanitized = sanitizeForFirestore(encounter);
   await updateDoc(sessionRef, {
-    activeEncounter: sanitizeForFirestore(encounter),
+    activeEncounter: sanitized,
+    'activeEncounter.battlemapTerrain': encounter.battlemapTerrain || {},
+    'activeEncounter.battlemapDoors': encounter.battlemapDoors || {},
+    'activeEncounter.battlemapFogOfWar': encounter.battlemapFogOfWar || {},
+    'activeEncounter.combatants': sanitized.combatants || [],
     updatedAt: new Date().toISOString()
   });
 }
