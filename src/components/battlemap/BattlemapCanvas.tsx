@@ -28,11 +28,21 @@ import {
   Armchair,
   FolderOpen,
   AlertCircle,
-  ExternalLink
+  ExternalLink,
+  Radio,
+  MapPin,
+  Flame,
+  CloudRain,
+  Snowflake,
+  CloudFog,
+  Sun,
+  Swords,
+  Sliders,
+  Info
 } from 'lucide-react';
 import { openDetachedWindow } from '../../utils/useDetachedSync';
 import { Combatant } from '../combat/encounter/encounterTypes';
-import { CharacterData, Spell } from '../../types';
+import { CharacterData, Spell, RuleEdition } from '../../types';
 import {
   BattlemapConfig,
   BattlemapTheme,
@@ -40,6 +50,7 @@ import {
   BATTLEMAP_THEMES,
   DiagonalRule,
   calculateGridDistanceFeet,
+  calculateGridDistance3D,
   calculatePathDistanceFeet,
   calculateDirectMoveCostFeet,
   TerrainType,
@@ -54,8 +65,26 @@ import {
   isTokenInsideAoE,
   BattlemapLayout,
   ActiveTeleportState,
-  ActiveSpellTargetingState
+  ActiveSpellTargetingState,
+  WeatherEffectType,
+  WEATHER_DEFINITIONS,
+  LightSourceType,
+  BattlemapPin,
+  BattlemapPing,
+  MapPinType,
+  isSquareThreatenedByCombatant,
+  detectAoOProvoked,
+  isCellSheltered,
+  getTileCeilingFeet,
+  getMaxAllowedElevation
 } from './battlemapTypes';
+import { WeatherCanvasLayer } from './WeatherCanvasLayer';
+import { WeatherTacticalRulesModal } from './WeatherTacticalRulesModal';
+import { BattlemapPingLayer, playTacticalPingAudio } from './BattlemapPingLayer';
+import { BattlemapPinsLayer } from './BattlemapPinsLayer';
+import { PinInspectorModal } from './PinInspectorModal';
+import { PinCreateModal } from './PinCreateModal';
+import { CombatantPropertiesModal } from './CombatantPropertiesModal';
 import { TerrainPalette, TerrainDrawTool } from './TerrainPalette';
 import { AoEControlPalette } from './AoEControlPalette';
 import { AoETemplateLayer } from './AoETemplateLayer';
@@ -129,6 +158,12 @@ export interface BattlemapCanvasProps {
   isStandalone?: boolean;
   heightClass?: string;
   onPopoutBattlemap?: () => void;
+  onUpdateCombatantLightSource?: (combatantId: string, lightSource: LightSourceType) => void;
+  initialPins?: BattlemapPin[];
+  onUpdatePins?: (pins: BattlemapPin[]) => void;
+  onUpdateCombatant?: (updated: Combatant) => void;
+  onLogAction?: (category: 'attack' | 'damage' | 'heal' | 'ability', message: string, actor?: string) => void;
+  edition?: RuleEdition;
 }
 
 const CELL_SIZE_PX = 48; // Base pixels per grid cell
@@ -174,8 +209,17 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   onToggleMountRole,
   isStandalone = false,
   heightClass,
-  onPopoutBattlemap
+  onPopoutBattlemap,
+  onUpdateCombatantLightSource,
+  initialPins,
+  onUpdatePins,
+  onUpdateCombatant,
+  onLogAction,
+  edition
 }) => {
+  const activeEdition: RuleEdition = edition || character?.edition || '5e';
+  const is35e = activeEdition === '3.5e';
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 20, y: 20 });
@@ -183,7 +227,11 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   const [panStart, setPanStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const hasDraggedRef = useRef<boolean>(false);
   const dragStartClientRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const isTokenDraggingRef = useRef<boolean>(false);
+  const lastTokenDragEndTimeRef = useRef<number>(0);
   const [isSpacePressed, setIsSpacePressed] = useState<boolean>(false);
+  const [inspectingCombatant, setInspectingCombatant] = useState<Combatant | null>(null);
+  const [showWeatherModal, setShowWeatherModal] = useState<boolean>(false);
 
   const zoomRef = useRef<number>(zoom);
   zoomRef.current = zoom;
@@ -198,6 +246,81 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
   const [hoveredCombatantId, setHoveredCombatantId] = useState<string | null>(null);
 
+  // Feature 3: Tactical Sonar Ping state
+  const [pings, setPings] = useState<BattlemapPing[]>([]);
+  const [isPingToolActive, setIsPingToolActive] = useState<boolean>(false);
+
+  // Feature 3: Secret GM Map Pins state
+  const [mapPins, setMapPins] = useState<BattlemapPin[]>(() => {
+    if (initialPins && initialPins.length > 0) return initialPins;
+    try {
+      const stored = localStorage.getItem(`nexus_battlemap_pins_${config.id}`);
+      if (stored) return JSON.parse(stored);
+    } catch {
+      // ignore
+    }
+    return [
+      {
+        id: 'pin-default-trap-1',
+        x: 8,
+        y: 6,
+        type: 'trap',
+        title: 'Hidden Spike Pit',
+        description: 'Covered false floor. DC 15 Perception to spot. 2d10 piercing damage on fail (DC 14 Dex save half).',
+        dc: 15,
+        isSecret: true,
+        createdAt: Date.now()
+      },
+      {
+        id: 'pin-default-door-1',
+        x: 14,
+        y: 4,
+        type: 'secret_door',
+        title: 'Concealed Stone Door',
+        description: 'Swings inward when torch sconce is pulled. DC 16 Investigation to detect seams.',
+        dc: 16,
+        isSecret: true,
+        createdAt: Date.now()
+      }
+    ];
+  });
+  const [isPinToolActive, setIsPinToolActive] = useState<boolean>(false);
+  const [selectedPin, setSelectedPin] = useState<BattlemapPin | null>(null);
+  const [pendingPinCell, setPendingPinCell] = useState<{ x: number; y: number } | null>(null);
+
+  // Feature 4: Token Light Sources (local override)
+  const [tokenLightSources, setTokenLightSources] = useState<Record<string, LightSourceType>>({});
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(`nexus_battlemap_pins_${config.id}`, JSON.stringify(mapPins));
+    } catch {
+      // ignore
+    }
+    onUpdatePins?.(mapPins);
+  }, [mapPins, config.id, onUpdatePins]);
+
+  const triggerPing = useCallback((x: number, y: number, color?: string, label?: string) => {
+    const newPing: BattlemapPing = {
+      id: `ping-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      x,
+      y,
+      color: color || (isDm ? '#f59e0b' : '#38bdf8'),
+      senderName: isDm ? 'GM' : character?.name || 'Player',
+      timestamp: Date.now()
+    };
+    setPings((prev) => [...prev, newPing]);
+    playTacticalPingAudio();
+    setTimeout(() => {
+      setPings((prev) => prev.filter((p) => p.id !== newPing.id));
+    }, 4500);
+  }, [isDm, character?.name]);
+
+  const handleSetLightSource = useCallback((combatantId: string, lightSource: LightSourceType) => {
+    setTokenLightSources((prev) => ({ ...prev, [combatantId]: lightSource }));
+    onUpdateCombatantLightSource?.(combatantId, lightSource);
+  }, [onUpdateCombatantLightSource]);
+
   // Phase 2: Movement Waypoint Planning Mode
   const [isMovePlanning, setIsMovePlanning] = useState<boolean>(false);
   const [moveWaypoints, setMoveWaypoints] = useState<Array<{ x: number; y: number }>>([]);
@@ -206,6 +329,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   const [isTerrainEditorOpen, setIsTerrainEditorOpen] = useState<boolean>(false);
   const [activeTerrainTool, setActiveTerrainTool] = useState<TerrainDrawTool>('brush');
   const [activeTerrainBrush, setActiveTerrainBrush] = useState<TerrainType>('wall');
+  const [activeCeilingBrushFeet, setActiveCeilingBrushFeet] = useState<number>(config.shelteredCeilingFeet ?? 10);
   const [boxStartCell, setBoxStartCell] = useState<{ x: number; y: number } | null>(null);
   const [isPaintingTerrain, setIsPaintingTerrain] = useState<boolean>(false);
 
@@ -375,10 +499,51 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           calculatedBaseSpeed: baseSpeed,
           calculatedRemainingSpeed: remainingSpeed,
           elevationFeet: effectiveElevation,
-          mountEntity: mount
+          mountEntity: mount,
+          lightSource: tokenLightSources[c.id] || c.lightSource || 'none'
         };
       });
-  }, [combatants, config.gridColumns, config.gridRows]);
+  }, [combatants, config.gridColumns, config.gridRows, tokenLightSources]);
+
+  // Open Flame Snuffing Watchdog: Automatically extinguish torches when weather becomes high wind/tempest/blizzard
+  const prevWeatherRef = useRef(config.weatherEffect || 'none');
+  useEffect(() => {
+    const prev = prevWeatherRef.current;
+    const current = config.weatherEffect || 'none';
+    prevWeatherRef.current = current;
+
+    if (prev !== current && current !== 'none') {
+      const def = WEATHER_DEFINITIONS[current];
+      if (def?.extinguishesFlames) {
+        const extinguishedCombatants: string[] = [];
+        positionedCombatants.forEach((c) => {
+          const currentLs = tokenLightSources[c.id] || c.lightSource || 'none';
+          const isSheltered = isCellSheltered(c.calculatedX, c.calculatedY, terrainMap, config.isEntirelyIndoors);
+          if (currentLs === 'torch' && !isSheltered) {
+            extinguishedCombatants.push(c.name);
+            handleSetLightSource(c.id, 'none');
+          }
+        });
+
+        if (extinguishedCombatants.length > 0) {
+          onLogAction?.(
+            'ability',
+            `💨 ${def.name}: Fierce gale winds and driving precipitation automatically blew out open torches on: ${extinguishedCombatants.join(', ')} (5e RAW).`,
+            'Tactical Weather Engine'
+          );
+        }
+      }
+    }
+  }, [config.weatherEffect, positionedCombatants, tokenLightSources, handleSetLightSource, onLogAction]);
+
+  // Player Target Lock Safety: If a targeted enemy becomes shrouded in Fog of War, clear player target lock
+  useEffect(() => {
+    if (isDm || !targetCombatantId || !currentUseFogOfWar) return;
+    const tgt = positionedCombatants.find((c) => c.id === targetCombatantId);
+    if (tgt && !isCombatantVisibleInFog(tgt, currentFogOfWar, currentUseFogOfWar, false, 'player')) {
+      onSetTargetCombatant?.(null);
+    }
+  }, [isDm, targetCombatantId, currentFogOfWar, currentUseFogOfWar, positionedCombatants, onSetTargetCombatant]);
 
   // Current focal mover: selected combatant or active combatant
   const activeMover = useMemo(() => {
@@ -528,6 +693,11 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
     return { walls, doors: doorsCount, difficult, cover, hazards };
   }, [terrainMap]);
 
+  // Phase 4: Sheltered interior cell coordinates for weather masking
+  const shelteredCellKeys = useMemo(() => {
+    return Object.keys(terrainMap).filter((k) => terrainMap[k] === 'sheltered');
+  }, [terrainMap]);
+
   // Phase 3: Paint cell helper
   const paintCell = useCallback(
     (x: number, y: number, terrain: TerrainType) => {
@@ -536,12 +706,24 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       if (terrain === 'open') {
         delete nextTerrain[key];
         onUpdateTerrain?.(nextTerrain);
+        if (config.ceilingOverrides?.[key] !== undefined && onUpdateConfig) {
+          const nextOverrides = { ...(config.ceilingOverrides || {}) };
+          delete nextOverrides[key];
+          onUpdateConfig({ ...config, ceilingOverrides: nextOverrides });
+        }
       } else {
         nextTerrain[key] = terrain;
         onUpdateTerrain?.(nextTerrain);
+        if (terrain === 'sheltered' && onUpdateConfig) {
+          const nextOverrides = {
+            ...(config.ceilingOverrides || {}),
+            [key]: activeCeilingBrushFeet
+          };
+          onUpdateConfig({ ...config, ceilingOverrides: nextOverrides });
+        }
       }
     },
-    [terrainMap, onUpdateTerrain]
+    [terrainMap, onUpdateTerrain, config, onUpdateConfig, activeCeilingBrushFeet]
   );
 
   // Phase 3: Dungeon template applicator
@@ -573,6 +755,20 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       // Add crates for half cover
       updated[`${minX + 3},${minY + 3}`] = 'cover_half';
       updated[`${maxX - 3},${minY + 3}`] = 'cover_half';
+
+      // 5e RAW: Fill room interior floor cells with sheltered indoor roof terrain & ceiling height
+      const updatedOverrides = { ...(config.ceilingOverrides || {}) };
+      for (let x = minX + 1; x < maxX; x++) {
+        for (let y = minY + 1; y < maxY; y++) {
+          const key = `${x},${y}`;
+          if (!updated[key]) {
+            updated[key] = 'sheltered';
+            updatedOverrides[key] = activeCeilingBrushFeet || config.shelteredCeilingFeet || 10;
+          }
+        }
+      }
+      onUpdateTerrain?.(updated);
+      onUpdateConfig?.({ ...config, ceilingOverrides: updatedOverrides });
     } else if (template === 'pillars') {
       const midX = Math.floor(config.gridColumns / 2);
       const midY = Math.floor(config.gridRows / 2);
@@ -612,9 +808,12 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
     } else {
       onUpdateTerrain?.({});
     }
+    if (config.ceilingOverrides && onUpdateConfig) {
+      onUpdateConfig({ ...config, ceilingOverrides: {} });
+    }
   };
 
-  // Phase 4: AoE caught combatants
+  // Phase 4: AoE caught combatants (3D aware)
   const aoeCaughtCombatants = useMemo(() => {
     if (!currentAoETemplate) return [];
     return positionedCombatants.filter((c) =>
@@ -623,14 +822,21 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         c.calculatedY,
         c.calculatedSize,
         currentAoETemplate,
-        config.feetPerSquare
+        config.feetPerSquare,
+        c.elevationFeet || 0
       )
     );
   }, [currentAoETemplate, positionedCombatants, config.feetPerSquare]);
 
-  // Phase 4: Ruler Line of Sight & Cover calculation
+  // Phase 4: Ruler Line of Sight & Cover calculation (3D aware)
   const rulerLoS = useMemo(() => {
     if (!isRulerActive || !rulerOrigin || !hoverCell) return null;
+    const originCombatant = positionedCombatants.find(
+      (c) => c.calculatedX === rulerOrigin.x && c.calculatedY === rulerOrigin.y
+    );
+    const hoverCombatant = positionedCombatants.find(
+      (c) => c.calculatedX === hoverCell.x && c.calculatedY === hoverCell.y
+    );
     return calculateLineOfSight(
       rulerOrigin.x,
       rulerOrigin.y,
@@ -639,9 +845,12 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       config.feetPerSquare,
       config.diagonalRule,
       terrainMap,
-      doors
+      doors,
+      originCombatant?.elevationFeet || 0,
+      hoverCombatant?.elevationFeet || 0,
+      config.weatherEffect
     );
-  }, [isRulerActive, rulerOrigin, hoverCell, terrainMap, doors, config.feetPerSquare, config.diagonalRule]);
+  }, [isRulerActive, rulerOrigin, hoverCell, positionedCombatants, terrainMap, doors, config.feetPerSquare, config.diagonalRule, config.weatherEffect]);
 
   // Phase 4: Fog of War count
   const revealedCount = useMemo(() => {
@@ -707,7 +916,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         terrainMap,
         doors,
         config.gridColumns,
-        config.gridRows
+        config.gridRows,
+        config.weatherEffect,
+        config.feetPerSquare
       );
       revealed.forEach((key) => {
         newFog[key] = true;
@@ -871,8 +1082,12 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
     if (!isPanning) return;
 
     const handleWindowMouseMove = (e: MouseEvent) => {
-      // If mouse button is no longer held down, immediately stop panning
-      if (e.buttons === 0) {
+      // If mouse button is no longer held down or token was recently dragged, immediately stop panning
+      if (
+        e.buttons === 0 ||
+        isTokenDraggingRef.current ||
+        Date.now() - lastTokenDragEndTimeRef.current < 400
+      ) {
         setIsPanning(false);
         hasDraggedRef.current = false;
         return;
@@ -905,6 +1120,8 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   // Global dragend and drop listeners to guarantee map panning never gets stuck after token drag
   useEffect(() => {
     const handleGlobalDragEnd = () => {
+      isTokenDraggingRef.current = false;
+      lastTokenDragEndTimeRef.current = Date.now();
       setIsPanning(false);
       setDraggedCombatantId(null);
       setDragHoverCell(null);
@@ -921,8 +1138,24 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
   // Dragging / Panning the map canvas
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    // If target is inside a token or already dragging a token, do NOT pan the map!
-    if (draggedCombatantId || (e.target as HTMLElement)?.closest?.('[data-token-draggable="true"]')) {
+    // If a token is being dragged or was dragged recently (cooldown prevents phantom mousedown on drop release), do NOT pan!
+    if (
+      isTokenDraggingRef.current ||
+      Date.now() - lastTokenDragEndTimeRef.current < 400 ||
+      draggedCombatantId ||
+      (e.target as HTMLElement)?.closest?.('[data-token-draggable="true"]') ||
+      (e.target as HTMLElement)?.closest?.('[data-pin-id]') ||
+      (e.target as HTMLElement)?.closest?.('.pins-layer') ||
+      (e.target as HTMLElement)?.closest?.('button') ||
+      (e.target as HTMLElement)?.closest?.('input') ||
+      (e.target as HTMLElement)?.closest?.('select') ||
+      (e.target as HTMLElement)?.closest?.('textarea') ||
+      selectedPin !== null ||
+      inspectingCombatant !== null ||
+      pendingPinCell !== null ||
+      e.buttons === 0
+    ) {
+      setIsPanning(false);
       return;
     }
     // If in terrain editing mode and left clicking, painting is handled by cell events
@@ -984,7 +1217,12 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (isPanning) {
       // If primary mouse button is no longer pressed, cancel panning immediately
-      if (e.buttons === 0 || draggedCombatantId) {
+      if (
+        e.buttons === 0 ||
+        draggedCombatantId ||
+        isTokenDraggingRef.current ||
+        Date.now() - lastTokenDragEndTimeRef.current < 400
+      ) {
         setIsPanning(false);
         hasDraggedRef.current = false;
         return;
@@ -1043,17 +1281,25 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         const maxY = Math.max(boxStartCell.y, hoverCell.y);
 
         const updated = { ...terrainMap };
+        const updatedOverrides = { ...(config.ceilingOverrides || {}) };
         for (let x = minX; x <= maxX; x++) {
           for (let y = minY; y <= maxY; y++) {
             const key = `${x},${y}`;
             if (activeTerrainBrush === 'open') {
               delete updated[key];
+              delete updatedOverrides[key];
             } else {
               updated[key] = activeTerrainBrush;
+              if (activeTerrainBrush === 'sheltered') {
+                updatedOverrides[key] = activeCeilingBrushFeet;
+              }
             }
           }
         }
         onUpdateTerrain?.(updated);
+        if (onUpdateConfig && (activeTerrainBrush === 'sheltered' || activeTerrainBrush === 'open')) {
+          onUpdateConfig({ ...config, ceilingOverrides: updatedOverrides });
+        }
         setBoxStartCell(null);
       }
       setIsPaintingTerrain(false);
@@ -1116,19 +1362,11 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       return;
     }
 
-    // In normal mode, mouse down on any cell initiates map dragging, UNLESS user clicked a token or is dragging a token
-    if (draggedCombatantId || (e.target as HTMLElement)?.closest?.('[data-token-draggable="true"]')) {
-      return;
-    }
-
-    if (e.button === 0 || e.button === 1 || e.button === 2 || isSpacePressed) {
-      if (e.button === 2) {
-        e.preventDefault();
-      }
-      setIsPanning(true);
+    // Panning is handled at the container level by handleMouseDown when bubbling up.
+    // If a token was recently dropped/dragged, ensure panning is canceled.
+    if (isTokenDraggingRef.current || Date.now() - lastTokenDragEndTimeRef.current < 400) {
+      setIsPanning(false);
       hasDraggedRef.current = false;
-      dragStartClientRef.current = { x: e.clientX, y: e.clientY };
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
     }
   };
 
@@ -1151,16 +1389,21 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
   // Handle Token Drag Start
   const handleTokenDragStart = (e: React.DragEvent, combatantId: string) => {
+    isTokenDraggingRef.current = true;
     // Explicitly reset map panning so token drag does not pan or snap the canvas
     setIsPanning(false);
     hasDraggedRef.current = false;
 
     const c = combatants.find((item) => item.id === combatantId);
-    if (!c) return;
+    if (!c) {
+      isTokenDraggingRef.current = false;
+      return;
+    }
 
     const canMove = isDm || c.controlledBy === currentUserId || c.isPlayerChar;
     if (!canMove) {
       e.preventDefault();
+      isTokenDraggingRef.current = false;
       return;
     }
 
@@ -1169,6 +1412,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       const remainingSpeed = typeof c.movementRemaining === 'number' ? c.movementRemaining : (c.speed || 30);
       if (remainingSpeed <= 0) {
         e.preventDefault();
+        isTokenDraggingRef.current = false;
         setMovementNotice({
           type: 'error',
           message: `Movement Locked: ${c.name} has 0 ft remaining this turn. Take a Dash action or wait for your next turn.`
@@ -1184,6 +1428,8 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   };
 
   const handleTokenDragEnd = () => {
+    isTokenDraggingRef.current = false;
+    lastTokenDragEndTimeRef.current = Date.now();
     setDraggedCombatantId(null);
     setDragHoverCell(null);
     setIsPanning(false);
@@ -1196,6 +1442,8 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       e.preventDefault();
       e.stopPropagation();
     }
+    isTokenDraggingRef.current = false;
+    lastTokenDragEndTimeRef.current = Date.now();
     setIsPanning(false);
     hasDraggedRef.current = false;
     const combatantId =
@@ -1328,6 +1576,19 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       } else if (onUpdateCombatantPosition) {
         onUpdateCombatantPosition(combatantId, cellX, cellY);
       }
+
+      // 5e RAW: Indoor flight altitude check
+      const isDestSheltered = isCellSheltered(cellX, cellY, terrainMap, config.isEntirelyIndoors);
+      const ceilingFeet = getTileCeilingFeet(cellX, cellY, config, terrainMap);
+      const maxAllowedElev = getMaxAllowedElevation(isDestSheltered, ceilingFeet, c.tokenSize || 1);
+      if (isDestSheltered && (c.elevationFeet || 0) > maxAllowedElev) {
+        onUpdateCombatant?.({ ...c, elevationFeet: maxAllowedElev });
+        onLogAction?.(
+          'ability',
+          `🏠 ${c.name} entered an indoor sheltered area (Ceiling: ${ceilingFeet}ft). Altitude automatically lowered to ${maxAllowedElev}ft (5e RAW).`,
+          'Indoor Ceiling Limiter'
+        );
+      }
     } else {
       // Placing unplaced or reserve token onto the map
       if (onUpdateCombatantPosition) {
@@ -1343,6 +1604,8 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
   const handleBenchDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    isTokenDraggingRef.current = false;
+    lastTokenDragEndTimeRef.current = Date.now();
     setIsPanning(false);
     hasDraggedRef.current = false;
     const combatantId =
@@ -1426,6 +1689,25 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
     // Shift click is reserved for targeting
     if (e.shiftKey) return;
+
+    // Tactical Sonar Ping Mode or Alt+Click shortcut
+    if (isPingToolActive || e.altKey) {
+      triggerPing(cellX, cellY);
+      return;
+    }
+
+    // Drop Secret GM Map Pin Mode
+    if (isPinToolActive && isDm) {
+      setPendingPinCell({ x: cellX, y: cellY });
+      return;
+    }
+
+    // Check if clicked cell contains a map pin entity (select pin and open properties)
+    const pinAtCell = mapPins.find((p) => p.x === cellX && p.y === cellY && (isDm || !p.isSecret));
+    if (pinAtCell) {
+      setSelectedPin(pinAtCell);
+      return;
+    }
 
     // Phase 4: Ruler Line of Sight placement
     if (isRulerActive) {
@@ -1582,6 +1864,19 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       onUpdateCombatantPosition(activeMover.id, destination.x, destination.y);
     }
 
+    // 5e RAW: Indoor flight altitude check
+    const isDestSheltered = isCellSheltered(destination.x, destination.y, terrainMap, config.isEntirelyIndoors);
+    const ceilingFeet = getTileCeilingFeet(destination.x, destination.y, config, terrainMap);
+    const maxAllowedElev = getMaxAllowedElevation(isDestSheltered, ceilingFeet, activeMover.tokenSize || 1);
+    if (isDestSheltered && (activeMover.elevationFeet || 0) > maxAllowedElev) {
+      onUpdateCombatant?.({ ...activeMover, elevationFeet: maxAllowedElev });
+      onLogAction?.(
+        'ability',
+        `🏠 ${activeMover.name} flew into an indoor sheltered room (Ceiling: ${ceilingFeet}ft). Altitude automatically lowered to ${maxAllowedElev}ft (5e RAW).`,
+        'Indoor Ceiling Limiter'
+      );
+    }
+
     // Reset waypoint state
     setMoveWaypoints([]);
     setIsMovePlanning(false);
@@ -1693,6 +1988,22 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             </span>
           </span>
 
+          {/* Tactical Rules Edition Indicator */}
+          <span
+            className={`hidden sm:inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded font-bold border ${
+              is35e
+                ? 'bg-purple-950/80 text-purple-300 border-purple-700/60'
+                : 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+            }`}
+            title={
+              is35e
+                ? 'Active Tactical Rules: D&D 3.5e RAW (5-10-5 Diagonals, AoO on square exit, 0 HP Disabled, -1 to -9 HP Dying, -10 HP Dead, +4/+7 Cover)'
+                : 'Active Tactical Rules: D&D 5e RAW (5-5-5 Diagonals, AoO on reach exit, Bloodied at <=50% HP, 0 HP Unconscious, +2/+5 Cover, Concentration)'
+            }
+          >
+            {is35e ? '⚔️ 3.5e Combat' : '🛡️ 5e Combat'}
+          </span>
+
           {/* Diagonal Rule Badge */}
           <button
             type="button"
@@ -1723,9 +2034,13 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             <Ruler className="w-3 h-3 text-stone-400" />
             <span>
               {config.diagonalRule === 'standard5e'
-                ? '5e Chebyshev (5ft/diag)'
+                ? is35e
+                  ? '5-5-5 Diag (Variant)'
+                  : '5e Chebyshev (5ft/diag)'
                 : config.diagonalRule === 'alternating35e'
-                ? '3.5e 5-10-5 Rule'
+                ? is35e
+                  ? '3.5e Core (5-10-5)'
+                  : '3.5e 5-10-5 (Variant)'
                 : 'Euclidean (Direct)'}
             </span>
           </button>
@@ -1937,6 +2252,125 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                 ))}
               </select>
             </div>
+          )}
+
+          {/* Weather & Atmosphere Quick Switcher */}
+          {onUpdateConfig && (
+            <div className="flex items-center gap-1.5">
+              <select
+                value={config.weatherEffect || 'none'}
+                onChange={(e) => {
+                  onUpdateConfig({
+                    ...config,
+                    weatherEffect: e.target.value as WeatherEffectType
+                  });
+                }}
+                className="bg-stone-950 border border-stone-800 rounded-lg px-2 py-1 text-xs text-stone-300 font-sans font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+                title="Ambient Weather & Particle Atmosphere (15 Conditions: Clear, Storm, Blizzard, Sandstorm, Hail, Acid Rain, Sunbeams, etc.)"
+              >
+                <optgroup label="Atmospheric & Wind">
+                  <option value="none">☀️ Clear Weather</option>
+                  <option value="wind">💨 Strong Gale Wind</option>
+                  <option value="mist">🌫️ Creeping Mist</option>
+                  <option value="sunbeams">✨ Radiant Sunbeams</option>
+                </optgroup>
+                <optgroup label="Precipitation">
+                  <option value="rain">🌧️ Steady Rain</option>
+                  <option value="snow">🌨️ Gentle Snowfall</option>
+                </optgroup>
+                <optgroup label="Severe Storms (5e RAW)">
+                  <option value="storm">⛈️ Thunderstorm & Tempest</option>
+                  <option value="blizzard">❄️ Blizzard & Whiteout</option>
+                  <option value="hail">🧊 Hail & Sleet Storm</option>
+                  <option value="sandstorm">🌪️ Desert Sandstorm</option>
+                </optgroup>
+                <optgroup label="Planar Hazards & Supernatural">
+                  <option value="embers">🔥 Volcanic Embers</option>
+                  <option value="ashfall">🌋 Choking Ashfall</option>
+                  <option value="acid_rain">🧪 Caustic Acid Rain</option>
+                  <option value="blood_rain">🩸 Crimson Blood Rain</option>
+                  <option value="arcane">🔮 Arcane Ley-Line</option>
+                </optgroup>
+              </select>
+
+              {/* Weather Tactical Rules Pill Button */}
+              {config.weatherEffect && config.weatherEffect !== 'none' ? (
+                <button
+                  type="button"
+                  onClick={() => setShowWeatherModal(true)}
+                  className={`flex items-center gap-1 px-2 py-1 text-xs rounded-lg font-bold border transition cursor-pointer ${
+                    WEATHER_DEFINITIONS[config.weatherEffect]?.badgeBg || 'bg-stone-900'
+                  } ${
+                    WEATHER_DEFINITIONS[config.weatherEffect]?.badgeBorder || 'border-stone-700'
+                  } ${
+                    WEATHER_DEFINITIONS[config.weatherEffect]?.badgeText || 'text-stone-300'
+                  } hover:brightness-125 shadow-xs`}
+                  title="Click to view 5e/3.5e RAW Tactical Rules for active weather"
+                >
+                  <span>{WEATHER_DEFINITIONS[config.weatherEffect]?.icon}</span>
+                  {WEATHER_DEFINITIONS[config.weatherEffect]?.disadvantageRangedAttacks && (
+                    <span className="text-[10px] px-1 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                      🏹 Disadv
+                    </span>
+                  )}
+                  {WEATHER_DEFINITIONS[config.weatherEffect]?.extinguishesFlames && (
+                    <span className="text-[10px] px-1 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 hidden md:inline">
+                      🔥 Exting
+                    </span>
+                  )}
+                  <Info className="w-3 h-3 opacity-70" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowWeatherModal(true)}
+                  className="px-1.5 py-1 text-xs rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition cursor-pointer"
+                  title="Weather & Atmosphere Catalog (15 Conditions with 5e RAW Rules)"
+                >
+                  <Info className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Tactical Ping Tool */}
+          <button
+            type="button"
+            onClick={() => setIsPingToolActive(!isPingToolActive)}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg font-bold transition shadow ${
+              isPingToolActive
+                ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-amber-500/30'
+                : 'bg-stone-950 hover:bg-stone-800 text-amber-300 border border-stone-800'
+            }`}
+            title="Tactical Sonar Ping (Click anywhere or Alt+Click anytime to drop ping beacon)"
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span>Ping</span>
+            {isPingToolActive && (
+              <span className="w-1.5 h-1.5 rounded-full bg-stone-950 animate-ping" />
+            )}
+          </button>
+
+          {/* Secret GM Map Pins Tool */}
+          {isDm && (
+            <button
+              type="button"
+              onClick={() => setIsPinToolActive(!isPinToolActive)}
+              className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg font-bold transition shadow ${
+                isPinToolActive
+                  ? 'bg-purple-600 text-stone-950 border-purple-600 shadow-purple-600/30'
+                  : 'bg-stone-950 hover:bg-stone-800 text-purple-300 border border-stone-800'
+              }`}
+              title="Secret GM Map Pins (Click on grid to place traps, secret doors, notes, hidden loot)"
+            >
+              <MapPin className="w-3.5 h-3.5" />
+              <span>Pins ({mapPins.length})</span>
+              {isPinToolActive && (
+                <span className="text-[10px] font-mono px-1 py-0.2 bg-stone-950 text-purple-200 rounded font-bold">
+                  Place
+                </span>
+              )}
+            </button>
           )}
 
           {/* Phase 4: Spell AoE Template Toggle */}
@@ -2222,6 +2656,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           onApplyTemplate={handleApplyTemplate}
           onClearAllTerrain={handleClearAllTerrainInternal}
           onClose={() => setIsTerrainEditorOpen(false)}
+          activeCeilingFeet={activeCeilingBrushFeet}
+          onChangeCeilingFeet={setActiveCeilingBrushFeet}
+          edition={activeEdition}
         />
       )}
 
@@ -2325,7 +2762,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
       {/* DM Configuration Drawer */}
       {showConfigModal && isDm && onUpdateConfig && (
-        <div className="bg-stone-900 border-b border-stone-800 p-3.5 grid grid-cols-1 sm:grid-cols-5 gap-3 text-xs animate-fadeIn z-20">
+        <div className="bg-stone-900 border-b border-stone-800 p-3.5 grid grid-cols-1 sm:grid-cols-6 gap-3 text-xs animate-fadeIn z-20">
           <div>
             <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Columns (Width)</label>
             <input
@@ -2361,7 +2798,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             </select>
           </div>
           <div>
-            <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Overlays</label>
+            <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Overlays & Lighting</label>
             <div className="space-y-1">
               <label className="flex items-center gap-1.5 text-stone-300 cursor-pointer">
                 <input
@@ -2370,17 +2807,54 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                   onChange={(e) => onUpdateConfig({ ...config, showReachableGrid: e.target.checked })}
                   className="rounded bg-stone-950 border-stone-700 text-amber-500 focus:ring-0"
                 />
-                <span>Reachable Speed Grid</span>
+                <span>Speed Grid</span>
               </label>
               <label className="flex items-center gap-1.5 text-stone-300 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={config.showMovementRings}
-                  onChange={(e) => onUpdateConfig({ ...config, showMovementRings: e.target.checked })}
+                  checked={config.showThreatReachRings !== false}
+                  onChange={(e) => onUpdateConfig({ ...config, showThreatReachRings: e.target.checked })}
+                  className="rounded bg-stone-950 border-stone-700 text-rose-500 focus:ring-0"
+                />
+                <span>Threat & AoO Rings</span>
+              </label>
+              <label className="flex items-center gap-1.5 text-stone-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.enableTokenLighting !== false}
+                  onChange={(e) => onUpdateConfig({ ...config, enableTokenLighting: e.target.checked })}
                   className="rounded bg-stone-950 border-stone-700 text-amber-500 focus:ring-0"
                 />
-                <span>Reach / Range Rings</span>
+                <span>Token Light Halos</span>
               </label>
+            </div>
+          </div>
+          <div>
+            <label className="block text-stone-400 font-mono text-[10px] uppercase mb-1">Indoor & Ceilings</label>
+            <div className="space-y-1">
+              <label className="flex items-center gap-1.5 text-stone-300 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={Boolean(config.isEntirelyIndoors)}
+                  onChange={(e) => onUpdateConfig({ ...config, isEntirelyIndoors: e.target.checked })}
+                  className="rounded bg-stone-950 border-stone-700 text-sky-500 focus:ring-0"
+                />
+                <span title="Entire map is an interior dungeon or cave (no overhead weather particles)">Entirely Indoors</span>
+              </label>
+              <div className="flex items-center gap-1 pt-0.5">
+                <span className="text-[10px] text-stone-400 font-mono">Ceiling:</span>
+                <input
+                  type="number"
+                  min={5}
+                  max={120}
+                  step={5}
+                  value={config.shelteredCeilingFeet ?? 10}
+                  onChange={(e) => onUpdateConfig({ ...config, shelteredCeilingFeet: Math.max(5, parseInt(e.target.value, 10) || 10) })}
+                  className="w-14 bg-stone-950 border border-stone-700 rounded px-1.5 py-0.5 text-stone-100 font-mono text-[11px]"
+                  title="Ceiling height clearance in feet for indoor/sheltered areas (5e RAW)"
+                />
+                <span className="text-[10px] text-stone-400 font-mono">ft</span>
+              </div>
             </div>
           </div>
           <div className="flex items-end">
@@ -2424,6 +2898,16 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             height: `${totalMapHeightPx}px`
           }}
         >
+          {/* Feature 4: Atmospheric Ambient Weather Particle System */}
+          <WeatherCanvasLayer
+            weather={config.weatherEffect || 'none'}
+            width={totalMapWidthPx}
+            height={totalMapHeightPx}
+            shelteredCells={shelteredCellKeys}
+            cellSize={CELL_SIZE_PX}
+            isEntirelyIndoors={Boolean(config.isEntirelyIndoors)}
+          />
+
           {/* SVG Grid Overlay */}
           <svg
             width={totalMapWidthPx}
@@ -2443,6 +2927,13 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                   stroke={themeConfig.gridColor}
                   strokeWidth="1"
                 />
+                {/* Tactile grid intersection cross markers */}
+                <path
+                  d="M -3 0 L 3 0 M 0 -3 L 0 3"
+                  stroke={themeConfig.gridColor}
+                  strokeWidth="1"
+                  opacity="0.45"
+                />
               </pattern>
 
               {/* Waypoint Marker Arrow */}
@@ -2457,6 +2948,91 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               >
                 <path d="M 0 0 L 10 5 L 0 10 z" fill="#10b981" />
               </marker>
+
+              {/* Torch Light Radial Gradient */}
+              <radialGradient id="token-light-torch" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.5" />
+                <stop offset="45%" stopColor="#d97706" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#b45309" stopOpacity="0" />
+              </radialGradient>
+
+              {/* Lantern Light Radial Gradient */}
+              <radialGradient id="token-light-lantern" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#fef08a" stopOpacity="0.55" />
+                <stop offset="55%" stopColor="#eab308" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#ca8a04" stopOpacity="0" />
+              </radialGradient>
+
+              {/* Magical Light Radial Gradient */}
+              <radialGradient id="token-light-magical" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#67e8f9" stopOpacity="0.6" />
+                <stop offset="55%" stopColor="#06b6d4" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#0891b2" stopOpacity="0" />
+              </radialGradient>
+
+              {/* 3D Depth Filters for Walls & Heavy Objects */}
+              <filter id="wall-3d-shadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="2" dy="4" stdDeviation="3" floodColor="#000000" floodOpacity="0.75" />
+              </filter>
+              <filter id="terrain-object-shadow" x="-25%" y="-25%" width="150%" height="150%">
+                <feDropShadow dx="1" dy="3" stdDeviation="2.5" floodColor="#000000" floodOpacity="0.65" />
+              </filter>
+
+              {/* Liquid Magma Lava Core Gradient */}
+              <radialGradient id="lava-core-pool" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stopColor="#fffbeb" stopOpacity="0.95" />
+                <stop offset="25%" stopColor="#fde047" stopOpacity="0.85" />
+                <stop offset="55%" stopColor="#f97316" stopOpacity="0.8" />
+                <stop offset="85%" stopColor="#dc2626" stopOpacity="0.85" />
+                <stop offset="100%" stopColor="#7f1d1d" stopOpacity="0.95" />
+              </radialGradient>
+
+              {/* Deep Water Gradient */}
+              <linearGradient id="water-deep-flow" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#0284c7" stopOpacity="0.5" />
+                <stop offset="50%" stopColor="#0369a1" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#0c4a6e" stopOpacity="0.75" />
+              </linearGradient>
+
+              {/* Shallow Water Gradient */}
+              <linearGradient id="water-shallow-flow" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.32" />
+                <stop offset="100%" stopColor="#0284c7" stopOpacity="0.45" />
+              </linearGradient>
+
+              {/* Ice Crystalline Glaze */}
+              <linearGradient id="ice-fracture-glaze" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#f0f9ff" stopOpacity="0.45" />
+                <stop offset="50%" stopColor="#bae6fd" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#7dd3fc" stopOpacity="0.38" />
+              </linearGradient>
+
+              {/* Wooden Cargo Crate Grain */}
+              <linearGradient id="crate-wood-grain" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stopColor="#b45309" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#78350f" stopOpacity="0.95" />
+              </linearGradient>
+
+              {/* Heavy Fortified Pillar Capital Bevel */}
+              <radialGradient id="pillar-cap-bevel" cx="40%" cy="40%" r="50%">
+                <stop offset="0%" stopColor="#78716c" stopOpacity="0.95" />
+                <stop offset="65%" stopColor="#44403c" stopOpacity="0.95" />
+                <stop offset="100%" stopColor="#1c1917" stopOpacity="0.98" />
+              </radialGradient>
+
+              {/* Chasm Endless Abyss Void */}
+              <radialGradient id="chasm-abyss-void" cx="50%" cy="50%" r="60%">
+                <stop offset="0%" stopColor="#000000" stopOpacity="1" />
+                <stop offset="70%" stopColor="#09090b" stopOpacity="0.96" />
+                <stop offset="100%" stopColor="#27272a" stopOpacity="0.85" />
+              </radialGradient>
+
+              {/* Warm Indoor Hardwood Parquet Plank Floor */}
+              <linearGradient id="wood-parquet-plank" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#78350f" stopOpacity="0.35" />
+                <stop offset="50%" stopColor="#92400e" stopOpacity="0.25" />
+                <stop offset="100%" stopColor="#451a03" stopOpacity="0.4" />
+              </linearGradient>
             </defs>
 
             {/* Grid Background Fill */}
@@ -2465,6 +3041,43 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               height={totalMapHeightPx}
               fill="url(#battlemap-grid-pattern)"
             />
+
+            {/* Feature 4: Dynamic Token Light Sources (Torches, Lanterns, Spells) */}
+            {config.enableTokenLighting !== false && (
+              <g className="token-lighting-layer pointer-events-none">
+                {positionedCombatants.map((c) => {
+                  const ls = c.lightSource;
+                  if (!ls || ls === 'none') return null;
+                  const radiusFeet = ls === 'lantern' ? 30 : 20;
+                  const radiusPx = (radiusFeet / config.feetPerSquare) * CELL_SIZE_PX;
+                  const cx = (c.calculatedX + c.calculatedSize / 2) * CELL_SIZE_PX;
+                  const cy = (c.calculatedY + c.calculatedSize / 2) * CELL_SIZE_PX;
+                  const gradId = ls === 'lantern' ? 'token-light-lantern' : ls === 'magical_light' ? 'token-light-magical' : 'token-light-torch';
+
+                  return (
+                    <g key={`light-${c.id}`}>
+                      {/* Wide ambient falloff aura */}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={radiusPx}
+                        fill={`url(#${gradId})`}
+                        className={ls === 'torch' ? 'animate-pulse' : ''}
+                        style={{ animationDuration: '2.5s' }}
+                      />
+                      {/* Bright core aura */}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={radiusPx * 0.45}
+                        fill={`url(#${gradId})`}
+                        opacity={0.7}
+                      />
+                    </g>
+                  );
+                })}
+              </g>
+            )}
 
             {/* Phase 3: Tactical Terrain Tiles Layer */}
             {Object.entries(terrainMap).map(([key, terrainType]) => {
@@ -2481,24 +3094,32 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
               if (terrainType === 'wall') {
                 return (
-                  <g key={`wall-${key}`}>
-                    {/* Solid stone masonry block */}
+                  <g key={`wall-${key}`} filter="url(#wall-3d-shadow)">
+                    {/* Solid stone masonry block foundation */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="#292524"
-                      stroke="#44403c"
-                      strokeWidth="1.5"
+                      fill="#1c1917"
+                      stroke="#0c0a09"
+                      strokeWidth="1"
                     />
-                    {/* Bevel highlights & mortar lines */}
-                    <line x1={px} y1={py} x2={px + CELL_SIZE_PX} y2={py} stroke="#57534e" strokeWidth="2" />
-                    <line x1={px} y1={py} x2={px} y2={py + CELL_SIZE_PX} stroke="#57534e" strokeWidth="2" />
-                    <line x1={px} y1={py + CELL_SIZE_PX / 2} x2={px + CELL_SIZE_PX} y2={py + CELL_SIZE_PX / 2} stroke="#1c1917" strokeWidth="1" />
-                    <line x1={px + CELL_SIZE_PX / 2} y1={py} x2={px + CELL_SIZE_PX / 2} y2={py + CELL_SIZE_PX / 2} stroke="#1c1917" strokeWidth="1" />
-                    <circle cx={px + 12} cy={py + 12} r="1.5" fill="#57534e" />
-                    <circle cx={px + 36} cy={py + 36} r="1.5" fill="#57534e" />
+                    {/* Row 1 stone blocks */}
+                    <rect x={px + 1} y={py + 1} width={CELL_SIZE_PX / 2 - 2} height={CELL_SIZE_PX / 2 - 2} fill="#292524" stroke="#44403c" strokeWidth="0.8" rx="1" />
+                    <rect x={px + CELL_SIZE_PX / 2 + 1} y={py + 1} width={CELL_SIZE_PX / 2 - 2} height={CELL_SIZE_PX / 2 - 2} fill="#262220" stroke="#44403c" strokeWidth="0.8" rx="1" />
+                    {/* Row 2 stone blocks (staggered ashlar pattern) */}
+                    <rect x={px + 1} y={py + CELL_SIZE_PX / 2 + 1} width={CELL_SIZE_PX / 3} height={CELL_SIZE_PX / 2 - 2} fill="#262220" stroke="#44403c" strokeWidth="0.8" rx="1" />
+                    <rect x={px + CELL_SIZE_PX / 3 + 2} y={py + CELL_SIZE_PX / 2 + 1} width={CELL_SIZE_PX / 3 + 4} height={CELL_SIZE_PX / 2 - 2} fill="#2e2a28" stroke="#44403c" strokeWidth="0.8" rx="1" />
+                    <rect x={px + (CELL_SIZE_PX * 2) / 3 + 7} y={py + CELL_SIZE_PX / 2 + 1} width={CELL_SIZE_PX / 3 - 8} height={CELL_SIZE_PX / 2 - 2} fill="#262220" stroke="#44403c" strokeWidth="0.8" rx="1" />
+                    {/* Top edge light bevel */}
+                    <line x1={px + 1} y1={py + 1.5} x2={px + CELL_SIZE_PX - 1} y2={py + 1.5} stroke="#78716c" strokeWidth="1.5" strokeLinecap="round" opacity="0.8" />
+                    {/* Left edge light bevel */}
+                    <line x1={px + 1.5} y1={py + 1} x2={px + 1.5} y2={py + CELL_SIZE_PX - 1} stroke="#57534e" strokeWidth="1" strokeLinecap="round" opacity="0.7" />
+                    {/* Stone texture chiseled flecks */}
+                    <circle cx={px + 10} cy={py + 10} r="1" fill="#78716c" opacity="0.5" />
+                    <circle cx={px + 38} cy={py + 12} r="1" fill="#78716c" opacity="0.5" />
+                    <circle cx={px + 24} cy={py + 36} r="1" fill="#78716c" opacity="0.4" />
                   </g>
                 );
               }
@@ -2515,43 +3136,42 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                     className="cursor-pointer"
                   >
                     <title>{isOpen ? 'Open Door (Click to Close)' : 'Closed Door (Click to Open)'}</title>
+                    {/* Stone Door Jambs / Frame Casings on left and right */}
+                    <rect x={px} y={py} width={5} height={CELL_SIZE_PX} fill="#292524" stroke="#44403c" strokeWidth="1" />
+                    <rect x={px + CELL_SIZE_PX - 5} y={py} width={5} height={CELL_SIZE_PX} fill="#292524" stroke="#44403c" strokeWidth="1" />
                     {isOpen ? (
                       <>
-                        {/* Open Door Frame & swing arc */}
-                        <rect
-                          x={px + 2}
-                          y={py + 2}
-                          width={CELL_SIZE_PX - 4}
-                          height={CELL_SIZE_PX - 4}
-                          fill="rgba(69, 26, 3, 0.15)"
+                        {/* Floor threshold stone */}
+                        <rect x={px + 5} y={py + CELL_SIZE_PX / 2 - 2} width={CELL_SIZE_PX - 10} height={4} fill="#57534e" opacity="0.5" />
+                        {/* Swing Arc on floor */}
+                        <path
+                          d={`M ${px + 5} ${py + 4} A ${CELL_SIZE_PX - 10} ${CELL_SIZE_PX - 10} 0 0 1 ${px + CELL_SIZE_PX - 5} ${py + CELL_SIZE_PX - 5}`}
+                          fill="none"
                           stroke="#f59e0b"
-                          strokeWidth="1.5"
+                          strokeWidth="1.2"
                           strokeDasharray="3 3"
+                          opacity="0.75"
                         />
-                        {/* Swung door leaf */}
-                        <rect
-                          x={px + 2}
-                          y={py + 2}
-                          width={6}
-                          height={CELL_SIZE_PX - 4}
-                          fill="#92400e"
-                          stroke="#d97706"
-                          strokeWidth="1"
-                          rx="1"
-                        />
+                        {/* 3D Angled Swung Open Door Leaf */}
+                        <g transform={`rotate(-65, ${px + 6}, ${py + 5})`} filter="url(#terrain-object-shadow)">
+                          <rect
+                            x={px + 6}
+                            y={py + 5}
+                            width={CELL_SIZE_PX - 12}
+                            height={6}
+                            fill="#78350f"
+                            stroke="#d97706"
+                            strokeWidth="1"
+                            rx="1"
+                          />
+                          <line x1={px + 8} y1={py + 8} x2={px + CELL_SIZE_PX - 8} y2={py + 8} stroke="#92400e" strokeWidth="1" />
+                          <circle cx={px + 8} cy={py + 8} r="1.5" fill="#f59e0b" />
+                        </g>
                         <text
-                          x={px + CELL_SIZE_PX / 2 + 3}
-                          y={py + CELL_SIZE_PX / 2 + 5}
+                          x={px + CELL_SIZE_PX / 2}
+                          y={py + CELL_SIZE_PX / 2 + 4}
                           textAnchor="middle"
-                          fontSize="16"
-                        >
-                          🚪
-                        </text>
-                        <text
-                          x={px + CELL_SIZE_PX / 2 + 3}
-                          y={py + CELL_SIZE_PX - 5}
-                          textAnchor="middle"
-                          fontSize="7"
+                          fontSize="9"
                           fill="#fbbf24"
                           fontWeight="bold"
                           fontFamily="monospace"
@@ -2560,49 +3180,36 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                         </text>
                       </>
                     ) : (
-                      <>
-                        {/* Closed solid reinforced timber door */}
+                      <g filter="url(#terrain-object-shadow)">
+                        {/* Closed Solid Reinforced Timber Door */}
                         <rect
-                          x={px + 2}
+                          x={px + 5}
                           y={py + 2}
-                          width={CELL_SIZE_PX - 4}
+                          width={CELL_SIZE_PX - 10}
                           height={CELL_SIZE_PX - 4}
                           fill="#451a03"
-                          stroke="#f59e0b"
-                          strokeWidth="2"
-                          rx="3"
+                          stroke="#78350f"
+                          strokeWidth="1.5"
+                          rx="2"
                         />
-                        {/* Iron bands */}
-                        <rect x={px + 4} y={py + 8} width={CELL_SIZE_PX - 8} height={3} fill="#78350f" />
-                        <rect x={px + 4} y={py + CELL_SIZE_PX - 12} width={CELL_SIZE_PX - 8} height={3} fill="#78350f" />
-                        <circle
-                          cx={px + CELL_SIZE_PX / 2}
-                          cy={py + CELL_SIZE_PX / 2}
-                          r="10"
-                          fill="#1c1917"
-                          stroke="#d97706"
-                          strokeWidth="1"
-                        />
-                        <text
-                          x={px + CELL_SIZE_PX / 2}
-                          y={py + CELL_SIZE_PX / 2 + 4}
-                          textAnchor="middle"
-                          fontSize="11"
-                        >
-                          🔒
-                        </text>
-                        <text
-                          x={px + CELL_SIZE_PX / 2}
-                          y={py + CELL_SIZE_PX - 5}
-                          textAnchor="middle"
-                          fontSize="7"
-                          fill="#fbbf24"
-                          fontWeight="bold"
-                          fontFamily="monospace"
-                        >
-                          CLOSED
-                        </text>
-                      </>
+                        {/* Vertical Wood Planks */}
+                        <line x1={px + 14} y1={py + 3} x2={px + 14} y2={py + CELL_SIZE_PX - 3} stroke="#271002" strokeWidth="1" />
+                        <line x1={px + 24} y1={py + 3} x2={px + 24} y2={py + CELL_SIZE_PX - 3} stroke="#271002" strokeWidth="1" />
+                        <line x1={px + 34} y1={py + 3} x2={px + 34} y2={py + CELL_SIZE_PX - 3} stroke="#271002" strokeWidth="1" />
+                        {/* Wrought Iron Horizontal Strap Hinges with Rivets */}
+                        <rect x={px + 5} y={py + 8} width={CELL_SIZE_PX - 10} height={4} fill="#18181b" rx="1" />
+                        <circle cx={px + 9} cy={py + 10} r="1" fill="#71717a" />
+                        <circle cx={px + 24} cy={py + 10} r="1" fill="#71717a" />
+                        <circle cx={px + 39} cy={py + 10} r="1" fill="#71717a" />
+                        <rect x={px + 5} y={py + CELL_SIZE_PX - 12} width={CELL_SIZE_PX - 10} height={4} fill="#18181b" rx="1" />
+                        <circle cx={px + 9} cy={py + CELL_SIZE_PX - 10} r="1" fill="#71717a" />
+                        <circle cx={px + 24} cy={py + CELL_SIZE_PX - 10} r="1" fill="#71717a" />
+                        <circle cx={px + 39} cy={py + CELL_SIZE_PX - 10} r="1" fill="#71717a" />
+                        {/* Brass Ring Pull / Escutcheon */}
+                        <circle cx={px + 32} cy={py + CELL_SIZE_PX / 2} r="3" fill="#f59e0b" stroke="#78350f" strokeWidth="0.8" />
+                        <circle cx={px + 32} cy={py + CELL_SIZE_PX / 2} r="1" fill="#18181b" />
+                        <circle cx={px + 16} cy={py + CELL_SIZE_PX / 2} r="2" fill="#d97706" />
+                      </g>
                     )}
                   </g>
                 );
@@ -2611,25 +3218,36 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'difficult') {
                 return (
                   <g key={`diff-${key}`}>
+                    {/* Mud / Gravel Ground Tint */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="rgba(217, 119, 6, 0.22)"
-                      stroke="rgba(245, 158, 11, 0.4)"
+                      fill="rgba(180, 83, 9, 0.16)"
+                      stroke="rgba(217, 119, 6, 0.35)"
                       strokeWidth="1"
                     />
-                    <circle cx={px + 12} cy={py + 14} r="3" fill="#d97706" opacity="0.6" />
-                    <circle cx={px + 34} cy={py + 18} r="4" fill="#d97706" opacity="0.5" />
-                    <circle cx={px + 22} cy={py + 34} r="3.5" fill="#d97706" opacity="0.6" />
+                    {/* Natural Jagged Rubble & Boulders with highlights and shadows */}
+                    <polygon points={`${px+8},${py+20} ${px+18},${py+12} ${px+24},${py+22} ${px+16},${py+28} ${px+10},${py+26}`} fill="#57534e" stroke="#292524" strokeWidth="1" />
+                    <line x1={px+18} y1={py+12} x2={px+16} y2={py+28} stroke="#78716c" strokeWidth="1" />
+                    <polygon points={`${px+26},${py+18} ${px+38},${py+14} ${px+42},${py+26} ${px+34},${py+32} ${px+28},${py+26}`} fill="#44403c" stroke="#1c1917" strokeWidth="1" />
+                    <polygon points={`${px+16},${py+34} ${px+26},${py+32} ${px+30},${py+42} ${px+20},${py+44}`} fill="#57534e" stroke="#292524" strokeWidth="0.8" />
+                    {/* Small scattered pebbles */}
+                    <circle cx={px + 12} cy={py + 10} r="2" fill="#78716c" />
+                    <circle cx={px + 38} cy={py + 38} r="2.5" fill="#57534e" />
+                    <circle cx={px + 32} cy={py + 8} r="1.5" fill="#78716c" />
                     <text
-                      x={px + CELL_SIZE_PX - 10}
-                      y={py + 12}
-                      fontSize="10"
-                      textAnchor="middle"
+                      x={px + CELL_SIZE_PX - 4}
+                      y={py + 9}
+                      fontSize="7.5"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                      fill="#f59e0b"
+                      opacity="0.8"
+                      textAnchor="end"
                     >
-                      🪨
+                      2x
                     </text>
                   </g>
                 );
@@ -2638,22 +3256,50 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'hazard') {
                 return (
                   <g key={`hazard-${key}`}>
+                    {/* Molten Core Glowing Pool */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="rgba(220, 38, 38, 0.35)"
+                      fill="url(#lava-core-pool)"
                       stroke="#ef4444"
-                      strokeWidth="1"
+                      strokeWidth="1.5"
                     />
+                    {/* Floating Jagged Cooling Basalt Crust Plates */}
+                    <polygon
+                      points={`${px+4},${py+4} ${px+18},${py+6} ${px+15},${py+18} ${px+6},${py+15}`}
+                      fill="#1c1917"
+                      stroke="#ea580c"
+                      strokeWidth="0.8"
+                    />
+                    <polygon
+                      points={`${px+24},${py+5} ${px+42},${py+7} ${px+38},${py+22} ${px+22},${py+18}`}
+                      fill="#292524"
+                      stroke="#f97316"
+                      strokeWidth="0.8"
+                    />
+                    <polygon
+                      points={`${px+10},${py+26} ${px+32},${py+28} ${px+36},${py+42} ${px+8},${py+40}`}
+                      fill="#1c1917"
+                      stroke="#ea580c"
+                      strokeWidth="0.8"
+                    />
+                    {/* Glowing Magma Fissures */}
+                    <line x1={px + 18} y1={py + 6} x2={px + 24} y2={py + 18} stroke="#fef08a" strokeWidth="1.5" />
+                    <line x1={px + 22} y1={py + 18} x2={px + 10} y2={py + 26} stroke="#fde047" strokeWidth="1.2" />
+                    <circle cx={px + 24} cy={py + 24} r="2" fill="#fffbeb" />
+                    <circle cx={px + 36} cy={py + 14} r="1" fill="#fde047" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
-                      y={py + CELL_SIZE_PX / 2 + 5}
-                      fontSize="16"
+                      y={py + CELL_SIZE_PX - 4}
+                      fontSize="7.5"
+                      fill="#fef08a"
+                      fontWeight="bold"
+                      fontFamily="monospace"
                       textAnchor="middle"
                     >
-                      🌋
+                      LAVA 2x
                     </text>
                   </g>
                 );
@@ -2662,29 +3308,41 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'water') {
                 return (
                   <g key={`water-${key}`}>
+                    {/* Deep Water Gradient */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="rgba(14, 165, 233, 0.35)"
+                      fill="url(#water-deep-flow)"
                       stroke="#0284c7"
                       strokeWidth="1"
                     />
+                    {/* Shimmering Caustic Currents */}
                     <path
-                      d={`M ${px + 6} ${py + 16} Q ${px + 16} ${py + 12} ${px + 26} ${py + 16} T ${px + 42} ${py + 16}`}
+                      d={`M ${px} ${py + 14} Q ${px + 12} ${py + 8} ${px + 24} ${py + 14} T ${px + CELL_SIZE_PX} ${py + 14}`}
                       fill="none"
-                      stroke="#38bdf8"
-                      strokeWidth="1.5"
-                      opacity="0.85"
+                      stroke="#7dd3fc"
+                      strokeWidth="1.8"
+                      opacity="0.8"
                     />
                     <path
-                      d={`M ${px + 6} ${py + 32} Q ${px + 16} ${py + 28} ${px + 26} ${py + 32} T ${px + 42} ${py + 32}`}
+                      d={`M ${px} ${py + 28} Q ${px + 14} ${py + 22} ${px + 26} ${py + 28} T ${px + CELL_SIZE_PX} ${py + 28}`}
                       fill="none"
                       stroke="#38bdf8"
-                      strokeWidth="1.5"
-                      opacity="0.85"
+                      strokeWidth="1.4"
+                      opacity="0.7"
                     />
+                    <path
+                      d={`M ${px} ${py + 40} Q ${px + 10} ${py + 34} ${px + 22} ${py + 40} T ${px + CELL_SIZE_PX} ${py + 40}`}
+                      fill="none"
+                      stroke="#bae6fd"
+                      strokeWidth="1.2"
+                      opacity="0.6"
+                    />
+                    {/* Depth water bubble reflections */}
+                    <circle cx={px + 14} cy={py + 22} r="1.5" fill="#e0f2fe" opacity="0.6" />
+                    <circle cx={px + 36} cy={py + 34} r="2" fill="#e0f2fe" opacity="0.5" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
                       y={py + CELL_SIZE_PX - 4}
@@ -2703,30 +3361,34 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'shallow_water') {
                 return (
                   <g key={`shallow-water-${key}`}>
+                    {/* Translucent Shallow Water Layer */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="rgba(56, 189, 248, 0.2)"
+                      fill="url(#water-shallow-flow)"
                       stroke="#38bdf8"
                       strokeWidth="1"
                     />
+                    {/* Visible Submerged Riverbed Pebbles */}
+                    <circle cx={px + 10} cy={py + 14} r="2.5" fill="#0369a1" opacity="0.5" />
+                    <circle cx={px + 36} cy={py + 18} r="3" fill="#0369a1" opacity="0.4" />
+                    <circle cx={px + 22} cy={py + 32} r="2" fill="#0369a1" opacity="0.5" />
                     <path
-                      d={`M ${px + 8} ${py + 22} Q ${px + 18} ${py + 18} ${px + 28} ${py + 22} T ${px + 40} ${py + 22}`}
+                      d={`M ${px + 4} ${py + 20} Q ${px + 16} ${py + 14} ${px + 28} ${py + 20} T ${px + 44} ${py + 20}`}
                       fill="none"
-                      stroke="#7dd3fc"
-                      strokeWidth="1.5"
-                      opacity="0.8"
+                      stroke="#e0f2fe"
+                      strokeWidth="1.4"
+                      opacity="0.85"
                     />
-                    <text
-                      x={px + CELL_SIZE_PX / 2}
-                      y={py + 16}
-                      fontSize="11"
-                      textAnchor="middle"
-                    >
-                      🌊
-                    </text>
+                    <path
+                      d={`M ${px + 6} ${py + 36} Q ${px + 18} ${py + 30} ${px + 30} ${py + 36} T ${px + 42} ${py + 36}`}
+                      fill="none"
+                      stroke="#bae6fd"
+                      strokeWidth="1.2"
+                      opacity="0.75"
+                    />
                     <text
                       x={px + CELL_SIZE_PX / 2}
                       y={py + CELL_SIZE_PX - 4}
@@ -2736,7 +3398,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                       fontFamily="monospace"
                       textAnchor="middle"
                     >
-                      WADE 2x
+                      WADE 1.5x
                     </text>
                   </g>
                 );
@@ -2745,27 +3407,23 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'ice') {
                 return (
                   <g key={`ice-${key}`}>
+                    {/* Glacial Crystalline Sheen */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="rgba(165, 243, 252, 0.25)"
-                      stroke="#67e8f9"
+                      fill="url(#ice-fracture-glaze)"
+                      stroke="#a5f3fc"
                       strokeWidth="1"
                     />
-                    {/* Crystal fracture lines */}
-                    <line x1={px + 8} y1={py + 10} x2={px + 24} y2={py + 26} stroke="#e0f2fe" strokeWidth="1" opacity="0.7" />
-                    <line x1={px + 24} y1={py + 26} x2={px + 40} y2={py + 18} stroke="#e0f2fe" strokeWidth="1" opacity="0.7" />
-                    <line x1={px + 24} y1={py + 26} x2={px + 18} y2={py + 40} stroke="#e0f2fe" strokeWidth="1" opacity="0.7" />
-                    <text
-                      x={px + CELL_SIZE_PX / 2}
-                      y={py + 18}
-                      fontSize="12"
-                      textAnchor="middle"
-                    >
-                      🧊
-                    </text>
+                    {/* Radial Jagged Fractures */}
+                    <line x1={px + 6} y1={py + 8} x2={px + 22} y2={py + 24} stroke="#ffffff" strokeWidth="1.5" opacity="0.85" />
+                    <line x1={px + 22} y1={py + 24} x2={px + 42} y2={py + 16} stroke="#ffffff" strokeWidth="1.2" opacity="0.8" />
+                    <line x1={px + 22} y1={py + 24} x2={px + 18} y2={py + 42} stroke="#ffffff" strokeWidth="1.2" opacity="0.8" />
+                    <line x1={px + 22} y1={py + 24} x2={px + 36} y2={py + 36} stroke="#e0f2fe" strokeWidth="1" opacity="0.75" />
+                    {/* Specular Glint Star */}
+                    <polygon points={`${px+22},${py+20} ${px+24},${py+24} ${px+22},${py+28} ${px+20},${py+24}`} fill="#ffffff" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
                       y={py + CELL_SIZE_PX - 4}
@@ -2783,26 +3441,33 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
               if (terrainType === 'climb') {
                 return (
-                  <g key={`climb-${key}`}>
+                  <g key={`climb-${key}`} filter="url(#terrain-object-shadow)">
+                    {/* Cliffside wall background */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="rgba(180, 83, 9, 0.22)"
-                      stroke="#d97706"
+                      fill="rgba(87, 83, 78, 0.25)"
+                      stroke="#78716c"
                       strokeWidth="1"
                     />
-                    {/* Ladder rungs */}
-                    <line x1={px + 12} y1={py + 6} x2={px + 12} y2={py + 42} stroke="#b45309" strokeWidth="2.5" />
-                    <line x1={px + 36} y1={py + 6} x2={px + 36} y2={py + 42} stroke="#b45309" strokeWidth="2.5" />
-                    <line x1={px + 12} y1={py + 12} x2={px + 36} y2={py + 12} stroke="#f59e0b" strokeWidth="1.5" />
-                    <line x1={px + 12} y1={py + 22} x2={px + 36} y2={py + 22} stroke="#f59e0b" strokeWidth="1.5" />
-                    <line x1={px + 12} y1={py + 32} x2={px + 36} y2={py + 32} stroke="#f59e0b" strokeWidth="1.5" />
+                    {/* Vertical Sturdy Ladder Struts */}
+                    <line x1={px + 12} y1={py} x2={px + 12} y2={py + CELL_SIZE_PX} stroke="#78350f" strokeWidth="3" />
+                    <line x1={px + 36} y1={py} x2={px + 36} y2={py + CELL_SIZE_PX} stroke="#78350f" strokeWidth="3" />
+                    {/* Iron Brackets & Rungs with 3D Bevel */}
+                    {[8, 18, 28, 38].map((rungY) => (
+                      <g key={rungY}>
+                        <line x1={px + 12} y1={py + rungY} x2={px + 36} y2={py + rungY} stroke="#1c1917" strokeWidth="3" />
+                        <line x1={px + 13} y1={py + rungY - 0.5} x2={px + 35} y2={py + rungY - 0.5} stroke="#d97706" strokeWidth="1.8" />
+                        <circle cx={px + 12} cy={py + rungY} r="1.5" fill="#f59e0b" />
+                        <circle cx={px + 36} cy={py + rungY} r="1.5" fill="#f59e0b" />
+                      </g>
+                    ))}
                     <text
                       x={px + CELL_SIZE_PX / 2}
-                      y={py + CELL_SIZE_PX - 4}
-                      fontSize="7"
+                      y={py + CELL_SIZE_PX - 2}
+                      fontSize="6.5"
                       fill="#fde68a"
                       fontWeight="bold"
                       fontFamily="monospace"
@@ -2817,38 +3482,48 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'web') {
                 return (
                   <g key={`web-${key}`}>
+                    {/* Translucent Web Trap Tint */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="rgba(244, 244, 245, 0.16)"
-                      stroke="#a1a1aa"
+                      fill="rgba(244, 244, 245, 0.12)"
+                      stroke="rgba(212, 212, 216, 0.4)"
                       strokeWidth="1"
                     />
-                    {/* Spiderweb spokes */}
-                    <line x1={px + 4} y1={py + 4} x2={px + 44} y2={py + 44} stroke="#e4e4e7" strokeWidth="1" opacity="0.6" />
-                    <line x1={px + 44} y1={py + 4} x2={px + 4} y2={py + 44} stroke="#e4e4e7" strokeWidth="1" opacity="0.6" />
-                    <circle cx={px + 24} cy={py + 24} r="12" fill="none" stroke="#e4e4e7" strokeWidth="0.8" opacity="0.6" />
-                    <circle cx={px + 24} cy={py + 24} r="6" fill="none" stroke="#e4e4e7" strokeWidth="0.8" opacity="0.6" />
-                    <text
-                      x={px + CELL_SIZE_PX / 2}
-                      y={py + 16}
-                      fontSize="10"
-                      textAnchor="middle"
-                    >
-                      🕸️
-                    </text>
+                    {/* Spiderweb anchor strands converging from corners */}
+                    <line x1={px} y1={py} x2={px + 28} y2={py + 20} stroke="#f4f4f5" strokeWidth="1.2" opacity="0.75" />
+                    <line x1={px + CELL_SIZE_PX} y1={py} x2={px + 28} y2={py + 20} stroke="#f4f4f5" strokeWidth="1.2" opacity="0.75" />
+                    <line x1={px} y1={py + CELL_SIZE_PX} x2={px + 28} y2={py + 20} stroke="#f4f4f5" strokeWidth="1.2" opacity="0.75" />
+                    <line x1={px + CELL_SIZE_PX} y1={py + CELL_SIZE_PX} x2={px + 28} y2={py + 20} stroke="#f4f4f5" strokeWidth="1.2" opacity="0.75" />
+                    <line x1={px + CELL_SIZE_PX / 2} y1={py} x2={px + 28} y2={py + 20} stroke="#e4e4e7" strokeWidth="0.8" opacity="0.6" />
+                    <line x1={px + CELL_SIZE_PX / 2} y1={py + CELL_SIZE_PX} x2={px + 28} y2={py + 20} stroke="#e4e4e7" strokeWidth="0.8" opacity="0.6" />
+                    {/* Concentric spiral silk loops */}
+                    <polygon
+                      points={`${px+16},${py+12} ${px+38},${py+12} ${px+38},${py+28} ${px+18},${py+30}`}
+                      fill="none"
+                      stroke="#ffffff"
+                      strokeWidth="0.9"
+                      opacity="0.8"
+                    />
+                    <polygon
+                      points={`${px+8},${py+6} ${px+42},${py+6} ${px+44},${py+38} ${px+10},${py+40}`}
+                      fill="none"
+                      stroke="#e4e4e7"
+                      strokeWidth="0.8"
+                      opacity="0.65"
+                    />
                     <text
                       x={px + CELL_SIZE_PX / 2}
                       y={py + CELL_SIZE_PX - 4}
                       fontSize="7"
-                      fill="#f4f4f5"
+                      fill="#e4e4e7"
                       fontWeight="bold"
                       fontFamily="monospace"
                       textAnchor="middle"
                     >
-                      STICKY 2x
+                      WEB 2x
                     </text>
                   </g>
                 );
@@ -2857,22 +3532,44 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'chasm') {
                 return (
                   <g key={`chasm-${key}`}>
+                    {/* Pitch black endless abyss */}
                     <rect
                       x={px}
                       y={py}
                       width={CELL_SIZE_PX}
                       height={CELL_SIZE_PX}
-                      fill="#09090b"
-                      stroke="#3f3f46"
-                      strokeWidth="1.5"
+                      fill="url(#chasm-abyss-void)"
                     />
+                    {/* Jagged rocky precipice cliff edge ledge */}
+                    <polygon
+                      points={`${px},${py} ${px+10},${py+4} ${px+24},${py+1} ${px+38},${py+5} ${px+CELL_SIZE_PX},${py} ${px+CELL_SIZE_PX},${py+2} ${px+38},${py+7} ${px+24},${py+3} ${px+10},${py+6} ${px},${py+2}`}
+                      fill="#57534e"
+                    />
+                    <polygon
+                      points={`${px},${py+CELL_SIZE_PX} ${px+12},${py+CELL_SIZE_PX-5} ${px+26},${py+CELL_SIZE_PX-2} ${px+36},${py+CELL_SIZE_PX-6} ${px+CELL_SIZE_PX},${py+CELL_SIZE_PX} ${px+CELL_SIZE_PX},${py+CELL_SIZE_PX-2} ${px+36},${py+CELL_SIZE_PX-8} ${px+26},${py+CELL_SIZE_PX-4} ${px+12},${py+CELL_SIZE_PX-7} ${px},${py+CELL_SIZE_PX-2}`}
+                      fill="#57534e"
+                    />
+                    <polygon
+                      points={`${px},${py} ${px+4},${py+12} ${px+1},${py+26} ${px+5},${py+38} ${px},${py+CELL_SIZE_PX} ${px+2},${py+CELL_SIZE_PX} ${px+7},${py+38} ${px+3},${py+26} ${px+6},${py+12} ${px+2},${py}`}
+                      fill="#44403c"
+                    />
+                    <polygon
+                      points={`${px+CELL_SIZE_PX},${py} ${px+CELL_SIZE_PX-4},${py+14} ${px+CELL_SIZE_PX-1},${py+28} ${px+CELL_SIZE_PX-5},${py+38} ${px+CELL_SIZE_PX},${py+CELL_SIZE_PX} ${px+CELL_SIZE_PX-2},${py+CELL_SIZE_PX} ${px+CELL_SIZE_PX-7},${py+38} ${px+CELL_SIZE_PX-3},${py+28} ${px+CELL_SIZE_PX-6},${py+14} ${px+CELL_SIZE_PX-2},${py}`}
+                      fill="#44403c"
+                    />
+                    {/* Falling loose stones */}
+                    <circle cx={px + 14} cy={py + 16} r="1.2" fill="#78716c" opacity="0.6" />
+                    <circle cx={px + 34} cy={py + 30} r="1.5" fill="#57534e" opacity="0.5" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
-                      y={py + CELL_SIZE_PX / 2 + 5}
-                      fontSize="16"
+                      y={py + CELL_SIZE_PX / 2 + 3}
+                      fontSize="7.5"
+                      fill="#71717a"
+                      fontWeight="bold"
+                      fontFamily="monospace"
                       textAnchor="middle"
                     >
-                      🕳️
+                      CHASM
                     </text>
                   </g>
                 );
@@ -2880,24 +3577,35 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
               if (terrainType === 'cover_half') {
                 return (
-                  <g key={`cover-half-${key}`}>
+                  <g key={`cover-half-${key}`} filter="url(#terrain-object-shadow)">
+                    {/* Ground floor clearance */}
                     <rect
                       x={px + 2}
                       y={py + 2}
                       width={CELL_SIZE_PX - 4}
                       height={CELL_SIZE_PX - 4}
-                      fill="rgba(16, 185, 129, 0.18)"
-                      stroke="#10b981"
-                      strokeWidth="1.5"
+                      fill="rgba(16, 185, 129, 0.12)"
+                      stroke="#059669"
+                      strokeWidth="1"
+                      strokeDasharray="2 2"
                       rx="3"
                     />
-                    <rect x={px + 6} y={py + 6} width={10} height={10} fill="#059669" rx="1" />
-                    <rect x={px + CELL_SIZE_PX - 16} y={py + 6} width={10} height={10} fill="#059669" rx="1" />
-                    <rect x={px + 4} y={py + CELL_SIZE_PX - 14} width={CELL_SIZE_PX - 8} height={10} rx="2" fill="#064e3b" />
+                    {/* Primary Wooden Cargo Crate */}
+                    <rect x={px + 4} y={py + 8} width={26} height={26} fill="url(#crate-wood-grain)" stroke="#451a03" strokeWidth="1.5" rx="1.5" />
+                    {/* Diagonal Cross Brace on Crate */}
+                    <line x1={px + 6} y1={py + 10} x2={px + 28} y2={py + 32} stroke="#78350f" strokeWidth="2.5" />
+                    {/* Iron corner reinforcement caps */}
+                    <rect x={px + 4} y={py + 8} width={5} height={5} fill="#27272a" />
+                    <rect x={px + 25} y={py + 8} width={5} height={5} fill="#27272a" />
+                    <rect x={px + 4} y={py + 29} width={5} height={5} fill="#27272a" />
+                    <rect x={px + 25} y={py + 29} width={5} height={5} fill="#27272a" />
+                    {/* Secondary Stacked Crate */}
+                    <rect x={px + 26} y={py + 18} width={18} height={20} fill="#92400e" stroke="#451a03" strokeWidth="1.2" rx="1" />
+                    <line x1={px + 26} y1={py + 28} x2={px + 44} y2={py + 28} stroke="#78350f" strokeWidth="1.5" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
-                      y={py + CELL_SIZE_PX - 6}
-                      fontSize="8"
+                      y={py + CELL_SIZE_PX - 3}
+                      fontSize="7.5"
                       fill="#6ee7b7"
                       fontWeight="bold"
                       fontFamily="monospace"
@@ -2911,31 +3619,31 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
               if (terrainType === 'cover_three_quarters') {
                 return (
-                  <g key={`cover-three-quarters-${key}`}>
+                  <g key={`cover-three-quarters-${key}`} filter="url(#wall-3d-shadow)">
+                    {/* Stone Plinth Foundation */}
                     <rect
-                      x={px + 2}
-                      y={py + 2}
-                      width={CELL_SIZE_PX - 4}
-                      height={CELL_SIZE_PX - 4}
-                      fill="rgba(99, 102, 241, 0.22)"
-                      stroke="#818cf8"
-                      strokeWidth="2"
-                      rx="3"
+                      x={px + 4}
+                      y={py + 4}
+                      width={CELL_SIZE_PX - 8}
+                      height={CELL_SIZE_PX - 8}
+                      fill="#1c1917"
+                      stroke="#44403c"
+                      strokeWidth="1.5"
+                      rx="2"
                     />
-                    <rect x={px + 4} y={py + CELL_SIZE_PX - 14} width={CELL_SIZE_PX - 8} height={10} rx="2" fill="#312e81" />
+                    {/* Massive Cylindrical Fluted Column Shaft */}
+                    <circle cx={px + CELL_SIZE_PX / 2} cy={py + CELL_SIZE_PX / 2} r={16} fill="url(#pillar-cap-bevel)" stroke="#292524" strokeWidth="1.5" />
+                    {/* Column Capital Rim Bevel */}
+                    <circle cx={px + CELL_SIZE_PX / 2} cy={py + CELL_SIZE_PX / 2} r={12} fill="#57534e" stroke="#78716c" strokeWidth="1" />
+                    <circle cx={px + CELL_SIZE_PX / 2} cy={py + CELL_SIZE_PX / 2} r={8} fill="#292524" />
+                    {/* Chiseled Masonry Cross Detail */}
+                    <line x1={px + CELL_SIZE_PX / 2 - 5} y1={py + CELL_SIZE_PX / 2} x2={px + CELL_SIZE_PX / 2 + 5} y2={py + CELL_SIZE_PX / 2} stroke="#78716c" strokeWidth="1" />
+                    <line x1={px + CELL_SIZE_PX / 2} y1={py + CELL_SIZE_PX / 2 - 5} x2={px + CELL_SIZE_PX / 2} y2={py + CELL_SIZE_PX / 2 + 5} stroke="#78716c" strokeWidth="1" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
-                      y={py + 20}
-                      fontSize="13"
-                      textAnchor="middle"
-                    >
-                      🏰
-                    </text>
-                    <text
-                      x={px + CELL_SIZE_PX / 2}
-                      y={py + CELL_SIZE_PX - 6}
-                      fontSize="8"
-                      fill="#c7d2fe"
+                      y={py + CELL_SIZE_PX - 3}
+                      fontSize="7.5"
+                      fill="#a5b4fc"
                       fontWeight="bold"
                       fontFamily="monospace"
                       textAnchor="middle"
@@ -2948,29 +3656,26 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
               if (terrainType === 'elevation_high') {
                 return (
-                  <g key={`elev-high-${key}`}>
+                  <g key={`elev-high-${key}`} filter="url(#terrain-object-shadow)">
+                    {/* Elevated Terrace Platform with 3D drop shadow */}
                     <rect
                       x={px + 2}
                       y={py + 2}
                       width={CELL_SIZE_PX - 4}
                       height={CELL_SIZE_PX - 4}
-                      fill="rgba(234, 179, 8, 0.2)"
+                      fill="rgba(234, 179, 8, 0.22)"
                       stroke="#eab308"
                       strokeWidth="1.5"
-                      rx="2"
+                      rx="3"
                     />
+                    {/* Stepped elevation contour lines */}
+                    <line x1={px + 4} y1={py + 8} x2={px + CELL_SIZE_PX - 4} y2={py + 8} stroke="#fef08a" strokeWidth="1.5" />
+                    <line x1={px + 4} y1={py + 16} x2={px + CELL_SIZE_PX - 4} y2={py + 16} stroke="#fde047" strokeWidth="1" opacity="0.7" />
+                    <polygon points={`${px+20},${py+20} ${px+24},${py+14} ${px+28},${py+20}`} fill="#fef08a" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
-                      y={py + 20}
-                      fontSize="13"
-                      textAnchor="middle"
-                    >
-                      ⛰️
-                    </text>
-                    <text
-                      x={px + CELL_SIZE_PX / 2}
-                      y={py + CELL_SIZE_PX - 6}
-                      fontSize="8"
+                      y={py + CELL_SIZE_PX - 4}
+                      fontSize="7.5"
                       fill="#fde047"
                       fontWeight="bold"
                       fontFamily="monospace"
@@ -2985,28 +3690,26 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               if (terrainType === 'elevation_low') {
                 return (
                   <g key={`elev-low-${key}`}>
+                    {/* Sunken Trench / Ditch Depression */}
                     <rect
                       x={px + 2}
                       y={py + 2}
                       width={CELL_SIZE_PX - 4}
                       height={CELL_SIZE_PX - 4}
-                      fill="rgba(120, 113, 108, 0.2)"
-                      stroke="#a8a29e"
+                      fill="rgba(28, 25, 23, 0.6)"
+                      stroke="#78716c"
                       strokeWidth="1.5"
+                      strokeDasharray="3 2"
                       rx="2"
                     />
+                    {/* Inner trench shadow lines */}
+                    <line x1={px + 5} y1={py + 5} x2={px + CELL_SIZE_PX - 5} y2={py + 5} stroke="#0c0a09" strokeWidth="2" />
+                    <line x1={px + 5} y1={py + 5} x2={px + 5} y2={py + CELL_SIZE_PX - 5} stroke="#0c0a09" strokeWidth="2" />
+                    <polygon points={`${px+20},${py+16} ${px+24},${py+22} ${px+28},${py+16}`} fill="#a8a29e" />
                     <text
                       x={px + CELL_SIZE_PX / 2}
-                      y={py + 20}
-                      fontSize="13"
-                      textAnchor="middle"
-                    >
-                      ⛏️
-                    </text>
-                    <text
-                      x={px + CELL_SIZE_PX / 2}
-                      y={py + CELL_SIZE_PX - 6}
-                      fontSize="8"
+                      y={py + CELL_SIZE_PX - 4}
+                      fontSize="7.5"
                       fill="#d6d3d1"
                       fontWeight="bold"
                       fontFamily="monospace"
@@ -3018,8 +3721,84 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                 );
               }
 
+              if (terrainType === 'sheltered') {
+                const cellCeiling = getTileCeilingFeet(tx, ty, config, terrainMap);
+                return (
+                  <g key={`sheltered-${key}`}>
+                    {/* Warm Polished Hardwood Parquet Plank Floor */}
+                    <rect
+                      x={px}
+                      y={py}
+                      width={CELL_SIZE_PX}
+                      height={CELL_SIZE_PX}
+                      fill="url(#wood-parquet-plank)"
+                      stroke="rgba(217, 119, 6, 0.45)"
+                      strokeWidth="1"
+                    />
+                    {/* Horizontal Floorboard Grooves */}
+                    <line x1={px} y1={py + 12} x2={px + CELL_SIZE_PX} y2={py + 12} stroke="#451a03" strokeWidth="1" opacity="0.6" />
+                    <line x1={px} y1={py + 24} x2={px + CELL_SIZE_PX} y2={py + 24} stroke="#451a03" strokeWidth="1" opacity="0.6" />
+                    <line x1={px} y1={py + 36} x2={px + CELL_SIZE_PX} y2={py + 36} stroke="#451a03" strokeWidth="1" opacity="0.6" />
+                    {/* Nail Studs on Planks */}
+                    <circle cx={px + 4} cy={py + 6} r="0.8" fill="#18181b" />
+                    <circle cx={px + CELL_SIZE_PX - 4} cy={py + 18} r="0.8" fill="#18181b" />
+                    <circle cx={px + 6} cy={py + 30} r="0.8" fill="#18181b" />
+                    {/* Ceiling Height Indicator */}
+                    <text
+                      x={px + 6}
+                      y={py + 10}
+                      fontSize="8"
+                      opacity="0.85"
+                      textAnchor="middle"
+                    >
+                      🏠
+                    </text>
+                    <text
+                      x={px + CELL_SIZE_PX - 3}
+                      y={py + 9}
+                      fontSize="8"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                      fill="#f59e0b"
+                      opacity="0.95"
+                      textAnchor="end"
+                    >
+                      {cellCeiling}'
+                    </text>
+                  </g>
+                );
+              }
+
               return null;
             })}
+
+            {/* Custom per-tile ceiling height labels on non-sheltered tiles (e.g. subterranean dungeons) */}
+            {config.ceilingOverrides &&
+              Object.entries(config.ceilingOverrides).map(([ovKey, feet]) => {
+                if (terrainMap[ovKey] === 'sheltered') return null;
+                const [xStr, yStr] = ovKey.split(',');
+                const tx = parseInt(xStr, 10);
+                const ty = parseInt(yStr, 10);
+                if (isNaN(tx) || isNaN(ty)) return null;
+                const px = tx * CELL_SIZE_PX;
+                const py = ty * CELL_SIZE_PX;
+                return (
+                  <g key={`ceiling-override-${ovKey}`} pointerEvents="none">
+                    <text
+                      x={px + CELL_SIZE_PX - 3}
+                      y={py + 9}
+                      fontSize="8"
+                      fontFamily="monospace"
+                      fontWeight="bold"
+                      fill="#f59e0b"
+                      opacity="0.8"
+                      textAnchor="end"
+                    >
+                      {feet}'
+                    </text>
+                  </g>
+                );
+              })}
 
             {/* Box Tool Drawing Preview in Terrain Mode */}
             {isTerrainEditorOpen && activeTerrainTool === 'box' && boxStartCell && hoverCell && (() => {
@@ -3033,6 +3812,8 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               const rows = maxY - minY + 1;
               const widthFeet = cols * config.feetPerSquare;
               const heightFeet = rows * config.feetPerSquare;
+              const isShelteredBrush = activeTerrainBrush === 'sheltered';
+              const boxBadgeWidth = isShelteredBrush ? 145 : 100;
 
               return (
                 <g className="pointer-events-none">
@@ -3047,9 +3828,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                     strokeDasharray="4 4"
                   />
                   <rect
-                    x={minX * CELL_SIZE_PX + w / 2 - 50}
+                    x={minX * CELL_SIZE_PX + w / 2 - boxBadgeWidth / 2}
                     y={minY * CELL_SIZE_PX + h / 2 - 12}
-                    width="100"
+                    width={boxBadgeWidth}
                     height="24"
                     rx="4"
                     fill="#18181b"
@@ -3065,7 +3846,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                     fontWeight="bold"
                     fontFamily="monospace"
                   >
-                    {cols}x{rows} ({widthFeet}x{heightFeet} ft)
+                    {cols}x{rows} ({widthFeet}x{heightFeet}ft){isShelteredBrush ? ` • 🏠 ${activeCeilingBrushFeet}'` : ''}
                   </text>
                 </g>
               );
@@ -3099,19 +3880,50 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               />
             ))}
 
-            {/* Hover Cell Highlight */}
-            {hoverCell && (
-              <rect
-                x={hoverCell.x * CELL_SIZE_PX}
-                y={hoverCell.y * CELL_SIZE_PX}
-                width={CELL_SIZE_PX}
-                height={CELL_SIZE_PX}
-                fill="rgba(245, 158, 11, 0.18)"
-                stroke="#f59e0b"
-                strokeWidth="1.5"
-                strokeDasharray="3 3"
-              />
-            )}
+            {/* Hover Cell Highlight with Ceiling Height Badge */}
+            {hoverCell && (() => {
+              const isSheltered = isCellSheltered(hoverCell.x, hoverCell.y, terrainMap, config.isEntirelyIndoors);
+              const cellCeiling = getTileCeilingFeet(hoverCell.x, hoverCell.y, config, terrainMap);
+              return (
+                <g pointerEvents="none">
+                  <rect
+                    x={hoverCell.x * CELL_SIZE_PX}
+                    y={hoverCell.y * CELL_SIZE_PX}
+                    width={CELL_SIZE_PX}
+                    height={CELL_SIZE_PX}
+                    fill="rgba(245, 158, 11, 0.18)"
+                    stroke="#f59e0b"
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                  />
+                  {isSheltered && (
+                    <g transform={`translate(${hoverCell.x * CELL_SIZE_PX}, ${hoverCell.y * CELL_SIZE_PX - 15})`}>
+                      <rect
+                        x={0}
+                        y={0}
+                        width={CELL_SIZE_PX}
+                        height={14}
+                        rx={3}
+                        fill="rgba(24, 24, 27, 0.94)"
+                        stroke="rgba(217, 119, 6, 0.7)"
+                        strokeWidth={1}
+                      />
+                      <text
+                        x={CELL_SIZE_PX / 2}
+                        y={10.5}
+                        textAnchor="middle"
+                        fontSize="8.5"
+                        fontFamily="monospace"
+                        fontWeight="bold"
+                        fill="#fef3c7"
+                      >
+                        🏠 {cellCeiling}ft
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })()}
 
             {/* Active Turn Token Reach Circle (5ft or reachFeet) */}
             {config.showMovementRings && activeCombatant && (() => {
@@ -3157,6 +3969,73 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               );
             })()}
 
+            {/* Feature 2: Threat Reach Danger Zones for Hostile Tokens */}
+            {config.showThreatReachRings !== false && (selectedCombatantId || draggedCombatantId || hoveredCombatantId) && (() => {
+              const currentToken = positionedCombatants.find(
+                (c) => c.id === (draggedCombatantId || selectedCombatantId || hoveredCombatantId)
+              );
+              if (!currentToken) return null;
+              const isCurrentEnemy = currentToken.type === 'enemy';
+
+              // Hostile opponents are of opposing side
+              const hostileThreats = positionedCombatants.filter((c) => {
+                if (c.id === currentToken.id) return false;
+                if (c.isDefeated || c.hpCurrent <= 0) return false;
+                return isCurrentEnemy ? (c.type === 'player' || c.type === 'ally') : (c.type === 'enemy');
+              });
+
+              return (
+                <g className="threat-zones-layer pointer-events-none">
+                  {hostileThreats.map((hostile) => {
+                    const reachFeet = hostile.reachFeet || 5;
+                    const reachSquares = reachFeet / config.feetPerSquare;
+                    const cx = (hostile.calculatedX + hostile.calculatedSize / 2) * CELL_SIZE_PX;
+                    const cy = (hostile.calculatedY + hostile.calculatedSize / 2) * CELL_SIZE_PX;
+                    const r = (reachSquares + (hostile.calculatedSize - 1) / 2) * CELL_SIZE_PX;
+
+                    return (
+                      <g key={`threat-${hostile.id}`}>
+                        {/* Threat Danger Zone Area */}
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={r}
+                          fill="rgba(239, 68, 68, 0.08)"
+                          stroke="#ef4444"
+                          strokeWidth="1.5"
+                          strokeDasharray="4 3"
+                        />
+                        {/* Threat reach tag */}
+                        <g transform={`translate(${cx}, ${cy - r - 8})`}>
+                          <rect
+                            x="-32"
+                            y="-8"
+                            width="64"
+                            height="16"
+                            rx="3"
+                            fill="#18181b"
+                            stroke="#ef4444"
+                            strokeWidth="1"
+                          />
+                          <text
+                            x="0"
+                            y="3.5"
+                            textAnchor="middle"
+                            fill="#fca5a5"
+                            fontSize="8"
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                          >
+                            ⚔️ {reachFeet}ft Threat
+                          </text>
+                        </g>
+                      </g>
+                    );
+                  })}
+                </g>
+              );
+            })()}
+
             {/* Shift-Click Targeting Line between Selected Token and Target */}
             {selectedCombatantId && targetCombatantId && (() => {
               const from = positionedCombatants.find((c) => c.id === selectedCombatantId);
@@ -3168,6 +4047,10 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               const x2 = (to.calculatedX + to.calculatedSize / 2) * CELL_SIZE_PX;
               const y2 = (to.calculatedY + to.calculatedSize / 2) * CELL_SIZE_PX;
 
+              const z1 = from.elevationFeet || 0;
+              const z2 = to.elevationFeet || 0;
+              const deltaZ = Math.abs(z1 - z2);
+
               const distFeet = calculateGridDistanceFeet(
                 from.calculatedX,
                 from.calculatedY,
@@ -3177,8 +4060,60 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                 config.diagonalRule
               );
 
+              const dist3dFeet = calculateGridDistance3D(
+                from.calculatedX,
+                from.calculatedY,
+                z1,
+                to.calculatedX,
+                to.calculatedY,
+                z2,
+                config.feetPerSquare,
+                config.diagonalRule
+              );
+
+              const los = calculateLineOfSight(
+                from.calculatedX,
+                from.calculatedY,
+                to.calculatedX,
+                to.calculatedY,
+                config.feetPerSquare,
+                config.diagonalRule,
+                terrainMap,
+                doors,
+                z1,
+                z2,
+                config.weatherEffect
+              );
+
               const midX = (x1 + x2) / 2;
               const midY = (y1 + y2) / 2;
+
+              let labelText = deltaZ > 0 ? `${dist3dFeet}ft 3D (ΔZ: ${deltaZ}ft)` : `${distFeet} ft`;
+              let strokeColor = '#ef4444';
+              let badgeBg = '#18181b';
+              let textColor = '#fecaca';
+
+              if (!los.hasLoS) {
+                if (los.weatherObscured) {
+                  labelText = `${distFeet}ft (⚠️ Weather Obscured: >${WEATHER_DEFINITIONS[config.weatherEffect || 'none']?.maxVisibilityFeet || 30}ft)`;
+                  strokeColor = '#f97316';
+                  textColor = '#fed7aa';
+                } else {
+                  labelText = `${distFeet}ft (🚫 ${los.blockedBy?.label || 'Blocked'})`;
+                  strokeColor = '#64748b';
+                  textColor = '#cbd5e1';
+                }
+              } else if (los.weatherDisadvantage) {
+                labelText = `${deltaZ > 0 ? `${dist3dFeet}ft 3D` : `${distFeet}ft`} (🏹 Disadv - Weather)`;
+                strokeColor = '#f59e0b';
+                textColor = '#fef08a';
+              } else if (los.cover !== 'none') {
+                labelText = `${deltaZ > 0 ? `${dist3dFeet}ft 3D` : `${distFeet}ft`} (+${los.bonusAc} AC Cover)`;
+                strokeColor = '#38bdf8';
+                textColor = '#bae6fd';
+              }
+
+              const labelWidth = Math.max(60, labelText.length * 6.8);
 
               return (
                 <g>
@@ -3187,30 +4122,30 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                     y1={y1}
                     x2={x2}
                     y2={y2}
-                    stroke="#ef4444"
+                    stroke={strokeColor}
                     strokeWidth="2"
-                    strokeDasharray="5 4"
+                    strokeDasharray={!los.hasLoS ? "4 4" : "5 4"}
                   />
                   <rect
-                    x={midX - 25}
+                    x={midX - labelWidth / 2}
                     y={midY - 10}
-                    width="50"
+                    width={labelWidth}
                     height="20"
                     rx="4"
-                    fill="#18181b"
-                    stroke="#ef4444"
+                    fill={badgeBg}
+                    stroke={strokeColor}
                     strokeWidth="1"
                   />
                   <text
                     x={midX}
                     y={midY + 4}
                     textAnchor="middle"
-                    fill="#fecaca"
+                    fill={textColor}
                     fontSize="10"
                     fontWeight="bold"
                     fontFamily="monospace"
                   >
-                    {distFeet} ft
+                    {labelText}
                   </text>
                 </g>
               );
@@ -3456,6 +4391,19 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                 ? `${dragDistance} ft (Dash)`
                 : `⚠️ ${dragDistance} ft (Exceeds ${remaining}ft)`;
 
+              // Feature 2: Attack of Opportunity Detection (5e vs 3.5e RAW)
+              const aooResult = config.showAoOWarnings !== false && !isDmFree
+                ? detectAoOProvoked(
+                    mover,
+                    { x: mover.calculatedX, y: mover.calculatedY },
+                    dragHoverCell,
+                    positionedCombatants,
+                    config.feetPerSquare,
+                    config.diagonalRule,
+                    activeEdition
+                  )
+                : { provoked: false, threateningEnemies: [] };
+
               return (
                 <g>
                   <line
@@ -3463,11 +4411,22 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                     y1={y1}
                     x2={x2}
                     y2={y2}
-                    stroke={strokeColor}
+                    stroke={aooResult.provoked ? '#ef4444' : strokeColor}
                     strokeWidth="2.5"
                     strokeDasharray="4 4"
                   />
-                  <circle cx={x2} cy={y2} r="5" fill={strokeColor} />
+                  <circle cx={x2} cy={y2} r="5" fill={aooResult.provoked ? '#ef4444' : strokeColor} />
+
+                  {/* Exit Square AoO Flashing Marker */}
+                  {aooResult.provoked && (
+                    <g transform={`translate(${x1}, ${y1})`} className="animate-bounce">
+                      <circle cx="0" cy="0" r="14" fill="rgba(239, 68, 68, 0.3)" stroke="#ef4444" strokeWidth="1.5" />
+                      <text x="0" y="4" textAnchor="middle" fontSize="12">
+                        ⚔️
+                      </text>
+                    </g>
+                  )}
+
                   {/* Floating Distance Badge */}
                   <g transform={`translate(${x2 + 10}, ${y2 - 20})`}>
                     <rect
@@ -3493,6 +4452,34 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                       {badgeText}
                     </text>
                   </g>
+
+                  {/* Feature 2: Floating AoO Warning Banner */}
+                  {aooResult.provoked && (
+                    <g transform={`translate(${x2 + 10}, ${y2 + 8})`}>
+                      <rect
+                        x="0"
+                        y="0"
+                        width={185}
+                        height="22"
+                        rx="5"
+                        fill="#450a0a"
+                        stroke="#ef4444"
+                        strokeWidth="1.5"
+                        className="shadow-2xl animate-pulse"
+                      />
+                      <text
+                        x="92"
+                        y="14.5"
+                        textAnchor="middle"
+                        fill="#fee2e2"
+                        fontSize="9"
+                        fontWeight="bold"
+                        fontFamily="monospace"
+                      >
+                        ⚠️ AoO ({is35e ? '3.5e' : '5e'}): {aooResult.threateningEnemies.map((e) => e.name).slice(0, 2).join(', ')}
+                      </text>
+                    </g>
+                  )}
                 </g>
               );
             })()}
@@ -3607,6 +4594,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               diagonalRule={config.diagonalRule}
               terrainMap={terrainMap}
               doors={doors}
+              combatants={positionedCombatants}
               onUpdateTemplate={handleUpdateAoEInternal}
               onClearRuler={() => {
                 setIsRulerActive(false);
@@ -3628,6 +4616,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               activeFogTool={activeFogTool}
               isEditingFog={isFogEditorOpen}
             />
+
+            {/* Feature 3: Tactical Sonar Pings Layer */}
+            <BattlemapPingLayer pings={pings} cellSize={CELL_SIZE_PX} />
           </svg>
 
           {/* Invisible Drop Grid Cells for Token Positioning, Waypoints, Terrain, and Fog */}
@@ -3673,13 +4664,30 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                         ? 'cursor-grabbing'
                         : isSpacePressed
                         ? 'cursor-grab'
-                        : 'cursor-grab hover:bg-white/[0.02]'
+                        : 'cursor-default hover:bg-white/[0.02]'
                     }`}
                   />
                 );
               })
             )}
           </div>
+
+          {/* Feature 3: Secret GM Map Pins Layer (Interactive HTML Overlay above grid) */}
+          <BattlemapPinsLayer
+            pins={mapPins}
+            cellSize={CELL_SIZE_PX}
+            isDm={isDm}
+            onSelectPin={(pin) => setSelectedPin(pin)}
+            selectedPinId={selectedPin?.id}
+            onUpdatePin={(updated) => {
+              setMapPins((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+              setSelectedPin(updated);
+            }}
+            onDeletePin={(pinId) => {
+              setMapPins((prev) => prev.filter((p) => p.id !== pinId));
+              if (selectedPin?.id === pinId) setSelectedPin(null);
+            }}
+          />
 
           {/* Render All Combatant Tokens */}
           {positionedCombatants.map((c) => {
@@ -3706,7 +4714,14 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             const isActive = activeCombatant?.id === c.id;
             const isSelected = selectedCombatantId === c.id;
             const isTarget = targetCombatantId === c.id;
-            const isDefeated = c.hpCurrent <= 0 || c.isDefeated;
+
+            // Edition-specific health states:
+            // 3.5e RAW: Dead at -10 HP or below. 0 HP is Disabled (staggered). -1 to -9 HP is Dying (unconscious, bleeding out).
+            // 5e RAW: Defeated / Unconscious at 0 HP. Bloodied at <= 50% HP.
+            const isDead35e = is35e && (c.hpCurrent <= -10 || c.isDefeated);
+            const isDisabled35e = is35e && c.hpCurrent === 0 && !c.isDefeated;
+            const isDying35e = is35e && c.hpCurrent < 0 && c.hpCurrent > -10 && !c.isDefeated;
+            const isDefeated = is35e ? isDead35e : (c.hpCurrent <= 0 || c.isDefeated);
             const isAlly = c.type === 'player' || c.type === 'ally';
 
             const tokenPixelSize = c.calculatedSize * CELL_SIZE_PX;
@@ -3714,6 +4729,10 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             const topPx = c.calculatedY * CELL_SIZE_PX;
 
             const hpPercent = Math.max(0, Math.min(100, Math.round((c.hpCurrent / Math.max(1, c.hpMax)) * 100)));
+            // 5e RAW only: Bloodied condition when at 50% HP or below (does NOT exist in 3.5e)
+            const isBloodied = !is35e && !isDefeated && hpPercent <= 50 && hpPercent > 0;
+            const isProne = c.conditions?.some((cond: string) => cond.toLowerCase().includes('prone'));
+            const flightVisualOffsetPx = c.elevationFeet && c.elevationFeet > 0 ? Math.min(22, Math.round((c.elevationFeet / 5) * 3)) : 0;
             const canControl = isDm || c.controlledBy === currentUserId || c.isPlayerChar;
 
             return (
@@ -3722,26 +4741,32 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                 data-token-draggable="true"
                 draggable={canControl && !isDefeated}
                 onMouseDown={(e) => {
-                  if (e.button === 0) {
-                    e.stopPropagation();
-                    setIsPanning(false);
-                    hasDraggedRef.current = false;
-                  }
+                  e.stopPropagation();
+                  setIsPanning(false);
+                  hasDraggedRef.current = false;
                 }}
                 onDragStart={(e) => handleTokenDragStart(e, c.id)}
                 onDragEnd={handleTokenDragEnd}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setInspectingCombatant(c);
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (Date.now() - lastTokenDragEndTimeRef.current < 250) {
+                    return;
+                  }
                   if (e.shiftKey) {
                     // Shift-click sets as target
                     if (onSetTargetCombatant) {
                       onSetTargetCombatant(targetCombatantId === c.id ? null : c.id);
                     }
                   } else {
-                    // Regular click selects token
+                    // Regular click selects token and opens properties
                     if (onSelectCombatant) {
-                      onSelectCombatant(selectedCombatantId === c.id ? null : c.id);
+                      onSelectCombatant(c.id);
                     }
+                    setInspectingCombatant(c);
                   }
                 }}
                 onContextMenu={(e) => {
@@ -3753,7 +4778,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                 onMouseLeave={() => setHoveredCombatantId(null)}
                 className={`absolute transition-transform duration-100 flex flex-col items-center justify-center cursor-pointer group ${
                   canControl ? 'cursor-grab active:cursor-grabbing' : ''
-                } ${isShroudedFromPlayers ? 'opacity-70' : ''}`}
+                } ${isShroudedFromPlayers ? 'opacity-65 ring-2 ring-purple-500/80 ring-dashed' : ''}`}
                 style={{
                   left: `${leftPx}px`,
                   top: `${topPx}px`,
@@ -3762,20 +4787,63 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                   zIndex: isActive ? 40 : isSelected ? 35 : isTarget ? 30 : 20
                 }}
                 title={`${c.name} (HP: ${c.hpCurrent}/${c.hpMax}, AC: ${c.armorClass}, Speed: ${c.calculatedRemainingSpeed}/${c.calculatedBaseSpeed}ft)\n${
-                  isShroudedFromPlayers ? '[Hidden from Players in Fog]\n' : ''
-                }${isCaughtInAoE ? '[Inside Active AoE Blast Area]\n' : ''}Drag to move. Click to select. Shift-click to target. Right-click for options.`}
+                  isShroudedFromPlayers ? '[Hidden from Players (Fog of War & Weather Visibility)]\n' : ''
+                }${isCaughtInAoE ? '[Inside Active AoE Blast Area]\n' : ''}Click to select and open properties. Right-click for options. Hover ✕ to remove.`}
               >
-                {/* DM / Controller Quick Bench Button on hover or select */}
-                {canControl && (hoveredCombatantId === c.id || isSelected) && (
+                {/* 3D Contact Shadow on the Ground Cell */}
+                <div
+                  className="absolute rounded-full bg-black/65 blur-[3px] pointer-events-none transition-all duration-150 -z-10"
+                  style={{
+                    width: `${tokenPixelSize * 0.76}px`,
+                    height: `${tokenPixelSize * 0.36}px`,
+                    bottom: `${Math.max(2, tokenPixelSize * 0.08)}px`,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    opacity: c.elevationFeet && c.elevationFeet > 0 ? Math.max(0.2, 0.65 - (c.elevationFeet / 120)) : 0.65
+                  }}
+                />
+
+                {/* Vertical Elevation Guide Tether Line for Flying Combatants */}
+                {c.elevationFeet && c.elevationFeet > 0 && (
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 w-0 border-l border-dashed border-sky-400/70 pointer-events-none -z-10"
+                    style={{
+                      bottom: `${tokenPixelSize * 0.22}px`,
+                      height: `${flightVisualOffsetPx + 10}px`
+                    }}
+                  />
+                )}
+
+                {/* Quick Properties Button */}
+                {(hoveredCombatantId === c.id || isSelected) && (
                   <button
                     type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                       e.stopPropagation();
+                      e.preventDefault();
+                      setInspectingCombatant(c);
+                    }}
+                    className="absolute -top-3 -left-3 w-6 h-6 rounded-full bg-stone-900 hover:bg-amber-600 border border-stone-600 hover:border-amber-400 text-stone-200 hover:text-white flex items-center justify-center text-xs shadow-xl z-50 transition cursor-pointer"
+                    title={`Entity Properties & Stats for ${c.name} (Click to inspect/edit)`}
+                  >
+                    ⚙️
+                  </button>
+                )}
+
+                {/* Quick Bench / Remove from Map Button */}
+                {(hoveredCombatantId === c.id || isSelected) && (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
                       onRemoveCombatantFromMap?.(c.id);
                       if (selectedCombatantId === c.id) onSelectCombatant?.(null);
                     }}
-                    className="absolute -top-2.5 -right-2.5 w-5 h-5 rounded-full bg-stone-900 hover:bg-rose-600 border border-stone-600 hover:border-rose-400 text-stone-300 hover:text-white flex items-center justify-center text-[10px] shadow-lg z-50 transition"
-                    title={`Bench ${c.name} (Move to reserve staging tray)`}
+                    className="absolute -top-3 -right-3 w-6 h-6 rounded-full bg-stone-900 hover:bg-rose-600 border border-stone-600 hover:border-rose-400 text-stone-200 hover:text-white flex items-center justify-center text-xs shadow-xl z-50 transition cursor-pointer"
+                    title={`Remove ${c.name} from map (Move to reserve staging tray)`}
                   >
                     ✕
                   </button>
@@ -3792,22 +4860,25 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
                 {/* Token Circular Border & Portrait Container */}
                 <div
-                  className={`relative rounded-full p-0.5 shadow-xl transition-all ${
+                  className={`relative rounded-full p-0.5 shadow-2xl transition-all duration-150 ${
+                    isProne ? 'rotate-[-12deg]' : ''
+                  } ${
                     isCaughtInAoE
-                      ? 'ring-4 ring-rose-500 shadow-rose-500/80 scale-105'
+                      ? 'ring-4 ring-rose-500 shadow-[0_0_18px_rgba(244,63,94,0.9)] scale-105'
                       : isActive
-                      ? 'ring-4 ring-amber-400 shadow-amber-500/50 scale-105'
+                      ? 'ring-4 ring-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.9)] scale-105'
                       : isSelected
-                      ? 'ring-4 ring-sky-400 shadow-sky-500/50 scale-105'
+                      ? 'ring-4 ring-sky-400 shadow-[0_0_18px_rgba(56,189,248,0.85)] scale-105'
                       : isTarget
-                      ? 'ring-4 ring-rose-500 shadow-rose-500/50 scale-105'
+                      ? 'ring-4 ring-rose-500 shadow-[0_0_18px_rgba(239,68,68,0.85)] scale-105'
                       : isAlly
-                      ? 'ring-2 ring-emerald-500/80 hover:ring-emerald-400'
-                      : 'ring-2 ring-rose-500/80 hover:ring-rose-400'
+                      ? 'ring-2 ring-amber-500/80 shadow-[0_4px_12px_rgba(0,0,0,0.7)] hover:ring-amber-400 hover:shadow-[0_0_12px_rgba(245,158,11,0.5)]'
+                      : 'ring-2 ring-rose-600/80 shadow-[0_4px_12px_rgba(0,0,0,0.7)] hover:ring-rose-400 hover:shadow-[0_0_12px_rgba(225,29,72,0.5)]'
                   } ${isDefeated ? 'opacity-40 grayscale' : ''}`}
                   style={{
                     width: `${tokenPixelSize - 4}px`,
-                    height: `${tokenPixelSize - 4}px`
+                    height: `${tokenPixelSize - 4}px`,
+                    transform: flightVisualOffsetPx > 0 ? `translateY(-${flightVisualOffsetPx}px)` : undefined
                   }}
                 >
                   <img
@@ -3826,11 +4897,41 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                     }}
                   />
 
+                  {/* Bloodied Indicator (5e RAW HP <= 50% only) */}
+                  {!is35e && isBloodied && (
+                    <div
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-950 border border-rose-500 flex items-center justify-center text-[9px] text-rose-200 shadow font-bold z-20 animate-pulse"
+                      title="Bloodied: Health is at 50% or below (5e RAW)"
+                    >
+                      🩸
+                    </div>
+                  )}
+
+                  {/* 3.5e RAW Disabled Badge (0 HP) */}
+                  {is35e && isDisabled35e && (
+                    <div
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-950 border border-amber-400 flex items-center justify-center text-[9px] text-amber-200 shadow font-bold z-20 animate-pulse"
+                      title="Disabled (0 HP, 3.5e RAW): Staggered, can take only 1 move or standard action. Strenuous activity deals 1 damage (dropping to Dying)."
+                    >
+                      ⚠️
+                    </div>
+                  )}
+
+                  {/* 3.5e RAW Dying Badge (-1 to -9 HP) */}
+                  {is35e && isDying35e && (
+                    <div
+                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-950 border border-rose-600 flex items-center justify-center text-[9px] text-rose-200 shadow font-bold z-20 animate-pulse"
+                      title={`Dying (${c.hpCurrent} HP, 3.5e RAW): Unconscious, losing 1 HP per round unless stabilized (10% roll).`}
+                    >
+                      🩸
+                    </div>
+                  )}
+
                   {/* Shrouded from Players Eye Badge (DM view) */}
                   {isShroudedFromPlayers && (
                     <div
-                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-purple-950 border border-purple-400 flex items-center justify-center text-[9px] text-purple-200 shadow font-bold"
-                      title="Hidden from players in Fog of War"
+                      className="absolute -top-1 -left-1 w-4 h-4 rounded-full bg-purple-950 border border-purple-400 flex items-center justify-center text-[9px] text-purple-200 shadow font-bold z-20"
+                      title="Hidden from players (Fog of War & Weather Visibility)"
                     >
                       👁️
                     </div>
@@ -3838,16 +4939,19 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
                   {/* Defeated Skull Overlay */}
                   {isDefeated && (
-                    <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center text-rose-400 font-bold text-xs">
+                    <div
+                      className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center text-rose-400 font-bold text-xs z-20"
+                      title={is35e ? 'Dead: -10 HP or below (3.5e RAW)' : 'Defeated / Unconscious: 0 HP (5e Death Saves)'}
+                    >
                       ☠️
                     </div>
                   )}
 
-                  {/* Concentrating Indicator */}
-                  {c.isConcentrating && !isDefeated && (
+                  {/* Concentrating Indicator (5e RAW only) */}
+                  {!is35e && c.isConcentrating && !isDefeated && (
                     <div
-                      className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-purple-950 border border-purple-400 flex items-center justify-center text-[9px] text-purple-200 shadow font-bold"
-                      title="Concentrating on a spell"
+                      className="absolute top-2 -right-1.5 w-4 h-4 rounded-full bg-purple-950 border border-purple-400 flex items-center justify-center text-[9px] text-purple-200 shadow font-bold z-20"
+                      title="Concentrating on a spell (5e RAW: 1 spell maximum, CON save on damage)"
                     >
                       C
                     </div>
@@ -3855,12 +4959,17 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
                   {/* Elevation Indicator if Flying / Elevated */}
                   {c.elevationFeet && c.elevationFeet !== 0 && (
-                    <div
-                      className="absolute -top-1 -left-1 px-1 py-0.2 bg-sky-950 border border-sky-400 text-sky-200 rounded text-[8px] font-mono font-bold flex items-center shadow"
-                      title={`Elevation: ${c.elevationFeet} ft`}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInspectingCombatant(c);
+                      }}
+                      className="absolute -top-1 left-1/2 -translate-x-1/2 px-1 py-0.2 bg-sky-950/95 hover:bg-sky-900 border border-sky-400 text-sky-200 rounded text-[8px] font-mono font-bold flex items-center shadow cursor-pointer transition z-20"
+                      title={`Elevation: ${c.elevationFeet} ft (Click to open entity properties)`}
                     >
-                      ✈️{c.elevationFeet > 0 ? `+${c.elevationFeet}` : c.elevationFeet}
-                    </div>
+                      ✈️{c.elevationFeet > 0 ? `+${c.elevationFeet}` : c.elevationFeet}'
+                    </button>
                   )}
 
                   {/* Mounted Saddle Indicator */}
@@ -3888,7 +4997,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                   {/* Designated Steed Badge */}
                   {c.isMount && !c.mountedOnId && (
                     <div
-                      className="absolute top-0 -left-1 px-1 py-0.2 bg-stone-900/90 border border-amber-500/70 text-amber-400 rounded text-[8px] font-mono font-bold flex items-center shadow"
+                      className="absolute top-0 -left-1 px-1 py-0.2 bg-stone-900/90 border border-amber-500/70 text-amber-400 rounded text-[8px] font-mono font-bold flex items-center shadow z-20"
                       title="Designated Steed / Mount"
                     >
                       🐎
@@ -3897,14 +5006,14 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
                   {/* AC Badge */}
                   <div
-                    className="absolute -bottom-1 -left-1 px-1 h-3.5 bg-stone-900 border border-stone-700 rounded text-[9px] font-mono font-bold text-stone-200 flex items-center shadow"
+                    className="absolute -bottom-1 -left-1 px-1 h-3.5 bg-stone-950/95 border border-stone-600 rounded text-[9px] font-mono font-bold text-stone-200 flex items-center shadow-lg z-20"
                     title={`Armor Class: ${c.armorClass}`}
                   >
                     🛡️{c.armorClass}
                   </div>
 
-                  {/* Mini HP Bar under token */}
-                  <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4/5 h-1.5 bg-stone-950/90 rounded-full border border-stone-800 overflow-hidden shadow">
+                  {/* Mini HP Bar with Temp HP Layer */}
+                  <div className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 w-4/5 h-1.5 bg-stone-950/95 rounded-full border border-stone-700/80 overflow-hidden shadow-md flex z-20">
                     <div
                       className={`h-full transition-all duration-200 ${
                         hpPercent > 50
@@ -3915,14 +5024,29 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
                       }`}
                       style={{ width: `${hpPercent}%` }}
                     />
+                    {c.tempHp && c.tempHp > 0 && (
+                      <div
+                        className="h-full bg-cyan-400 animate-pulse transition-all duration-200"
+                        style={{ width: `${Math.min(100 - hpPercent, Math.round((c.tempHp / Math.max(1, c.hpMax)) * 100))}%` }}
+                        title={`Temporary HP: +${c.tempHp}`}
+                      />
+                    )}
                   </div>
                 </div>
 
                 {/* Token Floating Name Label on Hover or Active */}
                 {(isActive || isSelected || hoveredCombatantId === c.id) && (
-                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-stone-950/95 border border-stone-700 rounded text-[10px] font-mono font-bold text-stone-100 whitespace-nowrap shadow-lg pointer-events-none z-50 flex items-center gap-1.5">
-                    <span>{c.name}</span>
-                    <span className="text-amber-400">({c.hpCurrent}/{c.hpMax} HP)</span>
+                  <div
+                    className="absolute -top-7 left-1/2 -translate-x-1/2 px-2.5 py-0.5 bg-stone-950/95 border border-amber-500/50 rounded-md text-[10px] font-mono font-bold text-stone-100 whitespace-nowrap shadow-2xl pointer-events-none z-50 flex items-center gap-1.5 backdrop-blur-xs"
+                    style={{
+                      transform: flightVisualOffsetPx > 0 ? `translate(-50%, -${flightVisualOffsetPx}px)` : 'translateX(-50%)'
+                    }}
+                  >
+                    <span className={isAlly ? 'text-amber-300' : 'text-rose-300'}>{c.name}</span>
+                    <span className={isBloodied ? 'text-rose-400 font-bold' : isDying35e ? 'text-rose-400 font-bold' : isDisabled35e ? 'text-amber-400 font-bold' : 'text-stone-300'}>
+                      ({c.hpCurrent}/{c.hpMax} HP{c.tempHp ? ` +${c.tempHp}` : ''})
+                      {is35e && isDisabled35e ? ' [Disabled]' : is35e && isDying35e ? ' [Dying]' : ''}
+                    </span>
                     <span className="text-emerald-400 font-normal">🏃 {c.calculatedRemainingSpeed}ft</span>
                   </div>
                 )}
@@ -4222,19 +5346,158 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
               );
             })()}
 
-            {selectedCombatantId && (
-              <button
-                type="button"
-                onClick={() => {
-                  onRemoveCombatantFromMap?.(selectedCombatantId);
-                  onSelectCombatant?.(null);
-                }}
-                className="px-2 py-1 bg-stone-900 hover:bg-rose-950/80 text-stone-300 hover:text-rose-300 border border-stone-700 hover:border-rose-600 rounded text-[11px] font-bold transition flex items-center gap-1"
-                title="Remove token from map and move back to reserve tray"
-              >
-                <span>Bench</span>
-              </button>
-            )}
+            {selectedCombatantId && targetCombatantId && (() => {
+              const sel = positionedCombatants.find((c) => c.id === selectedCombatantId);
+              const tgt = positionedCombatants.find((c) => c.id === targetCombatantId);
+              if (!sel || !tgt) return null;
+              const los = calculateLineOfSight(
+                sel.calculatedX,
+                sel.calculatedY,
+                tgt.calculatedX,
+                tgt.calculatedY,
+                config.feetPerSquare,
+                config.diagonalRule,
+                terrainMap,
+                doors,
+                sel.elevationFeet || 0,
+                tgt.elevationFeet || 0,
+                config.weatherEffect
+              );
+              return (
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-stone-900/90 border border-stone-800 rounded-lg text-[10px]">
+                  <span className="font-mono text-stone-300 font-bold">{los.distanceFeet}ft</span>
+                  {!los.hasLoS ? (
+                    los.weatherObscured ? (
+                      <span className="px-1.5 py-0.5 rounded font-bold bg-amber-950/90 text-amber-300 border border-amber-600/70 flex items-center gap-1">
+                        <span>⚠️</span> Out of Sight (&gt;{WEATHER_DEFINITIONS[config.weatherEffect || 'none']?.maxVisibilityFeet || 30}ft)
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded font-bold bg-rose-950/90 text-rose-300 border border-rose-600/70 flex items-center gap-1">
+                        <span>🚫</span> Blocked ({los.blockedBy?.label || 'Solid Wall'})
+                      </span>
+                    )
+                  ) : (
+                    <>
+                      {los.weatherDisadvantage && (
+                        <span className="px-1.5 py-0.5 rounded font-bold bg-amber-950/90 text-amber-300 border border-amber-600/70 flex items-center gap-1">
+                          <span>🏹</span> Weather Disadv
+                        </span>
+                      )}
+                      {los.cover !== 'none' && (
+                        <span className="px-1.5 py-0.5 rounded font-bold bg-sky-950/90 text-sky-300 border border-sky-600/70 flex items-center gap-1">
+                          <span>🛡️</span> +{los.bonusAc} AC ({los.cover.replace('_', ' ')})
+                        </span>
+                      )}
+                      {!los.weatherDisadvantage && los.cover === 'none' && (
+                        <span className="px-1.5 py-0.5 rounded font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-700/60">
+                          Clear LoS
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
+
+            {selectedCombatantId && (() => {
+              const sel = positionedCombatants.find((c) => c.id === selectedCombatantId);
+              if (!sel) return null;
+              const currentElev = sel.elevationFeet || 0;
+              const isSheltered = isCellSheltered(sel.calculatedX, sel.calculatedY, terrainMap, config.isEntirelyIndoors);
+              const ceilingFeet = getTileCeilingFeet(sel.calculatedX, sel.calculatedY, config, terrainMap);
+              const maxAllowedElev = getMaxAllowedElevation(isSheltered, ceilingFeet, sel.tokenSize || 1);
+              const canAscend5 = currentElev + 5 <= maxAllowedElev;
+              const canAscend10 = currentElev + 10 <= maxAllowedElev;
+              const canDescend5 = currentElev > 0;
+
+              return (
+                <div className="flex items-center gap-2 ml-1">
+                  {/* Altitude Quick Controls */}
+                  <div className="flex items-center gap-1 bg-stone-900 border border-stone-800 rounded-lg px-2 py-0.5">
+                    <span
+                      className="text-[10px] font-mono font-bold text-sky-400 flex items-center gap-0.5 mr-0.5"
+                      title={isSheltered ? `Current altitude: ${currentElev}ft. Capped by ${ceilingFeet}ft ceiling (Max: ${maxAllowedElev}ft)` : 'Current altitude/elevation above ground'}
+                    >
+                      <span>✈️</span>
+                      <span>{currentElev > 0 ? `+${currentElev}` : currentElev}ft</span>
+                    </span>
+
+                    {/* Indoor ceiling indicator tag */}
+                    {isSheltered && (
+                      <span
+                        className="px-1 py-0.2 bg-amber-950/70 border border-amber-800/60 rounded text-[9px] font-mono text-amber-300 font-bold"
+                        title={`Indoor Room (Ceiling: ${ceilingFeet}ft). In 5e RAW, flight altitude cannot exceed ceiling clearance.`}
+                      >
+                        🏠 {maxAllowedElev === 0 ? 'Ceiling Limit' : `Ceiling ${ceilingFeet}ft`}
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-0.5">
+                      {canDescend5 && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCombatant?.({ ...sel, elevationFeet: currentElev - 5 })}
+                          className="px-1 py-0.5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded text-[9px] font-mono font-bold cursor-pointer"
+                          title="Descend 5 ft"
+                        >
+                          -5
+                        </button>
+                      )}
+                      {canAscend5 && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCombatant?.({ ...sel, elevationFeet: currentElev + 5 })}
+                          className="px-1 py-0.5 bg-stone-800 hover:bg-stone-700 text-stone-300 rounded text-[9px] font-mono font-bold cursor-pointer"
+                          title="Ascend 5 ft"
+                        >
+                          +5
+                        </button>
+                      )}
+                      {canAscend10 && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCombatant?.({ ...sel, elevationFeet: currentElev + 10 })}
+                          className="px-1 py-0.5 bg-sky-950 hover:bg-sky-900 text-sky-300 border border-sky-800 rounded text-[9px] font-mono font-bold cursor-pointer"
+                          title="Ascend 10 ft"
+                        >
+                          +10
+                        </button>
+                      )}
+                      {currentElev !== 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateCombatant?.({ ...sel, elevationFeet: 0 })}
+                          className="px-1 py-0.5 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 rounded text-[9px] font-mono font-bold cursor-pointer ml-0.5"
+                          title="Land immediately on the ground (0 ft)"
+                        >
+                          Land
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setInspectingCombatant(sel)}
+                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-stone-950 font-bold rounded text-[11px] shadow transition flex items-center gap-1 cursor-pointer"
+                    title="Open Entity Properties and Stats"
+                  >
+                    <span>⚙️ Properties</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onRemoveCombatantFromMap?.(selectedCombatantId);
+                      onSelectCombatant?.(null);
+                    }}
+                    className="px-2 py-1 bg-stone-900 hover:bg-rose-950/80 text-stone-300 hover:text-rose-300 border border-stone-700 hover:border-rose-600 rounded text-[11px] font-bold transition flex items-center gap-1 cursor-pointer"
+                    title="Remove token from map and move back to reserve tray"
+                  >
+                    <span>🗑️ Remove</span>
+                  </button>
+                </div>
+              );
+            })()}
 
             <button
               type="button"
@@ -4264,6 +5527,18 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             <span className="truncate">{contextMenu.combatant.name}</span>
             <span className="text-[10px] text-stone-400 font-mono">({contextMenu.combatant.hpCurrent}/{contextMenu.combatant.hpMax} HP)</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setInspectingCombatant(contextMenu.combatant);
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-stone-800 hover:text-amber-300 flex items-center gap-2 transition font-medium"
+          >
+            <Sliders className="w-3.5 h-3.5 text-amber-400" />
+            <span>Open Entity Properties & Stats</span>
+          </button>
 
           <button
             type="button"
@@ -4374,17 +5649,85 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (confirm(`Remove ${contextMenu.combatant.name} from encounter entirely?`)) {
-                  onRemoveCombatant?.(contextMenu.combatant.id);
-                }
+                onRemoveCombatant?.(contextMenu.combatant.id);
                 setContextMenu(null);
               }}
-              className="w-full text-left px-3 py-1.5 hover:bg-rose-950/70 hover:text-rose-300 flex items-center gap-2 transition text-rose-400"
+              className="w-full text-left px-3 py-1.5 hover:bg-rose-950/70 hover:text-rose-300 flex items-center gap-2 transition text-rose-400 cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
               <span>Delete from Encounter</span>
             </button>
           )}
+
+          <div className="h-px bg-stone-800 my-1" />
+
+          {/* Quick Ping Here */}
+          <button
+            type="button"
+            onClick={() => {
+              const pos = positionedCombatants.find((c) => c.id === contextMenu.combatant.id);
+              if (pos) triggerPing(pos.calculatedX, pos.calculatedY);
+              setContextMenu(null);
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-stone-800 hover:text-amber-300 flex items-center gap-2 transition text-stone-300"
+          >
+            <Radio className="w-3.5 h-3.5 text-amber-400" />
+            <span>📍 Ping Token Location</span>
+          </button>
+
+          {/* DM Pin Here */}
+          {isDm && (
+            <button
+              type="button"
+              onClick={() => {
+                const pos = positionedCombatants.find((c) => c.id === contextMenu.combatant.id);
+                if (pos) setPendingPinCell({ x: pos.calculatedX, y: pos.calculatedY });
+                setContextMenu(null);
+              }}
+              className="w-full text-left px-3 py-1.5 hover:bg-stone-800 hover:text-purple-300 flex items-center gap-2 transition text-stone-300"
+            >
+              <MapPin className="w-3.5 h-3.5 text-purple-400" />
+              <span>📌 Drop Secret GM Pin Here</span>
+            </button>
+          )}
+
+          {/* Token Lighting Source */}
+          <div className="px-3 pt-2 pb-1 border-t border-stone-800 text-[10px] font-mono text-stone-400 flex items-center justify-between">
+            <span>LIGHT SOURCE</span>
+            <span className="text-amber-400 font-bold uppercase text-[9px]">
+              {contextMenu.combatant.lightSource || tokenLightSources[contextMenu.combatant.id] || 'none'}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1 px-2 pb-1.5">
+            {[
+              { id: 'none', label: 'Off', icon: '🌑' },
+              { id: 'torch', label: 'Torch', icon: '🕯️' },
+              { id: 'lantern', label: 'Lantern', icon: '🏮' },
+              { id: 'magical_light', label: 'Spell', icon: '✨' }
+            ].map((ls) => {
+              const currentLs = contextMenu.combatant.lightSource || tokenLightSources[contextMenu.combatant.id] || 'none';
+              const active = currentLs === ls.id;
+              return (
+                <button
+                  key={ls.id}
+                  type="button"
+                  onClick={() => {
+                    handleSetLightSource(contextMenu.combatant.id, ls.id as LightSourceType);
+                    setContextMenu(null);
+                  }}
+                  className={`px-1.5 py-1 text-[10px] rounded border flex flex-col items-center gap-0.5 transition ${
+                    active
+                      ? 'bg-amber-950/80 border-amber-600 text-amber-200 font-bold'
+                      : 'bg-stone-900 border-stone-800 text-stone-400 hover:text-stone-200'
+                  }`}
+                  title={`${ls.label} lighting`}
+                >
+                  <span className="text-xs">{ls.icon}</span>
+                  <span className="truncate max-w-[40px] text-[9px]">{ls.label}</span>
+                </button>
+              );
+            })}
+          </div>
 
           <div className="h-px bg-stone-800 my-1" />
 
@@ -4498,6 +5841,75 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
         userName={isDm ? 'DM' : 'Player'}
         onApplyLayout={handleApplyLayoutInternal}
       />
+
+      {/* Feature 3: Secret GM Pin Inspector & Editor Modal */}
+      {selectedPin && (
+        <PinInspectorModal
+          pin={selectedPin}
+          isDm={isDm}
+          onClose={() => setSelectedPin(null)}
+          onUpdatePin={(updated) => {
+            setMapPins((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+            setSelectedPin(updated);
+          }}
+          onDeletePin={(pinId) => {
+            setMapPins((prev) => prev.filter((p) => p.id !== pinId));
+            setSelectedPin(null);
+          }}
+        />
+      )}
+
+      {/* Feature 3: Secret GM Pin Creation Modal */}
+      {pendingPinCell && (
+        <PinCreateModal
+          cell={pendingPinCell}
+          onSave={(newPin) => {
+            setMapPins((prev) => [...prev, newPin]);
+            setIsPinToolActive(false);
+          }}
+          onClose={() => setPendingPinCell(null)}
+        />
+      )}
+
+      {/* Combatant Entity Properties Modal */}
+      {inspectingCombatant && (
+        <CombatantPropertiesModal
+          combatant={inspectingCombatant}
+          isDm={isDm}
+          isSheltered={isCellSheltered(inspectingCombatant.mapX ?? 0, inspectingCombatant.mapY ?? 0, terrainMap, config.isEntirelyIndoors)}
+          ceilingFeet={getTileCeilingFeet(inspectingCombatant.mapX ?? 0, inspectingCombatant.mapY ?? 0, config, terrainMap)}
+          onClose={() => setInspectingCombatant(null)}
+          onUpdateCombatant={(updated) => {
+            onUpdateCombatant?.(updated);
+            setInspectingCombatant(null);
+          }}
+          onRemoveFromMap={(id) => {
+            onRemoveCombatantFromMap?.(id);
+            if (selectedCombatantId === id) onSelectCombatant?.(null);
+            setInspectingCombatant(null);
+          }}
+          onDeleteFromEncounter={(id) => {
+            onRemoveCombatant?.(id);
+            if (selectedCombatantId === id) onSelectCombatant?.(null);
+            setInspectingCombatant(null);
+          }}
+          onCenterOnMap={handleCenterOnCombatant}
+        />
+      )}
+
+      {/* Weather & Atmospheric Conditions Modal */}
+      {showWeatherModal && (
+        <WeatherTacticalRulesModal
+          currentWeather={config.weatherEffect || 'none'}
+          onSelectWeather={(weather) => {
+            onUpdateConfig?.({
+              ...config,
+              weatherEffect: weather
+            });
+          }}
+          onClose={() => setShowWeatherModal(false)}
+        />
+      )}
     </div>
   );
 };

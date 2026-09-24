@@ -6,7 +6,7 @@ import { getMonsterPortraitUrl } from '../../../data/monsterPortraits';
 import { ENVIRONMENT_CONFIGS } from '../../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound, playHitSound, playMissSound, playDiceSound } from '../../../utils/diceAudio';
 import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState, ConcentrationPrompt, MassiveDamagePrompt } from './encounterTypes';
-import { TerrainType, DoorState, AoETemplate, BattlemapLayout, BattlemapConfig, ActiveTeleportState, ActiveSpellTargetingState, isCellImpassable } from '../../battlemap/battlemapTypes';
+import { TerrainType, DoorState, AoETemplate, BattlemapLayout, BattlemapConfig, ActiveTeleportState, ActiveSpellTargetingState, isCellImpassable, WeatherEffectType } from '../../battlemap/battlemapTypes';
 import { eventBus } from '../../../events/eventBus';
 import { broadcastEncounterState } from '../../../utils/useDetachedSync';
 import { 
@@ -93,6 +93,7 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
           battlemapDoors: parsed.battlemapDoors || {},
           battlemapFogOfWar: parsed.battlemapFogOfWar || {},
           battlemapUseFogOfWar: Boolean(parsed.battlemapUseFogOfWar),
+          battlemapWeatherEffect: parsed.battlemapWeatherEffect || 'none',
           combatLogs: Array.isArray(parsed.combatLogs) ? parsed.combatLogs : defaultState.combatLogs
         };
       }
@@ -170,11 +171,17 @@ export function useEncounterState({
   const [doors, setDoors] = useState<Record<string, DoorState>>(() => (loadSavedEncounter(character).battlemapDoors as Record<string, DoorState>) || {});
   const [fogOfWar, setFogOfWar] = useState<Record<string, boolean>>(() => (loadSavedEncounter(character).battlemapFogOfWar as Record<string, boolean>) || {});
   const [useFogOfWar, setUseFogOfWar] = useState<boolean>(() => Boolean(loadSavedEncounter(character).battlemapUseFogOfWar));
+  const [battlemapWeatherEffect, setBattlemapWeatherEffect] = useState<WeatherEffectType>(
+    () => (loadSavedEncounter(character).battlemapWeatherEffect as WeatherEffectType) || 'none'
+  );
   const [activeAoETemplate, setActiveAoETemplate] = useState<AoETemplate | null>(null);
   const instanceId = useRef(Math.random().toString(36).substring(2, 9) + Date.now().toString(36)).current;
   const isRemoteUpdateRef = useRef(false);
+  const isInitialSyncMountRef = useRef(true);
+  const lastActiveTurnKeyRef = useRef<string | null>(null);
+  const lastEncounterIdRef = useRef<string | null>(null);
 
-  const isDm = Boolean(currentUser && activeSession && activeSession.dmUid === currentUser.uid);
+  const isDm = Boolean(!activeSession || (currentUser && activeSession && activeSession.dmUid === currentUser.uid));
 
   // Sync state from remote Firestore Session Encounter
   useEffect(() => {
@@ -238,11 +245,31 @@ export function useEncounterState({
       if (remoteEnc.battlemapActiveAoE !== undefined) {
         setActiveAoETemplate(remoteEnc.battlemapActiveAoE);
       }
+      if (remoteEnc.battlemapWeatherEffect !== undefined) {
+        setBattlemapWeatherEffect((remoteEnc.battlemapWeatherEffect as WeatherEffectType) || 'none');
+      }
 
-      // Check if current active turn belongs to current player's character
-      const currentActiveCombatant = mappedCombatants[remoteEnc.activeTurnIndex || 0];
-      if (currentActiveCombatant && (currentActiveCombatant.name === character.name || currentActiveCombatant.controlledBy === currentUser?.uid)) {
-        playInitiativeTurnSound();
+      // Check if current active turn belongs to current player's character.
+      // Only play the turn horn when the turn or round advances to this player during active play,
+      // never on initial component mount / switching tabs to the combat sheet.
+      const activeIdx = remoteEnc.activeTurnIndex || 0;
+      const roundNum = remoteEnc.roundNumber || 1;
+      const encId = remoteEnc.id || remoteEnc.name || 'default-encounter';
+      const turnKey = `r${roundNum}-t${activeIdx}`;
+
+      const isInitialMount = isInitialSyncMountRef.current;
+      const isNewEncounter = lastEncounterIdRef.current !== encId;
+      const hasTurnAdvanced = !isInitialMount && !isNewEncounter && lastActiveTurnKeyRef.current !== null && lastActiveTurnKeyRef.current !== turnKey;
+
+      isInitialSyncMountRef.current = false;
+      lastEncounterIdRef.current = encId;
+      lastActiveTurnKeyRef.current = turnKey;
+
+      if (hasTurnAdvanced) {
+        const currentActiveCombatant = mappedCombatants[activeIdx];
+        if (currentActiveCombatant && (currentActiveCombatant.name === character.name || currentActiveCombatant.controlledBy === currentUser?.uid)) {
+          playInitiativeTurnSound();
+        }
       }
     }
   }, [
@@ -312,13 +339,14 @@ export function useEncounterState({
       battlemapFeetPerSquare: customConfig?.feetPerSquare,
       battlemapDiagonalRule: customConfig?.diagonalRule,
       battlemapTheme: customConfig?.theme as any,
+      battlemapWeatherEffect: customConfig?.weatherEffect !== undefined ? customConfig.weatherEffect : battlemapWeatherEffect,
       updatedAt: new Date().toISOString()
     };
 
     updateSessionEncounter(activeSessionCode, encounterPayload).catch((err) => {
       console.warn('Failed to sync encounter to session:', err);
     });
-  }, [activeSessionCode, isDm, encounterEnvironment, terrainMap, doors, fogOfWar, useFogOfWar, activeAoETemplate]);
+  }, [activeSessionCode, isDm, encounterEnvironment, terrainMap, doors, fogOfWar, useFogOfWar, activeAoETemplate, battlemapWeatherEffect]);
 
   // Player helper to submit their own initiative to the session
   const handlePlayerSubmitInitiative = useCallback((initRoll: number) => {
@@ -413,14 +441,15 @@ export function useEncounterState({
         battlemapTerrain: terrainMap,
         battlemapDoors: doors,
         battlemapFogOfWar: fogOfWar,
-        battlemapUseFogOfWar: useFogOfWar
+        battlemapUseFogOfWar: useFogOfWar,
+        battlemapWeatherEffect
       };
       localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(dataToSave));
       broadcastEncounterState(charKey, dataToSave, instanceId);
     } catch (err) {
       console.error("Error saving encounter state to localStorage:", err);
     }
-  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, terrainMap, doors, fogOfWar, useFogOfWar, character.id, instanceId]);
+  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, terrainMap, doors, fogOfWar, useFogOfWar, battlemapWeatherEffect, character.id, instanceId]);
 
   // Real-time cross-window synchronization listener (BroadcastChannel & storage event)
   useEffect(() => {
@@ -439,6 +468,7 @@ export function useEncounterState({
       if (data.battlemapDoors) setDoors(data.battlemapDoors as Record<string, DoorState>);
       if (data.battlemapFogOfWar) setFogOfWar(data.battlemapFogOfWar);
       if (typeof data.battlemapUseFogOfWar === 'boolean') setUseFogOfWar(data.battlemapUseFogOfWar);
+      if (data.battlemapWeatherEffect) setBattlemapWeatherEffect(data.battlemapWeatherEffect as WeatherEffectType);
     };
 
     let channel: BroadcastChannel | null = null;
@@ -571,6 +601,19 @@ export function useEncounterState({
     };
     setCombatLogs(prev => [newEntry, ...prev]);
   }, [roundNumber, activeCombatant?.name, character.name]);
+
+  // Listen for WeatherChanged events from spells, monster traits, lair actions, or items
+  useEffect(() => {
+    const unsub = eventBus.on('WeatherChanged', (payload) => {
+      if (payload?.weather) {
+        setBattlemapWeatherEffect(payload.weather as WeatherEffectType);
+        if (payload.sourceName && payload.reason) {
+          addLogEntry('ability', `🌪️ ${payload.reason}`, payload.sourceName);
+        }
+      }
+    });
+    return () => unsub();
+  }, [addLogEntry]);
 
   const handleClearCombatLogs = useCallback(() => {
     setCombatLogs([]);
@@ -773,6 +816,33 @@ export function useEncounterState({
             addLogEntry('condition', `🐎 ${r.name} was thrown from ${target.name} into an adjacent square and knocked Prone as the mount dropped to 0 HP! (5e Mounted Rules)`, r.name);
           });
         }
+      }
+
+      // Aerial Combat Watchdog: If a flying creature drops to 0 HP and lacks Hover, it plunges to the ground!
+      if (nextHp === 0 && (target.elevationFeet || 0) > 0 && !target.hasHover) {
+        const fallDist = target.elevationFeet || 0;
+        const fallDice = Math.min(20, Math.floor(fallDist / 10));
+        let fallDmg = 0;
+        for (let i = 0; i < fallDice; i++) fallDmg += Math.floor(Math.random() * 6) + 1;
+
+        setCombatants(prev => prev.map(c => {
+          if (c.id === id) {
+            const currentConds = c.conditions || [];
+            const newConds = currentConds.includes('Prone') ? currentConds : [...currentConds, 'Prone'];
+            return {
+              ...c,
+              elevationFeet: 0,
+              conditions: newConds
+            };
+          }
+          return c;
+        }));
+
+        addLogEntry(
+          'damage',
+          `🪂 PLUNGE (RAW): ${target.name} dropped to 0 HP while flying! Plunged ${fallDist} ft to the ground, taking ${fallDmg} fall damage (${fallDice}d6) and landing Prone!`,
+          target.name
+        );
       }
 
       // Concentration Watchdog: Check if target is actively concentrating
@@ -1093,6 +1163,26 @@ export function useEncounterState({
     if (nextCombatant) {
       playInitiativeTurnSound();
       addLogEntry('turn', `Turn started for ${nextCombatant.name} (Round ${nextRound}) — Movement: ${nextCombatant.movementRemaining} ft`, nextCombatant.name);
+
+      // Auto-refresh Action Economy for player character starting their new turn
+      if (onUpdateCharacter && (nextCombatant.id === character.id || nextCombatant.name === character.name || nextCombatant.isPlayerChar)) {
+        onUpdateCharacter({
+          ...character,
+          actionEconomy: {
+            standardActionUsed: false,
+            moveActionUsed: false,
+            swiftActionUsed: false,
+            immediateActionUsed: false,
+            fiveFootStepTaken: false,
+            actionUsed5e: false,
+            bonusActionUsed5e: false,
+            reactionUsed5e: false,
+            freeInteractionUsed5e: false,
+            remainingSpeed: character.speed || 30,
+            currentRound: nextRound
+          }
+        });
+      }
     }
 
     if (activeSessionCode && isDm) {
@@ -1153,6 +1243,37 @@ export function useEncounterState({
           addLogEntry('condition', `🐎 ${r.name} was thrown off ${targetName} and knocked Prone as the mount fell ${conditionName}! (5e Mounted Rules)`, r.name);
         });
       }
+    }
+
+    // Aerial Combat Watchdog (RAW): If a flying creature is knocked Prone, Unconscious, Incapacitated, Paralyzed, Petrified, or Stunned and lacks Hover, it plunges!
+    const fallConditions = ['prone', 'unconscious', 'incapacitated', 'paralyzed', 'petrified', 'stunned'];
+    if (fallConditions.includes(conditionName.toLowerCase()) && (target?.elevationFeet || 0) > 0 && !target?.hasHover) {
+      const fallDist = target?.elevationFeet || 0;
+      const fallDice = Math.min(20, Math.floor(fallDist / 10));
+      let fallDmg = 0;
+      for (let i = 0; i < fallDice; i++) fallDmg += Math.floor(Math.random() * 6) + 1;
+
+      setCombatants(prev => prev.map(c => {
+        if (c.id === combatantId) {
+          const curHp = c.hpCurrent;
+          const afterFallHp = Math.max(0, curHp - fallDmg);
+          const currentConds = c.conditions || [];
+          const withProne = currentConds.includes('Prone') ? currentConds : [...currentConds, 'Prone'];
+          return {
+            ...c,
+            elevationFeet: 0,
+            hpCurrent: afterFallHp,
+            conditions: withProne
+          };
+        }
+        return c;
+      }));
+
+      addLogEntry(
+        'damage',
+        `🪂 PLUNGE (RAW): ${targetName} was afflicted with "${conditionName}" while flying! Plunged ${fallDist} ft to the ground, taking ${fallDmg} bludgeoning damage (${fallDice}d6) and landing Prone!`,
+        targetName
+      );
     }
 
     if (target?.isPlayerChar && onUpdateCharacter) {
@@ -1607,7 +1728,6 @@ export function useEncounterState({
         return c;
       });
 
-      playInitiativeTurnSound();
       const colLetter = String.fromCharCode(65 + (x % 26));
       const coordStr = `${colLetter}${y + 1}`;
 
@@ -1640,7 +1760,55 @@ export function useEncounterState({
       }
       return next;
     });
-  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry, isDm]);
+
+    // Auto-sync Action Economy & Movement when moving tokens on the Battlemap
+    const isTeleport = Boolean(options?.isTeleport);
+    const isDmFree = Boolean(options?.isDmFreeMove && isDm);
+
+    if (!isTeleport && !isDmFree && distanceFeet > 0) {
+      const movedCombatant = combatants.find(c => c.id === id);
+      const isPlayerToken = id === character.id ||
+        (movedCombatant && (movedCombatant.name === character.name || movedCombatant.isPlayerChar));
+
+      if (isPlayerToken && onUpdateCharacter) {
+        const is35e = character.edition === '3.5e';
+        const baseSpeed = character.speed || 30;
+        const currentRemaining = typeof movedCombatant?.movementRemaining === 'number'
+          ? movedCombatant.movementRemaining
+          : baseSpeed;
+        const updatedRemaining = Math.max(0, currentRemaining - distanceFeet);
+
+        // 3.5e Rule: A 5-foot step is moving 5 ft without taking other movement.
+        // If movement is > 5 ft, it automatically expends a Move Action!
+        const isFiveFtStep = is35e && distanceFeet <= 5 && !character.actionEconomy?.moveActionUsed;
+
+        onUpdateCharacter({
+          ...character,
+          actionEconomy: {
+            ...character.actionEconomy,
+            moveActionUsed: is35e ? (!isFiveFtStep ? true : character.actionEconomy?.moveActionUsed) : true,
+            fiveFootStepTaken: is35e ? (isFiveFtStep ? true : character.actionEconomy?.fiveFootStepTaken) : undefined,
+            remainingSpeed: updatedRemaining,
+            currentRound: roundNumber
+          }
+        });
+      }
+
+      // Also dispatch custom window event to ensure instantaneous cross-component reactivity
+      try {
+        window.dispatchEvent(
+          new CustomEvent('nexus:token_moved', {
+            detail: {
+              combatantId: id,
+              characterId: character.id,
+              distanceFeet,
+              newRemaining: Math.max(0, (movedCombatant?.movementRemaining ?? (character.speed || 30)) - distanceFeet)
+            }
+          })
+        );
+      } catch {}
+    }
+  }, [activeSessionCode, syncEncounterToSession, activeTurnIndex, roundNumber, addLogEntry, isDm, combatants, character, onUpdateCharacter]);
 
   const handleApplyBattlemapLayout = useCallback((
     layout: BattlemapLayout,
@@ -1783,6 +1951,44 @@ export function useEncounterState({
     syncEncounterToSession,
     addLogEntry
   ]);
+
+  // Listener for dynamic or AI-generated battlemap layout deployment events
+  useEffect(() => {
+    const handleLayoutDeployed = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const layout = customEvent.detail?.layout;
+      if (layout) {
+        handleApplyBattlemapLayout(layout, {
+          includeTokens: true,
+          includeFog: true,
+          replaceTerrain: true
+        });
+      }
+    };
+
+    window.addEventListener('dnd_battlemap_layout_deployed', handleLayoutDeployed);
+
+    try {
+      const pending = sessionStorage.getItem('dnd_pending_battlemap_layout');
+      if (pending) {
+        sessionStorage.removeItem('dnd_pending_battlemap_layout');
+        const parsed = JSON.parse(pending);
+        if (parsed) {
+          handleApplyBattlemapLayout(parsed, {
+            includeTokens: true,
+            includeFog: true,
+            replaceTerrain: true
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to parse pending battlemap layout:', err);
+    }
+
+    return () => {
+      window.removeEventListener('dnd_battlemap_layout_deployed', handleLayoutDeployed);
+    };
+  }, [handleApplyBattlemapLayout]);
 
   const handleDashCombatant = useCallback((id: string) => {
     setCombatants(prev => {
@@ -2089,7 +2295,11 @@ export function useEncounterState({
     const members = allMembers.filter(m => m.isMonster || !isCharacterDead(m));
 
     if (deadMembers.length > 0) {
-      alert(`The following dead character(s) were excluded from combat: ${deadMembers.map(m => m.name).join(', ')}. Revive them before adding them to combat!`);
+      addLogEntry(
+        'note',
+        `⚠️ Dead character(s) excluded from combat: ${deadMembers.map(m => m.name).join(', ')}. Revive them before adding to combat.`,
+        'Encounter'
+      );
     }
 
     if (members.length === 0) return;
@@ -2337,6 +2547,8 @@ export function useEncounterState({
     setFogOfWar,
     useFogOfWar,
     setUseFogOfWar,
+    battlemapWeatherEffect,
+    setBattlemapWeatherEffect,
     activeAoETemplate,
     setActiveAoETemplate,
     handleUpdateFogOfWar,

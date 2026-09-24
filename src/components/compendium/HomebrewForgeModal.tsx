@@ -196,9 +196,7 @@ export const HomebrewForgeModal: React.FC<HomebrewForgeModalProps> = ({
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
-      if (window.confirm('Are you sure you want to close the Homebrew Forge? Any active draft in progress is safely preserved in local storage.')) {
-        onClose();
-      }
+      onClose();
     }
   };
 

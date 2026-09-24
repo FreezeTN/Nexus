@@ -259,7 +259,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                 {/* Exhaustion Selector */}
                 <div className="bg-stone-950 p-3.5 rounded-xl border border-stone-800 space-y-2">
                   <div className="flex items-center justify-between text-xs font-bold text-amber-200">
-                    <span>Exhaustion Level (DMG Rules)</span>
+                    <span>{character.edition === '3.5e' ? 'Exhaustion / Fatigue Level (3.5e & 5e RAW)' : 'Exhaustion Level (PHB p. 291 / DMG Rules)'}</span>
                     <span className="font-mono text-rose-400">Level {exhaustion} / 6</span>
                   </div>
                   <div className="grid grid-cols-7 gap-1.5">

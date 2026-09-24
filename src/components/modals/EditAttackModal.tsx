@@ -69,6 +69,7 @@ export const EditAttackModal: React.FC<EditAttackModalProps> = ({
 
   // Form State
   const [name, setName] = useState(attack?.name || '');
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [baseDamageDice, setBaseDamageDice] = useState(
     attack?.baseDamageDice || (attack?.damage ? attack.damage.split(' ')[0] : '1d8')
   );
@@ -226,9 +227,10 @@ export const EditAttackModal: React.FC<EditAttackModalProps> = ({
 
   const handleSave = () => {
     if (!name.trim()) {
-      alert('Please enter a Weapon / Attack Name.');
+      setValidationError('Please enter a Weapon / Attack Name.');
       return;
     }
+    setValidationError(null);
 
     const calculatedBonus = is35e && !useManualBonus && calcAttack
       ? calcAttack.totalAttackBonus
@@ -774,6 +776,23 @@ export const EditAttackModal: React.FC<EditAttackModalProps> = ({
             )}
           </div>
         </div>
+
+        {/* Validation Error Banner */}
+        {validationError && (
+          <div className="bg-rose-950/80 border-t border-b border-rose-600/60 text-rose-200 px-4 py-2.5 text-xs font-semibold flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-base">⚠️</span>
+              <span>{validationError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setValidationError(null)}
+              className="text-stone-400 hover:text-white text-xs p-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Footer Actions */}
         <div className="bg-stone-950 p-4 border-t border-stone-800 flex items-center justify-between shrink-0">

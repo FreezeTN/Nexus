@@ -615,12 +615,27 @@ export function useCharacterManager({
           }));
           setCharacters(prev => [...newChars, ...prev]);
           setActiveCharacterId(newChars[0].id);
-          alert(`Successfully imported ${newChars.length} character(s) via ${result.metadata.formatLabel}!`);
+          window.dispatchEvent(new CustomEvent('nexus_notification', {
+            detail: {
+              message: `Successfully imported ${newChars.length} character(s) via ${result.metadata.formatLabel}!`,
+              type: 'info'
+            }
+          }));
         } else {
-          alert(`Import failed: ${result.error || 'Unrecognized schema or format'}`);
+          window.dispatchEvent(new CustomEvent('nexus_notification', {
+            detail: {
+              message: `Import failed: ${result.error || 'Unrecognized schema or format'}`,
+              type: 'error'
+            }
+          }));
         }
       } catch (err: any) {
-        alert(`Failed to parse file: ${err?.message || 'Unknown error'}`);
+        window.dispatchEvent(new CustomEvent('nexus_notification', {
+          detail: {
+            message: `Failed to parse file: ${err?.message || 'Unknown error'}`,
+            type: 'error'
+          }
+        }));
       }
     };
     reader.readAsText(file);

@@ -149,6 +149,14 @@ export const Header: React.FC<HeaderProps> = ({
   const [isStandalone, setIsStandalone] = useState<boolean>(false);
   const [hpDelta, setHpDelta] = useState<string>('');
   const [showMaxHpInspector, setShowMaxHpInspector] = useState<boolean>(false);
+  const [headerToast, setHeaderToast] = useState<{ message: string; type?: 'info' | 'warning' | 'error' } | null>(null);
+
+  const showHeaderToast = (message: string, type: 'info' | 'warning' | 'error' = 'warning') => {
+    setHeaderToast({ message, type });
+    setTimeout(() => {
+      setHeaderToast(prev => (prev?.message === message ? null : prev));
+    }, 4500);
+  };
 
   const effectiveMaxHp = activeCharacter ? getEffectiveMaxHp(activeCharacter) : 0;
   const xpProgressDetails = activeCharacter ? getXpProgressDetails(activeCharacter.experiencePoints || 0, activeCharacter.level || 1) : null;
@@ -168,8 +176,18 @@ export const Header: React.FC<HeaderProps> = ({
       setDeferredPrompt(e as BeforeInstallPromptEvent);
     };
 
+    const handleNotification = (e: any) => {
+      if (e.detail?.message) {
+        showHeaderToast(e.detail.message, e.detail.type || 'info');
+      }
+    };
+
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
-    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('nexus_notification', handleNotification);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('nexus_notification', handleNotification);
+    };
   }, []);
 
   const handleEditionChange = (newEdition: RuleEdition) => {
@@ -242,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({
         // Revert transformation with overflow damage calculated
         const dummyCharWithNewHp = { ...activeCharacter, hpCurrent, hpTemp };
         const revertedChar = revertTransformation(dummyCharWithNewHp);
-        alert(`🐾 Beast Form (${activeCharacter.activeTransformation.form.name}) dropped to 0 HP!\nReverted to original form. Overflow damage applied to base HP (${revertedChar.hpCurrent}/${revertedChar.hpMax} HP).`);
+        showHeaderToast(`🐾 Beast Form (${activeCharacter.activeTransformation.form.name}) dropped to 0 HP! Reverted to original form. Overflow damage applied to base HP (${revertedChar.hpCurrent}/${revertedChar.hpMax} HP).`, 'warning');
         onUpdateCharacter(revertedChar);
         setHpDelta('');
         return;
@@ -285,7 +303,7 @@ export const Header: React.FC<HeaderProps> = ({
         const conMod = Math.floor((conScore - 10) / 2);
         const hasWarCaster = (activeCharacter.feats || []).some(f => f.name.toLowerCase().includes('war caster')) ||
                              (activeCharacter.classFeatures || []).some(f => f.name.toLowerCase().includes('war caster'));
-        alert(`⚡ Concentration Check Required!\nTook ${amount} damage while concentrating on a spell.\nTarget DC: ${dc} (Roll 1d20 + ${conMod} CON save${hasWarCaster ? ' WITH ADVANTAGE from War Caster feat' : ''}).`);
+        showHeaderToast(`⚡ Concentration Check Required! Took ${amount} damage while concentrating on a spell. Target DC: ${dc} (Roll 1d20 + ${conMod} CON save${hasWarCaster ? ' WITH ADVANTAGE from War Caster feat' : ''}).`, 'warning');
       }
 
       setHpDelta('');
@@ -303,7 +321,7 @@ export const Header: React.FC<HeaderProps> = ({
   const handleShortRest = () => {
     if (!activeCharacter) return;
     if (isCharacterDead(activeCharacter)) {
-      alert(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life.`);
+      showHeaderToast(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life.`, 'error');
       setShowRestModal(null);
       return;
     }
@@ -326,7 +344,7 @@ export const Header: React.FC<HeaderProps> = ({
   const handleLongRest = () => {
     if (!activeCharacter) return;
     if (isCharacterDead(activeCharacter)) {
-      alert(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life. Magic such as Revivify, Raise Dead, or manual HP edit is required.`);
+      showHeaderToast(`💀 ${activeCharacter.name} is DEAD! Resting cannot restore HP or bring a dead character back to life. Magic such as Revivify, Raise Dead, or manual HP edit is required.`, 'error');
       setShowRestModal(null);
       return;
     }
@@ -888,6 +906,34 @@ export const Header: React.FC<HeaderProps> = ({
                 Close Window
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Floating Header Notification Toast */}
+      {headerToast && createPortal(
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[10000] max-w-lg w-11/12 animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className={`p-3.5 rounded-2xl shadow-2xl border backdrop-blur-md flex items-center justify-between gap-3 text-xs font-semibold ${
+            headerToast.type === 'error'
+              ? 'bg-rose-950/95 border-rose-600 text-rose-100 shadow-rose-950/60'
+              : headerToast.type === 'info'
+              ? 'bg-sky-950/95 border-sky-600 text-sky-100 shadow-sky-950/60'
+              : 'bg-amber-950/95 border-amber-600 text-amber-100 shadow-amber-950/60'
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <span className="text-base">
+                {headerToast.type === 'error' ? '💀' : headerToast.type === 'info' ? 'ℹ️' : '⚡'}
+              </span>
+              <p className="leading-snug">{headerToast.message}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setHeaderToast(null)}
+              className="p-1 rounded-lg hover:bg-white/10 text-stone-300 hover:text-white transition shrink-0 cursor-pointer"
+            >
+              ✕
+            </button>
           </div>
         </div>,
         document.body

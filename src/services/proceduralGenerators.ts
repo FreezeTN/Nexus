@@ -1638,9 +1638,173 @@ export function generateProceduralEntity(
     };
   }
 
+  if (entityType === 'battlemap') {
+    return {
+      entity: generateProceduralBattlemap(prompt, edition, context),
+      entityType
+    };
+  }
+
   // Generic fallback
   return {
     entity: generateProceduralTreasure('CR 5-10 (Tier 2)', 'Treasure Chest', prompt, edition),
     entityType
+  };
+}
+
+// ==========================================
+// 8. TACTICAL BATTLEMAP PROCEDURAL GENERATOR
+// ==========================================
+export function generateProceduralBattlemap(
+  prompt: string = '',
+  edition: RuleEdition = '5e',
+  context?: any
+) {
+  const lower = (prompt + ' ' + (context?.theme || '')).toLowerCase();
+
+  let theme: 'dungeon' | 'grass' | 'cave' | 'volcano' | 'snow' | 'ship' | 'void' = 'dungeon';
+  let category: 'dungeon' | 'wilderness' | 'tavern' | 'ship' | 'boss_arena' | 'cavern' | 'ruins' | 'urban' | 'custom' = 'dungeon';
+  let title = 'Subterranean Crypt Arena';
+  let description = 'Ancient stone flagstones enclosed by thick masonry walls with sarcophagi providing tactical half cover.';
+
+  if (lower.includes('cave') || lower.includes('cavern') || lower.includes('mine') || lower.includes('stalagmite')) {
+    theme = 'cave';
+    category = 'cavern';
+    title = 'Fungal Grotto Cavern';
+    description = 'An underground cavern with damp earth, glowing bioluminescent moss, deep chasms, and slippery natural stone ledges.';
+  } else if (lower.includes('lava') || lower.includes('volcan') || lower.includes('fire') || lower.includes('magma') || lower.includes('forge')) {
+    theme = 'volcano';
+    category = 'boss_arena';
+    title = 'Obsidian Magma Crucible';
+    description = 'A sweltering chamber of cracked basalt slabs suspended over bubbling rivers of molten lava and sulfurous vents.';
+  } else if (lower.includes('snow') || lower.includes('ice') || lower.includes('frost') || lower.includes('winter') || lower.includes('tundra')) {
+    theme = 'snow';
+    category = 'wilderness';
+    title = 'Frozen Mountain Pass';
+    description = 'A biting glacial plateau with treacherous sheet ice, snowdrifts offering cover, and howling winds over a sheer cliff.';
+  } else if (lower.includes('forest') || lower.includes('wood') || lower.includes('grass') || lower.includes('swamp') || lower.includes('river')) {
+    theme = 'grass';
+    category = 'wilderness';
+    title = 'Ancient Druidic Grove';
+    description = 'A clearing of towering moss-covered monoliths encircled by dense briars, shallow river streams, and ancient runic stones.';
+  } else if (lower.includes('ship') || lower.includes('boat') || lower.includes('pirate') || lower.includes('deck') || lower.includes('ocean')) {
+    theme = 'ship';
+    category = 'ship';
+    title = 'Galleon Main Deck & Rigging';
+    description = 'Weather-beaten wooden deck planks flanked by ship gunwales, coiled rigging, cargo crates, and the open sea below.';
+  } else if (lower.includes('tavern') || lower.includes('inn') || lower.includes('bar') || lower.includes('pub') || lower.includes('shop')) {
+    theme = 'dungeon';
+    category = 'tavern';
+    title = 'The Crooked Flagon Tavern';
+    description = 'A lively common room with heavy oak tables providing half cover, an oak bar counter, a blazing hearth, and a back storage cellar.';
+  } else if (lower.includes('ruin') || lower.includes('temple') || lower.includes('altar') || lower.includes('shrine')) {
+    theme = 'dungeon';
+    category = 'ruins';
+    title = 'Ruined Sun Temple Altar';
+    description = 'Weathered marble colonnades, crumbling archways offering cover, and overgrown vines framing a raised sacred dais.';
+  }
+
+  const cols = 24;
+  const rows = 16;
+  const terrain: Array<{ x: number; y: number; type: string }> = [];
+  const doors: Array<{ x: number; y: number; isOpen: boolean; isLocked: boolean }> = [];
+  const tokens: Array<{ name: string; type: 'player' | 'ally' | 'enemy'; x: number; y: number; tokenSize: number; hpMax: number; armorClass: number; speed: number }> = [];
+
+  // Perimeter boundary walls
+  for (let x = 0; x < cols; x++) {
+    terrain.push({ x, y: 0, type: 'wall' });
+    terrain.push({ x, y: rows - 1, type: 'wall' });
+  }
+  for (let y = 1; y < rows - 1; y++) {
+    terrain.push({ x: 0, y, type: 'wall' });
+    terrain.push({ x: cols - 1, y, type: 'wall' });
+  }
+
+  // Door opening at top
+  const midX = Math.floor(cols / 2);
+  doors.push({ x: midX, y: 0, isOpen: false, isLocked: false });
+  const doorWallIdx = terrain.findIndex(t => t.x === midX && t.y === 0);
+  if (doorWallIdx >= 0) terrain.splice(doorWallIdx, 1);
+
+  if (theme === 'volcano') {
+    for (let y = 3; y < rows - 3; y++) {
+      if (y !== 7 && y !== 8) {
+        terrain.push({ x: 11, y, type: 'hazard' });
+        terrain.push({ x: 12, y, type: 'hazard' });
+      }
+    }
+    terrain.push({ x: 5, y: 5, type: 'cover_half' });
+    terrain.push({ x: 5, y: 10, type: 'cover_half' });
+    terrain.push({ x: 18, y: 5, type: 'cover_three_quarters' });
+    terrain.push({ x: 18, y: 10, type: 'cover_three_quarters' });
+    tokens.push({ name: 'Magma Behemoth', type: 'enemy', x: 19, y: 7, tokenSize: 2, hpMax: 85, armorClass: 16, speed: 30 });
+    tokens.push({ name: 'Fire Mephit', type: 'enemy', x: 14, y: 4, tokenSize: 1, hpMax: 21, armorClass: 12, speed: 30 });
+    tokens.push({ name: 'Fire Mephit', type: 'enemy', x: 14, y: 11, tokenSize: 1, hpMax: 21, armorClass: 12, speed: 30 });
+  } else if (theme === 'cave') {
+    for (let y = 2; y < rows - 2; y++) {
+      if (y !== 7 && y !== 8 && y !== 9) {
+        terrain.push({ x: 12, y, type: 'chasm' });
+      }
+    }
+    terrain.push({ x: 6, y: 4, type: 'cover_half' });
+    terrain.push({ x: 7, y: 11, type: 'difficult' });
+    terrain.push({ x: 8, y: 11, type: 'difficult' });
+    terrain.push({ x: 17, y: 4, type: 'elevation_high' });
+    terrain.push({ x: 17, y: 5, type: 'elevation_high' });
+    tokens.push({ name: 'Cave Troll', type: 'enemy', x: 18, y: 8, tokenSize: 2, hpMax: 84, armorClass: 15, speed: 30 });
+    tokens.push({ name: 'Troglodyte Sentry', type: 'enemy', x: 14, y: 3, tokenSize: 1, hpMax: 16, armorClass: 12, speed: 30 });
+    tokens.push({ name: 'Troglodyte Sentry', type: 'enemy', x: 14, y: 12, tokenSize: 1, hpMax: 16, armorClass: 12, speed: 30 });
+  } else if (category === 'tavern') {
+    for (let x = 3; x < 9; x++) {
+      terrain.push({ x, y: 3, type: 'cover_three_quarters' });
+    }
+    terrain.push({ x: 8, y: 4, type: 'cover_three_quarters' });
+    terrain.push({ x: 4, y: 8, type: 'cover_half' });
+    terrain.push({ x: 5, y: 8, type: 'cover_half' });
+    terrain.push({ x: 4, y: 12, type: 'cover_half' });
+    terrain.push({ x: 5, y: 12, type: 'cover_half' });
+    terrain.push({ x: 15, y: 6, type: 'cover_half' });
+    terrain.push({ x: 16, y: 6, type: 'cover_half' });
+    terrain.push({ x: 15, y: 10, type: 'cover_half' });
+    terrain.push({ x: 16, y: 10, type: 'cover_half' });
+    tokens.push({ name: 'Rogue Mercenary', type: 'enemy', x: 18, y: 8, tokenSize: 1, hpMax: 32, armorClass: 14, speed: 30 });
+    tokens.push({ name: 'Bawdy Brawler', type: 'enemy', x: 15, y: 5, tokenSize: 1, hpMax: 26, armorClass: 12, speed: 30 });
+    tokens.push({ name: 'Bawdy Brawler', type: 'enemy', x: 15, y: 11, tokenSize: 1, hpMax: 26, armorClass: 12, speed: 30 });
+  } else {
+    for (let x = 10; x <= 13; x++) {
+      for (let y = 6; y <= 9; y++) {
+        terrain.push({ x, y, type: 'shallow_water' });
+      }
+    }
+    terrain.push({ x: 6, y: 4, type: 'cover_half' });
+    terrain.push({ x: 6, y: 11, type: 'cover_half' });
+    terrain.push({ x: 17, y: 4, type: 'cover_half' });
+    terrain.push({ x: 17, y: 11, type: 'cover_half' });
+    terrain.push({ x: 19, y: 7, type: 'elevation_high' });
+    terrain.push({ x: 20, y: 7, type: 'elevation_high' });
+    terrain.push({ x: 19, y: 8, type: 'elevation_high' });
+    terrain.push({ x: 20, y: 8, type: 'elevation_high' });
+    tokens.push({ name: 'Skeletal Champion', type: 'enemy', x: 19, y: 7, tokenSize: 1, hpMax: 45, armorClass: 15, speed: 30 });
+    tokens.push({ name: 'Skeleton Archer', type: 'enemy', x: 17, y: 3, tokenSize: 1, hpMax: 13, armorClass: 13, speed: 30 });
+    tokens.push({ name: 'Skeleton Archer', type: 'enemy', x: 17, y: 12, tokenSize: 1, hpMax: 13, armorClass: 13, speed: 30 });
+    tokens.push({ name: 'Skeleton Warrior', type: 'enemy', x: 12, y: 5, tokenSize: 1, hpMax: 13, armorClass: 13, speed: 30 });
+  }
+
+  return {
+    type: 'battlemap',
+    name: title,
+    description,
+    category,
+    config: {
+      gridColumns: cols,
+      gridRows: rows,
+      feetPerSquare: 5,
+      theme,
+      diagonalRule: 'standard5e',
+      title
+    },
+    terrain,
+    doors,
+    tokens
   };
 }

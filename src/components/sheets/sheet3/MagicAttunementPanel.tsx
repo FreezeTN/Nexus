@@ -207,35 +207,73 @@ export const MagicAttunementPanel: React.FC<MagicAttunementPanelProps> = ({
 
         {/* Unattuned Magic / Attunable Items in Inventory */}
         {candidateItems.length > 0 && (
-          <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-2">
-            <h4 className="text-[11px] font-bold text-amber-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-amber-400" /> Magic Items in Inventory Awaiting Attunement ({candidateItems.length})
-            </h4>
+          <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[11px] font-bold text-amber-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Zap className="w-3.5 h-3.5 text-amber-400" /> Magic Items in Inventory Awaiting Attunement ({candidateItems.length})
+              </h4>
+              {slotsUsed >= maxSlots && (
+                <span className="text-[10px] font-mono text-rose-400 font-bold flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> All {maxSlots} Slots Full
+                </span>
+              )}
+            </div>
+
+            {slotsUsed >= maxSlots && (
+              <div className="p-2.5 bg-rose-950/40 border border-rose-700/60 rounded-xl text-xs text-rose-200 flex items-start gap-2">
+                <Lock className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-bold text-rose-300 block">Attunement Limit Reached ({slotsUsed}/{maxSlots}):</strong>
+                  D&D 5e RAW strictly restricts attunement to {maxSlots} magic items at a time. To attune another item, you must first click <strong>Unattune</strong> on one of your active items above.
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {candidateItems.map(item => (
-                <div
-                  key={item.id}
-                  className="bg-stone-900 border border-stone-800 rounded-xl p-2.5 flex items-center justify-between gap-2 hover:border-stone-700 transition"
-                >
-                  <div className="min-w-0">
-                    <span className="font-bold text-stone-200 block text-xs truncate">{item.name}</span>
-                    <span className="text-[10px] text-stone-400 font-mono">
-                      {item.itemType || 'Magic Gear'} &bull; {item.equipped ? t('inventory.equipped', 'Equipped') : 'Carried'}
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleToggleAttune(item.id)}
-                    disabled={slotsUsed >= maxSlots}
-                    className="flex items-center gap-1 px-2.5 py-1 bg-purple-900 hover:bg-purple-800 disabled:opacity-40 disabled:hover:bg-purple-900 text-purple-100 border border-purple-500/50 rounded-lg text-xs font-bold transition shrink-0 cursor-pointer"
-                    title={slotsUsed >= maxSlots ? 'All Attunement Slots Occupied' : 'Attune to this magic item'}
+              {candidateItems.map(item => {
+                const isLimitReached = slotsUsed >= maxSlots;
+                return (
+                  <div
+                    key={item.id}
+                    className={`border rounded-xl p-2.5 flex items-center justify-between gap-2 transition ${
+                      isLimitReached
+                        ? 'bg-stone-950/60 border-stone-800 opacity-75'
+                        : 'bg-stone-900 border-stone-800 hover:border-stone-700'
+                    }`}
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-purple-300" /> Attune
-                  </button>
-                </div>
-              ))}
+                    <div className="min-w-0">
+                      <span className="font-bold text-stone-200 block text-xs truncate">{item.name}</span>
+                      <span className="text-[10px] text-stone-400 font-mono">
+                        {item.itemType || 'Magic Gear'} &bull; {item.equipped ? t('inventory.equipped', 'Equipped') : 'Carried'}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleToggleAttune(item.id)}
+                      disabled={isLimitReached}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition shrink-0 ${
+                        isLimitReached
+                          ? 'bg-stone-900 text-stone-500 border border-stone-800 cursor-not-allowed'
+                          : 'bg-purple-900 hover:bg-purple-800 text-purple-100 border border-purple-500/50 cursor-pointer shadow-sm'
+                      }`}
+                      title={isLimitReached ? `Cannot attune: all ${maxSlots} attunement slots are in use. Unattune an item above first.` : 'Attune to this magic item'}
+                    >
+                      {isLimitReached ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5 text-stone-500" />
+                          <span>Locked</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                          <span>Attune</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

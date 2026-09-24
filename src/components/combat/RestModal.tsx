@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CharacterData } from '../../types';
-import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp } from '../../utils/dndCalculations';
+import { getAbilityModifier, isCharacterDead, getEffectiveMaxHp, recharge5eClassResources } from '../../utils/dndCalculations';
 import { playHealSound, playSpellCastSound } from '../../utils/soundEffects';
 import { Flame, Moon, Heart, Sparkles, Wand2, X, RefreshCw, Dices } from 'lucide-react';
 import { useLanguage } from '../../i18n/LanguageContext';
@@ -232,12 +232,15 @@ export const RestModal: React.FC<RestModalProps> = ({
       deathSavesFailures = 0;
     }
 
+    const updated5eResources = !is35e ? recharge5eClassResources(character, 'short') : character.classResources5e;
+
     onUpdateCharacter({
       ...character,
       hpCurrent: newHp,
       hitDiceCurrent: newHitDice,
       spellSlots: updatedSpellSlots,
       classFeatures: updatedFeatures,
+      classResources5e: updated5eResources,
       conditions,
       deathSavesSuccesses,
       deathSavesFailures
@@ -282,6 +285,7 @@ export const RestModal: React.FC<RestModalProps> = ({
     // Reduce Exhaustion by 1 if present
     const newExhaustion = Math.max(0, (character.exhaustionLevel || 0) - 1);
     const conditions = (character.conditions || []).filter(c => c !== 'Unconscious');
+    const updated5eResources = !is35e ? recharge5eClassResources(character, 'long') : character.classResources5e;
 
     onUpdateCharacter({
       ...character,
@@ -290,6 +294,7 @@ export const RestModal: React.FC<RestModalProps> = ({
       hitDiceCurrent: newHitDice,
       spellSlots: updatedSpellSlots,
       classFeatures: updatedFeatures,
+      classResources5e: updated5eResources,
       deathSavesSuccesses: 0,
       deathSavesFailures: 0,
       exhaustionLevel: newExhaustion,

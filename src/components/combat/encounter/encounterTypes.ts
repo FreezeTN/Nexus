@@ -74,11 +74,14 @@ export interface Combatant {
   tokenSize?: number; // 1 = 1x1 (Medium/Small), 2 = 2x2 (Large), 3 = 3x3 (Huge), 4 = 4x4 (Gargantuan)
   reachFeet?: number; // default 5ft
   elevationFeet?: number; // default 0ft
+  flySpeed?: number; // Flying speed in feet (e.g. 60ft)
+  hasHover?: boolean; // Whether the creature can hover (prevents falling when knocked prone/incapacitated)
   speed?: number; // Base movement speed in feet (default 30ft)
   movementRemaining?: number; // Remaining movement feet in current turn
   hasDashed?: boolean; // Whether Dash action was used this turn
   mountedOnId?: string; // ID of the mount combatant this rider is riding
   isMount?: boolean; // Whether this combatant is designated as a mount/steed
+  lightSource?: 'none' | 'torch' | 'lantern' | 'magical_light'; // Tactical light radius emitted by token
 }
 
 export interface CombatLogEntry {
@@ -122,5 +125,6 @@ export interface SavedEncounterData {
   battlemapDoors?: Record<string, { isOpen: boolean; isLocked?: boolean }>;
   battlemapFogOfWar?: Record<string, boolean>;
   battlemapUseFogOfWar?: boolean;
+  battlemapWeatherEffect?: string;
 }
 

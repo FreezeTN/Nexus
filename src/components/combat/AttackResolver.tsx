@@ -19,8 +19,11 @@ import {
   calculate35eDamageFormula
 } from '../../utils/dndCalculations';
 import { playDiceSound, playHitSound, playMissSound, playDamageAppliedSound, playFireSound, playIceColdSound, playLightningSound, playAcidPoisonSound } from '../../utils/diceAudio';
-import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2, EyeOff, Waves } from 'lucide-react';
+import { Crosshair, Swords, Shield, Dices, Flame, Sparkles, CheckCircle2, XCircle, Wand2, EyeOff, Waves, CloudRain } from 'lucide-react';
 import { CollapsibleBox } from '../common/CollapsibleBox';
+import { WeatherEffectType, WEATHER_DEFINITIONS } from '../battlemap/battlemapTypes';
+import { findWeatherTriggerForSpell } from '../battlemap/weatherAbilityTriggers';
+import { eventBus } from '../../events/eventBus';
 
 interface AttackResolverProps {
   character: CharacterData;
@@ -28,6 +31,7 @@ interface AttackResolverProps {
   combatants: Combatant[];
   activeCombatantId?: string;
   encounterEnvironment?: EncounterEnvironment;
+  weatherEffect?: WeatherEffectType;
   onRoll?: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onApplyDamageToCombatant?: (combatantId: string, damage: number) => void;
   onLogAction?: (category: 'attack' | 'damage' | 'heal' | 'ability', message: string, actor?: string) => void;
@@ -39,6 +43,7 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
   combatants,
   activeCombatantId,
   encounterEnvironment = 'terrestrial',
+  weatherEffect = 'none',
   onRoll,
   onApplyDamageToCombatant,
   onLogAction
@@ -215,6 +220,11 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     (character.inventory || []).some(i => i.equipped && (i.name.toLowerCase().includes('freedom of movement') || (i.notes || '').toLowerCase().includes('freedom of movement')));
   const activeDamageType = selectedAttack?.damageType || (selectedSpell?.school ? 'Force' : 'Slashing');
 
+  // RAW Weather Trigger & Call Lightning Storm Synergy (5e PHB p. 220)
+  const weatherTrigger = findWeatherTriggerForSpell(activeAttackName);
+  const isCallLightning = activeAttackName.toLowerCase().includes('call lightning');
+  const hasStormSynergy = isCallLightning && weatherEffect === 'storm';
+
   const underwaterEval = React.useMemo(() => {
     if (!isUnderwaterCombat) return null;
     return evaluateUnderwaterCombatModifiers({
@@ -322,6 +332,25 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     disadvantageSources.push('Underwater: Slashing/Bludgeoning without Swim Speed (-Disadvantage) (5e PHB p. 198)');
   }
 
+  // Tactical Weather Ranged Attack Modifiers (5e DMG pp. 109-111 & RAW)
+  const weatherDef = weatherEffect && weatherEffect !== 'none' ? WEATHER_DEFINITIONS[weatherEffect] : undefined;
+  if (weatherDef?.disadvantageRangedAttacks && isRanged) {
+    disadvantageSources.push(`${weatherDef.name}: High gale winds & driving precipitation impose Disadvantage on ranged weapon attacks (5e RAW)`);
+  }
+
+  // Tactical Weather Obscurement / Distance Vision Cap Check
+  const attackerCombatant = combatants.find(c => c.id === activeCombatantId || c.name.toLowerCase() === character.name.toLowerCase());
+  if (weatherDef?.maxVisibilityFeet && attackerCombatant?.mapX !== undefined && targetCombatant?.mapX !== undefined) {
+    const distSq = Math.hypot(
+      attackerCombatant.mapX - targetCombatant.mapX,
+      attackerCombatant.mapY - targetCombatant.mapY
+    );
+    const distFt = distSq * 5;
+    if (distFt > weatherDef.maxVisibilityFeet) {
+      disadvantageSources.push(`${weatherDef.name}: Target is heavily obscured beyond ${weatherDef.maxVisibilityFeet} ft vision limit (Total Concealment)`);
+    }
+  }
+
   const recommendedRollMode: 'normal' | 'advantage' | 'disadvantage' =
     advantageSources.length > 0 && disadvantageSources.length === 0
       ? 'advantage'
@@ -334,7 +363,7 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     if ((advantageSources.length > 0 || disadvantageSources.length > 0) && rollMode !== recommendedRollMode) {
       setRollMode(recommendedRollMode);
     }
-  }, [selectedTargetId, attackerConditions.join(','), targetConditions.join(','), recommendedRollMode, rollMode]);
+  }, [selectedTargetId, attackerConditions.join(','), targetConditions.join(','), recommendedRollMode, rollMode, weatherEffect]);
 
   // Auto-sync extra attack bonus from active conditions (e.g. Bless +2, Archery +2, Bane -2)
   React.useEffect(() => {
@@ -474,6 +503,18 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
     if (targetEffects.damageResistanceAll) {
       finalTotal = Math.floor(finalTotal / 2);
       finalBreakdown = `${finalBreakdown} | Petrified: [Halved by Resistance to All Damage]`;
+    }
+
+    // 5e RAW Call Lightning Storm Synergy (5e PHB p. 220):
+    // "If you are already in stormy conditions when you cast this spell, the damage increases by 1d10."
+    if (hasStormSynergy) {
+      const extraDice = lastResult.isCrit ? 2 : 1;
+      let extraRoll = 0;
+      for (let i = 0; i < extraDice; i++) {
+        extraRoll += Math.floor(Math.random() * 10) + 1;
+      }
+      finalTotal += extraRoll;
+      finalBreakdown = `${finalBreakdown} | ⚡ Call Lightning Storm Synergy (+${extraDice}d10): +${extraRoll} Lightning (5e PHB p. 220)`;
     }
 
     // 3.5e Underwater Combat Damage Penalty (3.5e DMG p. 92):
@@ -650,6 +691,48 @@ export const AttackResolver: React.FC<AttackResolverProps> = ({
               <span className="text-stone-300 text-[11px]">
                 Spell Atk: <strong className="text-amber-300">{formatModifier(spellAtkBonus)}</strong> | DC: <strong className="text-amber-300">{spellSaveDC}</strong>
               </span>
+            </div>
+          )}
+
+          {/* Weather Trigger / Storm Synergy Banner */}
+          {weatherTrigger && (
+            <div className="bg-sky-950/40 border border-sky-500/40 p-2.5 rounded-xl text-xs space-y-1.5 shadow">
+              <div className="flex items-center justify-between">
+                <span className="text-sky-300 font-bold flex items-center gap-1.5 font-serif">
+                  <span>{weatherTrigger.icon}</span>
+                  <span>{weatherTrigger.name} (5e RAW)</span>
+                </span>
+                <span className="text-[10px] bg-sky-900/60 text-sky-200 px-1.5 py-0.5 rounded border border-sky-600/40 font-mono">
+                  Atmosphere Trigger
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-300 leading-tight">
+                {weatherTrigger.description}
+              </p>
+              {hasStormSynergy ? (
+                <div className="text-[11px] bg-emerald-950/70 border border-emerald-500/50 text-emerald-200 p-1.5 rounded-lg flex items-center gap-1.5 font-bold">
+                  <span>⚡</span> Active Tempest Synergy: +1d10 Lightning Damage automatically applied to damage roll!
+                </div>
+              ) : (
+                weatherEffect !== weatherTrigger.weatherEffect && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      eventBus.emit('WeatherChanged', {
+                        weather: weatherTrigger.weatherEffect,
+                        sourceName: character.name,
+                        sourceType: 'spell',
+                        reason: `Cast ${weatherTrigger.name}: Summoned ${WEATHER_DEFINITIONS[weatherTrigger.weatherEffect]?.name || weatherTrigger.weatherEffect} (${weatherTrigger.source})`
+                      });
+                      onLogAction?.('ability', `🌪️ ${character.name} triggered ${weatherTrigger.name}, altering battlemap weather to ${WEATHER_DEFINITIONS[weatherTrigger.weatherEffect]?.name || weatherTrigger.weatherEffect} (5e RAW)!`, character.name);
+                    }}
+                    className="w-full mt-1 px-2.5 py-1.5 bg-sky-900 hover:bg-sky-800 border border-sky-400/50 text-sky-100 font-bold text-[11px] rounded-lg transition flex items-center justify-center gap-1.5 shadow cursor-pointer"
+                  >
+                    <span>{weatherTrigger.icon}</span>
+                    <span>Summon {WEATHER_DEFINITIONS[weatherTrigger.weatherEffect]?.name} on Battlemap</span>
+                  </button>
+                )
+              )}
             </div>
           )}
 

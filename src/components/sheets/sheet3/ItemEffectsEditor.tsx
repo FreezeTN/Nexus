@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { GearItem, AbilityName, WeaponDamageRow } from '../../../types';
+import { GearItem, AbilityName, WeaponDamageRow, CharacterData } from '../../../types';
+import { getMaxAttunementSlots, getAttunedItemsCount } from '../../../utils/dndCalculations';
 import {
   Shield,
   ShieldAlert,
@@ -124,12 +125,14 @@ interface ItemEffectsEditorProps {
   item: GearItem;
   onChange: (updated: GearItem) => void;
   edition?: string;
+  character?: CharacterData;
 }
 
 export const ItemEffectsEditor: React.FC<ItemEffectsEditorProps> = ({
   item,
   onChange,
-  edition = '5e'
+  edition = '5e',
+  character
 }) => {
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     defenses: true,
@@ -292,16 +295,36 @@ export const ItemEffectsEditor: React.FC<ItemEffectsEditorProps> = ({
               </div>
 
               <div className="flex flex-col justify-end">
-                <label className={`flex items-center gap-1.5 text-emerald-300 font-sans select-none pb-2 text-xs ${!item.requiresAttunement ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                  <input
-                    type="checkbox"
-                    disabled={!item.requiresAttunement}
-                    checked={item.attuned || false}
-                    onChange={(e) => onChange({ ...item, attuned: e.target.checked })}
-                    className="rounded text-emerald-600 bg-stone-800 border-stone-700"
-                  />
-                  <span className="whitespace-nowrap truncate">Attuned</span>
-                </label>
+                {(() => {
+                  const maxSlots = character ? getMaxAttunementSlots(character).maxSlots : 3;
+                  const currentAttuned = character ? getAttunedItemsCount(character) : 0;
+                  const isLimitReached = !item.attuned && currentAttuned >= maxSlots;
+                  const isDisabled = !item.requiresAttunement || isLimitReached;
+
+                  return (
+                    <label
+                      className={`flex items-center gap-1.5 text-emerald-300 font-sans select-none pb-2 text-xs ${
+                        isDisabled ? 'opacity-50 cursor-not-allowed text-stone-500' : 'cursor-pointer'
+                      }`}
+                      title={
+                        isLimitReached
+                          ? `Attunement Limit Reached (${currentAttuned}/${maxSlots} slots occupied). Unattune an item first!`
+                          : undefined
+                      }
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={isDisabled}
+                        checked={item.attuned || false}
+                        onChange={(e) => onChange({ ...item, attuned: e.target.checked })}
+                        className="rounded text-emerald-600 bg-stone-800 border-stone-700 disabled:opacity-40"
+                      />
+                      <span className="whitespace-nowrap truncate">
+                        Attuned {isLimitReached ? `(Full ${maxSlots}/${maxSlots})` : ''}
+                      </span>
+                    </label>
+                  );
+                })()}
               </div>
             </>
           )}

@@ -523,13 +523,7 @@ export const NewCharacterModal: React.FC<NewCharacterModalProps> = ({
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) {
-      if (name.trim()) {
-        if (window.confirm('Close character creation? Your entries are saved as a draft and will be restored when you reopen.')) {
-          onClose();
-        }
-      } else {
-        onClose();
-      }
+      onClose();
     }
   };
 

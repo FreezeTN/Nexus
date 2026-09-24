@@ -34,9 +34,16 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
 
   const { isVisible } = useLayoutCustomization();
 
-  const handleConfirmCastSpellTarget = (spellToCast: any, selectedTargetIds: string[], condName: string) => {
-    const updatedSlots = spellToCast.level > 0
-      ? character.spellSlots.map(s => s.level === spellToCast.level ? { ...s, current: Math.max(0, s.current - 1) } : s)
+  const handleConfirmCastSpellTarget = (
+    spellToCast: any,
+    selectedTargetIds: string[],
+    condName: string,
+    slotLevelToExpend?: number,
+    scaledDamage?: string
+  ) => {
+    const levelToDeduct = slotLevelToExpend !== undefined ? slotLevelToExpend : spellToCast.level;
+    const updatedSlots = levelToDeduct > 0
+      ? (character.spellSlots || []).map(s => s.level === levelToDeduct ? { ...s, current: Math.max(0, s.current - 1) } : s)
       : character.spellSlots;
 
     const availableTargets = allCharacters.length > 0 ? allCharacters : [character];
@@ -61,10 +68,14 @@ export const Sheet4Spells: React.FC<Sheet4Props> = ({
       });
     }
 
-    if (spellToCast.damage) {
-      onRollDamage(`✨ Cast ${spellToCast.name} on ${targetNamesStr} (Damage: ${spellToCast.damage}) - Applied '${condName}'!`, spellToCast.damage);
+    const activeDmg = scaledDamage || spellToCast.damage;
+    const isUpcast = levelToDeduct > (spellToCast.level || 1);
+    const upcastPrefix = isUpcast ? ` [Upcast Lvl ${levelToDeduct}]` : '';
+
+    if (activeDmg) {
+      onRollDamage(`✨ Cast ${spellToCast.name}${upcastPrefix} on ${targetNamesStr} (Damage: ${activeDmg}) - Applied '${condName}'!`, activeDmg);
     } else {
-      onRollDamage(`✨ Cast ${spellToCast.name} on ${targetNamesStr} - Applied '${condName}' status!`, '1d20');
+      onRollDamage(`✨ Cast ${spellToCast.name}${upcastPrefix} on ${targetNamesStr} - Applied '${condName}' status!`, '1d20');
     }
 
     setTargetModalSpell(null);

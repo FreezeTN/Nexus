@@ -23,6 +23,7 @@ import { getCharacterContainers, PRESET_CONTAINERS, getContainerWeightSummaries 
 import { syncInventoryWeaponsToAttacks } from '../../../utils/gearAttackSync';
 import { eventBus } from '../../../events/eventBus';
 import { useLanguage } from '../../../i18n/LanguageContext';
+import { MagicItemBodySlots35eModal } from '../../modals/MagicItemBodySlots35eModal';
 import {
   Package,
   Plus,
@@ -58,7 +59,8 @@ import {
   Crown,
   Coins,
   Eye,
-  ShoppingBag
+  ShoppingBag,
+  Lock
 } from 'lucide-react';
 import { ItemEffectsEditor, ITEM_CATEGORIES } from './ItemEffectsEditor';
 import { StablesAndMountsModal } from '../../modals/StablesAndMountsModal';
@@ -108,6 +110,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
   const [addItemModalTab, setAddItemModalTab] = useState<'catalog' | 'custom'>('catalog');
   const [catalogCategory, setCatalogCategory] = useState<'all' | 'custom' | 'weapons' | 'armor' | 'magic' | 'consumables' | 'mounts' | 'gear'>('all');
   const [showStablesModal, setShowStablesModal] = useState(false);
+  const [showBodySlots35eModal, setShowBodySlots35eModal] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState('');
   const [customCompendiumList, setCustomCompendiumList] = useState<CompendiumItem[]>([]);
   const [saveToCompendiumAlso, setSaveToCompendiumAlso] = useState(true);
@@ -154,6 +157,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
 
   // New item form state
   const is5e = (character.edition || '5e') === '5e';
+  const is35e = character.edition === '3.5e';
   const [newItemName, setNewItemName] = useState('');
   const [newItemQty, setNewItemQty] = useState<number>(1);
   const [newItemWeight, setNewItemWeight] = useState<number>(1);
@@ -1029,6 +1033,19 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
       storageKey="sheet3_equipment"
       headerExtra={
         <div className="flex items-center gap-2">
+          {is35e && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowBodySlots35eModal(true);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-950/80 hover:bg-sky-900 border border-sky-600/60 text-sky-200 rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+              title="Official 3.5e Magic Item Body Slots (DMG p. 214)"
+            >
+              <Shield className="w-3.5 h-3.5 text-sky-400" />
+              <span>Body Slots (3.5e)</span>
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1576,20 +1593,40 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                       <span>{item.stored ? 'STASH' : 'CARRY'}</span>
                     </button>
 
-                    {is5e && (
-                      <button
-                        onClick={() => handleToggleAttuned(item.id)}
-                        className={`flex items-center gap-1 transition px-1.5 py-0.5 rounded border text-[10px] font-mono cursor-pointer ${
-                          item.attuned
-                            ? 'bg-purple-950/90 text-purple-200 border-purple-500 font-bold shadow'
-                            : 'bg-stone-900 text-stone-500 border-stone-800 hover:text-stone-300'
-                        }`}
-                        title={item.attuned ? 'Attuned Magic Item (Active Bond)' : 'Click to Attune Magic Item'}
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                        <span>{item.attuned ? 'ATTUNED' : 'ATTUNE'}</span>
-                      </button>
-                    )}
+                    {is5e && (() => {
+                      const maxSlots = getMaxAttunementSlots(character).maxSlots;
+                      const currentAttuned = getAttunedItemsCount(character);
+                      const isLimitReached = !item.attuned && currentAttuned >= maxSlots;
+
+                      return (
+                        <button
+                          type="button"
+                          disabled={isLimitReached}
+                          onClick={() => handleToggleAttuned(item.id)}
+                          className={`flex items-center gap-1 transition px-1.5 py-0.5 rounded border text-[10px] font-mono ${
+                            item.attuned
+                              ? 'bg-purple-950/90 text-purple-200 border-purple-500 font-bold shadow cursor-pointer'
+                              : isLimitReached
+                              ? 'bg-stone-950/50 text-stone-600 border-stone-800/80 cursor-not-allowed opacity-50'
+                              : 'bg-stone-900 text-stone-500 border-stone-800 hover:text-stone-300 cursor-pointer'
+                          }`}
+                          title={
+                            item.attuned
+                              ? 'Attuned Magic Item (Active Bond) - Click to Unattune'
+                              : isLimitReached
+                              ? `Attunement Limit Reached (${currentAttuned}/${maxSlots} slots occupied). You must unattune an existing item before attuning this one.`
+                              : 'Click to Attune Magic Item'
+                          }
+                        >
+                          {isLimitReached ? (
+                            <Lock className="w-3.5 h-3.5 text-stone-600" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                          )}
+                          <span>{item.attuned ? 'ATTUNED' : isLimitReached ? 'LOCKED' : 'ATTUNE'}</span>
+                        </button>
+                      );
+                    })()}
 
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -3009,6 +3046,7 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
                 item={editingItem}
                 onChange={setEditingItem}
                 edition={character.edition}
+                character={character}
               />
 
               {/* Notes */}
@@ -3271,6 +3309,16 @@ export const InventoryListPanel: React.FC<InventoryListPanelProps> = ({
         <StablesAndMountsModal
           isOpen={showStablesModal}
           onClose={() => setShowStablesModal(false)}
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+        />
+      )}
+
+      {/* 3.5e MAGIC ITEM BODY SLOTS MODAL */}
+      {showBodySlots35eModal && (
+        <MagicItemBodySlots35eModal
+          isOpen={showBodySlots35eModal}
+          onClose={() => setShowBodySlots35eModal(false)}
           character={character}
           onUpdateCharacter={onUpdateCharacter}
         />

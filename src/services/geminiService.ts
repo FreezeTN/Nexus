@@ -1,6 +1,7 @@
 import { CharacterData, GearItem, Spell, RuleEdition, AbilityName, Skill } from '../types';
 import { CampaignEntity } from '../utils/searchIndexer';
 import { generateProceduralEntity } from './proceduralGenerators';
+import { BattlemapLayout, BattlemapLayoutToken, TerrainType, DoorState } from '../components/battlemap/battlemapTypes';
 import {
   parseSlashProgression,
   parseDamageReductionFromText,
@@ -86,7 +87,8 @@ export type EntityType =
   | 'campaign_recap'
   | 'rules_adjudication'
   | 'dungeon_hazard'
-  | 'tactical_room';
+  | 'tactical_room'
+  | 'battlemap';
 
 const USER_API_KEY_STORAGE = 'nexus_user_ai_api_key';
 
@@ -851,9 +853,102 @@ export function hydrateGeneratedRace(raw: any, edition: RuleEdition = '5e'): any
   };
 }
 
+export function hydrateGeneratedBattlemap(raw: any): BattlemapLayout {
+  const now = new Date().toISOString();
+  const cols = Math.max(10, Math.min(60, Number(raw.config?.gridColumns || raw.gridColumns) || 24));
+  const rows = Math.max(8, Math.min(60, Number(raw.config?.gridRows || raw.gridRows) || 16));
+  const theme = raw.config?.theme || raw.theme || 'dungeon';
+  const category = raw.category || 'dungeon';
+
+  // Normalize terrainMap
+  const terrainMap: Record<string, TerrainType> = {};
+  if (raw.terrainMap && typeof raw.terrainMap === 'object' && !Array.isArray(raw.terrainMap)) {
+    Object.assign(terrainMap, raw.terrainMap);
+  } else if (Array.isArray(raw.terrain)) {
+    raw.terrain.forEach((t: any) => {
+      if (typeof t?.x === 'number' && typeof t?.y === 'number' && t?.type) {
+        terrainMap[`${t.x},${t.y}`] = t.type as TerrainType;
+      }
+    });
+  }
+
+  // Normalize doors
+  const doors: Record<string, DoorState> = {};
+  if (raw.doors && typeof raw.doors === 'object' && !Array.isArray(raw.doors)) {
+    Object.assign(doors, raw.doors);
+  } else if (Array.isArray(raw.doors)) {
+    raw.doors.forEach((d: any) => {
+      if (typeof d?.x === 'number' && typeof d?.y === 'number') {
+        doors[`${d.x},${d.y}`] = {
+          isOpen: Boolean(d.isOpen),
+          isLocked: Boolean(d.isLocked),
+          x: d.x,
+          y: d.y
+        };
+      }
+    });
+  }
+
+  // Normalize tokens
+  const tokens: BattlemapLayoutToken[] = [];
+  if (Array.isArray(raw.tokens)) {
+    raw.tokens.forEach((tok: any, idx: number) => {
+      if (typeof tok?.x === 'number' && typeof tok?.y === 'number') {
+        tokens.push({
+          id: tok.id || `tok_ai_${Date.now()}_${idx}`,
+          name: tok.name || `Token ${idx + 1}`,
+          type: tok.type === 'player' ? 'player' : tok.type === 'ally' ? 'ally' : 'enemy',
+          x: Math.min(Math.max(0, tok.x), cols - 1),
+          y: Math.min(Math.max(0, tok.y), rows - 1),
+          tokenSize: tok.tokenSize || 1,
+          reachFeet: tok.reachFeet || 5,
+          elevationFeet: tok.elevationFeet || 0,
+          hpMax: tok.hpMax || 15,
+          hpCurrent: tok.hpCurrent ?? tok.hpMax ?? 15,
+          armorClass: tok.armorClass || 13,
+          speed: tok.speed || 30,
+          portraitUrl: tok.portraitUrl
+        });
+      }
+    });
+  }
+
+  return {
+    id: raw.id || `layout_ai_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    name: raw.name || raw.title || 'Tactical Encounter Arena',
+    description: raw.description || `AI-architected tactical encounter map (${cols}×${rows}, ${theme}).`,
+    category,
+    createdAt: raw.createdAt || now,
+    updatedAt: now,
+    authorName: raw.authorName || 'Nexus Oracle',
+    isPublic: false,
+    config: {
+      id: raw.config?.id || `cfg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      title: raw.name || raw.title || 'Tactical Encounter Arena',
+      gridColumns: cols,
+      gridRows: rows,
+      feetPerSquare: Number(raw.config?.feetPerSquare || raw.feetPerSquare) || 5,
+      gridType: raw.config?.gridType === 'hex' ? 'hex' : 'square',
+      theme,
+      diagonalRule: raw.config?.diagonalRule || 'standard5e',
+      showCoordinates: true,
+      showGridNumbers: false,
+      showMovementRings: true,
+      showReachableGrid: true,
+      snapToGrid: true,
+      backgroundImageUrl: raw.config?.backgroundImageUrl || raw.backgroundImageUrl || undefined,
+      enableDynamicVision: raw.config?.enableDynamicVision ?? true,
+      defaultVisionFeet: Number(raw.config?.defaultVisionFeet) || 60
+    },
+    terrainMap,
+    doors,
+    tokens
+  };
+}
+
 export interface DetectedChatEntity {
   id: string;
-  type: 'character' | 'monster' | 'merchant' | 'item' | 'spell' | 'class' | 'race' | 'graph_node';
+  type: 'character' | 'monster' | 'merchant' | 'item' | 'spell' | 'class' | 'race' | 'graph_node' | 'battlemap';
   name: string;
   subtitle?: string;
   summary?: string;
@@ -1029,6 +1124,29 @@ export function extractEntitiesFromChatMessage(text: string): DetectedChatEntity
         rawJson: itemObj,
       });
     }
+    // Check if it's a battlemap layout
+    if (
+      itemObj.type === 'battlemap' ||
+      itemObj.type === 'battle_map' ||
+      itemObj.type === 'map' ||
+      (itemObj.terrainMap !== undefined && (itemObj.config || itemObj.gridColumns || itemObj.theme)) ||
+      (Array.isArray(itemObj.terrain) && (itemObj.gridColumns || itemObj.config || itemObj.category))
+    ) {
+      const cols = itemObj.config?.gridColumns || itemObj.gridColumns || 24;
+      const rows = itemObj.config?.gridRows || itemObj.gridRows || 16;
+      const theme = itemObj.config?.theme || itemObj.theme || 'dungeon';
+      const tokenCount = Array.isArray(itemObj.tokens) ? itemObj.tokens.length : 0;
+      detected.push({
+        id: `det_map_${Date.now()}_${detected.length}`,
+        type: 'battlemap',
+        name: itemObj.name || itemObj.title || 'Tactical Battlemap',
+        subtitle: `Battlemap • ${cols}×${rows} sq • Theme: ${theme}${tokenCount > 0 ? ` • ${tokenCount} Tokens` : ''}`,
+        summary: itemObj.description || `Tactical encounter layout (${cols}×${rows}, ${theme}).`,
+        rawJson: itemObj,
+      });
+      return;
+    }
+
     // Check if it's an item
     else if (
       itemObj.costGp !== undefined ||

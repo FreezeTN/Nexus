@@ -1,6 +1,7 @@
 import { CharacterData } from '../../types';
 import { getEffectiveAbilities, getAbilityModifier } from './abilityCalculators';
 import { get35eSizeModifier } from '../rules/sizeScaleRules35e';
+import { find35eClassRule, calculateClassBab } from '../rules/dnd35eClassesRules';
 
 export interface Dnd35eBaseAttackBreakdown {
   bab: number;
@@ -48,26 +49,37 @@ export interface Dnd35eArmorClassBreakdown {
  * Calculates 3.5e Base Attack Bonus (BAB) by class
  */
 export function get35eBaseAttackBonus(char: CharacterData): Dnd35eBaseAttackBreakdown {
-  const cls = (char.characterClass || '').toLowerCase();
-  const lvl = char.level || 1;
+  const isGestalt = Boolean(char.optionalRules?.useGestaltUA72);
+  const isMulticlass = Boolean(char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass);
+  const lvl = Math.max(1, char.level || 1);
+  const primaryClass = char.characterClass || '';
+  const secondaryClass = char.optionalRules?.secondaryClass || '';
+  const secondaryLevel = Math.max(1, char.optionalRules?.secondaryLevel || 1);
+  const primaryLevel = isMulticlass ? Math.max(1, lvl - secondaryLevel) : lvl;
 
   let bab = 0;
   let progressionType: 'Full' | 'Three-Quarter' | 'Half' = 'Three-Quarter';
 
-  // Full BAB: Barbarian, Fighter, Paladin, Ranger
-  if (cls.includes('barbarian') || cls.includes('fighter') || cls.includes('paladin') || cls.includes('ranger') || cls.includes('knight') || cls.includes('warrior')) {
-    bab = lvl;
-    progressionType = 'Full';
-  }
-  // Half BAB: Wizard, Sorcerer
-  else if (cls.includes('wizard') || cls.includes('sorcerer') || cls.includes('mage') || cls.includes('necromancer')) {
-    bab = Math.floor(lvl * 0.5);
-    progressionType = 'Half';
-  }
-  // 3/4 BAB: Cleric, Druid, Monk, Rogue, Bard
-  else {
-    bab = Math.floor(lvl * 0.75);
-    progressionType = 'Three-Quarter';
+  // Manual override takes precedence if explicitly provided and not gestalt
+  if (!isGestalt && typeof char.bab === 'number') {
+    bab = char.bab;
+  } else if (!isGestalt && typeof char.baseAttackBonus === 'number') {
+    bab = char.baseAttackBonus;
+  } else if (isMulticlass) {
+    const bab1 = calculateClassBab(primaryClass, primaryLevel);
+    const bab2 = calculateClassBab(secondaryClass, secondaryLevel);
+    bab = bab1 + bab2;
+    const rule1 = find35eClassRule(primaryClass);
+    progressionType = rule1?.babProgression || 'Three-Quarter';
+  } else {
+    const rule = find35eClassRule(primaryClass);
+    if (rule) {
+      progressionType = rule.babProgression;
+      bab = calculateClassBab(primaryClass, lvl);
+    } else {
+      bab = calculateClassBab(primaryClass, lvl);
+      progressionType = bab === lvl ? 'Full' : bab === Math.floor(lvl * 0.5) ? 'Half' : 'Three-Quarter';
+    }
   }
 
   // Iterative Attacks generation: each attack at -5 from previous once BAB reaches +6, +11, +16
@@ -95,8 +107,8 @@ export function get35eBaseAttackBonus(char: CharacterData): Dnd35eBaseAttackBrea
  * Calculates 3.5e Good vs Poor Saves for Fortitude, Reflex, and Will
  */
 export function get35eSaves(char: CharacterData): Dnd35eSavesBreakdown {
-  const cls = (char.characterClass || '').toLowerCase();
-  const lvl = char.level || 1;
+  const lvl = Math.max(1, char.level || 1);
+  const primaryClass = char.characterClass || '';
   const abilities = getEffectiveAbilities(char);
 
   const conMod = getAbilityModifier(abilities.CON?.score || 10);
@@ -105,52 +117,70 @@ export function get35eSaves(char: CharacterData): Dnd35eSavesBreakdown {
 
   // Good save formula: 2 + floor(lvl / 2)
   // Poor save formula: floor(lvl / 3)
-  const calcSave = (isGood: boolean) => isGood ? 2 + Math.floor(lvl / 2) : Math.floor(lvl / 3);
+  const calcSave = (isGood: boolean, classLevel: number) =>
+    isGood ? 2 + Math.floor(classLevel / 2) : Math.floor(classLevel / 3);
 
-  // Class Save Profiles in 3.5e:
-  // Barbarian: Fort (Good), Ref (Poor), Will (Poor)
-  // Bard: Fort (Poor), Ref (Good), Will (Good)
-  // Cleric: Fort (Good), Ref (Poor), Will (Good)
-  // Druid: Fort (Good), Ref (Poor), Will (Good)
-  // Fighter: Fort (Good), Ref (Poor), Will (Poor)
-  // Monk: Fort (Good), Ref (Good), Will (Good)
-  // Paladin: Fort (Good), Ref (Poor), Will (Poor)
-  // Ranger: Fort (Good), Ref (Good), Will (Poor)
-  // Rogue: Fort (Poor), Ref (Good), Will (Poor)
-  // Sorcerer: Fort (Poor), Ref (Poor), Will (Good)
-  // Wizard: Fort (Poor), Ref (Poor), Will (Good)
+  const rule = find35eClassRule(primaryClass);
+  let goodFort = rule ? rule.goodSaves.includes('Fortitude') : false;
+  let goodRef = rule ? rule.goodSaves.includes('Reflex') : false;
+  let goodWill = rule ? rule.goodSaves.includes('Will') : false;
 
-  let goodFort = false;
-  let goodRef = false;
-  let goodWill = false;
-
-  if (cls.includes('barbarian') || cls.includes('fighter') || cls.includes('paladin')) {
-    goodFort = true;
-  } else if (cls.includes('bard')) {
-    goodRef = true;
-    goodWill = true;
-  } else if (cls.includes('cleric') || cls.includes('druid')) {
-    goodFort = true;
-    goodWill = true;
-  } else if (cls.includes('monk')) {
-    goodFort = true;
-    goodRef = true;
-    goodWill = true;
-  } else if (cls.includes('ranger')) {
-    goodFort = true;
-    goodRef = true;
-  } else if (cls.includes('rogue')) {
-    goodRef = true;
-  } else if (cls.includes('sorcerer') || cls.includes('wizard')) {
-    goodWill = true;
-  } else {
-    // Default balanced
-    goodFort = true;
+  // Fallback heuristic if not matched in dictionary
+  if (!rule) {
+    const cls = primaryClass.toLowerCase();
+    if (cls.includes('barbarian') || cls.includes('fighter') || cls.includes('paladin')) {
+      goodFort = true;
+    } else if (cls.includes('bard')) {
+      goodRef = true;
+      goodWill = true;
+    } else if (cls.includes('cleric') || cls.includes('druid')) {
+      goodFort = true;
+      goodWill = true;
+    } else if (cls.includes('monk')) {
+      goodFort = true;
+      goodRef = true;
+      goodWill = true;
+    } else if (cls.includes('ranger')) {
+      goodFort = true;
+      goodRef = true;
+    } else if (cls.includes('rogue')) {
+      goodRef = true;
+    } else if (cls.includes('sorcerer') || cls.includes('wizard') || cls.includes('psion')) {
+      goodWill = true;
+    } else {
+      goodFort = true;
+    }
   }
 
-  const baseFort = calcSave(goodFort);
-  const baseRef = calcSave(goodRef);
-  const baseWill = calcSave(goodWill);
+  let baseFort = calcSave(goodFort, lvl);
+  let baseRef = calcSave(goodRef, lvl);
+  let baseWill = calcSave(goodWill, lvl);
+
+  // Multiclass save stacking: add secondary class saves
+  if (char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass) {
+    const secClass = char.optionalRules.secondaryClass;
+    const secLevel = Math.max(1, char.optionalRules.secondaryLevel || 1);
+    const primLevel = Math.max(1, lvl - secLevel);
+
+    const primRule = find35eClassRule(primaryClass);
+    const secRule = find35eClassRule(secClass);
+
+    const pFortGood = primRule ? primRule.goodSaves.includes('Fortitude') : goodFort;
+    const pRefGood = primRule ? primRule.goodSaves.includes('Reflex') : goodRef;
+    const pWillGood = primRule ? primRule.goodSaves.includes('Will') : goodWill;
+
+    const sFortGood = secRule ? secRule.goodSaves.includes('Fortitude') : false;
+    const sRefGood = secRule ? secRule.goodSaves.includes('Reflex') : false;
+    const sWillGood = secRule ? secRule.goodSaves.includes('Will') : false;
+
+    baseFort = calcSave(pFortGood, primLevel) + calcSave(sFortGood, secLevel);
+    baseRef = calcSave(pRefGood, primLevel) + calcSave(sRefGood, secLevel);
+    baseWill = calcSave(pWillGood, primLevel) + calcSave(sWillGood, secLevel);
+
+    goodFort = pFortGood || sFortGood;
+    goodRef = pRefGood || sRefGood;
+    goodWill = pWillGood || sWillGood;
+  }
 
   // 3.5e Negative Levels: -1 to all saving throws per negative level
   const negPenalty = char.negativeLevels || 0;
@@ -165,10 +195,17 @@ export function get35eSaves(char: CharacterData): Dnd35eSavesBreakdown {
     coverReflexBonus = 4;
   }
 
+  // 3.5e Barbarian Rage Will Save Morale Bonus (+2 normal, +3 greater, +4 mighty)
+  let rageWillBonus = 0;
+  if (char.isRaging35e) {
+    const lvl = Math.max(1, char.level || 1);
+    rageWillBonus = lvl >= 20 ? 4 : lvl >= 11 ? 3 : 2;
+  }
+
   return {
     fortitude: { total: baseFort + conMod - negPenalty, base: baseFort, abilityMod: conMod, isGood: goodFort },
     reflex: { total: baseRef + dexMod + coverReflexBonus - negPenalty, base: baseRef, abilityMod: dexMod, isGood: goodRef },
-    will: { total: baseWill + wisMod - negPenalty, base: baseWill, abilityMod: wisMod, isGood: goodWill }
+    will: { total: baseWill + wisMod + rageWillBonus - negPenalty, base: baseWill, abilityMod: wisMod, isGood: goodWill }
   };
 }
 
@@ -377,6 +414,12 @@ export function get35eArmorClass(char: CharacterData): Dnd35eArmorClassBreakdown
   }
   if (char.miscAcBonus) {
     sources.misc.push(`Misc AC Bonus (+${char.miscAcBonus})`);
+  }
+
+  // 3.5e Barbarian Rage AC Penalty (-2 AC)
+  if (char.isRaging35e) {
+    miscBonus -= 2;
+    sources.misc.push('Barbarian Rage (-2 AC)');
   }
 
   // Monk AC Bonus in 3.5e: Wis mod + 1 per 5 monk levels if unarmored and unshielded

@@ -1,7 +1,7 @@
 {
   "short_name": "Nexus",
   "name": "Nexus",
-  "description": "Nexus next-generation TRPG and character sheet platform.",
+  "description": "A customizable, extensible tabletop workspace where campaign management, encounters, battlemaps, AI assistance, character management, and plugins all operate as parts of one cohesive platform.",
   "icons": [
     {
       "src": "/pwa-icon.svg",

@@ -524,6 +524,38 @@ Always ground your answers in the real structure of the Nexus platform:
   - 🎒 **Add Item to Inventory**
   - 📜 **Add Spell to Spellbook**
   - 🌐 **Add to Campaign Graph**
+  - 🗺️ **Apply to Battlemap** (Load Layout onto Grid)
+- When asked to create, design, or generate a battlemap or tactical encounter area (e.g. "Create a battlemap for a flooded crypt", "Design a tactical encounter arena with lava hazards and 3 fire elementals", "Kannst du mir eine Battlemap für eine Taverne erstellen?"):
+  - Provide a vivid tactical breakdown of the map layout, cover points, terrain hazards, lighting, and GM tactics.
+  - Include a complete JSON code block with \`"type": "battlemap"\` containing:
+\`\`\`json
+{
+  "type": "battlemap",
+  "name": "Flooded Scriptorium Crypt",
+  "description": "A subterranean vaulted chamber flooded with knee-deep water, stone sarcophagi providing half cover, and narrow dry flagstone walkways.",
+  "category": "dungeon",
+  "config": {
+    "gridColumns": 24,
+    "gridRows": 16,
+    "feetPerSquare": 5,
+    "theme": "dungeon",
+    "diagonalRule": "standard5e",
+    "title": "Flooded Scriptorium Crypt"
+  },
+  "terrain": [
+    { "x": 0, "y": 0, "type": "wall" },
+    { "x": 6, "y": 4, "type": "cover_half" },
+    { "x": 10, "y": 8, "type": "water" }
+  ],
+  "doors": [
+    { "x": 12, "y": 0, "isOpen": false, "isLocked": true }
+  ],
+  "tokens": [
+    { "name": "Skeleton Archer", "type": "enemy", "x": 14, "y": 5, "tokenSize": 1, "hpMax": 13, "armorClass": 13, "speed": 30 }
+  ]
+}
+\`\`\`
+  - The Nexus interface will automatically detect this and display a 1-Click **"🗺️ Apply to Battlemap"** button and **"Save to Library"** button right under your message!
 - When asked to create or generate a character, monster, merchant, item, spell, or quest, provide the full, rich statblock or JSON, and let the user know they can click the import button below the message or use the **Entity Forge** tab in this modal to import it instantly into the Hub or sheet!
 
 ### CRITICAL DIRECTIVE: INTERPRET ALL QUESTIONS AS ACTIONABLE TASKS
@@ -886,6 +918,51 @@ Return a valid JSON object with:
 - objectives: Array of { description: string, optional: boolean }
 - complications: Array of string (twists, rival factions, time limits)
 - rewards: { xp: number, gp: number, items: string[] }`;
+      } else if (entityType === "battlemap") {
+        systemPrompt = `You are an expert tabletop tactical encounter and battlemap architect for ${edition}.
+${langNote}
+Design a high-tactics, balanced battlemap layout strictly matching this JSON specification:
+{
+  "name": string (evocative battlemap title, e.g. "Flooded Scriptorium of the Drowned Priests", "Gorgon's Lair Cavern", "Rooftop Ambush at Dusk"),
+  "description": string (tactical overview: sensory room vibe, lighting conditions, hazards, chokepoints, cover opportunities),
+  "category": "dungeon" | "wilderness" | "tavern" | "ship" | "boss_arena" | "cavern" | "ruins" | "urban" | "custom",
+  "config": {
+    "gridColumns": number (between 20 and 30, default 24),
+    "gridRows": number (between 14 and 22, default 16),
+    "feetPerSquare": 5,
+    "theme": "dungeon" | "grass" | "cave" | "volcano" | "snow" | "ship" | "void",
+    "diagonalRule": "standard5e",
+    "title": string
+  },
+  "terrain": Array<{
+    "x": number (0-indexed integer, 0 <= x < gridColumns),
+    "y": number (0-indexed integer, 0 <= y < gridRows),
+    "type": "wall" | "door" | "difficult" | "hazard" | "water" | "shallow_water" | "ice" | "climb" | "web" | "chasm" | "cover_half" | "cover_three_quarters" | "elevation_high" | "elevation_low"
+  }>,
+  "doors": Array<{
+    "x": number,
+    "y": number,
+    "isOpen": boolean,
+    "isLocked": boolean,
+    "secret"?: boolean
+  }>,
+  "tokens": Array<{
+    "name": string (creature or hero name),
+    "type": "player" | "ally" | "enemy",
+    "x": number (0 <= x < gridColumns),
+    "y": number (0 <= y < gridRows),
+    "tokenSize": number (1 for Medium/Small, 2 for Large, 3 for Huge),
+    "hpMax": number,
+    "armorClass": number,
+    "speed": number
+  }>
+}
+
+CRITICAL TACTICAL DESIGN RULES:
+1. Place perimeter boundary walls along appropriate borders leaving 1 or 2 door/entry openings.
+2. Add interior tactical elements: cover (cover_half pillars/crates, cover_three_quarters barricades), terrain features (water, shallow_water, difficult rubble, hazard lava/traps, elevation_high ledges).
+3. Place 2 to 6 balanced enemy tokens in tactical ambush, defensive, or boss positions.
+4. Ensure all coordinates stay within gridColumns and gridRows limits.`;
       } else {
         systemPrompt = `You are a versatile TTRPG game generator. Generate a structured JSON entity based on the user's request.`;
       }

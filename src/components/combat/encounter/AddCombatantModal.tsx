@@ -39,6 +39,7 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
   const [newType, setNewType] = useState<'ally' | 'enemy'>(initialType === 'ally' ? 'ally' : 'enemy');
   const [newMonsterXpReward, setNewMonsterXpReward] = useState<number>(450);
   const [newPortraitUrl, setNewPortraitUrl] = useState<string>('');
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Merchant tab state
   const [selectedExistingMerchantId, setSelectedExistingMerchantId] = useState<string>('');
@@ -79,10 +80,11 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
     if (selectedTemplateId) {
       const tpl = allCharacters.find(c => c.id === selectedTemplateId);
       if (tpl && !tpl.isMonster && isCharacterDead(tpl)) {
-        alert(`"${tpl.name}" is Dead and cannot be added to combat until revived!`);
+        setFormError(`"${tpl.name}" is Dead and cannot be added to active combat until revived!`);
         return;
       }
     }
+    setFormError(null);
 
     const finalPortrait = newPortraitUrl.trim() || (newType === 'enemy' ? getMonsterPortraitUrl(newName.trim()) : undefined);
 
@@ -168,6 +170,23 @@ export const AddCombatantModal: React.FC<AddCombatantModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* Error / Validation Banner */}
+        {formError && (
+          <div className="bg-rose-950/80 border border-rose-600 text-rose-100 p-3 rounded-xl flex items-center justify-between gap-2 text-xs font-semibold">
+            <div className="flex items-center gap-2">
+              <span className="text-base">💀</span>
+              <span>{formError}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormError(null)}
+              className="text-stone-400 hover:text-white p-1"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* ================= TAB 1: STANDARD COMBATANT / MONSTER ================= */}
         {modalTab === 'combatant' && (

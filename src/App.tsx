@@ -7,18 +7,25 @@ import { SidebarDock } from './components/SidebarDock';
 import { DiceRoller } from './components/DiceRoller';
 import { Sheet1StatsFeatures } from './components/sheets/Sheet1StatsFeatures';
 import { Sheet2Combat } from './components/sheets/Sheet2Combat';
-import { Sheet3GearWealth } from './components/sheets/Sheet3GearWealth';
-import { Sheet4Spells } from './components/sheets/Sheet4Spells';
-import { Sheet5DescriptionNotes } from './components/sheets/Sheet5DescriptionNotes';
-import { Sheet6UserGuide } from './components/sheets/Sheet6UserGuide';
-import { Sheet7Compendium } from './components/sheets/Sheet7Compendium';
-import { SheetDmOverview } from './components/sheets/SheetDmOverview';
+
+// Code-split heavy sub-sheets for fast initial paint and reduced bundle size
+const Sheet3GearWealth = React.lazy(() => import('./components/sheets/Sheet3GearWealth').then(m => ({ default: m.Sheet3GearWealth })));
+const Sheet4Spells = React.lazy(() => import('./components/sheets/Sheet4Spells').then(m => ({ default: m.Sheet4Spells })));
+const Sheet5DescriptionNotes = React.lazy(() => import('./components/sheets/Sheet5DescriptionNotes').then(m => ({ default: m.Sheet5DescriptionNotes })));
+const Sheet6UserGuide = React.lazy(() => import('./components/sheets/Sheet6UserGuide').then(m => ({ default: m.Sheet6UserGuide })));
+const Sheet7Compendium = React.lazy(() => import('./components/sheets/Sheet7Compendium').then(m => ({ default: m.Sheet7Compendium })));
+const SheetDmOverview = React.lazy(() => import('./components/sheets/SheetDmOverview').then(m => ({ default: m.SheetDmOverview })));
+const EncounterTracker = React.lazy(() => import('./components/combat/EncounterTracker').then(m => ({ default: m.EncounterTracker })));
+const CommandPaletteModal = React.lazy(() => import('./components/common/CommandPaletteModal').then(m => ({ default: m.CommandPaletteModal })));
+const GuidedTourModal = React.lazy(() => import('./components/common/GuidedTourModal').then(m => ({ default: m.GuidedTourModal })));
+const LiveSessionCopilotDrawer = React.lazy(() => import('./components/common/LiveSessionCopilotDrawer').then(m => ({ default: m.LiveSessionCopilotDrawer })));
+const PhysicalDiceModal = React.lazy(() => import('./components/modals/PhysicalDiceModal').then(m => ({ default: m.PhysicalDiceModal })));
+const GlobalUpgradeModal = React.lazy(() => import('./components/modals/GlobalUpgradeModal').then(m => ({ default: m.GlobalUpgradeModal })));
+const DuplicateCharacterModal = React.lazy(() => import('./components/modals/DuplicateCharacterModal').then(m => ({ default: m.DuplicateCharacterModal })));
+
 import { DetachedHeaderBanner } from './components/common/DetachedHeaderBanner';
 import { getDetachedParams } from './utils/useDetachedSync';
-import { EncounterTracker } from './components/combat/EncounterTracker';
 import { MainMenu } from './components/MainMenu';
-import { CommandPaletteModal } from './components/common/CommandPaletteModal';
-import { GuidedTourModal } from './components/common/GuidedTourModal';
 import { PartyVoiceWidget } from './components/voice/PartyVoiceWidget';
 import { PersistentAmbiencePlayer } from './components/audio/PersistentAmbiencePlayer';
 import { useHotkeys } from './context/HotkeyContext';
@@ -26,21 +33,17 @@ import { useUiMode } from './context/UiModeContext';
 import { useAccessibility } from './context/AccessibilityContext';
 import { Crown } from 'lucide-react';
 
-import { LiveSessionCopilotDrawer } from './components/common/LiveSessionCopilotDrawer';
 import { GeneratedEncounter, hydrateGeneratedMonster } from './services/geminiService';
 import { Combatant, CombatLogEntry, SavedEncounterData } from './components/combat/encounter/encounterTypes';
 import { loadSavedEncounter } from './components/combat/encounter/useEncounterState';
 import { getMonsterPortraitUrl } from './data/monsterPortraits';
 import { EncounterEnvironment } from './types';
-import { PhysicalDiceModal } from './components/modals/PhysicalDiceModal';
-import { GlobalUpgradeModal } from './components/modals/GlobalUpgradeModal';
 import { GlobalDiceOverlay } from './components/dice/GlobalDiceOverlay';
 import { ThemeProvider } from './context/ThemeContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
 import { TableModeHud } from './components/tableMode/TableModeHud';
 import { FloatingQuickPlayDock } from './components/common/FloatingQuickPlayDock';
 import { ModalProvider, ModalContainer } from './modals';
-import { DuplicateCharacterModal } from './components/modals/DuplicateCharacterModal';
 import { useLayoutCustomization } from './utils/layoutCustomization';
 
 // Modular Manager Hooks
@@ -52,6 +55,7 @@ import {
   useDiceEngine,
   useModalCoordinator
 } from './hooks';
+import { isCharacterSpellcaster } from './utils/dndCalculations';
 
 const normalizeTabId = (tab: string): TabId => {
   switch (tab) {
@@ -102,6 +106,15 @@ const normalizeTabId = (tab: string): TabId => {
       return 'sheet1';
   }
 };
+
+const SheetLoadingFallback = () => (
+  <div className="flex items-center justify-center py-24 text-stone-400">
+    <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-stone-900/90 border border-amber-600/30 text-xs font-mono shadow-xl">
+      <div className="w-4 h-4 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      <span className="text-amber-200 font-semibold">Loading workspace view...</span>
+    </div>
+  </div>
+);
 
 function AppWorkspace() {
   const detachedParams = useMemo(() => getDetachedParams(), []);
@@ -381,6 +394,10 @@ function AppWorkspace() {
     onAddSpellToSpellbook: handleAddSpellToActiveCharacter,
     onPopulateCombatEncounter: handlePopulateCombatEncounter,
     onAppendSessionNotes: handleAppendSessionNotes,
+    onLoadBattlemapLayout: (layout: any) => {
+      sessionStorage.setItem('dnd_pending_battlemap_layout', JSON.stringify(layout));
+      window.dispatchEvent(new CustomEvent('dnd_battlemap_layout_deployed', { detail: { layout } }));
+    },
     onRoll: handleRoll,
     onUserChange: setCurrentUser,
     onUndo: undoCharacters,
@@ -513,7 +530,14 @@ function AppWorkspace() {
 
   const handleDetachTab = (tab: TabId) => {
     const url = `${window.location.origin}${window.location.pathname}?detachedTab=${tab}${activeCharacterId ? `&initialCharId=${activeCharacterId}` : ''}`;
-    window.open(url, `_blank_${tab}`, 'width=1280,height=800,menubar=no,toolbar=no,location=no,status=no');
+    try {
+      const win = window.open(url, `_blank_${tab}`, 'width=1280,height=800,menubar=no,toolbar=no,location=no,status=no');
+      if (!win) {
+        announceLiveMessage('Pop-up window was blocked. Please allow pop-ups to detach windows.');
+      }
+    } catch {
+      announceLiveMessage('Unable to open detached window due to browser or frame security settings.');
+    }
   };
 
   if (isDetachedWindow) {
@@ -758,7 +782,7 @@ function AppWorkspace() {
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 onDetachTab={handleDetachTab}
-                isSpellcaster={activeCharacter?.isSpellcaster || false}
+                isSpellcaster={activeCharacter ? isCharacterSpellcaster(activeCharacter) : false}
                 edition={currentSystemTheme}
                 currentUser={currentUser}
                 hasActiveCharacter={!!activeCharacter}
@@ -779,174 +803,176 @@ function AppWorkspace() {
 
               {/* Main Content Body */}
               <main className="w-full">
-                {activeTab === 'menu' && (
-                  <div id="tabpanel-menu" role="tabpanel" aria-labelledby="tab-menu" tabIndex={0}>
-                    <MainMenu
-                      characters={characters}
-                      activeCharacter={activeCharacter}
-                      onSelectCharacter={handleSelectCharacter}
-                      onCreateNewCharacter={handleOpenNewCharacterModal}
-                      onEnterGame={() => setActiveTab('sheet1')}
-                      onSystemChange={handleSystemChange}
-                      edition={currentSystemTheme}
-                      currentUser={currentUser}
-                      presenceMap={presenceMap}
-                      onOpenAuthModal={handleOpenAuthModal}
-                      enabledSystems={enabledSystems}
-                      onOpenSystemSelector={() => handleOpenTRPGSelector(false)}
-                      onOpenAudioModal={handleOpenAudioModal}
-                      onOpenAiAssistant={handleOpenAiAssistant}
-                      onOpenSessionLobby={handleOpenSessionModal}
-                      onOpenCampaignGraph={() => handleOpenCampaignGraph()}
-                      onExploreCompendium={() => {
-                        setActiveTab('sheet7');
-                      }}
-                      onOpenDeveloperSdk={handleOpenDeveloperSdk}
-                      onDuplicateCharacter={(char) => setCharacterToDuplicate(char)}
-                    />
-                  </div>
-                )}
+                <Suspense fallback={<SheetLoadingFallback />}>
+                  {activeTab === 'menu' && (
+                    <div id="tabpanel-menu" role="tabpanel" aria-labelledby="tab-menu" tabIndex={0}>
+                      <MainMenu
+                        characters={characters}
+                        activeCharacter={activeCharacter}
+                        onSelectCharacter={handleSelectCharacter}
+                        onCreateNewCharacter={handleOpenNewCharacterModal}
+                        onEnterGame={() => setActiveTab('sheet1')}
+                        onSystemChange={handleSystemChange}
+                        edition={currentSystemTheme}
+                        currentUser={currentUser}
+                        presenceMap={presenceMap}
+                        onOpenAuthModal={handleOpenAuthModal}
+                        enabledSystems={enabledSystems}
+                        onOpenSystemSelector={() => handleOpenTRPGSelector(false)}
+                        onOpenAudioModal={handleOpenAudioModal}
+                        onOpenAiAssistant={handleOpenAiAssistant}
+                        onOpenSessionLobby={handleOpenSessionModal}
+                        onOpenCampaignGraph={() => handleOpenCampaignGraph()}
+                        onExploreCompendium={() => {
+                          setActiveTab('sheet7');
+                        }}
+                        onOpenDeveloperSdk={handleOpenDeveloperSdk}
+                        onDuplicateCharacter={(char) => setCharacterToDuplicate(char)}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheet1' && activeCharacter && (
-                  <div id="tabpanel-sheet1" role="tabpanel" aria-labelledby="tab-sheet1" tabIndex={0}>
-                    <Sheet1StatsFeatures
-                      character={activeCharacter}
-                      currentUser={currentUser}
-                      activeSession={activeSession}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onAddMonsterToRoster={(monster) => {
-                        setCharacters(prev => [...prev, monster]);
-                      }}
-                      onRoll={handleRoll}
-                      onDuplicateCharacter={(char) => setCharacterToDuplicate(char)}
-                      onSyncToBaseCharacter={handleSyncToBaseCharacter}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheet1' && activeCharacter && (
+                    <div id="tabpanel-sheet1" role="tabpanel" aria-labelledby="tab-sheet1" tabIndex={0}>
+                      <Sheet1StatsFeatures
+                        character={activeCharacter}
+                        currentUser={currentUser}
+                        activeSession={activeSession}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onAddMonsterToRoster={(monster) => {
+                          setCharacters(prev => [...prev, monster]);
+                        }}
+                        onRoll={handleRoll}
+                        onDuplicateCharacter={(char) => setCharacterToDuplicate(char)}
+                        onSyncToBaseCharacter={handleSyncToBaseCharacter}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheet2' && activeCharacter && (
-                  <div id="tabpanel-sheet2" role="tabpanel" aria-labelledby="tab-sheet2" tabIndex={0}>
-                    <Sheet2Combat
-                      character={activeCharacter}
-                      edition={currentSystemTheme}
-                      allCharacters={characters}
-                      parties={parties}
-                      currentUser={currentUser}
-                      activeSession={activeSession}
-                      activeSessionCode={activeSessionCode}
-                      onOpenPartyManager={handleOpenPartyModal}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onAddMonsterToRoster={(monster) => {
-                        setCharacters(prev => [...prev, monster]);
-                      }}
-                      onRoll={handleRoll}
-                      onRollDamage={handleRollDamage}
-                      onOpenGenerators={handleOpenGenerators}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheet2' && activeCharacter && (
+                    <div id="tabpanel-sheet2" role="tabpanel" aria-labelledby="tab-sheet2" tabIndex={0}>
+                      <Sheet2Combat
+                        character={activeCharacter}
+                        edition={currentSystemTheme}
+                        allCharacters={characters}
+                        parties={parties}
+                        currentUser={currentUser}
+                        activeSession={activeSession}
+                        activeSessionCode={activeSessionCode}
+                        onOpenPartyManager={handleOpenPartyModal}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onAddMonsterToRoster={(monster) => {
+                          setCharacters(prev => [...prev, monster]);
+                        }}
+                        onRoll={handleRoll}
+                        onRollDamage={handleRollDamage}
+                        onOpenGenerators={handleOpenGenerators}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'battlemap' && activeCharacter && (
-                  <div id="tabpanel-battlemap" role="tabpanel" aria-labelledby="tab-battlemap" tabIndex={0}>
-                    <EncounterTracker
-                      character={activeCharacter}
-                      allCharacters={characters}
-                      parties={parties}
-                      currentUser={currentUser}
-                      activeSession={activeSession}
-                      activeSessionCode={activeSessionCode}
-                      onOpenPartyManager={handleOpenPartyModal}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onRoll={handleRoll}
-                      initialViewMode="battlemap"
-                      isStandaloneBattlemap={true}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'battlemap' && activeCharacter && (
+                    <div id="tabpanel-battlemap" role="tabpanel" aria-labelledby="tab-battlemap" tabIndex={0}>
+                      <EncounterTracker
+                        character={activeCharacter}
+                        allCharacters={characters}
+                        parties={parties}
+                        currentUser={currentUser}
+                        activeSession={activeSession}
+                        activeSessionCode={activeSessionCode}
+                        onOpenPartyManager={handleOpenPartyModal}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onRoll={handleRoll}
+                        initialViewMode="battlemap"
+                        isStandaloneBattlemap={true}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheet3' && activeCharacter && (
-                  <div id="tabpanel-sheet3" role="tabpanel" aria-labelledby="tab-sheet3" tabIndex={0}>
-                    <Sheet3GearWealth
-                      character={activeCharacter}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onAddItemToInventory={handleAddItemToActiveCharacter}
-                      onRollDamage={handleRollDamage}
-                      onOpenGenerators={handleOpenGenerators}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheet3' && activeCharacter && (
+                    <div id="tabpanel-sheet3" role="tabpanel" aria-labelledby="tab-sheet3" tabIndex={0}>
+                      <Sheet3GearWealth
+                        character={activeCharacter}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onAddItemToInventory={handleAddItemToActiveCharacter}
+                        onRollDamage={handleRollDamage}
+                        onOpenGenerators={handleOpenGenerators}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheet4' && activeCharacter && (
-                  <div id="tabpanel-sheet4" role="tabpanel" aria-labelledby="tab-sheet4" tabIndex={0}>
-                    <Sheet4Spells
-                      character={activeCharacter}
-                      allCharacters={characters}
-                      currentUser={currentUser}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onAddMonsterToRoster={(monster) => {
-                        setCharacters(prev => [...prev, monster]);
-                      }}
-                      onRoll={handleRoll}
-                      onRollDamage={handleRollDamage}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheet4' && activeCharacter && (
+                    <div id="tabpanel-sheet4" role="tabpanel" aria-labelledby="tab-sheet4" tabIndex={0}>
+                      <Sheet4Spells
+                        character={activeCharacter}
+                        allCharacters={characters}
+                        currentUser={currentUser}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onAddMonsterToRoster={(monster) => {
+                          setCharacters(prev => [...prev, monster]);
+                        }}
+                        onRoll={handleRoll}
+                        onRollDamage={handleRollDamage}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheet5' && activeCharacter && (
-                  <div id="tabpanel-sheet5" role="tabpanel" aria-labelledby="tab-sheet5" tabIndex={0}>
-                    <Sheet5DescriptionNotes
-                      character={activeCharacter}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onOpenGenerators={handleOpenGenerators}
-                      onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheet5' && activeCharacter && (
+                    <div id="tabpanel-sheet5" role="tabpanel" aria-labelledby="tab-sheet5" tabIndex={0}>
+                      <Sheet5DescriptionNotes
+                        character={activeCharacter}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onOpenGenerators={handleOpenGenerators}
+                        onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheet6' && (
-                  <div id="tabpanel-sheet6" role="tabpanel" aria-labelledby="tab-sheet6" tabIndex={0}>
-                    <Sheet6UserGuide
-                      edition={currentSystemTheme}
-                      enabledSystems={enabledSystems}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheet6' && (
+                    <div id="tabpanel-sheet6" role="tabpanel" aria-labelledby="tab-sheet6" tabIndex={0}>
+                      <Sheet6UserGuide
+                        edition={currentSystemTheme}
+                        enabledSystems={enabledSystems}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheet7' && (
-                  <div id="tabpanel-sheet7" role="tabpanel" aria-labelledby="tab-sheet7" tabIndex={0}>
-                    <Sheet7Compendium
-                      activeCharacter={activeCharacter}
-                      allCharacters={characters}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onUpdateAllCharacters={setCharacters}
-                      onAddItemToInventory={handleAddItemToActiveCharacter}
-                      onAddMonsterToRoster={(monster) => {
-                        setCharacters(prev => [...prev, monster]);
-                      }}
-                      enabledSystems={enabledSystems}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheet7' && (
+                    <div id="tabpanel-sheet7" role="tabpanel" aria-labelledby="tab-sheet7" tabIndex={0}>
+                      <Sheet7Compendium
+                        activeCharacter={activeCharacter}
+                        allCharacters={characters}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onUpdateAllCharacters={setCharacters}
+                        onAddItemToInventory={handleAddItemToActiveCharacter}
+                        onAddMonsterToRoster={(monster) => {
+                          setCharacters(prev => [...prev, monster]);
+                        }}
+                        enabledSystems={enabledSystems}
+                      />
+                    </div>
+                  )}
 
-                {activeTab === 'sheetDm' && (
-                  <div id="tabpanel-sheetDm" role="tabpanel" aria-labelledby="tab-sheetDm" tabIndex={0}>
-                    <SheetDmOverview
-                      activeSession={activeSession || localCampaignSession}
-                      allCharacters={characters}
-                      currentUser={currentUser}
-                      onUpdateCharacter={handleUpdateCharacter}
-                      onDetach={() => handleDetachTab('sheetDm')}
-                      onOpenUpgradeModal={handleOpenUpgradeModal}
-                      onOpenGenerators={handleOpenGenerators}
-                      onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
-                      onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
-                      ruleEdition={currentSystemTheme}
-                      parties={parties}
-                      activePartyId={activePartyId}
-                      onSelectPartyId={handleSelectPartyId}
-                    />
-                  </div>
-                )}
+                  {activeTab === 'sheetDm' && (
+                    <div id="tabpanel-sheetDm" role="tabpanel" aria-labelledby="tab-sheetDm" tabIndex={0}>
+                      <SheetDmOverview
+                        activeSession={activeSession || localCampaignSession}
+                        allCharacters={characters}
+                        currentUser={currentUser}
+                        onUpdateCharacter={handleUpdateCharacter}
+                        onDetach={() => handleDetachTab('sheetDm')}
+                        onOpenUpgradeModal={handleOpenUpgradeModal}
+                        onOpenGenerators={handleOpenGenerators}
+                        onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
+                        onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
+                        ruleEdition={currentSystemTheme}
+                        parties={parties}
+                        activePartyId={activePartyId}
+                        onSelectPartyId={handleSelectPartyId}
+                      />
+                    </div>
+                  )}
+                </Suspense>
               </main>
             </div>
           </div>
@@ -964,6 +990,8 @@ function AppWorkspace() {
           isPhysicalDiceMode={isPhysicalDiceMode}
           onTogglePhysicalDiceMode={() => setIsPhysicalDiceMode(prev => !prev)}
           onOpenUpgradeModal={handleOpenUpgradeModal}
+          activeCharacter={activeCharacter}
+          onUpdateCharacter={handleUpdateCharacter}
         />
       )}
 
@@ -980,44 +1008,54 @@ function AppWorkspace() {
         />
       )}
 
-      {/* Physical Tabletop Dice Modal */}
-      {physicalRollRequest && (
-        <PhysicalDiceModal request={physicalRollRequest} />
-      )}
+      {/* Lazy-loaded Tabletop Modals */}
+      <Suspense fallback={null}>
+        {physicalRollRequest && (
+          <PhysicalDiceModal request={physicalRollRequest} />
+        )}
 
-      {/* Guided Onboarding Tour Modal */}
-      <GuidedTourModal />
+        <GuidedTourModal />
 
-      {/* Global Command Palette (Ctrl+K / Cmd+K) */}
-      <CommandPaletteModal
-        isOpen={showCommandPalette}
-        onClose={() => setShowCommandPalette(false)}
-        characters={characters}
-        activeCharacter={activeCharacter || characters[0]}
-        onSelectCharacter={(char) => handleSelectCharacter(char.id)}
-        onOpenNewCharacter={() => handleOpenNewCharacterModal('character', activeTab === 'menu' ? currentSystemTheme : (activeCharacter?.edition || currentSystemTheme))}
-        onOpenOptions={handleOpenAudioModal}
-        onOpenAudio={handleOpenAudioModal}
-        onOpenExtensionManager={handleOpenExtensionManager}
-        onOpenDeveloperSdk={handleOpenDeveloperSdk}
-        onOpenCampaignGraph={() => handleOpenCampaignGraph()}
-        onOpenAiAssistant={handleOpenAiAssistant}
-        onOpenGenerators={handleOpenGenerators}
-        onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
-        onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
-        onOpenUniversalImporterStudio={handleOpenUniversalImporter}
-        onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
-        onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
-      />
+        <CommandPaletteModal
+          isOpen={showCommandPalette}
+          onClose={() => setShowCommandPalette(false)}
+          characters={characters}
+          activeCharacter={activeCharacter || characters[0]}
+          onSelectCharacter={(char) => handleSelectCharacter(char.id)}
+          onOpenNewCharacter={() => handleOpenNewCharacterModal('character', activeTab === 'menu' ? currentSystemTheme : (activeCharacter?.edition || currentSystemTheme))}
+          onOpenOptions={handleOpenAudioModal}
+          onOpenAudio={handleOpenAudioModal}
+          onOpenExtensionManager={handleOpenExtensionManager}
+          onOpenDeveloperSdk={handleOpenDeveloperSdk}
+          onOpenCampaignGraph={() => handleOpenCampaignGraph()}
+          onOpenAiAssistant={handleOpenAiAssistant}
+          onOpenGenerators={handleOpenGenerators}
+          onOpenCopilot={() => setShowLiveCopilotDrawer(true)}
+          onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
+          onOpenUniversalImporterStudio={handleOpenUniversalImporter}
+          onNavigateTab={(tab) => setActiveTab(normalizeTabId(tab))}
+          onRollDice={() => handleRoll('Manual Dice Roll', 20, 1, 0, 'normal')}
+        />
 
-      {/* Live Tabletop Session Co-Pilot HUD Drawer */}
-      <LiveSessionCopilotDrawer
-        isOpen={showLiveCopilotDrawer}
-        onClose={() => setShowLiveCopilotDrawer(false)}
-        activeCharacter={activeCharacter}
-        ruleEdition={currentSystemTheme}
-        onRoll={handleRoll}
-      />
+        <LiveSessionCopilotDrawer
+          isOpen={showLiveCopilotDrawer}
+          onClose={() => setShowLiveCopilotDrawer(false)}
+          activeCharacter={activeCharacter}
+          ruleEdition={currentSystemTheme}
+          onRoll={handleRoll}
+        />
+
+        {characterToDuplicate && (
+          <DuplicateCharacterModal
+            character={characterToDuplicate}
+            onClose={() => setCharacterToDuplicate(null)}
+            onDuplicate={(charId, options) => {
+              handleDuplicateCharacter(charId, options);
+              setCharacterToDuplicate(null);
+            }}
+          />
+        )}
+      </Suspense>
 
       {/* Integrated Party WebRTC Voice Client Widget */}
       <PartyVoiceWidget
@@ -1043,18 +1081,6 @@ function AppWorkspace() {
         onDismiss={() => setActiveRollResult(null)}
         displayDurationMs={5000}
       />
-
-      {/* Duplicate Character / Campaign Versioning Modal */}
-      {characterToDuplicate && (
-        <DuplicateCharacterModal
-          character={characterToDuplicate}
-          onClose={() => setCharacterToDuplicate(null)}
-          onDuplicate={(charId, options) => {
-            handleDuplicateCharacter(charId, options);
-            setCharacterToDuplicate(null);
-          }}
-        />
-      )}
     </div>
   );
 }

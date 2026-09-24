@@ -108,6 +108,14 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
   const [hpDelta, setHpDelta] = useState<string>('');
   const [showRestModal, setShowRestModal] = useState<'short' | 'long' | null>(null);
   const [skillSearch, setSkillSearch] = useState<string>('');
+  const [hudNotice, setHudNotice] = useState<string | null>(null);
+
+  const showHudNotice = (msg: string) => {
+    setHudNotice(msg);
+    setTimeout(() => {
+      setHudNotice(prev => (prev === msg ? null : prev));
+    }, 4000);
+  };
   const [spellSearch, setSpellSearch] = useState<string>('');
   const [selectedSpellLevel, setSelectedSpellLevel] = useState<number | 'all'>('all');
   const [showAddAttack, setShowAddAttack] = useState<boolean>(false);
@@ -252,7 +260,7 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
   // Hit Dice Spend
   const handleSpendHitDie = () => {
     if ((character.hitDiceCurrent || 0) <= 0) {
-      alert('No Hit Dice remaining! Take a Long Rest to recover Hit Dice.');
+      showHudNotice('⚠️ No Hit Dice remaining! Take a Long Rest to recover Hit Dice.');
       return;
     }
     const hitDieMatch = (character.hitDiceTotal || '1d8').match(/(\d+)d(\d+)/i);
@@ -431,7 +439,24 @@ export const TableModeHud: React.FC<TableModeHudProps> = ({
   }, [character.skills, skillSearch]);
 
   return (
-    <div id="table-mode-hud" className="w-full max-w-[1600px] mx-auto pb-16 space-y-4">
+    <div id="table-mode-hud" className="w-full max-w-[1600px] mx-auto pb-16 space-y-4 relative">
+      {/* Notice Banner */}
+      {hudNotice && (
+        <div className="sticky top-2 z-40 bg-amber-950/95 border border-amber-500/80 text-amber-100 p-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 text-xs font-semibold backdrop-blur-md animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚡</span>
+            <span>{hudNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setHudNotice(null)}
+            className="p-1 hover:bg-white/10 rounded text-stone-400 hover:text-white transition cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Top Banner / Tabletop Command Bar */}
       <header className="bg-stone-950/90 border border-amber-500/40 rounded-2xl p-3 sm:p-4 shadow-xl backdrop-blur-md flex flex-wrap items-center justify-between gap-3">
         {/* Left: Character Summary */}

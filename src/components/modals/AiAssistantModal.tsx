@@ -35,13 +35,15 @@ import {
   FolderPlus,
   RefreshCw,
   Award,
-  Users
+  Users,
+  Map
 } from 'lucide-react';
 import { CharacterData, GearItem, Spell, RuleEdition } from '../../types';
 import { CampaignEntity } from '../../utils/searchIndexer';
 import { useLanguage } from '../../i18n/LanguageContext';
 import { extractTextFromPdf, ExtractedPdfData } from '../../utils/pdfExtractor';
 import { saveCustomCompendiumEntry } from '../../data/compendiumData';
+import { saveBattlemapLayout } from '../../lib/battlemapStorage';
 import {
   ChatMessage,
   ChatMessageAttachment,
@@ -58,6 +60,7 @@ import {
   hydrateGeneratedGraphNode,
   hydrateGeneratedClass,
   hydrateGeneratedRace,
+  hydrateGeneratedBattlemap,
   extractEntitiesFromChatMessage,
   DetectedChatEntity
 } from '../../services/geminiService';
@@ -73,6 +76,7 @@ interface AiAssistantModalProps {
   onAddSpellToSpellbook?: (spell: Spell, targetCharacterId?: string) => void;
   onNavigateTab?: (tab: string) => void;
   onSelectCharacter?: (id: string) => void;
+  onLoadBattlemapLayout?: (layout: any) => void;
 }
 
 function formatHumanError(err: any): string {
@@ -168,6 +172,12 @@ const FORGE_INSPIRATIONS: Record<string, string[]> = {
   encounter: [
     'Ambush on a rope bridge over a chasm in heavy fog',
     'Ritual disruption inside a crumbling mausoleum'
+  ],
+  battlemap: [
+    'Flooded subterranean crypt with knee-deep water, sarcophagi half cover, and 4 skeleton archers',
+    'Volcanic ritual chamber with bubbling lava hazards, crumbling obsidian pillars, and a fire elemental boss',
+    'Bandit ambush gorge with elevated cliff ledges, fallen tree chokepoint, and archer nests',
+    'Underground smugglers tavern with wooden bar, tables, backroom vault, and secret door'
   ]
 };
 
@@ -181,7 +191,8 @@ export function AiAssistantModal({
   onAddItemToInventory,
   onAddSpellToSpellbook,
   onNavigateTab,
-  onSelectCharacter
+  onSelectCharacter,
+  onLoadBattlemapLayout
 }: AiAssistantModalProps) {
   const { language, currentLanguageObj } = useLanguage();
   const [activeTab, setActiveTab] = useState<'chat' | 'generator' | 'settings'>('chat');
@@ -255,6 +266,7 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
   const [isProceduralResult, setIsProceduralResult] = useState(false);
   const [importedSuccess, setImportedSuccess] = useState<string | null>(null);
   const [copiedSuccess, setCopiedSuccess] = useState(false);
+  const [operationError, setOperationError] = useState<string | null>(null);
 
   // API Key Settings
   const [userApiKey, setUserApiKey] = useState(getStoredUserApiKey());
@@ -288,7 +300,7 @@ You can ask me anything about TTRPG rules (**5e, 3.5e, Pathfinder 2e, Shadowrun,
     const isImage = file.type.startsWith('image/');
 
     if (!isPdf && !isImage) {
-      alert('Please attach a PDF document (.pdf) or image screenshot (.png, .jpg, .webp).');
+      setOperationError('Please attach a PDF document (.pdf) or image screenshot (.png, .jpg, .webp).');
       return;
     }
 
@@ -698,7 +710,7 @@ INSTRUCTIONS FOR THE ORACLE:
       setIsProceduralResult(!!res.isProceduralFallback);
       setImportedSuccess(null);
     } catch (err: any) {
-      alert(`Generation failed: ${err.message || 'Unknown error'}`);
+      setOperationError(`Generation failed: ${err.message || 'Unknown error'}`);
     } finally {
       setIsGenLoading(false);
     }
@@ -762,12 +774,19 @@ INSTRUCTIONS FOR THE ORACLE:
         const updated = [node, ...existingNodes];
         localStorage.setItem('penpaper_campaign_graph_nodes', JSON.stringify(updated));
         setImportedSuccess(`Added "${node.name}" (${node.type.toUpperCase()}) to your Campaign Graph network!`);
+      } else if (targetType === 'battlemap') {
+        const layout = hydrateGeneratedBattlemap(targetData);
+        saveBattlemapLayout(layout);
+        sessionStorage.setItem('dnd_pending_battlemap_layout', JSON.stringify(layout));
+        window.dispatchEvent(new CustomEvent('dnd_battlemap_layout_deployed', { detail: { layout } }));
+        if (onLoadBattlemapLayout) onLoadBattlemapLayout(layout);
+        setImportedSuccess(`Applied "${layout.name}" (${layout.config.gridColumns}×${layout.config.gridRows}) to Battlemap!`);
       } else {
         navigator.clipboard.writeText(JSON.stringify(targetData, null, 2));
         setImportedSuccess('Entity details copied to clipboard!');
       }
     } catch (err: any) {
-      alert(`Import failed: ${err.message}`);
+      setOperationError(`Import failed: ${err.message}`);
     }
   };
 
@@ -849,9 +868,19 @@ INSTRUCTIONS FOR THE ORACLE:
           ...prev,
           [entity.id]: `Added "${node.name}" (${node.type.toUpperCase()}) to Campaign Graph!`
         }));
+      } else if (entity.type === 'battlemap') {
+        const layout = hydrateGeneratedBattlemap(entity.rawJson);
+        saveBattlemapLayout(layout);
+        sessionStorage.setItem('dnd_pending_battlemap_layout', JSON.stringify(layout));
+        window.dispatchEvent(new CustomEvent('dnd_battlemap_layout_deployed', { detail: { layout } }));
+        if (onLoadBattlemapLayout) onLoadBattlemapLayout(layout);
+        setImportedChatIds(prev => ({
+          ...prev,
+          [entity.id]: `Applied "${layout.name}" to Battlemap!`
+        }));
       }
     } catch (err: any) {
-      alert(`Import failed: ${err.message || 'Unknown error'}`);
+      setOperationError(`Import failed: ${err.message || 'Unknown error'}`);
     }
   };
 
@@ -1066,6 +1095,19 @@ INSTRUCTIONS FOR THE ORACLE:
           </div>
         </div>
 
+        {operationError && (
+          <div className="px-4 py-2.5 bg-rose-950/90 border-b border-rose-800/80 text-rose-200 text-xs flex items-center justify-between animate-fadeIn z-20">
+            <span className="font-medium">{operationError}</span>
+            <button
+              type="button"
+              onClick={() => setOperationError(null)}
+              className="text-rose-400 hover:text-white text-xs ml-3 font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Tab 1: Oracle Chat */}
         {activeTab === 'chat' && (
           <div
@@ -1257,6 +1299,7 @@ INSTRUCTIONS FOR THE ORACLE:
                                       {entity.type === 'item' && <Shield className="w-4 h-4 text-emerald-400" />}
                                       {entity.type === 'spell' && <Scroll className="w-4 h-4 text-purple-400" />}
                                       {entity.type === 'graph_node' && <Network className="w-4 h-4 text-cyan-400" />}
+                                      {entity.type === 'battlemap' && <Map className="w-4 h-4 text-emerald-400" />}
                                     </div>
                                     <div>
                                       <div className="font-bold text-stone-100 text-xs flex items-center gap-1.5">
@@ -1272,6 +1315,8 @@ INSTRUCTIONS FOR THE ORACLE:
                                             ? 'Monster'
                                             : entity.type === 'merchant'
                                             ? 'Merchant Shop'
+                                            : entity.type === 'battlemap'
+                                            ? 'Battlemap'
                                             : entity.type.toUpperCase()}
                                         </span>
                                       </div>
@@ -1288,6 +1333,20 @@ INSTRUCTIONS FOR THE ORACLE:
                                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                                           <span>{isAlreadyImported}</span>
                                         </div>
+                                        {entity.type === 'battlemap' && onNavigateTab && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              onNavigateTab('battlemap');
+                                              onClose();
+                                            }}
+                                            className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold rounded-lg text-xs cursor-pointer transition shadow flex items-center gap-1"
+                                            title="Open Battlemap"
+                                          >
+                                            <Map className="w-3 h-3" />
+                                            <span>Open Battlemap</span>
+                                          </button>
+                                        )}
                                         {entity.type === 'item' && onNavigateTab && (
                                           <button
                                             type="button"
@@ -1340,6 +1399,8 @@ INSTRUCTIONS FOR THE ORACLE:
                                             ? `+ Add to ${destinationName}'s Inventory`
                                             : entity.type === 'spell'
                                             ? `+ Add to ${destinationName}'s Spellbook`
+                                            : entity.type === 'battlemap'
+                                            ? '🗺️ Apply to Battlemap'
                                             : 'Add to Graph'}
                                         </span>
                                       </button>
@@ -1636,6 +1697,7 @@ INSTRUCTIONS FOR THE ORACLE:
                       { type: 'npc' as EntityType, label: 'NPC Character', icon: Bot },
                       { type: 'item' as EntityType, label: 'Magic Item', icon: Shield },
                       { type: 'spell' as EntityType, label: 'Arcane Spell', icon: Scroll },
+                      { type: 'battlemap' as EntityType, label: 'Tactical Battlemap', icon: Map },
                       { type: 'graph_node' as EntityType, label: 'Lore Node', icon: Network },
                       { type: 'quest' as EntityType, label: 'Quest Hook', icon: Compass }
                     ].map(item => {
@@ -1686,6 +1748,8 @@ INSTRUCTIONS FOR THE ORACLE:
                         ? 'e.g. A legendary warhammer forged in celestial flame with radiant strike and return throw...'
                         : entityType === 'spell'
                         ? 'e.g. A 3rd-level transmutation spell that petrifies blood or slows enemy reflexes...'
+                        : entityType === 'battlemap'
+                        ? 'e.g. Flooded subterranean crypt with knee-deep water, sarcophagi half cover, and 4 skeleton archers...'
                         : 'e.g. Describe the theme, level, rarity, or story hook...'
                     }
                     rows={4}
@@ -1842,6 +1906,38 @@ INSTRUCTIONS FOR THE ORACLE:
                       </div>
                     )}
 
+                    {/* Battlemap Layout Preview */}
+                    {(entityType === 'battlemap' || generatedResult.terrainMap || generatedResult.config) && (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-stone-900/80 p-2.5 rounded-lg text-center font-mono">
+                          <div>
+                            <span className="text-stone-500 block text-[10px]">Grid Dimensions</span>
+                            <span className="text-amber-400 font-bold">
+                              {generatedResult.config?.gridColumns || 20}×{generatedResult.config?.gridRows || 20} sq
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-stone-500 block text-[10px]">Theme</span>
+                            <span className="text-sky-400 font-bold capitalize">
+                              {generatedResult.config?.theme || 'Dungeon'}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-stone-500 block text-[10px]">Terrain Tiles</span>
+                            <span className="text-emerald-400 font-bold">
+                              {Object.keys(generatedResult.terrainMap || {}).length}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-stone-500 block text-[10px]">Doors / Tokens</span>
+                            <span className="text-purple-400 font-bold">
+                              {Object.keys(generatedResult.doors || {}).length} D / {(generatedResult.tokens || []).length} T
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Spell / Item Description */}
                     {(generatedResult.description || generatedResult.notes || generatedResult.summary || generatedResult.backstory) && (
                       <div>
@@ -1860,6 +1956,19 @@ INSTRUCTIONS FOR THE ORACLE:
                         <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
                         <span className="font-medium">{importedSuccess}</span>
                       </div>
+                      {entityType === 'battlemap' && onNavigateTab && (
+                        <button
+                          onClick={() => {
+                            onNavigateTab('battlemap');
+                            onClose();
+                          }}
+                          className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-400 text-stone-950 font-bold rounded-lg text-xs transition cursor-pointer flex items-center gap-1 shrink-0 shadow"
+                        >
+                          <Map className="w-3.5 h-3.5" />
+                          <span>Open Battlemap Tab</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       {entityType === 'item' && onNavigateTab && (
                         <button
                           onClick={() => {
@@ -1938,6 +2047,28 @@ INSTRUCTIONS FOR THE ORACLE:
                           <span>Add Copy</span>
                         </button>
                       </div>
+                    ) : importedSuccess && entityType === 'battlemap' ? (
+                      <div className="flex gap-2">
+                        <button
+                          id="ai_forge_open_battlemap_btn"
+                          onClick={() => {
+                            if (onNavigateTab) onNavigateTab('battlemap');
+                            onClose();
+                          }}
+                          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold text-sm rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/40 cursor-pointer"
+                        >
+                          <Map className="w-4 h-4" />
+                          <span>Switch to Battlemap Screen</span>
+                        </button>
+                        <button
+                          onClick={() => handleImportEntity()}
+                          className="px-3.5 py-2.5 bg-stone-800 hover:bg-stone-700 text-stone-300 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1"
+                          title="Re-apply to Battlemap"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Re-apply</span>
+                        </button>
+                      </div>
                     ) : (
                       <button
                         id="ai_forge_import_btn"
@@ -1962,6 +2093,8 @@ INSTRUCTIONS FOR THE ORACLE:
                             ? `Add to ${(characters?.find(c => c.id === targetCharId) || activeCharacter)?.name || 'Character'}'s Spellbook (Sheet 4)`
                             : entityType === 'graph_node'
                             ? 'Add to Campaign Graph'
+                            : entityType === 'battlemap'
+                            ? 'Apply Layout to Battlemap'
                             : 'Copy Entity Data'}
                         </span>
                       </button>

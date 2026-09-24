@@ -175,6 +175,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   const [selectedMapTokenId, setSelectedMapTokenId] = useState<string | null>(null);
   const [targetMapTokenId, setTargetMapTokenId] = useState<string | null>(null);
   const [mapConfig, setMapConfig] = useState<BattlemapConfig>(() => {
+    const defaultDiag = character?.edition === '3.5e' ? 'alternating35e' : 'standard5e';
     // Check if session or localStorage has battlemap properties
     if (activeSession?.activeEncounter?.battlemapColumns) {
       return {
@@ -183,10 +184,13 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         gridRows: activeSession.activeEncounter.battlemapRows || 16,
         theme: activeSession.activeEncounter.battlemapTheme || 'dungeon',
         feetPerSquare: activeSession.activeEncounter.battlemapFeetPerSquare || 5,
-        diagonalRule: activeSession.activeEncounter.battlemapDiagonalRule || 'standard5e'
+        diagonalRule: activeSession.activeEncounter.battlemapDiagonalRule || defaultDiag
       };
     }
-    return DEFAULT_BATTLEMAP_CONFIG;
+    return {
+      ...DEFAULT_BATTLEMAP_CONFIG,
+      diagonalRule: defaultDiag
+    };
   });
 
   const handleLoadBattlemapLayout = (
@@ -577,6 +581,13 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
       {/* Monster Mechanics Actions Bar */}
       <MonsterMechanicsBar
         combatants={combatants}
+        onTriggerWeatherChange={(weather, reason, sourceName) => {
+          encounter.setBattlemapWeatherEffect(weather);
+          addLogEntry('ability', `🌪️ Weather Shift: ${reason}`, sourceName);
+          if (isDm && activeSession?.code) {
+            syncEncounterToSession(combatants, activeTurnIndex, roundNumber, undefined, undefined, undefined, undefined, undefined, undefined, { ...mapConfig, weatherEffect: weather });
+          }
+        }}
         onTriggerBeholderEyeRay={() => addLogEntry('ability', '👁️ BEHOLDER EYE RAY triggered', 'Beholder')}
         onTriggerMedusaGaze={() => addLogEntry('ability', '🗿 MEDUSA GAZE triggered (DC 14 CON)', 'Medusa')}
         onTriggerRemorhazHeatedBody={() => addLogEntry('ability', '🔥 REMORHAZ HEATED BODY triggered (3d6 Fire)', 'Remorhaz')}
@@ -1081,6 +1092,7 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             isDm={isDm}
             character={character}
             allCharacters={allCharacters}
+            edition={character?.edition || '5e'}
             onUpdateCombatantPosition={handleUpdateCombatantPosition}
             onMoveCombatant={handleMoveCombatant}
             onDashCombatant={handleDashCombatant}
@@ -1106,6 +1118,9 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             onMountCombatant={handleMountCombatant}
             onDismountCombatant={handleDismountCombatant}
             onToggleMountRole={handleToggleCombatantMountRole}
+            onUpdateCombatant={(updated) => {
+              setCombatants((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+            }}
             onRemoveCombatant={handleRemoveCombatant}
             onRemoveCombatantFromMap={handleRemoveCombatantFromMap}
             onResetBattlemap={handleResetBattlemap}
@@ -1117,13 +1132,17 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             onLoadLayout={handleLoadBattlemapLayout}
             onUpdateConfig={(newCfg) => {
               setMapConfig(newCfg);
+              if (newCfg.weatherEffect) {
+                encounter.setBattlemapWeatherEffect(newCfg.weatherEffect);
+              }
               if (isDm && activeSession?.code) {
                 // sync to session if DM
-                syncEncounterToSession(combatants, activeTurnIndex, roundNumber);
+                syncEncounterToSession(combatants, activeTurnIndex, roundNumber, undefined, undefined, undefined, undefined, undefined, undefined, newCfg);
               }
             }}
             isStandalone={isStandaloneBattlemap}
             onPopoutBattlemap={handlePopoutBattlemap}
+            onLogAction={addLogEntry}
           />
         </div>
       )}

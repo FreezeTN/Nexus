@@ -21,6 +21,8 @@ export * from './environmentRules';
 export * from './racialSkillBonusEngine';
 export * from './rules/sizeScaleRules35e';
 export { get35eSizeModifier } from './rules/sizeScaleRules35e';
+import { find35eClassRule, calculateClassBab, DND35E_ALL_CLASS_RULES } from './rules/dnd35eClassesRules';
+export * from './rules/dnd35eClassesRules';
 import { getRacialSkillBonusForSkill } from './racialSkillBonusEngine';
 import { get35eSizeModifier, get35eSpaceAndReach } from './rules/sizeScaleRules35e';
 import { calculate35eWeaponSizePenalty } from './dnd35eAdvancedMechanics';
@@ -607,11 +609,14 @@ export function getGestaltHitDie(
 }
 
 export function get35eClassBaseSkillPoints(className: string): number {
+  const rule = find35eClassRule(className);
+  if (rule) return rule.baseSkillPoints;
+
   const c = (className || '').toLowerCase();
   if (c.includes('rogue')) return 8;
-  if (c.includes('bard') || c.includes('ranger') || c.includes('scout')) return 6;
-  if (c.includes('barbarian') || c.includes('druid') || c.includes('monk')) return 4;
-  return 2; // Fighter, Paladin, Cleric, Sorcerer, Wizard, etc.
+  if (c.includes('bard') || c.includes('ranger') || c.includes('scout') || c.includes('aristocrat') || c.includes('expert') || c.includes('shadowdancer')) return 6;
+  if (c.includes('barbarian') || c.includes('druid') || c.includes('monk') || c.includes('soulknife') || c.includes('wilder') || c.includes('horizon walker') || c.includes('loremaster') || c.includes('assassin') || c.includes('duelist')) return 4;
+  return 2; // Fighter, Paladin, Cleric, Sorcerer, Wizard, Psion, Warrior, Adept, Commoner, etc.
 }
 
 export function getGestaltBaseSkillPoints(
@@ -3020,6 +3025,7 @@ export function getActiveGrantingSynergySkills(skills?: Skill[]): Array<{
 }
 
 export const DND35E_CORE_CLASS_SKILLS: Record<string, string[]> = {
+  // 11 Core PC Classes
   Barbarian: ['Climb', 'Craft', 'Handle Animal', 'Intimidate', 'Jump', 'Listen', 'Ride', 'Survival', 'Swim'],
   Bard: [
     'Appraise', 'Balance', 'Bluff', 'Climb', 'Concentration', 'Craft', 'Decipher Script', 'Diplomacy', 'Disguise',
@@ -3056,20 +3062,78 @@ export const DND35E_CORE_CLASS_SKILLS: Record<string, string[]> = {
     'Search', 'Sense Motive', 'Sleight of Hand', 'Spot', 'Swim', 'Tumble', 'Use Magic Device', 'Use Rope'
   ],
   Sorcerer: ['Bluff', 'Concentration', 'Craft', 'Knowledge (Arcana)', 'Profession', 'Spellcraft'],
-  Wizard: ['Concentration', 'Craft', 'Decipher Script', 'Knowledge (all)', 'Profession', 'Spellcraft']
+  Wizard: ['Concentration', 'Craft', 'Decipher Script', 'Knowledge (all)', 'Profession', 'Spellcraft'],
+
+  // 4 Expanded Psionics Classes
+  Psion: ['Autohypnosis', 'Concentration', 'Craft', 'Knowledge (all)', 'Profession', 'Psicraft'],
+  'Psychic Warrior': ['Autohypnosis', 'Climb', 'Concentration', 'Craft', 'Jump', 'Ride', 'Search', 'Swim'],
+  Soulknife: [
+    'Autohypnosis', 'Climb', 'Concentration', 'Craft', 'Hide', 'Jump',
+    'Knowledge (psionics)', 'Listen', 'Move Silently', 'Profession', 'Spot', 'Tumble'
+  ],
+  Wilder: [
+    'Autohypnosis', 'Balance', 'Bluff', 'Climb', 'Concentration', 'Craft', 'Escape Artist',
+    'Intimidate', 'Jump', 'Listen', 'Profession', 'Psicraft', 'Sense Motive', 'Spot', 'Swim', 'Tumble'
+  ],
+
+  // 5 NPC Classes
+  Adept: ['Concentration', 'Craft', 'Handle Animal', 'Heal', 'Knowledge (all)', 'Profession', 'Spellcraft', 'Survival'],
+  Aristocrat: [
+    'Appraise', 'Bluff', 'Diplomacy', 'Disguise', 'Forgery', 'Gather Information', 'Handle Animal',
+    'Intimidate', 'Knowledge (all)', 'Listen', 'Perform', 'Profession', 'Ride', 'Sense Motive',
+    'Speak Language', 'Spot', 'Survival', 'Swim'
+  ],
+  Commoner: ['Climb', 'Craft', 'Handle Animal', 'Jump', 'Listen', 'Profession', 'Ride', 'Spot', 'Swim', 'Use Rope'],
+  Expert: [], // Expert chooses any 10 skills
+  Warrior: ['Climb', 'Handle Animal', 'Intimidate', 'Jump', 'Ride', 'Swim'],
+
+  // Prestige Classes
+  'Arcane Archer': ['Craft', 'Hide', 'Listen', 'Move Silently', 'Ride', 'Spot', 'Survival', 'Use Rope'],
+  Archmage: ['Concentration', 'Craft', 'Knowledge (all)', 'Profession', 'Search', 'Spellcraft'],
+  Assassin: [
+    'Balance', 'Bluff', 'Climb', 'Craft', 'Decipher Script', 'Diplomacy', 'Disable Device',
+    'Disguise', 'Escape Artist', 'Forgery', 'Gather Information', 'Hide', 'Intimidate', 'Jump',
+    'Listen', 'Move Silently', 'Open Lock', 'Search', 'Sense Motive', 'Sleight of Hand', 'Spot',
+    'Swim', 'Tumble', 'Use Magic Device', 'Use Rope'
+  ],
+  Blackguard: ['Concentration', 'Craft', 'Diplomacy', 'Handle Animal', 'Heal', 'Hide', 'Intimidate', 'Knowledge (religion)', 'Profession', 'Ride'],
+  'Dragon Disciple': ['Concentration', 'Craft', 'Diplomacy', 'Escape Artist', 'Gather Information', 'Knowledge (all)', 'Listen', 'Profession', 'Search', 'Speak Language', 'Spellcraft', 'Spot'],
+  Duelist: ['Balance', 'Bluff', 'Escape Artist', 'Jump', 'Listen', 'Perform', 'Sense Motive', 'Spot', 'Tumble'],
+  'Dwarven Defender': ['Craft', 'Listen', 'Sense Motive', 'Spot'],
+  'Eldritch Knight': ['Concentration', 'Craft', 'Decipher Script', 'Jump', 'Knowledge (arcana)', 'Knowledge (nobility)', 'Ride', 'Sense Motive', 'Spellcraft', 'Swim'],
+  'Horizon Walker': ['Climb', 'Handle Animal', 'Hide', 'Knowledge (geography)', 'Listen', 'Move Silently', 'Profession', 'Ride', 'Spot', 'Survival'],
+  Loremaster: ['Appraise', 'Concentration', 'Craft', 'Decipher Script', 'Gather Information', 'Handle Animal', 'Heal', 'Knowledge (all)', 'Perform', 'Profession', 'Speak Language', 'Spellcraft', 'Use Magic Device'],
+  'Mystic Theurge': ['Concentration', 'Craft', 'Decipher Script', 'Knowledge (arcana)', 'Knowledge (religion)', 'Profession', 'Sense Motive', 'Spellcraft'],
+  Shadowdancer: ['Balance', 'Bluff', 'Decipher Script', 'Diplomacy', 'Disguise', 'Escape Artist', 'Hide', 'Jump', 'Listen', 'Move Silently', 'Perform', 'Profession', 'Search', 'Sleight of Hand', 'Spot', 'Tumble', 'Use Rope']
 };
 
-export function is35eClassSkill(characterClass: string, skillName: string, secondaryClass?: string, additionalClasses?: string[]): boolean {
+export function is35eClassSkill(characterClass: string, skillName: string, secondaryClass?: string, additionalClasses?: string[], customClassSkills?: string[]): boolean {
   const checkSingle = (clsName: string): boolean => {
     const cls = clsName?.trim() || '';
-    const list = DND35E_CORE_CLASS_SKILLS[cls];
-    if (!list) return false;
+    if (!cls) return false;
 
-    const lower = skillName.trim().toLowerCase();
-    if (list.includes('Knowledge (all)') && lower.startsWith('knowledge')) {
-      return true;
+    // Direct check in dictionary
+    let list = DND35E_CORE_CLASS_SKILLS[cls];
+    if (!list) {
+      const rule = find35eClassRule(cls);
+      if (rule) list = rule.classSkills;
     }
-    return list.some((item) => item.toLowerCase() === lower);
+
+    if (list && list.length > 0) {
+      const lower = skillName.trim().toLowerCase();
+      if (list.includes('Knowledge (all)') && lower.startsWith('knowledge')) {
+        return true;
+      }
+      return list.some((item) => item.toLowerCase() === lower);
+    }
+
+    // Expert allows any 10 chosen skills
+    if (cls.toLowerCase().includes('expert') && customClassSkills) {
+      const lower = skillName.trim().toLowerCase();
+      return customClassSkills.some(s => s.toLowerCase() === lower);
+    }
+
+    return false;
   };
 
   if (!characterClass) return true;
@@ -3083,7 +3147,7 @@ export function is35eClassSkill(characterClass: string, skillName: string, secon
 
   // Fallback for custom or homebrew classes not in core SRD dictionary
   const allClasses = [characterClass, secondaryClass, ...(additionalClasses || [])].filter(Boolean);
-  if (allClasses.every(c => !DND35E_CORE_CLASS_SKILLS[(c || '').trim()])) {
+  if (allClasses.every(c => !DND35E_CORE_CLASS_SKILLS[(c || '').trim()] && !find35eClassRule(c || ''))) {
     return true;
   }
   return false;
@@ -3135,33 +3199,270 @@ export function check35eSkillRankCap(
 // ----------------------------------------------------
 
 export function getCharacterCasterLevel(char: CharacterData): number {
+  if (!char) return 0;
   let baseCl = 0;
   if (typeof char.casterLevelOverride === 'number') {
     baseCl = char.casterLevelOverride;
   } else {
     const lvl = Math.max(1, char.level || 1);
     const cls = (char.characterClass || '').toLowerCase();
+    const sub = (char.subclass || '').toLowerCase();
+    const secCls = (char.optionalRules?.secondaryClass || '').toLowerCase();
+    const secLvl = Math.max(1, char.optionalRules?.secondaryLevel || 1);
 
-    // Full Casters (Wizard, Sorcerer, Cleric, Druid, Bard)
-    if (
-      cls.includes('wizard') ||
-      cls.includes('sorcerer') ||
-      cls.includes('cleric') ||
-      cls.includes('druid') ||
-      cls.includes('bard')
-    ) {
+    // Full Casters (Wizard, Sorcerer, Cleric, Druid, Bard, Beguiler, Warmage, Dread Necromancer, Duskblade, Archivist, Favored Soul, etc.)
+    const fullCasterMatches = (c: string) =>
+      c.includes('wizard') ||
+      c.includes('sorcerer') ||
+      c.includes('cleric') ||
+      c.includes('druid') ||
+      c.includes('bard') ||
+      c.includes('beguiler') ||
+      c.includes('warmage') ||
+      c.includes('dread necromancer') ||
+      c.includes('duskblade') ||
+      c.includes('archivist') ||
+      c.includes('favored soul') ||
+      c.includes('spirit shaman') ||
+      c.includes('shugenja') ||
+      c.includes('wu jen') ||
+      c.includes('healer');
+
+    if (fullCasterMatches(cls)) {
+      baseCl = lvl;
+    } else if (cls.includes('artificer')) {
+      baseCl = lvl;
+    } else if (cls.includes('warlock') || cls.includes('dragonfire')) {
       baseCl = lvl;
     } else if (cls.includes('paladin') || cls.includes('ranger')) {
-      // Paladins and Rangers cast spells starting at level 4 with CL = floor(level / 2)
-      baseCl = lvl >= 4 ? Math.floor(lvl / 2) : 0;
-    } else {
+      // In 3.5e: spellcasting at lvl 4 with CL = floor(level / 2)
+      // In 5e: half-caster with CL = floor(level / 2)
+      if (char.edition === '3.5e') {
+        baseCl = lvl >= 4 ? Math.floor(lvl / 2) : 0;
+      } else {
+        baseCl = Math.floor(lvl / 2);
+      }
+    } else if (sub.includes('eldritch knight') || sub.includes('arcane trickster') || cls.includes('trickster')) {
+      baseCl = Math.floor(lvl / 3);
+    } else if (char.isSpellcaster && (char.spells?.length > 0 || char.spellSlots?.some(s => s.max > 0))) {
       baseCl = lvl;
+    } else {
+      baseCl = 0;
+    }
+
+    // Check multiclass secondary caster if primary was 0 or multiclassing active
+    if (char.optionalRules?.useMulticlassing && secCls) {
+      let secCl = 0;
+      if (fullCasterMatches(secCls) || secCls.includes('artificer') || secCls.includes('warlock')) {
+        secCl = secLvl;
+      } else if (secCls.includes('paladin') || secCls.includes('ranger')) {
+        secCl = char.edition === '3.5e' ? (secLvl >= 4 ? Math.floor(secLvl / 2) : 0) : Math.floor(secLvl / 2);
+      }
+      baseCl = Math.max(baseCl, secCl);
     }
   }
 
   // 3.5e Negative Levels: -1 effective caster level per negative level
   const negLevels = char.negativeLevels || 0;
   return Math.max(0, baseCl - negLevels);
+}
+
+export function isCharacterSpellcaster(char: CharacterData): boolean {
+  if (!char) return false;
+  // Explicitly marked
+  if (char.isSpellcaster) return true;
+  // Has spells in spellbook
+  if (char.spells && char.spells.length > 0) return true;
+  // Has configured spell slots
+  if (char.spellSlots && char.spellSlots.some(s => (s.max || 0) > 0 || (s.current || 0) > 0)) return true;
+
+  // System-specific casters
+  if (char.edition === 'shadowrun') {
+    return Boolean((char.shadowrun?.mag && char.shadowrun.mag > 0) || (char.spells && char.spells.length > 0));
+  }
+  if (char.edition === 'cthulhu') {
+    return Boolean(char.spells && char.spells.length > 0);
+  }
+
+  // Check Caster Level from class progression
+  if (getCharacterCasterLevel(char) > 0) return true;
+
+  const cls = (char.characterClass || '').toLowerCase();
+  const sub = (char.subclass || '').toLowerCase();
+  const secCls = (char.optionalRules?.secondaryClass || '').toLowerCase();
+  const lvl = char.level || 1;
+
+  const KNOWN_CASTERS = [
+    'wizard', 'sorcerer', 'cleric', 'druid', 'bard', 'warlock',
+    'artificer', 'beguiler', 'warmage', 'dread necromancer',
+    'duskblade', 'archivist', 'favored soul', 'spirit shaman',
+    'shugenja', 'wu jen', 'healer', 'dragonfire adept',
+    'psion', 'wilder', 'psychic warrior', 'soulknife', 'binder'
+  ];
+
+  if (KNOWN_CASTERS.some(c => cls.includes(c) || secCls.includes(c))) {
+    return true;
+  }
+
+  if (cls.includes('paladin') || secCls.includes('paladin') || cls.includes('ranger') || secCls.includes('ranger')) {
+    return char.edition === '3.5e' ? lvl >= 4 : lvl >= 2;
+  }
+
+  if (sub.includes('eldritch knight') || sub.includes('arcane trickster') || cls.includes('trickster')) {
+    return lvl >= 3;
+  }
+
+  return false;
+}
+
+export function canCharacterCraftMagicItems(char: CharacterData): boolean {
+  if (!char || char.edition !== '3.5e') return false;
+  // Has active transactions in the ledger or XP spent on crafting
+  if ((char.xpLedger && char.xpLedger.length > 0) || (char.totalXpSpentOnCrafting && char.totalXpSpentOnCrafting > 0)) return true;
+
+  const cls = (char.characterClass || '').toLowerCase();
+  const secCls = (char.optionalRules?.secondaryClass || '').toLowerCase();
+  if (cls.includes('artificer') || secCls.includes('artificer')) return true;
+
+  const craftingKeywords = [
+    'craft', 'scribe scroll', 'brew potion', 'forge ring', 'craft wondrous',
+    'craft magic arms', 'craft wand', 'craft rod', 'craft staff', 'craft construct',
+    'item creation'
+  ];
+
+  if (char.feats?.some(f => craftingKeywords.some(kw => f.name.toLowerCase().includes(kw)))) {
+    return true;
+  }
+  if (char.classFeatures?.some(f => craftingKeywords.some(kw => f.name.toLowerCase().includes(kw)))) {
+    return true;
+  }
+
+  if (getCharacterCasterLevel(char) > 0) {
+    return true;
+  }
+
+  return false;
+}
+
+export function canCharacterCraft5e(char: CharacterData): boolean {
+  if (!char || char.edition === '3.5e') return false;
+
+  const cls = (char.characterClass || '').toLowerCase();
+  const secCls = (char.optionalRules?.secondaryClass || '').toLowerCase();
+  if (cls.includes('artificer') || secCls.includes('artificer')) return true;
+
+  if (isCharacterSpellcaster(char)) return true;
+
+  const craftingKeywords = [
+    'tool', 'kit', 'supplies', 'artisan', 'herbalism', 'alchemist', 'smith',
+    'brewer', 'calligrapher', 'carpenter', 'cartographer', 'cobbler', 'cook',
+    'glassblower', 'jeweler', 'leatherworker', 'mason', 'painter', 'potter',
+    'tinker', 'weaver', 'woodcarver', 'craft'
+  ];
+
+  if (char.classFeatures?.some(f => craftingKeywords.some(kw => f.name.toLowerCase().includes(kw) || f.description?.toLowerCase().includes(kw)))) {
+    return true;
+  }
+  if (char.feats?.some(f => craftingKeywords.some(kw => f.name.toLowerCase().includes(kw) || f.description?.toLowerCase().includes(kw)))) {
+    return true;
+  }
+  if (char.inventory?.some(i => craftingKeywords.some(kw => i.name.toLowerCase().includes(kw)))) {
+    return true;
+  }
+
+  return false;
+}
+
+export function recharge5eClassResources(
+  char: CharacterData,
+  restType: 'short' | 'long'
+): NonNullable<CharacterData['classResources5e']> {
+  const cls = (char.characterClass || '').toLowerCase();
+  const secCls = (char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass)
+    ? char.optionalRules.secondaryClass.toLowerCase()
+    : '';
+
+  const priLvl = char.level || 1;
+  const secLvl = char.optionalRules?.secondaryLevel || 1;
+
+  const getClassLevel = (className: string): number => {
+    let lvl = 0;
+    if (cls.includes(className)) lvl += priLvl;
+    if (secCls.includes(className)) lvl += secLvl;
+    return lvl;
+  };
+
+  const barbLvl = getClassLevel('barbarian');
+  const monkLvl = getClassLevel('monk');
+  const sorcLvl = getClassLevel('sorcerer');
+  const clericLvl = getClassLevel('cleric');
+  const paladinLvl = getClassLevel('paladin');
+  const bardLvl = getClassLevel('bard');
+  const fighterLvl = getClassLevel('fighter');
+  const druidLvl = getClassLevel('druid');
+
+  const effectiveAbilities = getEffectiveAbilities(char);
+  const chaMod = getAbilityModifier(effectiveAbilities.CHA?.score || 10);
+
+  const res = { ...(char.classResources5e || {}) };
+
+  // Barbarian Rage
+  const getBarbarianRageMax = (lvl: number): number => {
+    if (lvl >= 20) return 999;
+    if (lvl >= 17) return 6;
+    if (lvl >= 12) return 5;
+    if (lvl >= 6) return 4;
+    if (lvl >= 3) return 3;
+    return 2;
+  };
+  const rageMax = getBarbarianRageMax(barbLvl);
+
+  // Monk Ki
+  const kiMax = monkLvl >= 2 ? monkLvl : 0;
+
+  // Sorcerer Sorcery Points
+  const sorcPointsMax = sorcLvl >= 2 ? sorcLvl : 0;
+
+  // Channel Divinity
+  let channelDivinityMax = 0;
+  if (clericLvl >= 18) channelDivinityMax = 3;
+  else if (clericLvl >= 6) channelDivinityMax = 2;
+  else if (clericLvl >= 2) channelDivinityMax = 1;
+  if (paladinLvl >= 3) channelDivinityMax = Math.max(channelDivinityMax, 1);
+
+  // Bardic Inspiration
+  const bardicMax = Math.max(1, chaMod);
+
+  // Fighter
+  const actionSurgeMax = fighterLvl >= 17 ? 2 : fighterLvl >= 2 ? 1 : 0;
+
+  // Druid Wild Shape
+  const wildShapeMax = druidLvl >= 20 ? 999 : druidLvl >= 2 ? 2 : 0;
+
+  // Paladin Lay on Hands
+  const layOnHandsMax = paladinLvl * 5;
+
+  if (restType === 'short') {
+    if (monkLvl >= 2) res.ki = { current: kiMax, max: kiMax };
+    if (channelDivinityMax > 0) res.channelDivinity = { current: channelDivinityMax, max: channelDivinityMax };
+    if (bardLvl >= 5) res.bardicInspiration = { current: bardicMax, max: bardicMax };
+    if (fighterLvl >= 1) res.secondWind = { available: true };
+    if (actionSurgeMax > 0) res.actionSurge = { current: actionSurgeMax, max: actionSurgeMax };
+    if (wildShapeMax > 0) res.wildShape = { current: wildShapeMax, max: wildShapeMax };
+  } else {
+    // Long Rest: Recharges all
+    if (barbLvl > 0) res.rage = { current: rageMax, max: rageMax, isRaging: false };
+    if (monkLvl >= 2) res.ki = { current: kiMax, max: kiMax };
+    if (sorcLvl >= 2) res.sorceryPoints = { current: sorcPointsMax, max: sorcPointsMax };
+    if (channelDivinityMax > 0) res.channelDivinity = { current: channelDivinityMax, max: channelDivinityMax };
+    if (bardLvl > 0) res.bardicInspiration = { current: bardicMax, max: bardicMax };
+    if (fighterLvl >= 1) res.secondWind = { available: true };
+    if (actionSurgeMax > 0) res.actionSurge = { current: actionSurgeMax, max: actionSurgeMax };
+    if (wildShapeMax > 0) res.wildShape = { current: wildShapeMax, max: wildShapeMax };
+    if (paladinLvl > 0) res.layOnHands5e = { current: layOnHandsMax, max: layOnHandsMax };
+  }
+
+  return res;
 }
 
 export function getSpellPenetrationBonus(char: CharacterData): number {
@@ -3407,27 +3708,16 @@ export function getCharacterBab(char: CharacterData): number {
   const level = Math.max(1, char.level || 1);
 
   const getBabForClass = (clsName: string, clsLevel: number = level): number => {
-    const className = (clsName || '').toLowerCase();
-    // Full BAB (1.0x Level): Fighter, Paladin, Ranger, Barbarian
-    if (
-      className.includes('fighter') ||
-      className.includes('paladin') ||
-      className.includes('ranger') ||
-      className.includes('barbarian')
-    ) {
-      return clsLevel;
-    }
-
-    // Poor BAB (0.5x Level): Wizard, Sorcerer
-    if (className.includes('wizard') || className.includes('sorcerer')) {
-      return Math.floor(clsLevel * 0.5);
-    }
-
-    // Medium BAB (0.75x Level): Cleric, Druid, Monk, Rogue, Bard
-    return Math.floor(clsLevel * 0.75);
+    return calculateClassBab(clsName, clsLevel);
   };
 
-  const primaryBab = getBabForClass(char.characterClass, level);
+  const isMulticlass = Boolean(char.optionalRules?.useMulticlassing && char.optionalRules?.secondaryClass);
+  const secondaryLevel = Math.max(1, char.optionalRules?.secondaryLevel || 1);
+  const primaryLevel = isMulticlass ? Math.max(1, level - secondaryLevel) : level;
+
+  const primaryBab = isMulticlass
+    ? getBabForClass(char.characterClass, primaryLevel) + getBabForClass(char.optionalRules!.secondaryClass!, secondaryLevel)
+    : getBabForClass(char.characterClass, level);
 
   // Gestalt UA 72: Characters use the better base attack bonus across their tracks
   if (isGestalt) {
@@ -4174,6 +4464,184 @@ export function calculate35eCriticalDamage(
     multipliedExpr: `(${clean}) × ${multiplier}`,
     diceMultiplied: clean,
     staticBonusMultiplied: 0
+  };
+}
+
+// ----------------------------------------------------
+// D&D 5e CRITICAL DAMAGE & CLASS COMBAT ENHANCERS
+// ----------------------------------------------------
+
+export function calculate5eCriticalDamage(
+  damageExpr: string,
+  character?: CharacterData,
+  isMelee: boolean = true
+): {
+  critExpr: string;
+  bonusDiceDesc?: string;
+  breakdown: string;
+} {
+  const clean = (damageExpr || '1d8').trim();
+  const bonusFeatures: string[] = [];
+  let extraPrimaryDice = 0;
+
+  if (character) {
+    const raceStr = (character.race || '').toLowerCase();
+    const clsStr = (character.characterClass || '').toLowerCase();
+    const secClsStr = (character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass)
+      ? character.optionalRules.secondaryClass.toLowerCase()
+      : '';
+    const priLvl = character.level || 1;
+    const secLvl = character.optionalRules?.secondaryLevel || 1;
+    let barbLvl = 0;
+    if (clsStr.includes('barbarian')) barbLvl += priLvl;
+    if (secClsStr.includes('barbarian')) barbLvl += secLvl;
+
+    // Barbarian Brutal Critical (PHB p. 49)
+    if (barbLvl >= 17) {
+      extraPrimaryDice += 3;
+      bonusFeatures.push('Brutal Critical +3 dice');
+    } else if (barbLvl >= 13) {
+      extraPrimaryDice += 2;
+      bonusFeatures.push('Brutal Critical +2 dice');
+    } else if (barbLvl >= 9) {
+      extraPrimaryDice += 1;
+      bonusFeatures.push('Brutal Critical +1 die');
+    }
+
+    // Half-Orc Savage Attacks (PHB p. 41) - melee weapon only
+    if (isMelee && (raceStr.includes('half-orc') || raceStr.includes('half orc') || raceStr === 'orc')) {
+      extraPrimaryDice += 1;
+      bonusFeatures.push('Savage Attacks +1 die');
+    }
+  }
+
+  // Replace each XdY with (2*X)dY, and add extraPrimaryDice to the first matched die group
+  let isFirstDiceGroup = true;
+  const critExpr = clean.replace(/(\d+)d(\d+)/gi, (match, countStr, sidesStr) => {
+    const baseCount = parseInt(countStr, 10);
+    const sides = parseInt(sidesStr, 10);
+    let newCount = baseCount * 2;
+    if (isFirstDiceGroup && extraPrimaryDice > 0) {
+      newCount += extraPrimaryDice;
+      isFirstDiceGroup = false;
+    }
+    return `${newCount}d${sides}`;
+  });
+
+  const bonusDiceDesc = bonusFeatures.length > 0 ? bonusFeatures.join(', ') : undefined;
+  const breakdown = bonusDiceDesc ? `Doubled Dice + ${bonusDiceDesc}` : 'Doubled Damage Dice';
+
+  return {
+    critExpr,
+    bonusDiceDesc,
+    breakdown
+  };
+}
+
+export function get5eRageBonus(character: CharacterData): { isRaging: boolean; bonusDamage: number } {
+  if (character.edition === '3.5e') return { isRaging: false, bonusDamage: 0 };
+
+  const conditions = character.conditions || [];
+  const isRaging = conditions.some(c => c.toLowerCase().includes('rag'));
+
+  const clsStr = (character.characterClass || '').toLowerCase();
+  const secClsStr = (character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass)
+    ? character.optionalRules.secondaryClass.toLowerCase()
+    : '';
+  const priLvl = character.level || 1;
+  const secLvl = character.optionalRules?.secondaryLevel || 1;
+  let barbLvl = 0;
+  if (clsStr.includes('barbarian')) barbLvl += priLvl;
+  if (secClsStr.includes('barbarian')) barbLvl += secLvl;
+
+  if (barbLvl <= 0) {
+    return { isRaging, bonusDamage: 0 };
+  }
+
+  let bonusDamage = 2;
+  if (barbLvl >= 16) {
+    bonusDamage = 4;
+  } else if (barbLvl >= 9) {
+    bonusDamage = 3;
+  }
+
+  return { isRaging, bonusDamage };
+}
+
+export function get5eSneakAttackInfo(character: CharacterData): {
+  hasSneakAttack: boolean;
+  diceCount: number;
+  damageExpr: string;
+} {
+  if (character.edition === '3.5e') return { hasSneakAttack: false, diceCount: 0, damageExpr: '' };
+
+  const clsStr = (character.characterClass || '').toLowerCase();
+  const secClsStr = (character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass)
+    ? character.optionalRules.secondaryClass.toLowerCase()
+    : '';
+  const priLvl = character.level || 1;
+  const secLvl = character.optionalRules?.secondaryLevel || 1;
+  let rogueLvl = 0;
+  if (clsStr.includes('rogue')) rogueLvl += priLvl;
+  if (secClsStr.includes('rogue')) rogueLvl += secLvl;
+
+  const hasFeature = (character.classFeatures || []).some(f => f.name.toLowerCase().includes('sneak attack'));
+
+  if (rogueLvl <= 0 && !hasFeature) {
+    return { hasSneakAttack: false, diceCount: 0, damageExpr: '' };
+  }
+
+  const effectiveLvl = Math.max(1, rogueLvl > 0 ? rogueLvl : priLvl);
+  const diceCount = Math.ceil(effectiveLvl / 2);
+
+  return {
+    hasSneakAttack: true,
+    diceCount,
+    damageExpr: `${diceCount}d6`
+  };
+}
+
+export function get5ePaladinSmiteInfo(character: CharacterData): {
+  canSmite: boolean;
+  paladinLevel: number;
+  availableSlots: { level: number; current: number; max: number; baseDice: number; damage: string }[];
+} {
+  if (character.edition === '3.5e') return { canSmite: false, paladinLevel: 0, availableSlots: [] };
+
+  const clsStr = (character.characterClass || '').toLowerCase();
+  const secClsStr = (character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass)
+    ? character.optionalRules.secondaryClass.toLowerCase()
+    : '';
+  const priLvl = character.level || 1;
+  const secLvl = character.optionalRules?.secondaryLevel || 1;
+  let paladinLvl = 0;
+  if (clsStr.includes('paladin')) paladinLvl += priLvl;
+  if (secClsStr.includes('paladin')) paladinLvl += secLvl;
+
+  const hasSmiteFeature = (character.classFeatures || []).some(f => f.name.toLowerCase().includes('divine smite'));
+
+  if (paladinLvl < 2 && !hasSmiteFeature) {
+    return { canSmite: false, paladinLevel: paladinLvl, availableSlots: [] };
+  }
+
+  const slots = (character.spellSlots || [])
+    .filter(s => s.level >= 1 && s.level <= 5 && s.current > 0)
+    .map(s => {
+      // 5e RAW: 2d8 for 1st level, +1d8 per slot level above 1st, max 5d8
+      const baseDice = Math.min(5, 1 + s.level);
+      return {
+        level: s.level,
+        current: s.current,
+        max: s.max,
+        baseDice,
+        damage: `${baseDice}d8`
+      };
+    });
+
+  return {
+    canSmite: true,
+    paladinLevel: paladinLvl,
+    availableSlots: slots
   };
 }
 
@@ -5453,6 +5921,16 @@ export {
   SIZE_CATEGORY_ORDER
 } from './dnd35eAdvancedMechanics';
 export type { WeaponSizePenaltyResult } from './dnd35eAdvancedMechanics';
+
+export {
+  getPassivePerception,
+  getPassiveInvestigation,
+  getPassiveInsight,
+  getPassiveSenses,
+  hasObservantFeat,
+  type PassiveSensesSuite
+} from '../systems/dnd5e/abilities';
+
 
 
 

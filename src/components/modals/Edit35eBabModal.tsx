@@ -32,6 +32,9 @@ export const Edit35eBabModal: React.FC<Edit35eBabModalProps> = ({
   const mediumBabPreset = Math.floor(level * 0.75);
   const poorBabPreset = Math.floor(level * 0.5);
 
+  const charWithoutManualBab = { ...character, bab: undefined, baseAttackBonus: undefined };
+  const calculatedClassBab = getCharacterBab(charWithoutManualBab);
+
   const previewIteratives = get35eIterativeAttacks(babValue, babValue);
 
   const handleSave = () => {
@@ -111,8 +114,17 @@ export const Edit35eBabModal: React.FC<Edit35eBabModalProps> = ({
             </div>
 
             {/* Quick Class Progression Presets */}
-            <div className="pt-2 border-t border-stone-800/80 space-y-1.5">
-              <div className="text-[11px] font-bold text-stone-400">Quick Presets for Level {level}:</div>
+            <div className="pt-2 border-t border-stone-800/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-400">Quick Presets for Level {level}:</span>
+                <button
+                  type="button"
+                  onClick={() => setBabValue(calculatedClassBab)}
+                  className="text-[11px] font-mono text-amber-400 hover:text-amber-300 underline underline-offset-2"
+                >
+                  Use Auto-Calculated (+{calculatedClassBab})
+                </button>
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 <button
                   type="button"
@@ -124,7 +136,7 @@ export const Edit35eBabModal: React.FC<Edit35eBabModalProps> = ({
                   }`}
                 >
                   <div className="text-xs font-bold">Full BAB (+{fullBabPreset})</div>
-                  <div className="text-[10px] text-stone-400 truncate">Fighter, Paladin, Barbarian, Ranger</div>
+                  <div className="text-[10px] text-stone-400 truncate">Fighter, Paladin, Barb, Ranger, Warrior</div>
                 </button>
 
                 <button
@@ -137,7 +149,7 @@ export const Edit35eBabModal: React.FC<Edit35eBabModalProps> = ({
                   }`}
                 >
                   <div className="text-xs font-bold">Medium BAB (+{mediumBabPreset})</div>
-                  <div className="text-[10px] text-stone-400 truncate">Cleric, Rogue, Monk, Druid, Bard</div>
+                  <div className="text-[10px] text-stone-400 truncate">Cleric, Rogue, Monk, Druid, Bard, Psionics</div>
                 </button>
 
                 <button
@@ -150,7 +162,7 @@ export const Edit35eBabModal: React.FC<Edit35eBabModalProps> = ({
                   }`}
                 >
                   <div className="text-xs font-bold">Poor BAB (+{poorBabPreset})</div>
-                  <div className="text-[10px] text-stone-400 truncate">Wizard, Sorcerer</div>
+                  <div className="text-[10px] text-stone-400 truncate">Wizard, Sorcerer, Psion, Adept, Commoner</div>
                 </button>
               </div>
             </div>

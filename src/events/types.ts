@@ -19,6 +19,7 @@ export type EventType =
   | 'ConcentrationCheckRequested'
   | 'MassiveDamageCheckRequested'
   | 'CompendiumUpdated'
+  | 'WeatherChanged'
   | 'OpenModal'
   | 'CloseModal';
 
@@ -62,6 +63,12 @@ export interface EventPayloadMap {
     damageTaken: number;
     fortSaveDc: number;
     fortMod: number;
+  };
+  WeatherChanged: {
+    weather: string;
+    sourceName?: string;
+    sourceType?: 'spell' | 'monster_regional' | 'monster_lair' | 'item' | 'legendary' | 'dm';
+    reason?: string;
   };
 }
 

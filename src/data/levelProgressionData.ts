@@ -1,4 +1,5 @@
 import { RuleEdition } from '../types';
+import { find35eClassRule } from '../utils/rules/dnd35eClassesRules';
 
 export interface LevelProgressionEntry {
   level: number;
@@ -146,6 +147,14 @@ export const CLASS_HIT_DICE_MAP: Record<string, ClassHitDieMeta> = {
 };
 
 export function getClassHitDie(className: string): ClassHitDieMeta {
+  const rule = find35eClassRule(className);
+  if (rule?.hitDie) {
+    return {
+      dieType: rule.hitDie,
+      averageHp: Math.floor(rule.hitDie / 2) + 1
+    };
+  }
+
   const normalized = (className || '').toLowerCase().trim();
   for (const key of Object.keys(CLASS_HIT_DICE_MAP)) {
     if (normalized.includes(key)) {

@@ -881,6 +881,7 @@ export interface SyncedEncounterState {
   battlemapFogOfWar?: Record<string, boolean>; // "x,y" => isExplored
   battlemapUseFogOfWar?: boolean;
   battlemapActiveAoE?: any | null; // Synced AoE template
+  battlemapWeatherEffect?: string;
   updatedAt: string;
   updatedByUid?: string;
   updatedByName?: string;

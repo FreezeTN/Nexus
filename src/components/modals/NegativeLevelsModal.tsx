@@ -111,7 +111,7 @@ export const NegativeLevelsModal: React.FC<NegativeLevelsModalProps> = ({
         negativeLevels: nextCount,
         negativeLevelsHistory: nextHistory
       });
-      alert(`Fortitude check failed vs DC ${entry.dc}! The energy drain has become permanent: Character Level reduced to ${nextLevel}.`);
+      setLastCheckResult(`💀 Fortitude check failed vs DC ${entry.dc}! The energy drain has become permanent: Character Level reduced to ${nextLevel}.`);
     }
   };
 

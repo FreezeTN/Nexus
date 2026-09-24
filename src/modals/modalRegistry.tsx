@@ -260,6 +260,7 @@ export function renderRegisteredModal<K extends ModalId>({
             onAddSpellToSpellbook={p.onAddSpellToSpellbook}
             onNavigateTab={p.onNavigateTab}
             onSelectCharacter={p.onSelectCharacter}
+            onLoadBattlemapLayout={p.onLoadBattlemapLayout}
           />
         </Suspense>
       );

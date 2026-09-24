@@ -22,16 +22,19 @@ import {
   calculate35eAoOPool,
   calculate35eAbilityDamageDrainSummary,
   get35eSkillBonus,
+  getSkillBonus,
   getProficiencyBonus,
   get35eSpaceAndReach,
   get35eSizeModifier,
   get35eGrappleModifier,
-  get35eHideModifier
+  get35eHideModifier,
+  isCharacterSpellcaster
 } from '../../../utils/dndCalculations';
 import { canCharacterShapeshift, canCharacterSummonCompanion } from '../../../utils/classProgressionUtils';
 
 import { HpOrb, getHpColorClass } from '../../HpOrb';
 import { ConditionsPanel } from '../../combat/ConditionsPanel';
+import { ClassResources5ePanel } from './ClassResources5ePanel';
 import { Edit35eAcModal } from '../../modals/Edit35eAcModal';
 import { Edit35eBabModal } from '../../modals/Edit35eBabModal';
 import { Edit35eDrResistanceModal } from '../../modals/Edit35eDrResistanceModal';
@@ -113,14 +116,33 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
   const [show35eEnvironmentalModal, setShow35eEnvironmentalModal] = useState(false);
   const [show35eSizeScaleModal, setShow35eSizeScaleModal] = useState(false);
   const [showSpeedModal, setShowSpeedModal] = useState(false);
-  const [isTacticalPanelExpanded, setIsTacticalPanelExpanded] = useState(true);
+  const [isTacticalPanelExpanded, setIsTacticalPanelExpanded] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('nexus_35e_tactical_expanded');
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const toggleTacticalPanel = () => {
+    setIsTacticalPanelExpanded(prev => {
+      const next = !prev;
+      try {
+        localStorage.setItem('nexus_35e_tactical_expanded', String(next));
+      } catch {}
+      return next;
+    });
+  };
   const effectiveMaxHp = getEffectiveMaxHp(character);
+  const effectiveAbilities = getEffectiveAbilities(character);
   const speedInfo = getEffectiveSpeed(character);
   const ac35 = get35eArmorClass(character);
   const acp35 = calculate35eTotalArmorCheckPenalty(character);
   const aooInfo = calculate35eAoOPool(character);
   const abilityDamageSummary = calculate35eAbilityDamageDrainSummary(character);
   const canShapeshift = canCharacterShapeshift(character);
+  const canConcentrate = isCharacterSpellcaster(character) || Boolean(character.skills?.some(s => s.name.toLowerCase() === 'concentration' && (s.ranks || 0) > 0)) || (character.spells && character.spells.length > 0);
   const canSummon = Boolean(setShowCompanionModal && canCharacterSummonCompanion(character));
 
   const handleToggleDeathSuccess = (index: number) => {
@@ -170,8 +192,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
     let conds = character.conditions || [];
 
     if (d20 === 20) {
-      label += ' - NAT 20! Regain 1 HP & Stabilized!';
-      updatedHpCurrent = Math.max(1, updatedHpCurrent || 1);
+      label += ' - NAT 20! Regained 1 HP & Regained Consciousness!';
+      updatedHpCurrent = 1;
       updatedSuccesses = 0;
       updatedFailures = 0;
       conds = conds.filter(c => c !== 'Unconscious' && c !== 'Dead');
@@ -182,11 +204,10 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
       label += ' - Success!';
       updatedSuccesses = Math.min(3, updatedSuccesses + 1);
       if (updatedSuccesses >= 3) {
-        label += ' 🌟 3 Successes! Regained 1 HP & Stabilized!';
-        updatedHpCurrent = Math.max(1, updatedHpCurrent || 1);
-        updatedSuccesses = 0;
+        label += ' 🌟 3 Successes! Character is STABILIZED (0 HP, Unconscious, no longer rolling saves)!';
+        updatedSuccesses = 3;
         updatedFailures = 0;
-        conds = conds.filter(c => c !== 'Unconscious' && c !== 'Dead');
+        if (!conds.includes('Unconscious')) conds = [...conds, 'Unconscious'];
       }
     } else {
       label += ' - Failure!';
@@ -212,6 +233,91 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
     });
 
     onRoll(label, 20, 1, 0, 'normal');
+  };
+
+  const handleStabilizeCharacter = () => {
+    let conds = character.conditions || [];
+    if (!conds.includes('Unconscious')) conds = [...conds, 'Unconscious'];
+    conds = conds.filter(c => c !== 'Dead');
+    onUpdateCharacter({
+      ...character,
+      deathSavesSuccesses: 3,
+      deathSavesFailures: 0,
+      conditions: conds
+    });
+    onRoll('Character Stabilized! (Unconscious at 0 HP, no longer making death saves)', 20, 1, 0, 'normal');
+  };
+
+  const handleUseHealersKit = () => {
+    const inv = character.inventory || [];
+    const kitIndex = inv.findIndex(i => (i.name || '').toLowerCase().includes("healer's kit") || (i.name || '').toLowerCase().includes("healers kit"));
+    if (kitIndex < 0) return;
+    const kit = inv[kitIndex];
+    const updatedInv = [...inv];
+    let usesRemainingMsg = '';
+    if (kit.quantity > 1) {
+      updatedInv[kitIndex] = { ...kit, quantity: kit.quantity - 1 };
+      usesRemainingMsg = `${kit.quantity - 1} uses remaining`;
+    } else {
+      updatedInv.splice(kitIndex, 1);
+      usesRemainingMsg = '0 uses remaining (depleted)';
+    }
+
+    let conds = character.conditions || [];
+    if (!conds.includes('Unconscious')) conds = [...conds, 'Unconscious'];
+    conds = conds.filter(c => c !== 'Dead');
+
+    onUpdateCharacter({
+      ...character,
+      inventory: updatedInv,
+      deathSavesSuccesses: 3,
+      deathSavesFailures: 0,
+      conditions: conds
+    });
+    onRoll(`🩹 Used Healer's Kit (${usesRemainingMsg}) - Character Stabilized!`, 20, 1, 0, 'normal');
+  };
+
+  const handleSpareTheDying = () => {
+    let conds = character.conditions || [];
+    if (!conds.includes('Unconscious')) conds = [...conds, 'Unconscious'];
+    conds = conds.filter(c => c !== 'Dead');
+    onUpdateCharacter({
+      ...character,
+      deathSavesSuccesses: 3,
+      deathSavesFailures: 0,
+      conditions: conds
+    });
+    onRoll('✨ Cast Spare the Dying Cantrip - Character Stabilized at 0 HP!', 20, 1, 0, 'normal');
+  };
+
+  const handleMedicineCheckStabilize = () => {
+    const medicineSkill = character.skills.find(s => s.name === 'Medicine');
+    const mod = medicineSkill ? getSkillBonus(medicineSkill, effectiveAbilities, character.level, character) : getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+    const d20 = Math.floor(Math.random() * 20) + 1;
+    const total = d20 + mod;
+    const passed = total >= 10;
+    if (passed) {
+      let conds = character.conditions || [];
+      if (!conds.includes('Unconscious')) conds = [...conds, 'Unconscious'];
+      conds = conds.filter(c => c !== 'Dead');
+      onUpdateCharacter({
+        ...character,
+        deathSavesSuccesses: 3,
+        deathSavesFailures: 0,
+        conditions: conds
+      });
+      onRoll(`First Aid Medicine Check: d20(${d20}) + ${mod} = ${total} (vs DC 10) - SUCCESS! Character Stabilized!`, 20, 1, mod, 'normal');
+    } else {
+      onRoll(`First Aid Medicine Check: d20(${d20}) + ${mod} = ${total} (vs DC 10) - FAILED to stabilize.`, 20, 1, mod, 'normal');
+    }
+  };
+
+  const handleResetDeathSaves = () => {
+    onUpdateCharacter({
+      ...character,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0
+    });
   };
 
   const handleRoll35eStabilization = () => {
@@ -529,122 +635,119 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 );
               })()}
 
-              {/* INTEGRATED ACTION ECONOMY FOR 5E & 3.5E */}
+              {/* Vitality Status & Stabilization Engine */}
               {character.edition === '3.5e' ? (
-                /* 3.5e Action Economy Tracker */
-                <div className="bg-stone-950 px-2.5 py-2 rounded-xl border border-stone-800 space-y-1.5">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3 text-sky-400" />
-                      <span>Action Economy (Round Tracker)</span>
+                <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
+                  {/* Status Banner */}
+                  <div className="flex items-center justify-between text-xs font-mono">
+                    <span className="text-stone-400">Vitality Status:</span>
+                    <span
+                      className={`font-bold px-2 py-0.5 rounded text-[11px] ${
+                        (character.hpCurrent ?? 0) <= -10
+                          ? 'bg-red-950 text-red-300 border border-red-700'
+                          : (character.hpCurrent ?? 0) < 0
+                            ? character.isStabilized35e
+                              ? 'bg-amber-950 text-amber-300 border border-amber-600'
+                              : 'bg-red-950/80 text-rose-300 border border-rose-600 animate-pulse'
+                            : (character.hpCurrent ?? 0) === 0
+                              ? 'bg-yellow-950 text-yellow-300 border border-yellow-600'
+                              : 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                      }`}
+                    >
+                      {(character.hpCurrent ?? 0) <= -10
+                        ? 'Dead (≤ -10 HP)'
+                        : (character.hpCurrent ?? 0) < 0
+                          ? character.isStabilized35e
+                            ? 'Stable (Unconscious)'
+                            : 'Dying (Unconscious)'
+                          : (character.hpCurrent ?? 0) === 0
+                            ? 'Disabled (0 HP)'
+                            : 'Conscious & Active'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            standardActionUsed: false,
-                            moveActionUsed: false,
-                            swiftActionUsed: false,
-                            immediateActionUsed: false,
-                            fiveFootStepTaken: false,
-                          },
-                        })
-                      }
-                      className="text-[9px] font-mono font-bold text-sky-400 hover:text-sky-300 underline cursor-pointer"
-                    >
-                      Reset Turn Actions
-                    </button>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-1.5 text-[10px] font-mono">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            standardActionUsed: !character.actionEconomy?.standardActionUsed,
-                          },
-                        })
-                      }
-                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
-                        character.actionEconomy?.standardActionUsed
-                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
-                          : 'bg-amber-950/60 text-amber-200 border-amber-700/60 font-bold'
-                      }`}
-                      title="Click to toggle Standard Action used"
-                    >
-                      Standard
-                    </button>
+                  {/* Dying & Stabilization Controls (Only visible when HP <= 0) */}
+                  {(character.hpCurrent ?? 0) <= 0 ? (
+                    <div className="space-y-1.5 pt-1.5 border-t border-stone-800/60">
+                      <div className="text-[10px] text-stone-400 leading-tight">
+                        {(character.hpCurrent ?? 0) <= -10 && 'Character has reached -10 HP and is deceased under D&D 3.5e RAW.'}
+                        {(character.hpCurrent ?? 0) < 0 && (character.hpCurrent ?? 0) > -10 && (
+                          character.isStabilized35e
+                            ? 'Character is stable at negative HP. Rolls 10% each hour to regain consciousness.'
+                            : 'Character is dying. At end of each round, roll 10% (d100 ≤ 10) to stabilize, or lose 1 HP.'
+                        )}
+                        {(character.hpCurrent ?? 0) === 0 && 'Disabled: Can take only 1 move or standard action per turn. Strenuous activity deals 1 damage.'}
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            moveActionUsed: !character.actionEconomy?.moveActionUsed,
-                          },
-                        })
-                      }
-                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
-                        character.actionEconomy?.moveActionUsed
-                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
-                          : 'bg-indigo-950/60 text-indigo-200 border-indigo-700/60 font-bold'
-                      }`}
-                      title="Click to toggle Move Action used"
-                    >
-                      Move
-                    </button>
+                      <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        <button
+                          type="button"
+                          onClick={handleRoll35eStabilization}
+                          disabled={(character.hpCurrent ?? 0) >= 0 || (character.hpCurrent ?? 0) <= -10}
+                          className="py-1.5 px-2 bg-stone-800 hover:bg-rose-950 disabled:opacity-40 disabled:hover:bg-stone-800 border border-stone-700 hover:border-rose-600 text-stone-200 hover:text-rose-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 shadow cursor-pointer"
+                          title="Roll d100: 1-10% stabilizes; 11-100% loses 1 HP"
+                        >
+                          <Dices className="w-3 h-3 text-rose-400" /> Roll 10% Save
+                        </button>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            swiftActionUsed: !character.actionEconomy?.swiftActionUsed,
-                          },
-                        })
-                      }
-                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
-                        character.actionEconomy?.swiftActionUsed
-                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
-                          : 'bg-sky-950/60 text-sky-200 border-sky-700/60 font-bold'
-                      }`}
-                      title="Click to toggle Swift / Immediate Action used"
-                    >
-                      Swift/Imm.
-                    </button>
+                        <button
+                          type="button"
+                          onClick={handleRoll35eHealCheck}
+                          disabled={(character.hpCurrent ?? 0) >= 0 || (character.hpCurrent ?? 0) <= -10}
+                          className="py-1.5 px-2 bg-stone-800 hover:bg-emerald-950 disabled:opacity-40 disabled:hover:bg-stone-800 border border-stone-700 hover:border-emerald-600 text-stone-200 hover:text-emerald-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 shadow cursor-pointer"
+                          title="First Aid: Heal check DC 15 to stabilize a dying character"
+                        >
+                          <Heart className="w-3 h-3 text-emerald-400" /> First Aid (DC 15)
+                        </button>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            fiveFootStepTaken: !character.actionEconomy?.fiveFootStepTaken,
-                          },
-                        })
-                      }
-                      className={`p-1 rounded-lg border text-center transition cursor-pointer ${
-                        character.actionEconomy?.fiveFootStepTaken
-                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
-                          : 'bg-emerald-950/60 text-emerald-200 border-emerald-700/60 font-bold'
-                      }`}
-                      title="Click to toggle 5-ft Step taken (prevents AoO)"
-                    >
-                      5-ft Step
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={handleToggle35eStabilized}
+                        className={`w-full py-1 rounded-lg border text-[10px] font-mono font-bold transition cursor-pointer ${
+                          character.isStabilized35e
+                            ? 'bg-amber-950/80 text-amber-200 border-amber-600'
+                            : 'bg-stone-900 hover:bg-stone-800 text-stone-400 border-stone-700'
+                        }`}
+                      >
+                        {character.isStabilized35e ? '✓ Status: Stabilized (Click to toggle)' : 'Mark as Stabilized'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between text-[10px] text-stone-400 pt-1 border-t border-stone-800/60">
+                      <span>Normal round action economy active</span>
+                      <span className="text-emerald-400 font-mono font-bold">Standard Turn RAW</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* 5e Vitality Status in HP Box */
+                <div className="bg-stone-950 px-2.5 py-1.5 rounded-xl border border-stone-800 flex items-center justify-between text-xs font-mono">
+                  <span className="text-stone-400">Vitality Status:</span>
+                  {(() => {
+                    const hp = character.hpCurrent ?? effectiveMaxHp;
+                    const isDead = character.deathSavesFailures >= 3;
+                    const isStable = hp === 0 && (character.deathSavesSuccesses >= 3 || character.isStabilized35e);
+                    const isDying = hp <= 0 && !isDead && !isStable;
 
-                  {/* 3.5e Mounted Combat & Nonlethal Status Footer */}
+                    if (isDead) {
+                      return <span className="text-rose-400 font-bold px-2 py-0.5 rounded bg-rose-950 border border-rose-700 text-[11px]">Dead (3 Fails)</span>;
+                    }
+                    if (isDying) {
+                      return <span className="text-rose-300 font-bold px-2 py-0.5 rounded bg-rose-950/80 border border-rose-600 text-[11px] animate-pulse">Dying (0 HP)</span>;
+                    }
+                    if (isStable) {
+                      return <span className="text-amber-300 font-bold px-2 py-0.5 rounded bg-amber-950 border border-amber-600 text-[11px]">Stable (0 HP)</span>;
+                    }
+                    return <span className="text-emerald-300 font-bold px-2 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-[11px]">Conscious & Active</span>;
+                  })()}
+                </div>
+              )}
+
+              {/* Mounted Combat, Nonlethal Status & 3.5e Size Scale (Action Economy is tracked in the top Turn & Action Economy Bar) */}
+              {character.edition === '3.5e' ? (
+                <div className="space-y-1.5">
+                  {/* 3.5e Mounted Combat & Nonlethal Status */}
                   {(() => {
                     const currentHp = character.hpCurrent ?? effectiveMaxHp;
                     const nonlethal = character.nonlethalDamage || 0;
@@ -652,7 +755,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     const isUnconsciousNL = nonlethal > 0 && nonlethal > currentHp && currentHp > 0;
 
                     return (
-                      <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-800/60 text-[10px] font-mono">
+                      <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl bg-stone-950 border border-stone-800 text-[10px] font-mono">
                         {isUnconsciousNL ? (
                           <span className="text-rose-400 font-bold flex items-center gap-1 animate-pulse">
                             ⚠️ Unconscious (Nonlethal &gt; Current HP)
@@ -686,7 +789,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     );
                   })()}
 
-                  {/* 3.5e Creature Size, Combat Space & Natural Reach Strip (Integrated into Column 1 Movement & Space) */}
+                  {/* 3.5e Creature Size, Combat Space & Natural Reach Strip */}
                   {(() => {
                     const sizeScaleInfo = get35eSpaceAndReach(character.sizeCategory, character.reachType || character.isQuadruped);
                     const sizeAtkAcMod = get35eSizeModifier(character.sizeCategory);
@@ -735,118 +838,26 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   })()}
                 </div>
               ) : (
-                /* 5e Action Economy Tracker - Integrated into Vitality & HP */
-                <div className="bg-stone-950 px-2.5 py-2 rounded-xl border border-stone-800 space-y-1.5">
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="font-bold text-stone-300 uppercase tracking-wider flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3 text-sky-400" />
-                      <span>Action Economy (5e Round)</span>
+                /* 5e Mounted Combat Controls */
+                <div className="flex items-center justify-between gap-2 p-1.5 rounded-xl bg-stone-950 border border-stone-800">
+                  <button
+                    type="button"
+                    onClick={() => setShow35eMountedModal(true)}
+                    className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                      character.isMounted
+                        ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600'
+                        : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700'
+                    }`}
+                    title="Open 5e Mounted Combat (PHB p. 198): Movement cost, Controlled vs Independent mount, DC 10 Dex saves"
+                  >
+                    <Shield className="w-3 h-3 text-amber-400" />
+                    <span>{character.isMounted ? `Mounted: ${character.mountInfo?.name || 'Steed'}` : 'Mounted Combat (5e)'}</span>
+                  </button>
+                  {character.isMounted && (
+                    <span className="text-[10px] text-emerald-400 font-mono">
+                      Steed: {character.mountInfo?.speed || '60 ft.'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            actionUsed5e: false,
-                            bonusActionUsed5e: false,
-                            reactionUsed5e: false,
-                          },
-                        })
-                      }
-                      className="text-[9px] font-mono font-bold text-sky-400 hover:text-sky-300 underline cursor-pointer"
-                    >
-                      Reset Turn Actions
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-1.5 text-[10px] font-mono">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            actionUsed5e: !character.actionEconomy?.actionUsed5e,
-                          },
-                        })
-                      }
-                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer ${
-                        character.actionEconomy?.actionUsed5e
-                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
-                          : 'bg-amber-950/60 text-amber-200 border-amber-700/60 font-bold'
-                      }`}
-                      title="Click to toggle Action used"
-                    >
-                      Action
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            bonusActionUsed5e: !character.actionEconomy?.bonusActionUsed5e,
-                          },
-                        })
-                      }
-                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer ${
-                        character.actionEconomy?.bonusActionUsed5e
-                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
-                          : 'bg-indigo-950/60 text-indigo-200 border-indigo-700/60 font-bold'
-                      }`}
-                      title="Click to toggle Bonus Action used"
-                    >
-                      Bonus Action
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onUpdateCharacter({
-                          ...character,
-                          actionEconomy: {
-                            ...character.actionEconomy,
-                            reactionUsed5e: !character.actionEconomy?.reactionUsed5e,
-                          },
-                        })
-                      }
-                      className={`p-1.5 rounded-lg border text-center transition cursor-pointer ${
-                        character.actionEconomy?.reactionUsed5e
-                          ? 'bg-stone-900 text-stone-500 border-stone-800 line-through'
-                          : 'bg-rose-950/60 text-rose-200 border-rose-700/60 font-bold'
-                      }`}
-                      title="Click to toggle Reaction used (Opportunity Attack, Shield, Counterspell)"
-                    >
-                      Reaction
-                    </button>
-                  </div>
-
-                  {/* 5e Mounted Combat Controls */}
-                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-800/60">
-                    <button
-                      type="button"
-                      onClick={() => setShow35eMountedModal(true)}
-                      className={`px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold transition flex items-center gap-1.5 shadow-sm cursor-pointer ${
-                        character.isMounted
-                          ? 'bg-emerald-950 hover:bg-emerald-900 text-emerald-300 border border-emerald-600'
-                          : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700'
-                      }`}
-                      title="Open 5e Mounted Combat (PHB p. 198): Movement cost, Controlled vs Independent mount, DC 10 Dex saves"
-                    >
-                      <Shield className="w-3 h-3 text-amber-400" />
-                      <span>{character.isMounted ? `Mounted: ${character.mountInfo?.name || 'Steed'}` : 'Mounted Combat (5e)'}</span>
-                    </button>
-                    {character.isMounted && (
-                      <span className="text-[10px] text-emerald-400 font-mono">
-                        Steed: {character.mountInfo?.speed || '60 ft.'}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
               )}
               </div>
@@ -1647,93 +1658,46 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                 )}
               </div>
 
-              {/* 3.5e Dying, Stabilization & Tactical Engines Suite VS 5e Death Saves Panel */}
+              {/* 3.5e Tactical Engines Suite VS 5e Death Saves Panel */}
               {character.edition === '3.5e' ? (
-                <div className="flex-1 flex flex-col justify-center gap-3 my-auto">
-                  {/* Status & Stabilization Panel */}
-                  <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
-                    {/* Status Banner */}
-                    <div className="flex items-center justify-between text-xs font-mono">
-                      <span className="text-stone-400">Vitality Status:</span>
-                      <span
-                        className={`font-bold px-2 py-0.5 rounded text-[11px] ${
-                          (character.hpCurrent ?? 0) <= -10
-                            ? 'bg-red-950 text-red-300 border border-red-700'
-                            : (character.hpCurrent ?? 0) < 0
-                              ? character.isStabilized35e
-                                ? 'bg-amber-950 text-amber-300 border border-amber-600'
-                                : 'bg-red-950/80 text-rose-300 border border-rose-600 animate-pulse'
-                              : (character.hpCurrent ?? 0) === 0
-                                ? 'bg-yellow-950 text-yellow-300 border border-yellow-600'
-                                : 'bg-emerald-950 text-emerald-300 border border-emerald-700'
-                        }`}
-                      >
-                        {(character.hpCurrent ?? 0) <= -10
-                          ? 'Dead (≤ -10 HP)'
-                          : (character.hpCurrent ?? 0) < 0
-                            ? character.isStabilized35e
-                              ? 'Stable (Unconscious)'
-                              : 'Dying (Unconscious)'
-                            : (character.hpCurrent ?? 0) === 0
-                              ? 'Disabled (0 HP)'
-                              : 'Conscious & Active'}
-                      </span>
+                <div className="flex-1 flex flex-col justify-start gap-2.5">
+                  {/* Active Conditions Quick Dismiss Strip (Column 3) */}
+                  {(character.conditions || []).length > 0 && (
+                    <div className="bg-stone-950 p-2 rounded-xl border border-amber-600/40 space-y-1.5 shadow-sm">
+                      <div className="flex items-center justify-between text-[10px] font-mono">
+                        <span className="text-amber-400 font-bold flex items-center gap-1">
+                          <AlertTriangle className="w-3 h-3 text-amber-400" /> Active Conditions:
+                        </span>
+                        <span className="text-[9px] text-stone-500 font-mono">
+                          Click ✕ to remove
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {(character.conditions || []).map((cond) => (
+                          <span
+                            key={cond}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-950/70 border border-amber-700/60 text-amber-200 text-[10px] font-mono font-medium shadow-xs"
+                          >
+                            <span>{cond}</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onUpdateCharacter({
+                                  ...character,
+                                  conditions: (character.conditions || []).filter(c => c !== cond)
+                                });
+                              }}
+                              className="text-amber-400 hover:text-white transition ml-0.5 font-bold cursor-pointer"
+                              title={`Remove ${cond}`}
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                      </div>
                     </div>
-
-                    {/* Dying & Stabilization Controls (Only visible when HP <= 0) */}
-                    {(character.hpCurrent ?? 0) <= 0 ? (
-                      <div className="space-y-1.5 pt-1.5 border-t border-stone-800/60">
-                        <div className="text-[10px] text-stone-400 leading-tight">
-                          {(character.hpCurrent ?? 0) <= -10 && 'Character has reached -10 HP and is deceased under D&D 3.5e RAW.'}
-                          {(character.hpCurrent ?? 0) < 0 && (character.hpCurrent ?? 0) > -10 && (
-                            character.isStabilized35e
-                              ? 'Character is stable at negative HP. Rolls 10% each hour to regain consciousness.'
-                              : 'Character is dying. At end of each round, roll 10% (d100 ≤ 10) to stabilize, or lose 1 HP.'
-                          )}
-                          {(character.hpCurrent ?? 0) === 0 && 'Disabled: Can take only 1 move or standard action per turn. Strenuous activity deals 1 damage.'}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-1.5 pt-1">
-                          <button
-                            type="button"
-                            onClick={handleRoll35eStabilization}
-                            disabled={(character.hpCurrent ?? 0) >= 0 || (character.hpCurrent ?? 0) <= -10}
-                            className="py-1.5 px-2 bg-stone-800 hover:bg-rose-950 disabled:opacity-40 disabled:hover:bg-stone-800 border border-stone-700 hover:border-rose-600 text-stone-200 hover:text-rose-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 shadow cursor-pointer"
-                            title="Roll d100: 1-10% stabilizes; 11-100% loses 1 HP"
-                          >
-                            <Dices className="w-3 h-3 text-rose-400" /> Roll 10% Save
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={handleRoll35eHealCheck}
-                            disabled={(character.hpCurrent ?? 0) >= 0 || (character.hpCurrent ?? 0) <= -10}
-                            className="py-1.5 px-2 bg-stone-800 hover:bg-emerald-950 disabled:opacity-40 disabled:hover:bg-stone-800 border border-stone-700 hover:border-emerald-600 text-stone-200 hover:text-emerald-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1 shadow cursor-pointer"
-                            title="First Aid: Heal check DC 15 to stabilize a dying character"
-                          >
-                            <Heart className="w-3 h-3 text-emerald-400" /> First Aid (DC 15)
-                          </button>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={handleToggle35eStabilized}
-                          className={`w-full py-1 rounded-lg border text-[10px] font-mono font-bold transition cursor-pointer ${
-                            character.isStabilized35e
-                              ? 'bg-amber-950/80 text-amber-200 border-amber-600'
-                              : 'bg-stone-900 hover:bg-stone-800 text-stone-400 border-stone-700'
-                          }`}
-                        >
-                          {character.isStabilized35e ? '✓ Status: Stabilized (Click to toggle)' : 'Mark as Stabilized'}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between text-[10px] text-stone-400 pt-1 border-t border-stone-800/60">
-                        <span>Normal round action economy active</span>
-                        <span className="text-emerald-400 font-mono font-bold">Standard Turn RAW</span>
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   {/* 3.5e Senses & Vision Display (Integrated into Column 3 Status & Awareness) */}
                   <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800/90 flex items-center justify-between text-xs font-mono px-3 shadow-sm">
@@ -1749,7 +1713,7 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                   {/* 3.5e Tactical Engines & Advanced Mechanics Suite Grid */}
                   <div className="bg-stone-950 p-2.5 rounded-xl border border-stone-800 space-y-2">
                     <div 
-                      onClick={() => setIsTacticalPanelExpanded(!isTacticalPanelExpanded)}
+                      onClick={toggleTacticalPanel}
                       className="text-[10px] font-bold text-stone-300 uppercase tracking-wider px-0.5 flex items-center justify-between cursor-pointer select-none hover:text-amber-200 transition"
                       title={isTacticalPanelExpanded ? 'Click to collapse Tactical Engines' : 'Click to expand Tactical Engines'}
                     >
@@ -1757,13 +1721,17 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         <Layers className="w-3.5 h-3.5 text-amber-400" />
                         <span>Tactical Engines & Mechanics</span>
                         <span className="text-[9px] bg-stone-900 border border-stone-800 text-stone-400 px-1.5 py-0.2 rounded font-mono">
-                          {8 + (canShapeshift ? 1 : 0)} tools
+                          {7 + (canShapeshift ? 1 : 0) + (canConcentrate ? 1 : 0)} tools
                         </span>
                       </span>
                       <div className="flex items-center gap-1.5">
                         <span className="text-[9px] text-amber-500 font-mono font-bold">3.5e RAW</span>
                         <button
                           type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleTacticalPanel();
+                          }}
                           className="text-stone-400 hover:text-stone-200"
                         >
                           {isTacticalPanelExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
@@ -1826,20 +1794,22 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                         </span>
                       </button>
 
-                      {/* Concentration Check */}
-                      <button
-                        type="button"
-                        onClick={() => setShow35eConcentrationModal(true)}
-                        className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-sky-600/50 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-sky-300 flex items-center gap-1 group-hover:text-sky-200">
-                            <Zap className="w-3 h-3 text-sky-400" /> Concentration
-                          </span>
-                          <span className="text-[8px] text-stone-500">DC calc</span>
-                        </div>
-                        <span className="text-[8px] text-stone-400 truncate">Defensive casting</span>
-                      </button>
+                      {/* Concentration Check - Gated to Casters or Concentration-trained Characters */}
+                      {canConcentrate && (
+                        <button
+                          type="button"
+                          onClick={() => setShow35eConcentrationModal(true)}
+                          className="p-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 hover:border-sky-600/50 rounded-lg text-left transition flex flex-col gap-0.5 shadow-sm cursor-pointer group"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-bold text-sky-300 flex items-center gap-1 group-hover:text-sky-200">
+                              <Zap className="w-3 h-3 text-sky-400" /> Concentration
+                            </span>
+                            <span className="text-[8px] text-stone-500">DC calc</span>
+                          </div>
+                          <span className="text-[8px] text-stone-400 truncate">Defensive casting</span>
+                        </button>
+                      )}
 
                       {/* Tumble & Acrobatics */}
                       <button
@@ -2037,10 +2007,85 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                     <button
                       type="button"
                       onClick={handleRollDeathSave}
-                      className="w-full py-1.5 bg-stone-900 hover:bg-rose-950 border border-stone-800 hover:border-rose-600 text-stone-200 hover:text-rose-200 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                      disabled={character.deathSavesFailures >= 3 || character.deathSavesSuccesses >= 3}
+                      className="w-full py-1.5 bg-stone-900 hover:bg-rose-950 border border-stone-800 hover:border-rose-600 text-stone-200 hover:text-rose-200 disabled:opacity-40 disabled:hover:bg-stone-900 disabled:hover:border-stone-800 text-[11px] font-bold rounded-lg transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
                     >
                       <Dices className="w-3.5 h-3.5 text-rose-400" /> Roll Death Saving Throw
                     </button>
+
+                    {/* First Aid & Stabilization Actions */}
+                    {(() => {
+                      const healersKit = (character.inventory || []).find(i => (i.name || '').toLowerCase().includes("healer's kit") || (i.name || '').toLowerCase().includes("healers kit"));
+                      const hasSpareTheDying = (character.spells || []).some(s => (s.name || '').toLowerCase().includes('spare the dying'));
+                      const medicineSkill = character.skills.find(s => s.name === 'Medicine');
+                      const medBonus = medicineSkill ? getSkillBonus(medicineSkill, effectiveAbilities, character.level, character) : getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+                      const hasActiveSaves = character.deathSavesSuccesses > 0 || character.deathSavesFailures > 0;
+
+                      return (
+                        <div className="pt-1.5 border-t border-stone-800/80 space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] font-mono text-stone-400 font-bold">
+                            <span>First Aid & Stabilization:</span>
+                            {hasActiveSaves && (
+                              <button
+                                type="button"
+                                onClick={handleResetDeathSaves}
+                                className="text-stone-500 hover:text-stone-300 underline font-normal cursor-pointer"
+                                title="Reset death save counters to 0 (e.g. after receiving healing)"
+                              >
+                                Reset Saves
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {/* Healer's Kit Button */}
+                            {healersKit ? (
+                              <button
+                                type="button"
+                                onClick={handleUseHealersKit}
+                                className="px-2 py-1 bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-600/60 rounded text-[10px] font-mono text-emerald-200 font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                title={`Use 1 charge from ${healersKit.name} (${healersKit.quantity} uses left) to automatically stabilize without a check`}
+                              >
+                                <span>🩹 Kit ({healersKit.quantity}x)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={handleStabilizeCharacter}
+                                className="px-2 py-1 bg-amber-950/60 hover:bg-amber-900 border border-amber-600/50 rounded text-[10px] font-mono text-amber-200 font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                                title="Mark character as stabilized (Unconscious at 0 HP, stops death save rolls)"
+                              >
+                                <Shield className="w-3 h-3 text-amber-400" />
+                                <span>Stabilize</span>
+                              </button>
+                            )}
+
+                            {/* Medicine Check (DC 10) */}
+                            <button
+                              type="button"
+                              onClick={handleMedicineCheckStabilize}
+                              className="px-2 py-1 bg-stone-900 hover:bg-stone-800 border border-stone-700 rounded text-[10px] font-mono text-stone-200 transition flex items-center justify-center gap-1 cursor-pointer"
+                              title={`Roll Medicine check (+${medBonus}) vs DC 10 First Aid rule (PHB p. 197)`}
+                            >
+                              <Activity className="w-3 h-3 text-teal-400" />
+                              <span>Medicine DC 10</span>
+                            </button>
+                          </div>
+
+                          {/* Spare the Dying Cantrip if caster or available */}
+                          {hasSpareTheDying && (
+                            <button
+                              type="button"
+                              onClick={handleSpareTheDying}
+                              className="w-full py-1 bg-purple-950/70 hover:bg-purple-900 border border-purple-500/60 rounded text-[10px] font-mono text-purple-200 font-bold transition flex items-center justify-center gap-1 cursor-pointer"
+                              title="Cast Spare the Dying cantrip to automatically stabilize a creature with 0 hit points"
+                            >
+                              <span>✨ Cast Spare the Dying Cantrip</span>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* 5e Exhaustion Tracker (PHB p. 291) */}
@@ -2106,6 +2151,34 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
                       </div>
                     );
                   })()}
+
+                  {/* 5e Concentration Save Engine - Gated to Casters or Spell users */}
+                  {canConcentrate && (
+                    <div className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex items-center justify-between gap-2 shadow-sm">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-5 h-5 rounded-lg bg-sky-950 border border-sky-600/50 flex items-center justify-center text-sky-400 shrink-0">
+                          <Zap className="w-3 h-3" />
+                        </div>
+                        <div className="min-w-0">
+                          <span className="text-[11px] font-bold text-stone-200 block truncate">
+                            Concentration Save
+                          </span>
+                          <span className="text-[9.5px] text-stone-400 font-mono block truncate">
+                            DC 10 or ½ damage
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShow35eConcentrationModal(true)}
+                        className="px-2 py-0.5 rounded-lg bg-sky-950 hover:bg-sky-900 border border-sky-600/50 hover:border-sky-500 text-sky-300 text-[10.5px] font-mono font-bold transition shrink-0 cursor-pointer shadow-sm flex items-center gap-1"
+                        title="Roll 5e Concentration Saving Throw"
+                      >
+                        <span>Con Save</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2147,6 +2220,15 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {/* 5e Signature Class Features & Resource Engine (Barbarian Rage, Ki, Sorcery Points, Channel Divinity, etc.) */}
+      {character.edition !== '3.5e' && (
+        <ClassResources5ePanel
+          character={character}
+          onUpdateCharacter={onUpdateCharacter}
+          onRoll={onRoll}
+        />
       )}
 
       {/* Conditions & Status Effects Widget */}
@@ -2241,8 +2323,8 @@ export const CombatDefensesPanel: React.FC<CombatDefensesPanelProps> = ({
         />
       )}
 
-      {/* 3.5e Concentration & Defensive Casting Modal */}
-      {character.edition === '3.5e' && (
+      {/* Concentration & Defensive Casting Modal (3.5e & 5e RAW) */}
+      {show35eConcentrationModal && (
         <ConcentrationCheckModal
           isOpen={show35eConcentrationModal}
           onClose={() => setShow35eConcentrationModal(false)}

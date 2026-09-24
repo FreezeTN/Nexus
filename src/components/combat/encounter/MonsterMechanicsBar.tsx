@@ -1,8 +1,12 @@
 import React from 'react';
 import { Combatant } from './encounterTypes';
+import { WeatherEffectType } from '../../battlemap/battlemapTypes';
+import { getMonsterWeatherTriggers } from '../../battlemap/weatherAbilityTriggers';
+import { eventBus } from '../../../events/eventBus';
 
 interface MonsterMechanicsBarProps {
   combatants: Combatant[];
+  onTriggerWeatherChange?: (weather: WeatherEffectType, reason: string, sourceName: string) => void;
   onTriggerBeholderEyeRay: () => void;
   onTriggerMedusaGaze: () => void;
   onTriggerRemorhazHeatedBody: () => void;
@@ -34,6 +38,7 @@ interface MonsterMechanicsBarProps {
 
 export const MonsterMechanicsBar: React.FC<MonsterMechanicsBarProps> = ({
   combatants,
+  onTriggerWeatherChange,
   onTriggerBeholderEyeRay,
   onTriggerMedusaGaze,
   onTriggerRemorhazHeatedBody,
@@ -88,7 +93,10 @@ export const MonsterMechanicsBar: React.FC<MonsterMechanicsBarProps> = ({
   const showCockatrice = hasMonster('cockatrice');
   const showAboleth = hasMonster('aboleth');
 
+  const weatherTriggers = getMonsterWeatherTriggers(combatants);
+
   const hasAnySpecialMonster =
+    weatherTriggers.length > 0 ||
     showBeholder || showMedusa || showRemorhaz || showRoper || showIronGolem ||
     showRustMonster || showMindFlayer || showVampire || showGibbering || showCloaker ||
     showShambling || showPhaseSpider || showGhost || showNightmare || showSuccubus || showNightHag ||
@@ -109,6 +117,24 @@ export const MonsterMechanicsBar: React.FC<MonsterMechanicsBarProps> = ({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap text-xs">
+        {weatherTriggers.map((trig) => (
+          <button
+            key={trig.id}
+            onClick={() => {
+              onTriggerWeatherChange?.(trig.weatherEffect, trig.description, trig.name);
+              eventBus.emit('WeatherChanged', {
+                weather: trig.weatherEffect,
+                sourceName: trig.name,
+                sourceType: trig.type,
+                reason: `${trig.name}: ${trig.description}`
+              });
+            }}
+            className="px-2.5 py-1 bg-sky-950 hover:bg-sky-900 border border-sky-500/50 text-sky-200 rounded-lg transition font-bold flex items-center gap-1 shadow"
+            title={trig.description}
+          >
+            <span>{trig.icon}</span> {trig.name}
+          </button>
+        ))}
         {showBeholder && (
           <button onClick={onTriggerBeholderEyeRay} className="px-2.5 py-1 bg-purple-950 hover:bg-purple-900 border border-purple-600/50 text-purple-200 rounded-lg transition font-bold flex items-center gap-1 shadow">
             <span>👁️</span> Beholder Eye Ray

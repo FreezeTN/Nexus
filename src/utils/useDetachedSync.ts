@@ -46,15 +46,28 @@ export function openDetachedWindow(tabId: string, activeCharId?: string, session
 
   const features = `width=${width},height=${height},top=${top},left=${left},resizable=yes,scrollbars=yes,status=no,toolbar=no,menubar=no`;
   
-  const popWin = window.open(url.toString(), `detached_${tabId}`, features);
-  
-  if (!popWin || popWin.closed || typeof popWin.closed === 'undefined') {
-    // If popup was blocked by browser policies, fallback to opening in new tab
-    window.open(url.toString(), '_blank');
-  } else {
-    popWin.focus();
+  try {
+    const popWin = window.open(url.toString(), `detached_${tabId}`, features);
+    
+    if (!popWin || popWin.closed || typeof popWin.closed === 'undefined') {
+      // If popup was blocked by browser policies, fallback to opening in new tab
+      try {
+        window.open(url.toString(), '_blank');
+      } catch {
+        // Ignored if popup completely blocked
+      }
+    } else {
+      popWin.focus();
+    }
+    return popWin;
+  } catch {
+    try {
+      window.open(url.toString(), '_blank');
+    } catch {
+      // Ignored
+    }
+    return null;
   }
-  return popWin;
 }
 
 export const ENCOUNTER_SYNC_CHANNEL_NAME = 'penpaper_encounter_sync_v1';

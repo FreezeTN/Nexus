@@ -798,7 +798,23 @@ export const OFFICIAL_35E_CLASS_FEATURES: (ClassFeature & { className: string; r
   { id: 'cf35-ddf-1', className: 'Dwarven Defender', reqLevel: 1, name: 'Defensive Stance', source: 'Dwarven Defender 3.5e', description: 'Adopt an immovable defensive posture: gain +2 Strength, +4 Constitution, +2 resistance bonus on all saves, and +4 dodge bonus to AC.' },
   { id: 'cf35-ddf-2', className: 'Dwarven Defender', reqLevel: 2, name: 'Defensive Awareness & Trap Sense', source: 'Dwarven Defender 3.5e', description: 'Retain Dexterity bonus to AC even when flat-footed. Gain bonus on Reflex saves and AC against traps.' },
 
-  { id: 'cf35-am-1', className: 'Archmage', reqLevel: 1, name: 'High Sorcery', source: 'Archmage 3.5e', description: 'Select an ability of High Sorcery (Arcane Fire, Arcane Reach, Mastery of Counterspelling, Mastery of Elements, or Spell Power) by permanently sacrificing a spell slot.' }
+  { id: 'cf35-am-1', className: 'Archmage', reqLevel: 1, name: 'High Sorcery', source: 'Archmage 3.5e', description: 'Select an ability of High Sorcery (Arcane Fire, Arcane Reach, Mastery of Counterspelling, Mastery of Elements, or Spell Power) by permanently sacrificing a spell slot.' },
+
+  // Expanded Psionics (XPH 3.5e)
+  { id: 'cf35-psion-1', className: 'Psion', reqLevel: 1, name: 'Power Points & Psionic Manifestation', source: 'Psion 3.5e', description: 'Manifest psionic powers using a pool of Power Points governed by Intelligence. Gain bonus power points based on INT modifier.' },
+  { id: 'cf35-psion-2', className: 'Psion', reqLevel: 1, name: 'Psionic Discipline Specialization', source: 'Psion 3.5e', description: 'Choose a primary psionic discipline (Clairsentience, Metacreativity, Psychokinesis, Psychometabolism, Psychoportation, or Telepathy).' },
+  { id: 'cf35-psion-5', className: 'Psion', reqLevel: 5, name: 'Bonus Psionic Feat (5th)', source: 'Psion 3.5e', description: 'Gain a bonus psionic, metapsionic, or psionic item creation feat.' },
+  { id: 'cf35-psion-10', className: 'Psion', reqLevel: 10, name: 'Bonus Psionic Feat (10th)', source: 'Psion 3.5e', description: 'Gain a bonus psionic, metapsionic, or psionic item creation feat.' },
+
+  { id: 'cf35-psyw-1', className: 'Psychic Warrior', reqLevel: 1, name: 'Power Points & Bonus Combat Feat', source: 'Psychic Warrior 3.5e', description: 'Manifest powers with Wisdom and gain a bonus combat or psionic feat at 1st, 2nd, and every 3 levels thereafter.' },
+
+  { id: 'cf35-sk-1', className: 'Soulknife', reqLevel: 1, name: 'Mind Blade', source: 'Soulknife 3.5e', description: 'Manifest a semi-solid blade composed of psychic energy as a move action. Deals 1d6 damage (Small) or 1d8 damage (Medium) with 19-20/x2 threat.' },
+  { id: 'cf35-sk-2', className: 'Soulknife', reqLevel: 2, name: 'Throw Mind Blade', source: 'Soulknife 3.5e', description: 'Throw your mind blade as a ranged weapon with a range increment of 30 feet.' },
+  { id: 'cf35-sk-3', className: 'Soulknife', reqLevel: 3, name: 'Psychic Strike (+1d8)', source: 'Soulknife 3.5e', description: 'Charge mind blade with psychic energy (move action) to deal +1d8 damage to living non-mind-immune foes (+2d8 at 7th, +3d8 at 11th, +4d8 at 15th, +5d8 at 19th).' },
+  { id: 'cf35-sk-6', className: 'Soulknife', reqLevel: 6, name: 'Mind Blade Enhancement (+1)', source: 'Soulknife 3.5e', description: 'Mind blade gains a +1 enhancement bonus to attack and damage (+2 at 10th, +3 at 14th, +4 at 18th, +5 at 20th).' },
+
+  { id: 'cf35-wld-1', className: 'Wilder', reqLevel: 1, name: 'Wild Surge +1 & Psychic Enervation', source: 'Wilder 3.5e', description: 'Push past normal limits: boost manifester level by +1 at the risk of 5% psychic enervation (dazed + lost PP). Scales up to +6 at 19th level.' },
+  { id: 'cf35-wld-2', className: 'Wilder', reqLevel: 2, name: 'Elation & Volatile Mind', source: 'Wilder 3.5e', description: 'Surging passion grants +2 morale bonus on STR and CON, and enemies targeting the wilder with telepathy powers must pay extra power points.' }
 ];
 
 /**

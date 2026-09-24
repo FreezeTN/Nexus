@@ -612,6 +612,112 @@ MILESTONE 34: DUAL-SCREEN BATTLEMAP POPOUT & TACTICAL GRID DRAG POLISH (v0.9.14)
   - Added mouse button safety verification (`e.buttons === 0`) in `handleMouseMove` and window mouse handlers to immediately cancel canvas panning if mouse buttons are released.
   - Corrected stage cursor class to `cursor-default` when spacebar is not pressed.
 
+--------------------------------------------------------------------------------
+MILESTONE 35: NEXUS ORACLE AI BATTLEMAP SYNTHESIS & PROCEDURAL GRID (v0.9.15)
+--------------------------------------------------------------------------------
+* Nexus Oracle AI Battlemap Generator (`src/components/modals/AiAssistantModal.tsx`):
+  - Expanded the Nexus Oracle AI Assistant with full procedural and AI-assisted tactical battlemap generation.
+  - Natural language encounter generation: DMs can request any environment (e.g. "Create a sunken crypt with 4 pillars, locked iron doors, and a goblin ambush").
+  - Automated layout synthesis: dimensions, environmental themes (stone, dungeon, lava, forest, astral void), stone walls, difficult terrain hazards, dynamic doors, Fog of War shroud, and pre-positioned combatant tokens.
+  - Interactive Preview & Deployment Card: Offers a visual summary with one-click "Deploy Map to Encounter" action.
+
+* Streamlined Controls & Token Drag Polish (`src/components/battlemap/BattlemapCanvas.tsx`):
+  - Removed redundant popout buttons from the main navigation tab bar to maintain focus.
+  - Fixed token drag mouse-up events to prevent accidental canvas grab-and-pan locks.
+
+--------------------------------------------------------------------------------
+MILESTONE 36: FULL 3D COMBAT ENGINE, TACTICAL ELEVATION & RAW AERIAL PLUNGE (v0.9.16)
+--------------------------------------------------------------------------------
+* True 3D Tactical Distance Math & Metrics (`src/components/battlemap/battlemapTypes.ts`):
+  - Engineered `calculateGridDistance3D` supporting both 5e standard Chebyshev 3D rules (`max(horizontal, deltaZ)` per XGtE/DMG) and 3.5e/Euclidean true hypotenuse geometry (`hypot(horizontal, deltaZ)`).
+  - Applied consistently across targeting lines, tactical rulers, reach calculations, and spell AoE checks.
+
+* 3D Melee Reach Gating & Opportunity Attack Engine (`src/components/battlemap/battlemapTypes.ts`):
+  - Enforced vertical altitude reach constraints on melee combatants: ground melee combatants can no longer threaten or strike airborne creatures flying above their reach limit (`verticalDelta <= reachFeet`).
+  - Opportunity Attacks (`detectAoOProvoked`) upgraded to evaluate 3D Euclidean and Chebyshev boundaries when leaving a threatened sphere aloft.
+
+* Volumetric 3D AoE Spell Templates & Elevation Awareness (`src/components/battlemap/battlemapTypes.ts`):
+  - Upgraded AoE templates with altitude origin (`elevationFeet`) and vertical height boundaries (`heightFeet`).
+  - Spheres (e.g. Fireball) calculate true 3D radial intersections (`hypot(dx, dy, deltaZ) <= radius`).
+  - Cylinders, cubes, and cones evaluate both floor area and vertical height spans so flying creatures above or below the burst area are excluded.
+
+* 3D Line of Sight & Cover Degradation (`src/components/battlemap/battlemapTypes.ts`):
+  - Upgraded `calculateLineOfSight` with 3D raycasting and vertical angle analysis.
+  - High-ground vertical vantage points allow attackers to shoot down past low-ground half cover when elevation exceeds horizontal distance.
+
+* RAW Aerial Fall & Plunge Damage Watchdogs (`src/components/combat/encounter/useEncounterState.ts`):
+  - Integrated official 5e aerial combat rules into the encounter state machine: when an elevated flying creature without Hover drops to 0 HP or suffers an incapacitating condition (Prone, Unconscious, Incapacitated, Paralyzed, Petrified, Stunned), it immediately plunges to the ground (`elevationFeet = 0`).
+  - Fall damage calculation: inflicts 1d6 bludgeoning damage per 10 feet fallen (max 20d6), knocks the creature Prone, and logs detailed plunge entries in the Combat Log.
+
+* Real-Time Flight Controls, 3D Targeting & Ruler HUD (`src/components/battlemap/BattlemapCanvas.tsx`, `src/components/battlemap/AoETemplateLayer.tsx`, `src/components/battlemap/CombatantPropertiesModal.tsx`):
+  - Added quick altitude adjustments (`-5ft`, `+5ft`, `+10ft`, `Land`) directly in the selected token HUD tray and interactive token badges.
+  - Shift-click targeting lines and the Tactical LoS Ruler display both 3D distance and vertical elevation difference (ΔZ) whenever either token is aloft.
+  - Added Fly Speed (`flySpeed`), quick altitude presets (`0ft`, `10ft`, `20ft`, `30ft`, `60ft`, `120ft`), and Hover capability toggle (`hasHover`) to Combatant Properties.
+
+* Asynchronous Non-Blocking Notification UI & Toast System:
+  - Replaced legacy blocking browser `alert()` popups with non-blocking UI notification banners, rich combat log entries, and toasts across all character management and encounter workflows.
+
+* 15 Atmospheric Conditions & 5e RAW Tactical Weather Engine (`src/components/battlemap/weatherDefinitions.ts`, `src/components/battlemap/WeatherCanvasLayer.tsx`, `src/components/battlemap/WeatherTacticalRulesModal.tsx`):
+  - Integrated 15 distinct atmospheric and weather conditions: Clear Weather, Steady Rain, Thunderstorm & Tempest, Gentle Snow, Blizzard & Whiteout, Hail & Sleet Storm, Strong Gale Wind, Desert Sandstorm, Creeping Mist, Volcanic Embers, Choking Ashfall, Caustic Acid Rain, Crimson Blood Rain, Arcane Ley-Line Surge, and Radiant Sunbeams.
+  - High-performance 60fps canvas particle system rendering forked branching lightning bolts, bouncing hailstones, tumbling autumn leaves, swirling sand grains, and diagonal sun shafts.
+  - Interactive Tactical Weather HUD pill and dedicated Rules Modal with official 5e & 3.5e RAW combat modifiers (ranged attack disadvantage, open flame snuffing, hearing perception penalties, concentration DCs, extreme cold/heat exhaustion checks, and flight landing requirements).
+
+--------------------------------------------------------------------------------
+MILESTONE 37: AUTOMATED 5E RAW WEATHER ENGINE, VISIBILITY GATING & SNUFFING (v0.9.17)
+--------------------------------------------------------------------------------
+* Automated Ranged Attack Disadvantage Engine (`src/components/combat/AttackResolver.tsx`):
+  - Wired the active battlemap weather condition directly into the Attack Resolver and Combat Sheet.
+  - Weather with severe winds or heavy precipitation (Thunderstorm, Blizzard, Desert Sandstorm, Strong Gale Wind) automatically imposes Disadvantage on ranged weapon attacks per 5e DMG pp. 109-111 (RAW).
+  - Displays dynamic reason tags (`Weather: High gale winds & driving precipitation impose Disadvantage on ranged weapon attacks (5e RAW)`).
+
+* Maximum Visibility Feet Gating & Weather Concealment (`src/components/battlemap/battlemapTypes.ts`, `src/components/battlemap/weatherDefinitions.ts`):
+  - Populated strict 5e RAW maximum visibility distances on weather definitions (30 ft in Blizzards, Sandstorms, and Creeping Mist; 60 ft in Heavy Rain, Thunderstorms, and Ashfall).
+  - Fog of War party vision reveal (`calculateVisibleCells`) automatically clamps reveal radius to the weather's maximum visibility limit.
+  - Line of Sight calculation (`calculateLineOfSight`) marks targets beyond the weather distance cap as heavily obscured (`weatherObscured: true`, `hasLoS: false`), preventing illegal target acquisition through impenetrable fog/blizzards.
+
+* Open Flame Snuffing Watchdog (`src/components/battlemap/BattlemapCanvas.tsx`):
+  - Added an automated environmental watchdog that monitors weather transitions: when gale winds or torrential downpours begin, open torches on all tokens are instantly extinguished (`lightSource: 'none'`).
+  - Automatically emits a descriptive action log entry to the combat log (`Fierce gale winds and driving precipitation automatically blew out open torches on: ... (5e RAW)`).
+
+* Fog of War & Player Targeting Safety System (`src/components/battlemap/BattlemapCanvas.tsx`):
+  - Player target lock auto-clearing: if an active target moves into Fog of War or beyond the weather visibility boundary, the player's target lock is immediately broken to enforce information asymmetry.
+  - DMs retain complete visibility of all shrouded tokens, styled with a distinct purple dashed border and concealment eye badge (`👁️`).
+
+* Tactical Line of Sight, Cover & Weather HUD (`src/components/battlemap/BattlemapCanvas.tsx`):
+  - Upgraded the shift-click targeting line and the bottom Target HUD card to show real-time 3D distances, cover bonuses (+2 Half Cover, +5 Three-Quarters Cover), weather disadvantage warnings, and weather obscurement status.
+
+--------------------------------------------------------------------------------
+MILESTONE 38: AUTOMATED RAW WEATHER ABILITIES, SPELLS & LAIR TRIGGERS (v0.9.18)
+--------------------------------------------------------------------------------
+* Automated Spell Weather Shifts (`src/components/battlemap/weatherAbilityTriggers.ts`, `src/components/modals/SpellTargetModal.tsx`):
+  - Created a dedicated registry of official 5e RAW weather-modifying spells: Control Weather (8th lvl), Call Lightning (3rd lvl), Storm of Vengeance (9th lvl), Sleet Storm (3rd lvl), Fog Cloud (1st lvl), Incendiary Cloud (8th lvl), Whirlwind (7th lvl), Gust of Wind (2nd lvl), and Dawn (5th lvl).
+  - Integrated automatic detection into the spellcasting workflow (SpellTargetModal).
+  - Casting any of these spells displays a 5e RAW Atmospheric Weather Shift card with climate selection options (e.g., choice between Thunderstorm, Blizzard, Steady Rain, Gale Wind, or Clear Weather for Control Weather).
+  - Automatically shifts battlemap atmospheric weather across all clients when cast.
+
+* Call Lightning Storm Synergy (+1d10 Damage) (`src/components/combat/AttackResolver.tsx`):
+  - Implemented 5e PHB p. 220 RAW rule: if Call Lightning is cast or used when an outdoor storm already exists on the battlemap, the spell channels the existing storm, granting an automatic +1d10 lightning damage (+2d10 on critical hits).
+  - Displays dynamic synergy badge in the Attack Resolver and breakdown logs in the Combat Log.
+
+* Monster Regional Effects & Lair Weather Triggers (`src/components/combat/encounter/MonsterMechanicsBar.tsx`, `src/components/combat/EncounterTracker.tsx`):
+  - Integrated 5e Monster Manual regional environmental effects into the Monster Mechanics Action Bar:
+    - Adult & Ancient Blue Dragons: 6-mile regional thunderstorm or desert dust devil lair sandstorm (5e MM p. 91).
+    - Adult & Ancient White Dragons: 6-mile regional glacial blizzard (5e MM p. 100).
+    - Adult & Ancient Red Dragons: 6-mile regional volcanic ash plume & cinders (5e MM p. 97).
+    - Adult & Ancient Green Dragons: 1-mile regional unnatural creeping mist (5e MM p. 94).
+    - Mummy Lord: Tomb Sandstorm lair action (5e MM p. 229).
+    - Vampire: 1-mile creeping fog regional shroud (5e MM p. 297).
+    - Storm Giant: Innate tempest storm dominance (5e MM p. 156).
+  - Single-click triggering instantly shifts battlemap weather, applies mechanical rules, and logs tactical action in the combat log.
+
+* Global Weather Event Bus & Multi-Client Synchronization (`src/events/types.ts`, `src/events/eventBus.ts`, `src/components/combat/encounter/useEncounterState.ts`):
+  - Extended event bus with `WeatherChanged` event payload (`weather`, `sourceName`, `sourceType`, `reason`).
+  - Synced encounter state and multiplayer session state when weather shifts occur via spell, monster, or DM action.
+
+* Tactical Weather Rules Modal: RAW Abilities & Spells Tab (`src/components/battlemap/WeatherTacticalRulesModal.tsx`):
+  - Added dedicated tab indexing all 5e RAW environmental spells and monster regional effects.
+  - Interactive "Trigger Weather Shift" buttons allow DMs and players to quickly activate any atmospheric transition with instant grid particle updates and mechanical adjustments.
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

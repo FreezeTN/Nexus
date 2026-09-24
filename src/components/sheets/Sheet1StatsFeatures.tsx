@@ -1508,6 +1508,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                 onUpdateCharacter={onUpdateCharacter}
                 onOpenShapeshift={() => setShowTransformationModal(true)}
                 onOpenSummonCompanion={() => setShowCompanionModal(true)}
+                onRoll={onRoll}
               />
               <FeatsPanel
                 character={character}
@@ -1575,6 +1576,7 @@ export const Sheet1StatsFeatures: React.FC<Sheet1Props> = ({
                       onOpenSummonCompanion={() => setShowCompanionModal(true)}
                       onOpenTurnUndead={() => setShowTurnUndeadModal(true)}
                       onOpenPrestigeValidator={() => setShowPrestigeModal(true)}
+                      onRoll={onRoll}
                     />
                   )}
 

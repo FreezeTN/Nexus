@@ -26,6 +26,13 @@ export {
   type AbilityScoreDetails
 };
 
+export function hasObservantFeat(char: CharacterData): boolean {
+  return Boolean(
+    char.feats?.some(f => f.name.toLowerCase().includes('observant')) ||
+    char.classFeatures?.some(f => f.name.toLowerCase().includes('observant'))
+  );
+}
+
 export function getPassivePerception(char: CharacterData): number {
   const effectiveLevel = getCombinedLevel(char);
   const effectiveAbilities = getEffectiveAbilities(char);
@@ -37,6 +44,11 @@ export function getPassivePerception(char: CharacterData): number {
   } else {
     const wisMod = getAbilityModifier(effectiveAbilities.WIS?.score || 10);
     basePassive = 10 + wisMod;
+  }
+
+  // Observant feat: +5 to passive Wisdom (Perception)
+  if (hasObservantFeat(char)) {
+    basePassive += 5;
   }
 
   // Check equipped item passive perception bonuses (e.g. Sentinel Shield, Eyes of the Eagle)
@@ -67,6 +79,12 @@ export function getPassiveInvestigation(char: CharacterData): number {
     const intMod = getAbilityModifier(effectiveAbilities.INT?.score || 10);
     basePassive = 10 + intMod;
   }
+
+  // Observant feat: +5 to passive Intelligence (Investigation)
+  if (hasObservantFeat(char)) {
+    basePassive += 5;
+  }
+
   return basePassive;
 }
 

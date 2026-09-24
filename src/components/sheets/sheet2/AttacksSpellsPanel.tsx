@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Attack, CharacterData, WeaponDamageRow } from '../../../types';
+import { Attack, CharacterData, WeaponDamageRow, GearItem } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { COMBAT_CHEAT_SHEET } from '../../../data/dndRulesData';
 import { isShapeshiftAbility } from '../../../data/transformationData';
@@ -22,16 +22,23 @@ import {
   format35eIterativeString,
   get35eEffectiveThreatRange,
   get35eCriticalMultiplier,
+  calculate35eCriticalDamage,
+  calculate5eCriticalDamage,
+  get5eRageBonus,
+  get5eSneakAttackInfo,
+  get5ePaladinSmiteInfo,
   adjust35eOffhandDamageFormula,
   adjust5eOffhandDamageFormula,
   getEffectiveAbilities,
   getAbilityModifier,
   calculate35eWeaponSizePenalty,
-  SIZE_CATEGORY_ORDER
+  SIZE_CATEGORY_ORDER,
+  isCharacterSpellcaster
 } from '../../../utils/dndCalculations';
 import {
   Swords,
   Plus,
+  Minus,
   Trash2,
   Dices,
   BookMarked,
@@ -42,7 +49,9 @@ import {
   Sparkles,
   Zap,
   RefreshCw,
-  Check
+  Check,
+  Target,
+  AlertTriangle
 } from 'lucide-react';
 import { syncInventoryWeaponsToAttacks } from '../../../utils/gearAttackSync';
 import { useLayoutCustomization } from '../../../utils/layoutCustomization';
@@ -93,6 +102,60 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   const [editingAttack, setEditingAttack] = useState<Attack | null>(null);
   const [showEditAttackModal, setShowEditAttackModal] = useState(false);
 
+  // 5e Tactical Combat Augments & Power Attack
+  const [powerAttackWeaponIds, setPowerAttackWeaponIds] = useState<Record<string, boolean>>({});
+  const [activeSmiteAttackId, setActiveSmiteAttackId] = useState<string | null>(null);
+  const [smiteSlotLevel, setSmiteSlotLevel] = useState<number>(1);
+  const [smiteIsFiendOrUndead, setSmiteIsFiendOrUndead] = useState<boolean>(false);
+  const [smiteIsCrit, setSmiteIsCrit] = useState<boolean>(false);
+  const [panelNotice, setPanelNotice] = useState<string | null>(null);
+
+  const showPanelNotice = (msg: string) => {
+    setPanelNotice(msg);
+    setTimeout(() => {
+      setPanelNotice(prev => (prev === msg ? null : prev));
+    }, 4000);
+  };
+
+  const handleExecuteDivineSmite = (atk: Attack) => {
+    const slot = (character.spellSlots || []).find(s => s.level === smiteSlotLevel);
+    if (!slot || slot.current <= 0) {
+      showPanelNotice(`⚠️ No Level ${smiteSlotLevel} spell slots remaining!`);
+      return;
+    }
+
+    const updatedSlots = (character.spellSlots || []).map(s => {
+      if (s.level === smiteSlotLevel) {
+        return { ...s, current: Math.max(0, s.current - 1) };
+      }
+      return s;
+    });
+
+    onUpdateCharacter({
+      ...character,
+      spellSlots: updatedSlots
+    });
+
+    let diceCount = Math.min(5, 1 + smiteSlotLevel);
+    if (smiteIsFiendOrUndead) {
+      diceCount = Math.min(6, diceCount + 1);
+    }
+    if (smiteIsCrit) {
+      diceCount = diceCount * 2;
+    }
+
+    const smiteDmgExpr = `${diceCount}d8`;
+    const critTag = smiteIsCrit ? ' [CRITICAL HIT]' : '';
+    const fiendTag = smiteIsFiendOrUndead ? ' (+1d8 vs Fiend/Undead)' : '';
+
+    onRollDamage(
+      `⚡ ${atk.name} Divine Smite (Lvl ${smiteSlotLevel} Slot${fiendTag}${critTag})`,
+      `${smiteDmgExpr} Radiant`
+    );
+
+    setActiveSmiteAttackId(null);
+  };
+
   const handleOpenEditAttack = (atk: Attack) => {
     setEditingAttack(atk);
     setShowEditAttackModal(true);
@@ -133,7 +196,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
 
   const handleAddAttack = () => {
     if (!attackName.trim()) {
-      alert('Please enter a Weapon / Spell Name before saving.');
+      showPanelNotice('Please enter a Weapon / Spell Name before saving.');
       return;
     }
     const finalType = attackDamageType === 'Custom' ? 'Slashing' : (attackDamageType || 'Slashing');
@@ -198,11 +261,11 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
 
   const handleUseHealingItem = (item: any) => {
     if (item.stored) {
-      alert(`"${item.name}" is Stored Away in your stash! Un-store it from inventory before using.`);
+      showPanelNotice(`"${item.name}" is Stored Away in your stash! Un-store it from inventory before using.`);
       return;
     }
     if (isCharacterDead(character)) {
-      alert(`${character.name} is Dead! Items and potions cannot bring a dead character back to life. Only revives or manual HP modification can restore life.`);
+      showPanelNotice(`${character.name} is Dead! Items and potions cannot bring a dead character back to life. Only revives or manual HP modification can restore life.`);
       return;
     }
 
@@ -227,16 +290,79 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
     onRollDamage(`Consumed ${item.name} (${breakdown}) - Restored +${hpGained} HP!`, expr);
   };
 
+  const handleSpendAmmunition = (item: any) => {
+    if ((item.quantity || 0) <= 0) {
+      showPanelNotice(`Out of ${item.name}! You have no ammunition left.`);
+      return;
+    }
+    const nextQty = Math.max(0, (item.quantity || 1) - 1);
+    const updatedInventory = character.inventory.map(i => {
+      if (i.id === item.id) {
+        return { ...i, quantity: nextQty };
+      }
+      return i;
+    });
+
+    onUpdateCharacter({
+      ...character,
+      inventory: updatedInventory
+    });
+
+    onRollDamage(`🏹 Expended 1 ${item.name} (${nextQty} remaining)`, '0');
+  };
+
+  const handleAdjustItemQuantity = (item: any, delta: number) => {
+    const nextQty = Math.max(0, (item.quantity || 0) + delta);
+    const updatedInventory = character.inventory.map(i => {
+      if (i.id === item.id) {
+        return { ...i, quantity: nextQty };
+      }
+      return i;
+    });
+
+    onUpdateCharacter({
+      ...character,
+      inventory: updatedInventory
+    });
+  };
+
+  const handleQuickAddAmmo = (ammoName: string, defaultQty: number = 20, weight: number = 1) => {
+    const existing = character.inventory.find(i => i.name.toLowerCase() === ammoName.toLowerCase());
+    if (existing) {
+      handleAdjustItemQuantity(existing, defaultQty);
+    } else {
+      const newItem: GearItem = {
+        id: `ammo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        name: ammoName,
+        quantity: defaultQty,
+        weight: weight,
+        equipped: false,
+        itemType: 'Ammunition',
+        notes: `Ammunition bundle (${defaultQty} count).`
+      };
+      onUpdateCharacter({
+        ...character,
+        inventory: [...(character.inventory || []), newItem]
+      });
+    }
+  };
+
+  const handleRecoverAmmunition = (item: any) => {
+    const recoverCount = Math.max(1, Math.floor((item.quantity || 1) / 2));
+    handleAdjustItemQuantity(item, recoverCount);
+    onRollDamage(`🏹 Battlefield Search (PHB p. 146): Recovered half spent ammunition (+${recoverCount} ${item.name})!`, '0');
+  };
+
   const handleCastCombatSpell = (spell: any) => {
     if (spell.level > 0 && spell.prepared === false) {
-      alert(`"${spell.name}" is not prepared! Prepare it in your spellbook first.`);
+      showPanelNotice(`"${spell.name}" is not prepared! Prepare it in your spellbook first.`);
       return;
     }
 
     if (spell.level > 0) {
       const slot = character.spellSlots.find(s => s.level === spell.level);
       if (!slot || slot.current <= 0) {
-        alert(`No Level ${spell.level} spell slots remaining!`);
+        showPanelNotice(`No Level ${spell.level} spell slots remaining!`);
         return;
       }
     }
@@ -266,7 +392,7 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
 
     if (isHealing) {
       if (isCharacterDead(character)) {
-        alert(`${character.name} is Dead! Standard healing spells cannot bring a dead character back to life.`);
+        showPanelNotice(`${character.name} is Dead! Standard healing spells cannot bring a dead character back to life.`);
         return;
       }
 
@@ -296,7 +422,24 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
   const showCombatSpells = isVisible('s2_combatSpellsPotions');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* Dynamic Feedback Banner */}
+      {panelNotice && (
+        <div className="sticky top-2 z-30 bg-amber-950/95 border border-amber-500/80 text-amber-100 p-3 rounded-xl shadow-lg flex items-center justify-between gap-3 text-xs font-semibold backdrop-blur-md animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚡</span>
+            <span>{panelNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPanelNotice(null)}
+            className="p-1 hover:bg-white/10 rounded text-stone-400 hover:text-white transition cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Weapons & Attacks Panel */}
       {showAttacks && (
         <CollapsibleBox
@@ -383,26 +526,48 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                   const atk35e = is35e ? calculate35eAttackBonus(character, atk) : null;
                   const dmg35e = is35e ? calculate35eDamageFormula(character, atk) : null;
 
+                  const isMelee = (atk.range || '').toLowerCase().includes('melee') || (atk.range || '').toLowerCase().includes('5 ft') || !atk.range?.toLowerCase().includes('range');
+                  const isRanged = (atk.range || '').toLowerCase().includes('range') || (atk.range ? parseInt(atk.range) > 10 : false);
+                  const isHeavyOrTwoHanded = (atk.notes || '').toLowerCase().includes('heavy') || (atk.notes || '').toLowerCase().includes('two-handed') || atk.isTwoHanded;
+                  const isFinesseOrRanged = isRanged || (atk.notes || '').toLowerCase().includes('finesse') || ['dagger', 'rapier', 'shortsword', 'scimitar', 'whip', 'dart'].some(w => atk.name.toLowerCase().includes(w));
+
+                  const isPowerAttackActive = Boolean(powerAttackWeaponIds[atk.id]);
+                  const powerAttackPen = isPowerAttackActive ? -5 : 0;
+                  const powerAttackDmgBonus = isPowerAttackActive ? 10 : 0;
+
+                  const rageInfo = get5eRageBonus(character);
+                  const rageBonus = (!is35e && rageInfo.isRaging && isMelee) ? rageInfo.bonusDamage : 0;
+                  const sneakInfo = get5eSneakAttackInfo(character);
+                  const smiteInfo = get5ePaladinSmiteInfo(character);
+
                   const sizePenaltyInfo = is35e && atk.weaponSize
                     ? calculate35eWeaponSizePenalty(character.sizeCategory || 'Medium', atk.weaponSize)
                     : null;
-                  const netAttackBonus = is35e
-                    ? (atk35e?.totalAttackBonus ?? atk.attackBonus)
-                    : atk.attackBonus + (sizePenaltyInfo?.penalty || 0);
-
-                  const iterativeAttacks = is35e && atk35e ? atk35e.iterativeAttacks : (is35e ? get35eIterativeAttacks(netAttackBonus, bab) : []);
-                  const hasIteratives = iterativeAttacks.length > 1;
 
                   const has5eTwfStyle = !is35e && Boolean(
                     character.classFeatures?.some(f => f.name.toLowerCase().includes('two-weapon')) ||
                     character.feats?.some(f => f.name.toLowerCase().includes('two-weapon fighting')) ||
                     (character as any).fightingStyle?.toLowerCase().includes('two-weapon')
                   );
-                  const abilities = getEffectiveAbilities(character);
-                  const strMod = getAbilityModifier(abilities?.STR?.score || 10);
+
+                  let baseDamageFor5e = atk.isOffhand ? adjust5eOffhandDamageFormula(atk.damage, has5eTwfStyle) : atk.damage;
+                  if (rageBonus > 0) {
+                    baseDamageFor5e = `${baseDamageFor5e} + ${rageBonus}`;
+                  }
+                  if (powerAttackDmgBonus > 0) {
+                    baseDamageFor5e = `${baseDamageFor5e} + ${powerAttackDmgBonus}`;
+                  }
+
                   const effectiveDamage = is35e
                     ? (dmg35e?.damageFormula ?? atk.damage)
-                    : (atk.isOffhand ? adjust5eOffhandDamageFormula(atk.damage, has5eTwfStyle) : atk.damage);
+                    : baseDamageFor5e;
+
+                  const netAttackBonus = (is35e
+                    ? (atk35e?.totalAttackBonus ?? atk.attackBonus)
+                    : atk.attackBonus + (sizePenaltyInfo?.penalty || 0)) + powerAttackPen;
+
+                  const iterativeAttacks = is35e && atk35e ? atk35e.iterativeAttacks : (is35e ? get35eIterativeAttacks(netAttackBonus, bab) : []);
+                  const hasIteratives = iterativeAttacks.length > 1;
 
                   return (
                     <div
@@ -514,6 +679,30 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                                       ? (has5eTwfStyle ? 'Off-Hand (TWF Style)' : 'Off-Hand (No Mod)')
                                       : 'Off-Hand: Off'}
                                   </span>
+                                </button>
+                              )}
+                              {!is35e && rageBonus > 0 && (
+                                <span
+                                  className="text-[10px] font-mono px-2 py-0.5 rounded-full border bg-red-950/80 text-red-300 border-red-600/70 flex items-center gap-1 shrink-0"
+                                  title={`Barbarian Rage active: +${rageBonus} melee damage`}
+                                >
+                                  <span>🔥</span>
+                                  <span>+{rageBonus} Rage</span>
+                                </span>
+                              )}
+                              {(isHeavyOrTwoHanded || isRanged) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPowerAttackWeaponIds(prev => ({ ...prev, [atk.id]: !prev[atk.id] }))}
+                                  className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1 transition shrink-0 cursor-pointer ${
+                                    isPowerAttackActive
+                                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 font-bold'
+                                      : 'bg-stone-900 text-stone-400 border-stone-800 hover:text-stone-300 hover:border-stone-700'
+                                  }`}
+                                  title={isRanged ? 'Toggle Sharpshooter (-5 to hit, +10 damage)' : 'Toggle Great Weapon Master / Power Attack (-5 to hit, +10 damage)'}
+                                >
+                                  <Target className="w-2.5 h-2.5" />
+                                  <span>{isPowerAttackActive ? (isRanged ? 'Sharpshooter (-5/+10)' : 'GWM (-5/+10)') : (isRanged ? 'Sharpshooter: Off' : 'GWM: Off')}</span>
                                 </button>
                               )}
                             </div>
@@ -641,21 +830,24 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                         <div className="flex items-center gap-2 w-full min-w-0">
                           <button
                             onClick={() => onRoll(
-                              `${atk.name}${sizePenaltyInfo && sizePenaltyInfo.penalty < 0 ? ` (incl. ${sizePenaltyInfo.penalty} size penalty)` : ''} Attack Roll`,
+                              `${atk.name}${isPowerAttackActive ? ' (-5 Power Attack)' : ''}${sizePenaltyInfo && sizePenaltyInfo.penalty < 0 ? ` (incl. ${sizePenaltyInfo.penalty} size penalty)` : ''} Attack Roll`,
                               20,
                               1,
                               netAttackBonus,
                               'normal'
                             )}
                             className="flex-1 min-w-0 py-1.5 px-2 bg-stone-900 hover:bg-amber-600 text-amber-200 hover:text-stone-950 rounded-lg font-mono font-bold text-xs transition border border-stone-700 hover:border-amber-500 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] overflow-hidden"
-                            title={`Roll Attack: d20 + ${netAttackBonus}${is35e && atk35e ? ` (${atk35e.breakdown})` : ` (base +${atk.attackBonus})`}`}
+                            title={`Roll Attack: d20 + ${netAttackBonus}${is35e && atk35e ? ` (${atk35e.breakdown})` : ` (base +${atk.attackBonus}${powerAttackPen ? ` ${powerAttackPen} PA` : ''})`}`}
                           >
                             <Crosshair className="w-3.5 h-3.5 shrink-0" />
                             <span className="truncate">Attack ({formatModifier(netAttackBonus)})</span>
                           </button>
 
                           <button
-                            onClick={() => onRollDamage(`${atk.name}${atk.isOffhand ? ' (Off-Hand)' : ''} Damage (${atk.damageType})`, effectiveDamage)}
+                            onClick={() => onRollDamage(
+                              `${atk.name}${atk.isOffhand ? ' (Off-Hand)' : ''}${rageBonus > 0 ? ' (+Rage)' : ''}${isPowerAttackActive ? ' (+10 PA)' : ''} Damage (${atk.damageType})`,
+                              effectiveDamage
+                            )}
                             className="flex-1 min-w-0 py-1.5 px-2 bg-rose-950/80 hover:bg-rose-900 text-rose-200 rounded-lg font-mono font-bold text-xs transition border border-rose-600/50 hover:border-rose-400 flex items-center justify-center gap-1.5 shadow-sm active:scale-[0.98] overflow-hidden"
                             title={`Roll Damage: ${effectiveDamage} (${atk.damageType})${is35e && dmg35e ? ` (${dmg35e.breakdown})` : ''}`}
                           >
@@ -663,6 +855,166 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
                             <span className="truncate">Dmg ({effectiveDamage})</span>
                           </button>
                         </div>
+
+                        {/* Combat Augments: Critical Hit, Sneak Attack, Divine Smite */}
+                        <div className="flex items-center gap-1.5 flex-wrap w-full min-w-0">
+                          {/* Critical Hit Roll */}
+                          {(() => {
+                            if (is35e) {
+                              const mult = get35eCriticalMultiplier(atk).multiplier;
+                              const crit35e = calculate35eCriticalDamage(effectiveDamage, mult);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => onRollDamage(`⚡ ${atk.name} CRITICAL HIT Damage (×${mult}) [${atk.damageType}]`, crit35e.multipliedExpr)}
+                                  className="flex-1 min-w-[75px] py-1 px-1.5 bg-amber-950/70 hover:bg-amber-900 text-amber-200 hover:text-amber-100 rounded-lg font-mono font-bold text-[11px] transition border border-amber-600/50 hover:border-amber-400 flex items-center justify-center gap-1 shadow-sm active:scale-[0.98]"
+                                  title={`Roll 3.5e Critical Damage: ${crit35e.multipliedExpr} (×${mult} Multiplier)`}
+                                >
+                                  <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span className="truncate">Crit ⚡ (×{mult})</span>
+                                </button>
+                              );
+                            } else {
+                              const crit5e = calculate5eCriticalDamage(effectiveDamage, character, isMelee);
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={() => onRollDamage(`⚡ ${atk.name} CRITICAL HIT Damage (${atk.damageType}) [${crit5e.breakdown}]`, crit5e.critExpr)}
+                                  className="flex-1 min-w-[75px] py-1 px-1.5 bg-amber-950/70 hover:bg-amber-900 text-amber-200 hover:text-amber-100 rounded-lg font-mono font-bold text-[11px] transition border border-amber-600/50 hover:border-amber-400 flex items-center justify-center gap-1 shadow-sm active:scale-[0.98]"
+                                  title={`Roll 5e Critical Damage: ${crit5e.critExpr} (${crit5e.breakdown})`}
+                                >
+                                  <Zap className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span className="truncate">Crit ⚡ ({crit5e.critExpr})</span>
+                                </button>
+                              );
+                            }
+                          })()}
+
+                          {/* Sneak Attack Quick Trigger (Rogue) */}
+                          {!is35e && sneakInfo.hasSneakAttack && isFinesseOrRanged && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onRollDamage(
+                                  `🗡️ ${atk.name} + Sneak Attack (${atk.damageType}) [Weapon + ${sneakInfo.damageExpr}]`,
+                                  `${effectiveDamage} + ${sneakInfo.damageExpr}`
+                                );
+                              }}
+                              className="flex-1 min-w-[95px] py-1 px-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 hover:text-red-100 rounded-lg font-mono font-bold text-[11px] transition border border-red-600/50 hover:border-red-400 flex items-center justify-center gap-1 shadow-sm active:scale-[0.98]"
+                              title={`Roll Weapon Damage + Sneak Attack (+${sneakInfo.damageExpr})`}
+                            >
+                              <span className="shrink-0">🗡️</span>
+                              <span className="truncate">+Sneak ({sneakInfo.damageExpr})</span>
+                            </button>
+                          )}
+
+                          {/* Divine Smite Trigger (Paladin) */}
+                          {!is35e && smiteInfo.canSmite && isMelee && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (activeSmiteAttackId === atk.id) {
+                                  setActiveSmiteAttackId(null);
+                                } else {
+                                  setActiveSmiteAttackId(atk.id);
+                                  if (smiteInfo.availableSlots.length > 0) {
+                                    setSmiteSlotLevel(smiteInfo.availableSlots[0].level);
+                                  }
+                                }
+                              }}
+                              className={`flex-1 min-w-[80px] py-1 px-1.5 rounded-lg font-mono font-bold text-[11px] transition border flex items-center justify-center gap-1 shadow-sm active:scale-[0.98] cursor-pointer ${
+                                activeSmiteAttackId === atk.id
+                                  ? 'bg-purple-900 text-purple-100 border-purple-400 ring-1 ring-purple-400/50'
+                                  : 'bg-purple-950/80 hover:bg-purple-900 text-purple-200 border-purple-600/50 hover:border-purple-400'
+                              }`}
+                              title="Open Divine Smite slot expenditure and damage roll"
+                            >
+                              <Sparkles className="w-3 h-3 text-purple-300 shrink-0" />
+                              <span className="truncate">⚡ Smite</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Divine Smite Expander Menu */}
+                        {!is35e && activeSmiteAttackId === atk.id && smiteInfo.canSmite && isMelee && (
+                          <div className="p-2 rounded-lg bg-purple-950/60 border border-purple-700/60 space-y-2 mt-1 font-mono text-xs">
+                            <div className="flex items-center justify-between">
+                              <span className="text-purple-200 font-bold flex items-center gap-1 text-[11px]">
+                                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                                <span>Divine Smite (PHB p. 85)</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setActiveSmiteAttackId(null)}
+                                className="text-stone-400 hover:text-stone-200 text-[11px]"
+                              >
+                                ✕
+                              </button>
+                            </div>
+
+                            {smiteInfo.availableSlots.length === 0 ? (
+                              <p className="text-rose-400 text-[11px]">No 1st–5th level spell slots remaining!</p>
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-1 flex-wrap">
+                                  <span className="text-stone-400 text-[10px] block w-full">Slot to Expend:</span>
+                                  {smiteInfo.availableSlots.map(slot => (
+                                    <button
+                                      key={slot.level}
+                                      type="button"
+                                      onClick={() => setSmiteSlotLevel(slot.level)}
+                                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition ${
+                                        smiteSlotLevel === slot.level
+                                          ? 'bg-purple-700 text-white border-purple-400 ring-1 ring-purple-300'
+                                          : 'bg-stone-900 text-purple-300 border-stone-700 hover:border-purple-500'
+                                      }`}
+                                    >
+                                      Lvl {slot.level} ({slot.baseDice}d8) &bull; {slot.current}/{slot.max}
+                                    </button>
+                                  ))}
+                                </div>
+
+                                <div className="flex items-center justify-between text-[11px] gap-2 pt-1 border-t border-purple-900/60 flex-wrap">
+                                  <label className="flex items-center gap-1.5 cursor-pointer text-purple-200">
+                                    <input
+                                      type="checkbox"
+                                      checked={smiteIsFiendOrUndead}
+                                      onChange={e => setSmiteIsFiendOrUndead(e.target.checked)}
+                                      className="rounded text-purple-600 focus:ring-purple-500 bg-stone-900 border-purple-700"
+                                    />
+                                    <span>Fiend/Undead (+1d8)</span>
+                                  </label>
+
+                                  <label className="flex items-center gap-1.5 cursor-pointer text-amber-200">
+                                    <input
+                                      type="checkbox"
+                                      checked={smiteIsCrit}
+                                      onChange={e => setSmiteIsCrit(e.target.checked)}
+                                      className="rounded text-amber-600 focus:ring-amber-500 bg-stone-900 border-amber-700"
+                                    />
+                                    <span>Crit (2× Dice)</span>
+                                  </label>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleExecuteDivineSmite(atk)}
+                                  className="w-full py-1 bg-gradient-to-r from-purple-700 to-amber-600 hover:from-purple-600 hover:to-amber-500 text-white rounded-lg font-bold text-xs shadow transition active:scale-[0.99] flex items-center justify-center gap-1.5"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                                  <span>
+                                    Unleash Smite ({(() => {
+                                      let d = Math.min(5, 1 + smiteSlotLevel);
+                                      if (smiteIsFiendOrUndead) d = Math.min(6, d + 1);
+                                      if (smiteIsCrit) d *= 2;
+                                      return `${d}d8 Radiant`;
+                                    })()})
+                                  </span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
 
                         {/* Extra Damage Roll Buttons */}
                         {atk.additionalDamageRows && atk.additionalDamageRows.length > 0 && (
@@ -691,112 +1043,295 @@ export const AttacksSpellsPanel: React.FC<AttacksSpellsPanelProps> = ({
       )}
 
       {/* Combat Spells & Consumables Quick Bar */}
-      {showCombatSpells && (
-        <CollapsibleBox
-          title="Combat Spells & Potions Quick Bar"
-          icon={<Sparkles className="w-5 h-5 text-amber-500" />}
-          storageKey="sheet2_combat_spells"
-        >
-        <div className="space-y-4 pt-2 text-xs">
-          {/* Healing Potions & Items */}
-          <div>
-            <span className="font-serif font-bold text-amber-300 text-xs block mb-2 font-sans">
-              Consumable Potions & Items (Inventory)
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              {character.inventory.filter(i => isHealingItem(i)).map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex items-center justify-between gap-2"
-                >
-                  <div>
-                    <div className="font-bold text-emerald-300">{item.name}</div>
-                    <div className="text-[10px] text-stone-400 font-mono">Qty: {item.quantity}</div>
-                  </div>
-                  <button
-                    onClick={() => handleUseHealingItem(item)}
-                    className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-600/50 rounded-lg font-bold transition shrink-0"
-                  >
-                    Drink / Heal
-                  </button>
-                </div>
-              ))}
-              {character.inventory.filter(i => isHealingItem(i)).length === 0 && (
-                <p className="text-stone-500 italic text-[11px] col-span-full">
-                  No potions or healing items in inventory.
-                </p>
-              )}
-            </div>
-          </div>
+      {showCombatSpells && (() => {
+        const isCaster = isCharacterSpellcaster(character);
+        const hasSpells = Boolean(character.spells && character.spells.length > 0);
+        const showPreparedSpells = isCaster || hasSpells;
 
-          {/* Quick Cast Combat Spells */}
-          <div>
-            <span className="font-serif font-bold text-amber-300 text-xs block mb-2 font-sans">
-              Prepared Spells (Click to Cast & Track Slots)
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-              {character.spells.filter(s => s.prepared !== false).map((spell) => (
-                <div
-                  key={spell.id}
-                  className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex items-center justify-between gap-2"
-                >
-                  <div className="truncate">
-                    <div className="font-bold text-amber-200 truncate">{spell.name}</div>
-                    <div className="text-[10px] text-stone-400 font-mono">
-                      {spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`}
-                    </div>
+        return (
+          <CollapsibleBox
+            title="Combat Ammunition, Potions & Spells Quick Bar"
+            icon={<Target className="w-5 h-5 text-amber-500" />}
+            storageKey="sheet2_combat_spells"
+          >
+          <div className="space-y-4 pt-2 text-xs">
+            {/* 1. Ammunition & Quiver Quick-Tracker */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-serif font-bold text-amber-300 text-xs flex items-center gap-1.5 font-sans">
+                  <Target className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Ammunition & Quiver Counter</span>
+                </span>
+                <span className="text-[10px] text-stone-400 font-mono hidden sm:inline">
+                  PHB p. 146: Direct +/- expenditure & recovery
+                </span>
+              </div>
+
+              {(() => {
+                const ammoItems = character.inventory.filter(i => {
+                  const name = (i.name || '').toLowerCase();
+                  const notes = (i.notes || '').toLowerCase();
+                  const type = (i.itemType || '').toLowerCase();
+                  return (
+                    name.includes('arrow') ||
+                    name.includes('bolt') ||
+                    name.includes('bullet') ||
+                    name.includes('needle') ||
+                    name.includes('dart') ||
+                    type.includes('ammunition') ||
+                    notes.includes('ammunition') ||
+                    name.includes('quiver')
+                  );
+                });
+
+                return (
+                  <div className="space-y-2">
+                    {ammoItems.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {ammoItems.map((ammo) => {
+                          const qty = ammo.quantity || 0;
+                          const isZero = qty <= 0;
+                          const isLow = qty > 0 && qty <= 5;
+
+                          return (
+                            <div
+                              key={ammo.id}
+                              className={`p-2 rounded-xl border flex flex-col justify-between gap-1.5 transition ${
+                                isZero
+                                  ? 'bg-rose-950/30 border-rose-800/60'
+                                  : isLow
+                                  ? 'bg-amber-950/30 border-amber-700/60'
+                                  : 'bg-stone-950 border-stone-800'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-bold text-stone-200 truncate text-xs flex items-center gap-1">
+                                  <Target className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span className="truncate">{ammo.name}</span>
+                                </span>
+                                {isZero && (
+                                  <span className="px-1.5 py-0.2 rounded bg-rose-900/80 text-rose-200 text-[9px] font-mono font-bold shrink-0">
+                                    EMPTY
+                                  </span>
+                                )}
+                                {isLow && (
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-900/80 text-amber-200 text-[9px] font-mono font-bold shrink-0">
+                                    LOW
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Quantity Stepper and Shoot Controls */}
+                              <div className="flex items-center justify-between gap-1 pt-1 border-t border-stone-800/80">
+                                <div className="flex items-center gap-1 bg-stone-900 rounded-lg p-0.5 border border-stone-800">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustItemQuantity(ammo, -1)}
+                                    disabled={qty <= 0}
+                                    className="p-1 hover:bg-stone-800 disabled:opacity-30 text-stone-300 rounded transition cursor-pointer"
+                                    title="Deduct 1 ammo"
+                                  >
+                                    <Minus className="w-3 h-3" />
+                                  </button>
+                                  <span className="font-mono font-extrabold px-1.5 text-xs text-amber-300 min-w-[24px] text-center">
+                                    {qty}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAdjustItemQuantity(ammo, 1)}
+                                    className="p-1 hover:bg-stone-800 text-stone-300 rounded transition cursor-pointer"
+                                    title="Add 1 ammo"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                  </button>
+                                </div>
+
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSpendAmmunition(ammo)}
+                                    disabled={qty <= 0}
+                                    className="px-2 py-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:hover:bg-amber-600 text-stone-950 font-bold rounded-lg text-[10px] transition font-sans cursor-pointer shadow-sm active:scale-95"
+                                    title="Fire 1 shot (deducts 1 and logs)"
+                                  >
+                                    🏹 Fire (-1)
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRecoverAmmunition(ammo)}
+                                    className="p-1 bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800 rounded-lg text-[10px] transition cursor-pointer"
+                                    title="Scavenge & recover 50% spent ammunition after battle (PHB p. 146)"
+                                  >
+                                    Recv 50%
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="bg-stone-950/70 p-2.5 rounded-xl border border-stone-800 text-stone-400 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <span>No ammunition in inventory. Quick-add common ammunition bundles:</span>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAddAmmo('Arrows (20)', 20, 1)}
+                            className="px-2 py-0.5 bg-stone-900 hover:bg-amber-950/70 text-amber-300 border border-stone-800 hover:border-amber-600/60 rounded text-[10px] font-mono transition cursor-pointer"
+                          >
+                            + 20 Arrows
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAddAmmo('Crossbow Bolts (20)', 20, 1.5)}
+                            className="px-2 py-0.5 bg-stone-900 hover:bg-amber-950/70 text-amber-300 border border-stone-800 hover:border-amber-600/60 rounded text-[10px] font-mono transition cursor-pointer"
+                          >
+                            + 20 Bolts
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAddAmmo('Sling Bullets (20)', 20, 1.5)}
+                            className="px-2 py-0.5 bg-stone-900 hover:bg-amber-950/70 text-amber-300 border border-stone-800 hover:border-amber-600/60 rounded text-[10px] font-mono transition cursor-pointer"
+                          >
+                            + 20 Bullets
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickAddAmmo('Darts (10)', 10, 2.5)}
+                            className="px-2 py-0.5 bg-stone-900 hover:bg-amber-950/70 text-amber-300 border border-stone-800 hover:border-amber-600/60 rounded text-[10px] font-mono transition cursor-pointer"
+                          >
+                            + 10 Darts
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {character.edition === '3.5e' && (
-                      <button
-                        type="button"
-                        onClick={() => setMetamagicModalSpell(spell)}
-                        className="px-2 py-1 bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-600/50 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
-                        title="Apply 3.5e Metamagic Feats (Empower, Maximize, Quicken, Extend, Enlarge, Widen, Silent, Still)"
-                      >
-                        <Sparkles className="w-3 h-3 text-purple-400" />
-                        <span>Metamagic</span>
-                      </button>
-                    )}
-                    {isShapeshiftAbility(spell.name, spell.description) && (
-                      <button
-                        onClick={onOpenShapeshift}
-                        className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
-                        title="Launch Nexus Shapeshift Engine"
-                      >
-                        <span>🐾</span>
-                        <span>Shapeshift</span>
-                      </button>
-                    )}
-                    {isCompanionSummonAbility(spell.name, spell.description) && (
-                      <button
-                        onClick={onOpenSummonCompanion}
-                        className="px-2 py-1 bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
-                        title="Launch Nexus Companion & Summon Engine"
-                      >
-                        <span>🦅</span>
-                        <span>Summon</span>
-                      </button>
-                    )}
+                );
+              })()}
+            </div>
+
+            {/* 2. Healing Potions & Combat Consumables */}
+            <div>
+              <span className="font-serif font-bold text-amber-300 text-xs block mb-2 font-sans flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Consumable Potions & Items (Inventory)</span>
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {character.inventory.filter(i => isHealingItem(i)).map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-bold text-emerald-300 truncate">{item.name}</div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustItemQuantity(item, -1)}
+                          disabled={(item.quantity || 0) <= 0}
+                          className="p-0.5 hover:bg-stone-800 text-stone-400 rounded transition"
+                          title="Decrement quantity"
+                        >
+                          <Minus className="w-2.5 h-2.5" />
+                        </button>
+                        <span className="text-[10px] text-stone-300 font-mono font-bold">{item.quantity}x</span>
+                        <button
+                          type="button"
+                          onClick={() => handleAdjustItemQuantity(item, 1)}
+                          className="p-0.5 hover:bg-stone-800 text-stone-400 rounded transition"
+                          title="Increment quantity"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                        </button>
+                      </div>
+                    </div>
                     <button
-                      onClick={() => handleCastCombatSpell(spell)}
-                      className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-600/50 rounded-lg font-bold transition"
+                      onClick={() => handleUseHealingItem(item)}
+                      className="px-2.5 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-600/50 rounded-lg font-bold transition shrink-0 cursor-pointer shadow-sm active:scale-95"
                     >
-                      Cast
+                      Drink / Heal
                     </button>
                   </div>
-                </div>
-              ))}
-              {character.spells.filter(s => s.prepared !== false).length === 0 && (
-                <p className="text-stone-500 italic text-[11px] col-span-full">
-                  No prepared spells found in spellbook.
-                </p>
-              )}
+                ))}
+                {character.inventory.filter(i => isHealingItem(i)).length === 0 && (
+                  <p className="text-stone-500 italic text-[11px] col-span-full">
+                    No potions or healing items in inventory.
+                  </p>
+                )}
+              </div>
             </div>
+
+            {/* Quick Cast Combat Spells - Only shown if character is a spellcaster or has spells in repertoire */}
+            {showPreparedSpells && (
+              <div>
+                <span className="font-serif font-bold text-amber-300 text-xs block mb-2 font-sans">
+                  Prepared Spells (Click to Cast & Track Slots)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                  {character.spells.filter(s => s.prepared !== false).map((spell) => (
+                    <div
+                      key={spell.id}
+                      className="bg-stone-950 p-2 rounded-xl border border-stone-800 flex items-center justify-between gap-2"
+                    >
+                      <div className="truncate">
+                        <div className="font-bold text-amber-200 truncate">{spell.name}</div>
+                        <div className="text-[10px] text-stone-400 font-mono">
+                          {spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {character.edition === '3.5e' && (
+                          <button
+                            type="button"
+                            onClick={() => setMetamagicModalSpell(spell)}
+                            className="px-2 py-1 bg-purple-950/80 hover:bg-purple-900 text-purple-200 border border-purple-600/50 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                            title="Apply 3.5e Metamagic Feats (Empower, Maximize, Quicken, Extend, Enlarge, Widen, Silent, Still)"
+                          >
+                            <Sparkles className="w-3 h-3 text-purple-400" />
+                            <span>Metamagic</span>
+                          </button>
+                        )}
+                        {isShapeshiftAbility(spell.name, spell.description) && (
+                          <button
+                            onClick={onOpenShapeshift}
+                            className="px-2 py-1 bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                            title="Launch Nexus Shapeshift Engine"
+                          >
+                            <span>🐾</span>
+                            <span>Shapeshift</span>
+                          </button>
+                        )}
+                        {isCompanionSummonAbility(spell.name, spell.description) && (
+                          <button
+                            onClick={onOpenSummonCompanion}
+                            className="px-2 py-1 bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-500/60 rounded-lg font-bold transition text-[11px] flex items-center gap-1 shadow cursor-pointer"
+                            title="Launch Nexus Companion & Summon Engine"
+                          >
+                            <span>🦅</span>
+                            <span>Summon</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleCastCombatSpell(spell)}
+                          className="px-2.5 py-1 bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-600/50 rounded-lg font-bold transition"
+                        >
+                          Cast
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  {character.spells.filter(s => s.prepared !== false).length === 0 && (
+                    <p className="text-stone-500 italic text-[11px] col-span-full">
+                      No prepared spells found in spellbook.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      </CollapsibleBox>
-      )}
+        </CollapsibleBox>
+        );
+      })()}
 
       {/* MODAL: Add Attack */}
       {showAddAttackModal && (

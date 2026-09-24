@@ -22,6 +22,7 @@ interface AoETemplateLayerProps {
   diagonalRule: DiagonalRule;
   terrainMap: Record<string, TerrainType>;
   doors: Record<string, DoorState>;
+  combatants?: Combatant[];
   onUpdateTemplate?: (template: AoETemplate) => void;
   onClearRuler?: () => void;
   onClearAoE?: () => void;
@@ -38,6 +39,7 @@ export const AoETemplateLayer: React.FC<AoETemplateLayerProps> = ({
   diagonalRule,
   terrainMap,
   doors,
+  combatants = [],
   onUpdateTemplate,
   onClearRuler,
   onClearAoE
@@ -422,6 +424,11 @@ export const AoETemplateLayer: React.FC<AoETemplateLayerProps> = ({
     const x2Px = (hoverCell.x + 0.5) * cellSizePx;
     const y2Px = (hoverCell.y + 0.5) * cellSizePx;
 
+    const originCombatant = combatants.find((c) => c.mapX === rulerOrigin.x && c.mapY === rulerOrigin.y);
+    const hoverCombatant = combatants.find((c) => c.mapX === hoverCell.x && c.mapY === hoverCell.y);
+    const z1 = originCombatant?.elevationFeet || 0;
+    const z2 = hoverCombatant?.elevationFeet || 0;
+
     const los = calculateLineOfSight(
       rulerOrigin.x,
       rulerOrigin.y,
@@ -430,29 +437,39 @@ export const AoETemplateLayer: React.FC<AoETemplateLayerProps> = ({
       feetPerSquare,
       diagonalRule,
       terrainMap,
-      doors
+      doors,
+      z1,
+      z2
     );
 
     const midX = (x1Px + x2Px) / 2;
     const midY = (y1Px + y2Px) / 2;
 
+    const hasElevDiff = los.elevationDiffFeet !== undefined && los.elevationDiffFeet > 0;
+    const distText = hasElevDiff
+      ? `${los.distance3dFeet} ft 3D (ΔZ: ${los.elevationDiffFeet}ft)`
+      : `${los.distanceFeet} ft`;
+
     let lineColor = '#06b6d4'; // cyan-500
-    let labelText = `${los.distanceFeet} ft • Clear LoS`;
+    let labelText = `${distText} • Clear LoS`;
     let labelBg = '#0e7490';
 
     if (!los.hasLoS) {
       lineColor = '#ef4444'; // rose-500
-      labelText = `${los.distanceFeet} ft • Blocked (${los.blockedBy?.label || 'Wall'})`;
+      labelText = `${distText} • Blocked (${los.blockedBy?.label || 'Wall'})`;
       labelBg = '#991b1b';
     } else if (los.cover === 'three_quarters') {
       lineColor = '#818cf8'; // indigo-400
-      labelText = `${los.distanceFeet} ft • 3/4 Cover (+5 AC)`;
+      labelText = `${distText} • 3/4 Cover (+5 AC)`;
       labelBg = '#3730a3';
     } else if (los.cover === 'half') {
       lineColor = '#10b981'; // emerald-500
-      labelText = `${los.distanceFeet} ft • Half Cover (+2 AC)`;
+      labelText = `${distText} • Half Cover (+2 AC)`;
       labelBg = '#065f46';
     }
+
+    const badgeWidth = hasElevDiff ? 220 : 160;
+    const halfWidth = badgeWidth / 2;
 
     return (
       <g id="tactical-ruler-los">
@@ -519,9 +536,9 @@ export const AoETemplateLayer: React.FC<AoETemplateLayerProps> = ({
           }}
         >
           <rect
-            x={midX - 80}
+            x={midX - halfWidth}
             y={midY - 14}
-            width="160"
+            width={badgeWidth}
             height="26"
             rx="6"
             fill={labelBg}
@@ -543,7 +560,7 @@ export const AoETemplateLayer: React.FC<AoETemplateLayerProps> = ({
           </text>
           {/* Explicit red remove button on badge */}
           <rect
-            x={midX + 56}
+            x={midX + halfWidth - 24}
             y={midY - 9}
             width="18"
             height="18"

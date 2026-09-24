@@ -100,6 +100,7 @@ export interface ModalPropsMap {
     onAddSpellToSpellbook?: (spell: any, targetId?: string) => void;
     onNavigateTab?: (tab: any) => void;
     onSelectCharacter?: (id: string) => void;
+    onLoadBattlemapLayout?: (layout: any) => void;
   };
   'tabletop-generators': {
     initialTab?: GeneratorTab;

@@ -12,11 +12,13 @@ import {
   generateProgressionSpellSlots,
   getCharacterCasterLevel,
   getSpellPenetrationBonus,
-  calculate35eTotalArcaneSpellFailure
+  calculate35eTotalArcaneSpellFailure,
+  isCharacterSpellcaster
 } from '../../../utils/dndCalculations';
 import { Wand2, RefreshCw, BookOpen, Sparkles, Calculator, Flame, ShieldAlert, Dices } from 'lucide-react';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import { SpellResistanceAndAsf35eModal } from '../../modals/SpellResistanceAndAsf35eModal';
+import { WizardSpecialization35eModal } from '../../modals/WizardSpecialization35eModal';
 
 interface SpellcastingStatsPanelProps {
   character: CharacterData;
@@ -32,7 +34,10 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
   const { t } = useLanguage();
   const [showProgressionInfo, setShowProgressionInfo] = useState(false);
   const [showAsfModal, setShowAsfModal] = useState(false);
+  const [showWizardModal, setShowWizardModal] = useState(false);
+  const [showManualOverride, setShowManualOverride] = useState(false);
 
+  const isCaster = isCharacterSpellcaster(character);
   const is35e = character.edition === '3.5e';
   const casterLevel = getCharacterCasterLevel(character);
   const spellPenBonus = getSpellPenetrationBonus(character);
@@ -108,43 +113,82 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
       icon={<Wand2 className="w-5 h-5 text-amber-500" />}
       storageKey="sheet4_stats"
       headerExtra={
-        <div className="flex items-center gap-2">
-          {prepDetails.isPreparedCaster && (
-            <div className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
-              prepDetails.isOverLimit
-                ? 'bg-rose-950 text-rose-300 border-rose-600/60'
-                : prepDetails.currentPrepared === prepDetails.maxPrepared
-                ? 'bg-amber-950 text-amber-300 border-amber-600/50'
-                : 'bg-emerald-950 text-emerald-300 border-emerald-600/50'
-            }`}>
-              <BookOpen className="w-3.5 h-3.5" />
-              <span>{prepDetails.currentPrepared} / {prepDetails.maxPrepared} Prepared</span>
-            </div>
-          )}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAutoCalculateSlots();
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-amber-600/40 text-amber-300 rounded-lg text-xs font-bold transition shadow"
-            title="Auto-calculate standard D&D 5e / 3.5e spell slots based on class and multiclass progression"
-          >
-            <Calculator className="w-3.5 h-3.5 text-amber-400" /> Auto-Progression
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleRestoreAllSlots();
-            }}
-            className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg text-xs font-bold transition shadow"
-            title="Restore all spell slots to maximum (Long Rest)"
-          >
-            <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> {t('common.reset', 'Restore All')}
-          </button>
-        </div>
+        (isCaster || showManualOverride) ? (
+          <div className="flex items-center gap-2">
+            {prepDetails.isPreparedCaster && (
+              <div className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+                prepDetails.isOverLimit
+                  ? 'bg-rose-950 text-rose-300 border-rose-600/60'
+                  : prepDetails.currentPrepared === prepDetails.maxPrepared
+                  ? 'bg-amber-950 text-amber-300 border-amber-600/50'
+                  : 'bg-emerald-950 text-emerald-300 border-emerald-600/50'
+              }`}>
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>{prepDetails.currentPrepared} / {prepDetails.maxPrepared} Prepared</span>
+              </div>
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAutoCalculateSlots();
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-stone-900 hover:bg-stone-800 border border-amber-600/40 text-amber-300 rounded-lg text-xs font-bold transition shadow cursor-pointer"
+              title="Auto-calculate standard D&D 5e / 3.5e spell slots based on class and multiclass progression"
+            >
+              <Calculator className="w-3.5 h-3.5 text-amber-400" /> Auto-Progression
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleRestoreAllSlots();
+              }}
+              className="flex items-center gap-1 px-2.5 py-1 bg-amber-950/90 hover:bg-amber-900 border border-amber-600/50 text-amber-200 rounded-lg text-xs font-bold transition shadow cursor-pointer"
+              title="Restore all spell slots to maximum (Long Rest)"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-amber-400" /> {t('common.reset', 'Restore All')}
+            </button>
+          </div>
+        ) : (
+          <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-stone-900 border border-stone-800 text-stone-400">
+            Non-Caster Class
+          </span>
+        )
       }
     >
       <div className="space-y-4 pt-2 text-xs">
+        {!isCaster && !showManualOverride ? (
+          <div className="bg-stone-950/80 border border-stone-800/90 rounded-2xl p-4 md:p-6 text-center space-y-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-stone-900 border border-stone-800 flex items-center justify-center mx-auto text-stone-500">
+              <Wand2 className="w-5 h-5 text-stone-500" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1">
+              <h4 className="font-serif font-bold text-stone-200 text-sm md:text-base">
+                Non-Spellcasting Class ({character.characterClass || 'Martial'})
+              </h4>
+              <p className="text-stone-400 text-xs leading-relaxed">
+                {character.name} does not have innate spellcasting progression under {character.edition || '5e'} rules. Spell save DC, spell attack bonuses, and spell slots are dormant for this class.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => onUpdateCharacter({ ...character, isSpellcaster: true })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 text-xs font-bold rounded-xl transition shadow cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Enable Spellcasting / Homebrew Magic</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowManualOverride(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 border border-stone-800 text-stone-300 text-xs font-mono rounded-xl transition cursor-pointer"
+              >
+                <span>Show Slots & DC Anyway</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
         {/* Multiclass & Pact Magic Progression Summary Bar */}
         {(progression.isMulticlass || progression.pactMagic) && (
           <div className="bg-stone-950/80 border border-purple-900/60 rounded-xl p-3 space-y-1.5">
@@ -197,6 +241,32 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
             {prepDetails.isOverLimit && (
               <span className="text-[11px] font-bold font-mono px-2 py-0.5 bg-rose-900/80 text-rose-200 border border-rose-600 rounded">
                 Over Preparation Limit!
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Spells Known Limit Banner for Known Classes (Bard, Sorcerer, Warlock, Ranger, etc.) */}
+        {prepDetails.isKnownCaster && (
+          <div className={`p-3 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 ${
+            prepDetails.isOverLimit
+              ? 'bg-amber-950/40 border-amber-600/60 text-amber-200'
+              : 'bg-stone-900/80 border-stone-800 text-stone-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              <Sparkles className={`w-4 h-4 shrink-0 ${prepDetails.isOverLimit ? 'text-amber-400' : 'text-indigo-400'}`} />
+              <div>
+                <span className="font-bold text-xs text-stone-100 block">
+                  {prepDetails.className} Spells Known: {prepDetails.currentKnown} of {prepDetails.maxKnown} known
+                </span>
+                <span className="text-[11px] text-stone-400 font-mono">
+                  {prepDetails.formula} • Known spells are always ready (no daily slot preparation needed)
+                </span>
+              </div>
+            </div>
+            {prepDetails.isOverLimit && (
+              <span className="text-[11px] font-bold font-mono px-2 py-0.5 bg-amber-900/80 text-amber-200 border border-amber-600 rounded">
+                Exceeds Table Spells Known
               </span>
             )}
           </div>
@@ -311,6 +381,41 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
           </div>
         )}
 
+        {/* 3.5e Wizard Arcane Specialization Card */}
+        {is35e && (character.characterClass || '').toLowerCase().includes('wizard') && (
+          <div className="bg-stone-950 p-2.5 rounded-xl border border-indigo-700/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-indigo-950/80 border border-indigo-700/60 rounded-lg text-indigo-300">
+                <BookOpen className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-indigo-200">
+                    School: {character.wizardSchool35e?.specialization || 'Universalist (Generalist)'}
+                  </span>
+                  {character.wizardSchool35e?.specialization && character.wizardSchool35e.specialization !== 'Universal' ? (
+                    <span className="px-1.5 py-0.2 bg-amber-950 border border-amber-700/60 text-amber-300 rounded text-[10px] font-mono">
+                      +1 Specialist Slot/Lvl
+                    </span>
+                  ) : null}
+                </div>
+                {character.wizardSchool35e?.prohibitedSchools && character.wizardSchool35e.prohibitedSchools.length > 0 && (
+                  <div className="text-[11px] text-red-400 font-mono">
+                    Prohibited: {character.wizardSchool35e.prohibitedSchools.join(', ')}
+                  </div>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowWizardModal(true)}
+              className="px-3 py-1 bg-indigo-950 hover:bg-indigo-900 border border-indigo-600/70 text-indigo-200 rounded-lg text-xs font-bold transition shadow whitespace-nowrap"
+            >
+              Configure School
+            </button>
+          </div>
+        )}
+
         {/* Spell Slot Trackers (Levels 1 to 9) */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -409,6 +514,18 @@ export const SpellcastingStatsPanel: React.FC<SpellcastingStatsPanelProps> = ({
             onUpdateCharacter={onUpdateCharacter}
             onRoll={onRoll}
           />
+        )}
+
+        {/* 3.5e Wizard Specialization Modal */}
+        {showWizardModal && (
+          <WizardSpecialization35eModal
+            isOpen={true}
+            onClose={() => setShowWizardModal(false)}
+            character={character}
+            onUpdateCharacter={onUpdateCharacter}
+          />
+        )}
+          </>
         )}
       </div>
     </CollapsibleBox>

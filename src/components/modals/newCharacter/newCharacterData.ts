@@ -465,7 +465,18 @@ export const CLASS_OPTIONS_BY_SYSTEM: Record<RuleEdition, string[]> = {
     'Fighter', 'Wizard', 'Rogue', 'Cleric', 'Paladin', 'Ranger', 'Barbarian', 'Bard', 'Druid', 'Monk', 'Sorcerer', 'Warlock', 'Artificer'
   ],
   '3.5e': [
-    'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Wizard'
+    // 11 Core Classes
+    'Barbarian', 'Bard', 'Cleric', 'Druid', 'Fighter', 'Monk', 'Paladin', 'Ranger', 'Rogue', 'Sorcerer', 'Wizard',
+    // 4 Expanded Psionics Classes
+    'Psion', 'Psychic Warrior', 'Soulknife', 'Wilder',
+    // 51 Supplemental Classes (Complete Series, Campaign Settings, Environment & Special sourcebooks)
+    'Archivist', 'Ardent', 'Artificer', 'Battle Dancer', 'Beguiler', 'Binder', 'Crusader',
+    'Death Master', 'Divine Mind', 'Dragon Shaman', 'Dragonfire Adept', 'Dread Necromancer', 'Duskblade',
+    'Erudite', 'Factotum', 'Favored Soul', 'Healer', 'Hexblade', 'Incarnate', 'Jester', 'Knight', 'Lurk',
+    'Mariner', 'Marshal', 'Master', 'Mountebank', 'Mystic', 'Nightstalker', 'Ninja', 'Noble',
+    'Psychic Rogue', 'Samurai', 'Savant', 'Scout', 'Shadowcaster', "Sha'ir", 'Shaman', 'Shugenja',
+    'Sohei', 'Soulborn', 'Spellthief', 'Spirit Shaman', 'Swashbuckler', 'Swordsage', 'Totemist',
+    'Truenamer', 'Urban Druid', 'Warblade', 'Warlock', 'Warmage', 'Wu Jen'
   ],
   'shadowrun': [
     'Street Samurai', 'Decker', 'Rigger', 'Physical Adept', 'Spellcasting Mage', 'Shaman', 'Face', 'Technomancer', 'Weapons Specialist', 'Bounty Hunter', 'Corporate Agent'
@@ -521,7 +532,66 @@ export const SUBCLASS_MAP_BY_SYSTEM: Record<RuleEdition, Record<string, string[]
     Blackguard: ['Fiendish Servant Master', 'Sneak Attack Smiter', 'Unholy Desecrator'],
     'Red Wizard': ['Circle Leader', 'Specialist Focus', 'Spell Power Specialist'],
     Thaumaturgist: ['Planar Ally Master', 'Augmented Summoner', 'Contingent Conjurer'],
-    'Eldritch Knight': ['Arcane Spellsword', 'Armored Warmage', 'Eldritch Tactician']
+    'Eldritch Knight': ['Arcane Spellsword', 'Armored Warmage', 'Eldritch Tactician'],
+
+    // Expanded Psionics Classes
+    Psion: ['Telepath (Telepathy)', 'Kineticist (Psychokinesis)', 'Nomad (Psychoportation)', 'Egoist (Psychometabolism)', 'Seer (Clairsentience)', 'Shaper (Metacreativity)'],
+    'Psychic Warrior': ['Psionic Weapon Master', 'Biofeedback Juggernaut', 'Metaphysical Body Champion', 'Soul-Archer'],
+    Soulknife: ['Mind Blade Shape Specialist', 'Psychic Strike Assassin', 'Bladewind Master', 'Throw Mind Blade Specialist'],
+    Wilder: ['Wild Surge Blaster', 'Elation Psychic', 'Euphoric Surge Channeler', 'Student of the Surging Mind'],
+
+    // Complete Series & Supplement Classes
+    Archivist: ['Dark Knowledge Lorekeeper', 'Anatomy of the Beast', 'Dread Inquisitor', 'Sacred Exorcist'],
+    Ardent: ['Fate & Freedom Mantle', 'Conflict & Destruction Mantle', 'Life & Creation Mantle', 'Physical & Mental Dominance'],
+    Artificer: ['Wandcrafter & Spell Storer', 'Homunculus Companion Master', 'Armorer & Item Infuser', 'Alchemical Savant'],
+    'Battle Dancer': ['Capoeira Acrobatic Dancer', 'Dervish Flame Dancer', 'Flowing Water Style'],
+    Beguiler: ['Mindbender Specialist', 'Cloaked Infiltrator', 'Glib Illusionist', 'Arcane Saboteur'],
+    Binder: ['Occult Vestige Channeler', 'Pact Knight', 'Apocryphal Theurge', 'Knight of the Sacred Seal'],
+    Crusader: ['Devoted Spirit Defender', 'White Raven Tactician', 'Steely Resolve Bulwark', 'Stone Dragon Juggernaut'],
+    'Death Master': ['Undead Minion Commander', 'Charnel Scythe Reaper', 'Lich Aspirant', 'Master of the Crypt'],
+    'Divine Mind': ['Psychic Aura Guardian', 'Divine Champion', 'Mantle Protector'],
+    'Dragon Shaman': ['Red Dragon Totem (Fire/Power)', 'Gold Dragon Totem (Fire/Vigor)', 'Black Dragon Totem (Acid/Deception)', 'Silver Dragon Totem (Cold/Armor)', 'Blue Dragon Totem (Electricity/Insight)', 'Green Dragon Totem (Acid/Nature)'],
+    'Dragonfire Adept': ['Five-Fold Breath Master', 'Draconic Invocator', 'Scalebound Guardian', 'Slow Breath Trapper'],
+    'Dread Necromancer': ['Charnel Touch Reanimator', 'Graveborn Commander', 'Lich Apotheosis', 'Fear Aura Specialist'],
+    Duskblade: ['Arcane Channeling Gish', 'Spellstrike Blademaster', 'Armored Quick-Caster', 'Dimensional Jaunter'],
+    Erudite: ['Psionic Discipline Scholar', 'Unlimited Mental Archive', 'Metaconcert Savant'],
+    Factotum: ['Inspiration Polymath', 'Cunning Strike Combatant', 'Arcane Dilettante Specialist', 'Opportunistic Tactician'],
+    'Favored Soul': ['Deity Weapon Champion', 'Angelic/Bat Wing Ascendant', 'Miraculous Divine Conduit'],
+    Healer: ['Celestial Unicorn Cavalier', 'Sacred Cleanser', 'Pure Radiance Restorer'],
+    Hexblade: ['Curse Weaver', 'Arcane Resistor (Mettle)', 'Dark Companion Hound', 'Dread Warrior'],
+    Incarnate: ['Incarnum Radiant Champion', 'Soulmeld Shaper', 'Chakra Binding Master'],
+    Jester: ['Satirical Mockery Master', 'Buffoon Acrobat', 'Taunting Harlequin'],
+    Knight: ['Knight of the Shield', 'Bulwark Defender (Test of Mettle)', 'Mounted Chivalric Lancer'],
+    Lurk: ['Mental Assassin', 'Sneak Augment Specialist', 'Shadow Mind Infiltrator'],
+    Mariner: ['Sea Dog Dirty Fighter', 'Swashbuckling Rigging Climber', 'Naval Captain'],
+    Marshal: ['Major & Minor Aura Commander', 'Tactical Field Officer', 'Rallying Banner Bearer'],
+    Master: ['Master Craftsman', 'Grand Academic Scholar', 'Master Performer'],
+    Mountebank: ['Infernal Pact Deceiver', 'Slick Teleporter', 'Beguiling Swindler'],
+    Mystic: ['Sun Domain Channeler', 'Heart Divine Spontaneous Caster', 'Mystic Seer'],
+    Nightstalker: ['Spirit Companion Stalker', 'Death Strike Assassin', 'Shadow Walk Specialist'],
+    Ninja: ['Ghost Step Infiltrator', 'Ki Smiter', 'Sudden Strike Shadow Assassin', 'Great Leap Acrobat'],
+    Noble: ['Inspiring Aristocrat', 'Commanding Diplomat', 'Tactical Patron'],
+    'Psychic Rogue': ['Psionic Sneak Infiltrator', 'Mind Trapfinder', 'Thought Siphon'],
+    Samurai: ['Daisho Two-Blade Master', 'Terrifying Staredown Champion', 'Kiai Smiter'],
+    Savant: ['Academic Polymath', 'Sneak Savant', 'Universal Skill Prodigy'],
+    Scout: ['Skirmish Striker', 'Wilderness Sniper', 'Dungeon Recon Specialist', 'Fast Movement Scout'],
+    Shadowcaster: ['Fundamental Shadow Manipulator', 'Ebon Mystery Weaver', 'Umbral Master'],
+    "Sha'ir": ['Gen Familiar Summoner', 'Elemental Diplomacy Adept', 'Planar Spell Retriever'],
+    Shaman: ['Spiritual Guardian', 'Spirit Sight Seer', 'Unarmed Spirit Warrior'],
+    Shugenja: ['Order of the Flame', 'Order of the Gentle Rain (Water)', 'Order of the Spring Zephyr (Air)', 'Order of the Ingot (Earth)'],
+    Sohei: ['Ki Frenzy Berserker', 'Temple Guardian', 'Iaijutsu Striker'],
+    Soulborn: ['Smite Opponent Champion', 'Incarnum Armored Crusader', 'Chakra Smiter'],
+    Spellthief: ['Arcane Siphon Specialist', 'Spell Absorber', 'Steal Spell-Like Ability', 'Absorb Spell Feat Master'],
+    'Spirit Shaman': ['Spirit Guide Channeler', 'Chastise Spirits Exorcist', 'Druidic Spirit Caster'],
+    Swashbuckler: ['Insightful Fencer (INT to Damage)', 'Daring Outlaw Combatant', 'Acrobatic Duelist', 'Shield of Blades'],
+    Swordsage: ['Shadow Sun Ninja', 'Diamond Mind Focus Master', 'Desert Wind Skirmisher', 'Setting Sun Thrower'],
+    Totemist: ['Magical Beast Totem Binder', 'Manticore Spikes Specialist', 'Gorgon Armor Juggernaut', 'Sphinx Claw Striker'],
+    Truenamer: ['Utterance Lexicon Master', 'Word of Creation Scholar', 'Truespeak Adept'],
+    'Urban Druid': ['City Alleys Wild Shaper', 'Urban Companion Shepherd', 'Crowd-Walk Negotiator'],
+    Warblade: ['Iron Heart Striker', 'Diamond Mind Tactician', 'White Raven Leader', 'Tiger Claw Pouncer'],
+    Warlock: ['Eldritch Blaster', 'Hellfire Invoker', 'Dark Artisan Pactmaster', 'Eldritch Glaive Combatant'],
+    Warmage: ['Warmage Edge Bombardier', 'Armored Evoker', 'Sudden Metamagic Specialist'],
+    'Wu Jen': ['Master of the Elements', 'Spell Secret Savant', 'Taboo Mystic Hermit']
   },
   'shadowrun': {
     'Street Samurai': ['Cyberware Muscle', 'Bioware Reflexes', 'Blade Master', 'Tank Samurai', 'Dual Pistoleer'],

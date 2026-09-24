@@ -92,6 +92,7 @@ export const BattlemapLayoutsModal: React.FC<BattlemapLayoutsModalProps> = ({
   const [saveIncludeTokens, setSaveIncludeTokens] = useState<boolean>(true);
   const [saveIncludeFog, setSaveIncludeFog] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [deletingLayoutId, setDeletingLayoutId] = useState<string | null>(null);
 
   // Load Confirmation Modal State
   const [layoutToLoad, setLayoutToLoad] = useState<BattlemapLayout | null>(null);
@@ -221,9 +222,9 @@ export const BattlemapLayoutsModal: React.FC<BattlemapLayoutsModalProps> = ({
 
   // Handle Delete
   const handleDeleteLayout = async (layoutId: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to delete the layout "${name}"?`)) return;
     try {
       await deleteBattlemapLayout(layoutId);
+      setDeletingLayoutId(null);
       await refreshLayouts();
       setFeedbackMessage({ type: 'success', text: `Deleted "${name}".` });
     } catch (err: any) {
@@ -640,14 +641,34 @@ export const BattlemapLayoutsModal: React.FC<BattlemapLayoutsModalProps> = ({
                         <div className="pt-3 border-t border-stone-800/80 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-1.5">
                             {!layout.isBuiltin && (
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteLayout(layout.id, layout.name)}
-                                className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition"
-                                title="Delete layout"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              deletingLayoutId === layout.id ? (
+                                <div className="flex items-center gap-1 bg-rose-950 px-1.5 py-0.5 rounded border border-rose-800">
+                                  <span className="text-[10px] text-rose-300 font-bold">Delete?</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteLayout(layout.id, layout.name)}
+                                    className="px-1 py-0.2 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold cursor-pointer"
+                                  >
+                                    Yes
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingLayoutId(null)}
+                                    className="px-1 py-0.2 rounded border border-stone-700 text-stone-400 text-[10px] hover:text-white cursor-pointer"
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingLayoutId(layout.id)}
+                                  className="p-1.5 text-stone-500 hover:text-rose-400 hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                                  title="Delete layout"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )
                             )}
                             <button
                               type="button"

@@ -14,6 +14,151 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.19',
+    date: 'Today',
+    title: 'Dual-Engine Tactical Battlemap: D&D 3.5e vs 5e RAW Combat Differentiation',
+    badge: '3.5e / 5e Tactical Mechanics',
+    badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    highlights: [
+      {
+        category: '⚔️ Dual-Edition Attack of Opportunity (AoO) Engine',
+        detail: 'Differentiated AoO provocation mechanics per official Rules-as-Written: in 5e RAW (PHB p. 195), AoOs are provoked only upon exiting a creature’s threat perimeter; in 3.5e RAW (PHB p. 137), exiting ANY threatened square provokes an AoO, even when moving between squares threatened by the same foe. Additionally enforced 3.5e flat-footed restrictions (cannot make AoO unless possessing Combat Reflexes).'
+      },
+      {
+        category: '🩸 Edition-Specific Health Status Badges & HP Milestones',
+        detail: 'Gated modern 5e "Bloodied" status (<= 50% HP) so it only displays during 5e encounters (as 3.5e does not have a bloodied mechanic). Implemented authentic 3.5e RAW health thresholds: 0 HP displays a yellow ⚠️ [Disabled] (staggered) condition, -1 to -9 HP displays a red 🩸 [Dying] (unconscious, bleeding) condition, and ☠️ [Dead] triggers at -10 HP or below.'
+      },
+      {
+        category: '📐 Automatic 3.5e Core (5-10-5) vs 5e Chebyshev Grid Initialization',
+        detail: 'Encounter Tracker now automatically detects character edition and sets battlemaps to the authentic 3.5e Core (5-10-5 Alternating) diagonal rule (PHB p. 147) for 3.5e campaigns, while maintaining 5e Chebyshev (5ft/diag) for 5e campaigns. Added an active edition combat badge (⚔️ 3.5e Combat / 🛡️ 5e Combat) to the battlemap toolbar.'
+      },
+      {
+        category: '🛡️ Terrain Cover AC & Saving Throw Bonus Gating',
+        detail: 'Updated the battlemap Terrain Palette chips, cover tooltips, and tactical markers with edition-specific RAW values: 3.5e Standard Cover (+4 AC / +2 Reflex) and Nine-Tenths Cover (+7 AC / +3 Reflex) vs 5e Half Cover (+2 AC / +2 DEX) and Three-Quarters Cover (+5 AC / +5 DEX).'
+      },
+      {
+        category: '📏 Natural Reach for Large (Tall vs. Long) Creatures & Concentration Gating',
+        detail: 'Implemented 3.5e RAW (PHB p. 149) natural reach differentiation: Large bipedal/tall creatures automatically project a 10 ft threat reach (15 ft for Huge tall creatures) vs 5 ft for quadrupeds/long creatures. Restricted the purple concentration ring indicator to 5e rules where single-spell concentration is strictly mandated.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.18',
+    date: 'Today',
+    title: 'Automated 5e RAW Weather-Shifting Abilities, Spells & Monster Regional Triggers',
+    badge: 'Weather Abilities & Spells (5e RAW)',
+    badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    highlights: [
+      {
+        category: '⚡ Automated Spell Weather Shifts (5e PHB / XGtE)',
+        detail: 'Integrated full automated atmospheric weather shifting into the spellcasting flow (SpellTargetModal). Casting Control Weather, Call Lightning, Storm of Vengeance, Sleet Storm, Fog Cloud, Incendiary Cloud, Whirlwind, Gust of Wind, or Dawn automatically identifies the spell’s environmental effect, displays a 5e RAW atmospheric card with optional climate choice, and automatically shifts the battlemap weather on cast.'
+      },
+      {
+        category: '🌩️ Call Lightning Storm Synergy (+1d10 Damage)',
+        detail: 'Faithfully implemented 5e PHB p. 220 RAW rule: if Call Lightning is cast or used when stormy conditions already exist on the battlemap, the spell channels the existing storm, automatically boosting damage by +1d10 (+2d10 on critical hits) in the Attack Resolver and Combat Log.'
+      },
+      {
+        category: '🐉 Monster Regional Effects & Lair Weather Triggers (5e MM)',
+        detail: 'Connected the Monster Mechanics Action Bar and Encounter Tracker to automatic weather triggers for iconic creatures: Adult/Ancient Blue Dragons summon regional thunderstorms or lair dust devils; White Dragons trigger glacial blizzards; Red Dragons summon volcanic ashfall; Green Dragons & Vampires conjure heavy creeping fog; Mummy Lords trigger desert sandstorms; and Storm Giants dominate the tempest.'
+      },
+      {
+        category: '🌦️ Global Weather Event Bus & Encounter State Synchronization',
+        detail: 'Created a centralized WeatherChanged event system across the event bus, useEncounterState, and multiplayer sessions. When any spell, monster lair action, or DM trigger shifts the weather, the battlemap particle system, Fog of War reveal radius, flame snuffing watchdog, and attack resolver immediately adapt in sync across all clients.'
+      },
+      {
+        category: '📖 Tactical Weather Rules Modal: RAW Abilities & Spells Tab',
+        detail: 'Added a dedicated tab to the Weather Tactical Rules Modal indexing all official 5e environmental spells and monster regional effects. Includes instant 1-click "Trigger Weather Shift" controls with duration citations, rules references, and active weather status.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.17',
+    date: 'Today',
+    title: 'Automated 5e RAW Tactical Weather, Visibility Gating & Flame Snuffing Watchdog',
+    badge: 'Tactical Weather & Visibility',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '🏹 Automated Ranged Weapon Attack Disadvantage (5e DMG RAW)',
+        detail: 'Connected the active battlemap weather engine directly to the Attack Resolver. Whenever atmospheric conditions with severe winds or torrential precipitation (Thunderstorm, Blizzard, Desert Sandstorm, Strong Gale Wind) are active, ranged weapon attacks automatically incur Disadvantage per 5e DMG pp. 109-111, complete with tactical reason badges and audit trail.'
+      },
+      {
+        category: '👁️ Weather Visibility Caps & Line-of-Sight Concealment',
+        detail: 'Implemented strict 5e RAW maximum visibility ranges for atmospheric phenomena (30 ft in Blizzards, Sandstorms, and Creeping Mist; 60 ft in Heavy Rain, Thunderstorms, and Ashfall). Automatically clamps Fog of War party vision reveal radii and calculates Line of Sight: targets beyond the weather limit are heavily obscured, blocking direct target locking and alerting players.'
+      },
+      {
+        category: '💨 Open Flame Snuffing Watchdog',
+        detail: 'Integrated an automated environmental watchdog that monitors weather changes: when gale-force winds or torrential storms begin, all non-magical open torches on combatants are automatically extinguished (setting lightSource to none) and logged in the combat log with a tactical alert.'
+      },
+      {
+        category: '🛡️ Fog of War & Player Targeting Safety',
+        detail: 'Hardened player targeting so that if an active enemy target moves into unexplored Fog of War or outside weather vision, player target locks are automatically cleared to prevent meta-targeting unseen foes. DMs retain complete visibility of all shrouded tokens marked with purple concealment badges.'
+      },
+      {
+        category: '🎯 Real-Time LoS, Cover & Weather HUD',
+        detail: 'Enhanced the bottom Target HUD card and shift-click tactical line to show real-time 3D distances, cover bonuses (+2 Half Cover, +5 Three-Quarters Cover), weather disadvantage notices, and weather obscurement status at a glance.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.16',
+    date: 'Today',
+    title: 'Full 3D Combat Engine, Tactical Elevation & RAW Aerial Plunge Mechanics',
+    badge: '3D Combat & Aerial Engine',
+    badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/40',
+    highlights: [
+      {
+        category: '📐 True 3D Tactical Distance Math & Metrics',
+        detail: 'Engineered true 3D tactical distance calculation (calculateGridDistance3D) supporting both 5e standard Chebyshev 3D rules (max of horizontal span or vertical altitude delta, per XGtE/DMG) and 3.5e/Euclidean true hypotenuse geometry. Applied consistently across targeting, line of sight, and reach calculations.'
+      },
+      {
+        category: '⚔️ 3D Melee Reach Gating & Opportunity Attacks',
+        detail: 'Enforced vertical altitude reach constraints on melee combatants. Ground melee attackers can no longer threaten or target airborne creatures flying above their reach limit. Updated Opportunity Attack detection (detectAoOProvoked) in full 3D space to trigger whenever a combatant leaves a threatened 3D sphere.'
+      },
+      {
+        category: '💥 Volumetric 3D AoE Spell Templates',
+        detail: 'Upgraded spell Area of Effect templates with altitude and vertical volume support. Spheres (e.g. Fireball) now calculate true 3D radial intersections, while cylinders, cubes, and cones evaluate both floor area and vertical height spans so flying creatures above or below the burst area are accurately excluded.'
+      },
+      {
+        category: '🪂 RAW Aerial Fall & Plunge Damage Watchdogs',
+        detail: 'Integrated official 5e aerial combat rules into the encounter state machine: when an elevated flying creature without Hover drops to 0 HP or suffers an incapacitating condition (Prone, Unconscious, Incapacitated, Paralyzed, Petrified, Stunned), it immediately plunges to the ground, taking 1d6 bludgeoning damage per 10 feet fallen (max 20d6), landing Prone, and logging the event in the Combat Log.'
+      },
+      {
+        category: '✈️ Real-Time Altitude Controls & 3D Ruler HUD',
+        detail: 'Added quick altitude adjustments (-5ft, +5ft, +10ft, Land) directly on the selected token HUD and interactive token badges. Shift-click targeting lines and the Tactical LoS Ruler now display both 3D hypotenuse distance and vertical elevation difference (ΔZ). Added Fly Speed, quick altitude presets, and Hover capability toggles to Combatant Properties.'
+      },
+      {
+        category: '🔔 Non-Blocking Notification UI & Toast System',
+        detail: 'Modernized the application notification architecture by replacing legacy blocking browser alert() popups with sleek non-blocking UI notification banners, rich combat log entries, and toasts across all character management and encounter workflows.'
+      },
+      {
+        category: '🌪️ 15 Weather Conditions & 5e RAW Tactical Rules Engine',
+        detail: 'Integrated 15 distinct atmospheric and weather conditions into the battlemap (Clear, Steady Rain, Thunderstorm & Tempest, Gentle Snow, Blizzard & Whiteout, Hail & Sleet Storm, Strong Gale Wind, Desert Sandstorm, Creeping Mist, Volcanic Embers, Choking Ashfall, Caustic Acid Rain, Crimson Blood Rain, Arcane Ley-Lines, Radiant Sunbeams). Features 60fps canvas particle rendering (forked lightning bolts, bouncing hailstones, tumbling autumn leaves, golden sunbeams), an interactive tactical HUD pill, and a comprehensive 5e RAW rules modal with combat modifiers (ranged disadvantage, flame extinction, hearing perception penalties, concentration DCs, and flight landing requirements).'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.15',
+    date: 'Today',
+    title: 'Nexus Oracle AI Battlemap Generator & Tactical Drag Refinement',
+    badge: 'AI Battlemaps & Drag Polish',
+    badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    highlights: [
+      {
+        category: '🔮 Nexus Oracle AI Battlemap Synthesis',
+        detail: 'Expanded the Nexus Oracle AI Assistant with full procedural and AI-assisted tactical battlemap generation. DMs can simply ask the Oracle in natural language to generate any encounter environment (e.g. "Create a sunken crypt with 4 pillars, locked iron doors, and a goblin ambush"). The Oracle synthesizes layout dimensions, themes, walls, terrain hazards, dynamic doors, Fog of War shroud, and pre-positioned tokens, offering an interactive preview card with a one-click "Deploy Map to Encounter" action.'
+      },
+      {
+        category: '🪟 Streamlined Battlemap Popout Controls',
+        detail: 'Eliminated redundant popout buttons from the top navigation tab bar, ensuring a clean and focused navigation interface while preserving the dedicated "Popout" button directly in the tactical battlemap controls toolbar.'
+      },
+      {
+        category: '🎯 Token Drag & Anti-Snap Canvas Guard',
+        detail: 'Fixed an issue where releasing a dragged creature token would cause the battlemap to snap or lock into grab/pan mode. Added strict token drag reference tracking, a post-drag cooldown guard to swallow phantom mouse events, and refined cell idle cursor states so tokens drag and drop effortlessly without disturbing the canvas.'
+      }
+    ]
+  },
+  {
     version: 'v0.9.14',
     date: 'Today',
     title: 'Dual-Screen Battlemap Popout & Tactical Grid Drag Engine Polish',

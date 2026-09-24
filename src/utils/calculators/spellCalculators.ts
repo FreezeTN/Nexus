@@ -6,8 +6,11 @@ export { getCombinedLevel };
 
 export interface PreparedSpellsDetails {
   isPreparedCaster: boolean;
+  isKnownCaster?: boolean;
   maxPrepared: number;
+  maxKnown?: number;
   currentPrepared: number;
+  currentKnown?: number;
   cantripsCount: number;
   formula: string;
   className: string;
@@ -212,20 +215,76 @@ export function getPreparedSpellsDetails(char: CharacterData): PreparedSpellsDet
     }
   }
 
-  // Non-prepared casters (Sorcerer, Bard, Warlock, Ranger)
+  // -------------------------------------------------------------
+  // 5e Spells Known Casters (Sorcerer, Bard, Warlock, Ranger, etc.)
+  // -------------------------------------------------------------
+  let isKnownCaster = false;
+  let maxKnown = 0;
+  const currentKnown = leveledSpells.length;
+
   if (!isPreparedCaster) {
-    maxPrepared = leveledSpells.length;
-    formula = 'All Known Spells Ready';
+    const sub = (char.subclass || '').toLowerCase();
+    const cappedLvl = Math.max(1, Math.min(20, lvl));
+
+    if (cls.includes('bard')) {
+      isKnownCaster = true;
+      const bardTable = [4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 15, 16, 18, 19, 19, 20, 22, 22, 22];
+      let base = bardTable[cappedLvl - 1] || 4;
+      if (sub.includes('lore') && cappedLvl >= 6 && cappedLvl < 10) {
+        base += 2; // Additional Magical Secrets (Lore Bard)
+      }
+      maxKnown = base;
+      formula = `5e Bard Table (Level ${cappedLvl}: ${maxKnown} Spells Known)`;
+      className = 'Bard';
+    } else if (cls.includes('sorcerer')) {
+      isKnownCaster = true;
+      const sorcTable = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 12, 13, 13, 14, 14, 15, 15, 15, 15];
+      maxKnown = sorcTable[cappedLvl - 1] || 2;
+      formula = `5e Sorcerer Table (Level ${cappedLvl}: ${maxKnown} Spells Known)`;
+      className = 'Sorcerer';
+    } else if (cls.includes('warlock')) {
+      isKnownCaster = true;
+      const warlockTable = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, 15];
+      maxKnown = warlockTable[cappedLvl - 1] || 2;
+      formula = `5e Warlock Table (Level ${cappedLvl}: ${maxKnown} Spells Known)`;
+      className = 'Warlock';
+    } else if (cls.includes('ranger')) {
+      isKnownCaster = true;
+      const rangerTable = [0, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11];
+      maxKnown = rangerTable[cappedLvl - 1] || 0;
+      formula = `5e Ranger Table (Level ${cappedLvl}: ${maxKnown} Spells Known)`;
+      className = 'Ranger';
+    } else if (sub.includes('eldritch knight') || cls.includes('eldritch knight')) {
+      isKnownCaster = true;
+      const ekTable = [0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 12, 13];
+      maxKnown = ekTable[cappedLvl - 1] || 0;
+      formula = `5e Eldritch Knight Table (Level ${cappedLvl}: ${maxKnown} Spells Known)`;
+      className = 'Eldritch Knight';
+    } else if (sub.includes('arcane trickster') || cls.includes('arcane trickster')) {
+      isKnownCaster = true;
+      const atTable = [0, 0, 3, 4, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10, 10, 11, 11, 11, 12, 13];
+      maxKnown = atTable[cappedLvl - 1] || 0;
+      formula = `5e Arcane Trickster Table (Level ${cappedLvl}: ${maxKnown} Spells Known)`;
+      className = 'Arcane Trickster';
+    } else {
+      maxPrepared = leveledSpells.length;
+      formula = 'All Known Spells Ready';
+    }
   }
 
   return {
     isPreparedCaster,
+    isKnownCaster,
     maxPrepared,
+    maxKnown: isKnownCaster ? maxKnown : undefined,
     currentPrepared,
+    currentKnown: isKnownCaster ? currentKnown : undefined,
     cantripsCount,
     formula,
     className,
-    isOverLimit: isPreparedCaster && currentPrepared > maxPrepared
+    isOverLimit: isPreparedCaster 
+      ? currentPrepared > maxPrepared 
+      : (isKnownCaster && maxKnown > 0 ? currentKnown > maxKnown : false)
   };
 }
 

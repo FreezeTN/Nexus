@@ -11,7 +11,8 @@ import {
   get35eCriticalMultiplier,
   evaluate35eMissChance,
   DND35E_MISS_CHANCE_PRESETS,
-  MissChanceType
+  MissChanceType,
+  get35eMonkFlurryAttacks
 } from '../../utils/dndCalculations';
 import { CriticalConfirmationModal } from './CriticalConfirmationModal';
 import {
@@ -109,24 +110,53 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
   // Power Attack Damage Bonus: 1:1 for 1H, 2:1 for 2H in 3.5e
   const powerAttackDmgBonus = isTwoHandedGrip ? powerAttackPenalty * 2 : powerAttackPenalty;
 
-  // Global penalty to all attacks from Rapid Shot or Flurry
+  // Determine Monk level for Flurry of Blows progression
+  const isMonk = character.characterClass.toLowerCase().includes('monk') ||
+    Boolean(character.optionalRules?.secondaryClass?.toLowerCase().includes('monk'));
+  const monkLevel = character.characterClass.toLowerCase().includes('monk')
+    ? (character.level || 1)
+    : (character.optionalRules?.secondaryLevel || 1);
+
+  // Rapid Shot penalty (-2 to all attacks)
   let multiPenalty = 0;
   if (rapidShotActive) multiPenalty -= 2;
-  if (flurryActive) multiPenalty -= 2;
 
-  // Net attack modifier on top of base
-  const globalAtkAdjustment = -powerAttackPenalty + multiPenalty + situationalMod;
+  // Net attack modifier on top of base (excluding flurry penalty which is baked into flurry steps)
+  const baseAtkAdjustment = -powerAttackPenalty + multiPenalty + situationalMod;
+  const globalAtkAdjustment = baseAtkAdjustment;
 
   // Build current sequence
   const currentSequence: AttackRollStep[] = [];
 
-  // 1st attack
-  currentSequence.push({
-    id: 'atk-1',
-    name: '1st Attack (Primary)',
-    source: 'iterative',
-    bonus: baseAttackBonus + globalAtkAdjustment
-  });
+  if (flurryActive) {
+    const flurrySteps = get35eMonkFlurryAttacks(monkLevel, baseAttackBonus);
+    flurrySteps.forEach((fs) => {
+      currentSequence.push({
+        id: `atk-flurry-${fs.attackIndex}`,
+        name: fs.label,
+        source: fs.isExtraAttack ? 'flurry' : 'iterative',
+        bonus: fs.bonus + baseAtkAdjustment
+      });
+    });
+  } else {
+    // 1st attack
+    currentSequence.push({
+      id: 'atk-1',
+      name: '1st Attack (Primary)',
+      source: 'iterative',
+      bonus: baseAttackBonus + baseAtkAdjustment
+    });
+
+    // Iterative attacks from BAB
+    baseIteratives.slice(1).forEach((it) => {
+      currentSequence.push({
+        id: `atk-iterative-${it.attackNumber}`,
+        name: `${it.label} (${it.penalty} BAB)`,
+        source: 'iterative',
+        bonus: it.bonus + baseAtkAdjustment
+      });
+    });
+  }
 
   // Haste extra attack (at highest bonus)
   if (hasteActive) {
@@ -134,7 +164,7 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
       id: 'atk-haste',
       name: 'Haste Extra Attack',
       source: 'haste',
-      bonus: baseAttackBonus + globalAtkAdjustment
+      bonus: baseAttackBonus + baseAtkAdjustment + (flurryActive ? (monkLevel >= 9 ? 0 : monkLevel >= 5 ? -1 : -2) : 0)
     });
   }
 
@@ -144,29 +174,9 @@ export const FullAttackModal: React.FC<FullAttackModalProps> = ({
       id: 'atk-rapid',
       name: 'Rapid Shot Attack',
       source: 'rapid_shot',
-      bonus: baseAttackBonus + globalAtkAdjustment
+      bonus: baseAttackBonus + baseAtkAdjustment + (flurryActive ? (monkLevel >= 9 ? 0 : monkLevel >= 5 ? -1 : -2) : 0)
     });
   }
-
-  // Flurry of Blows extra attack
-  if (flurryActive) {
-    currentSequence.push({
-      id: 'atk-flurry',
-      name: 'Flurry Extra Attack',
-      source: 'flurry',
-      bonus: baseAttackBonus + globalAtkAdjustment
-    });
-  }
-
-  // Iterative attacks from BAB
-  baseIteratives.slice(1).forEach((it) => {
-    currentSequence.push({
-      id: `atk-iterative-${it.attackNumber}`,
-      name: `${it.label} (${it.penalty} BAB)`,
-      source: 'iterative',
-      bonus: it.bonus + globalAtkAdjustment
-    });
-  });
 
   // Helper to roll single attack in sequence
   const handleRollSingleInSequence = (stepIndex: number) => {

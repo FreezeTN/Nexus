@@ -29,6 +29,7 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
   
   // Custom companion form state
   const [customName, setCustomName] = useState('');
+  const [customError, setCustomError] = useState<string | null>(null);
   const [customCategory, setCustomCategory] = useState<CompanionPreset['category']>('Familiar');
   const [customHp, setCustomHp] = useState(10);
   const [customAc, setCustomAc] = useState(12);
@@ -153,15 +154,15 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
       additionalNotes: updatedNotes
     });
 
-    alert(`✨ ${preset.name} has been summoned and added to your Campaign Roster!`);
     onClose();
   };
 
   const handleSummonCustom = () => {
     if (!customName.trim()) {
-      alert('Please enter a name for your companion.');
+      setCustomError('Please enter a name for your companion.');
       return;
     }
+    setCustomError(null);
 
     const speedNum = parseInt(customSpeed) || 30;
     const companionCharacter: CharacterData = {
@@ -241,7 +242,6 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
       additionalNotes: (character.additionalNotes || '') + `\n🐾 Active Companion: ${customName}`
     });
 
-    alert(`✨ Custom Companion "${customName}" has been summoned into your Campaign Roster!`);
     onClose();
   };
 
@@ -523,9 +523,16 @@ export const CompanionModal: React.FC<CompanionModalProps> = ({
                 />
               </div>
 
+              {customError && (
+                <div className="bg-rose-950/80 border border-rose-600/70 text-rose-200 text-xs px-3 py-2 rounded-xl flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>{customError}</span>
+                </div>
+              )}
+
               <button
                 onClick={handleSummonCustom}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow cursor-pointer"
               >
                 <span>✨</span>
                 <span>Summon Custom Companion</span>

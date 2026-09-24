@@ -102,6 +102,14 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   const [activeFolderTab, setActiveFolderTab] = React.useState<'all' | 'characters' | 'monsters' | 'merchants'>('all');
   const [collapsedFolders, setCollapsedFolders] = React.useState<Record<string, boolean>>({});
   const [folderSearchQueries, setFolderSearchQueries] = React.useState<Record<string, string>>({});
+  const [menuToast, setMenuToast] = React.useState<string | null>(null);
+
+  const showMenuToast = (msg: string) => {
+    setMenuToast(msg);
+    setTimeout(() => {
+      setMenuToast(prev => (prev === msg ? null : prev));
+    }, 4000);
+  };
 
   const handleFolderSearchChange = (folderKey: string, query: string) => {
     setFolderSearchQueries(prev => ({ ...prev, [folderKey]: query }));
@@ -197,7 +205,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
       const handleCardClick = () => {
         if (isLockedForPlayer) {
-          alert(`🔒 ${char.name} is currently active in another session by ${activeUserName}. Players cannot select active characters of other players.`);
+          showMenuToast(`🔒 ${char.name} is currently active in another session by ${activeUserName}. Players cannot select active characters of other players.`);
           return;
         }
         onSelectCharacter(char.id);
@@ -353,7 +361,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   if (isLockedForPlayer) {
-                    alert(`🔒 ${char.name} is currently active by ${activeUserName}.`);
+                    showMenuToast(`🔒 ${char.name} is currently active by ${activeUserName}.`);
                     return;
                   }
                   onSelectCharacter(char.id);
@@ -665,7 +673,23 @@ export const MainMenu: React.FC<MainMenuProps> = ({
   };
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-8 pb-12 relative">
+      {/* Toast Notification for Locked Characters & Errors */}
+      {menuToast && (
+        <div className="sticky top-2 z-40 bg-amber-950/95 border border-amber-500/80 text-amber-200 p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 text-xs font-semibold backdrop-blur-md animate-in fade-in duration-150">
+          <div className="flex items-center gap-2">
+            <span className="text-base">🔒</span>
+            <p className="leading-snug">{menuToast}</p>
+          </div>
+          <button
+            onClick={() => setMenuToast(null)}
+            className="p-1 hover:bg-white/10 rounded-lg text-stone-300 hover:text-white transition shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* First-Use Intent Launcher / Welcome Hub (Phase A) */}
       {showFirstUseLauncher ? (
         <FirstUseLauncher

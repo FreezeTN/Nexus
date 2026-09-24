@@ -21,7 +21,11 @@ import {
   resolveRacialSkillBonus,
   getRacialSkillBonusForSkill,
   getGestaltBaseSkillPoints,
-  get35eClassBaseSkillPoints
+  get35eClassBaseSkillPoints,
+  getPassivePerception,
+  getPassiveInvestigation,
+  getPassiveInsight,
+  hasObservantFeat
 } from '../../../utils/dndCalculations';
 import {
   Shield,
@@ -35,7 +39,8 @@ import {
   Filter,
   Dna,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Eye
 } from 'lucide-react';
 import { ConditionalSkillRollModal } from '../../modals/ConditionalSkillRollModal';
 import { CharacterRacialBonusesModal } from '../../modals/CharacterRacialBonusesModal';
@@ -172,6 +177,7 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
         {/* 3.5e Skill Point Calculator Summary Panel */}
         {character.edition === '3.5e' && (() => {
           const isGestalt = Boolean(character.optionalRules?.useGestaltUA72);
+          const isMulticlass = Boolean(character.optionalRules?.useMulticlassing && character.optionalRules?.secondaryClass);
           const defaultBaseSP = isGestalt
             ? getGestaltBaseSkillPoints(character)
             : get35eClassBaseSkillPoints(character.characterClass);
@@ -179,9 +185,23 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
           const intMod = getAbilityModifier(character.abilities.INT?.score || 10);
           const isHuman = character.race.toLowerCase().includes('human') || (character.hybridHeritage?.isTemplateMode && character.hybridHeritage?.baseRaceId === 'human');
 
-          const lvl1SP = Math.max(4, (baseSP + intMod) * 4) + (isHuman ? 4 : 0);
-          const addLvlSP = (character.level - 1) * (Math.max(1, baseSP + intMod) + (isHuman ? 1 : 0));
-          const totalAvailableSP = lvl1SP + addLvlSP;
+          let totalAvailableSP = 0;
+          if (isMulticlass && !isGestalt) {
+            const secClass = character.optionalRules?.secondaryClass || '';
+            const secLevel = Math.max(1, character.optionalRules?.secondaryLevel || 1);
+            const priLevel = Math.max(1, character.level - secLevel);
+            const priBaseSP = baseSP;
+            const secBaseSP = get35eClassBaseSkillPoints(secClass);
+
+            const priSP = Math.max(4, (priBaseSP + intMod) * 4) + (priLevel - 1) * Math.max(1, priBaseSP + intMod);
+            const secSP = secLevel * Math.max(1, secBaseSP + intMod);
+            const humanSP = isHuman ? (4 + (character.level - 1)) : 0;
+            totalAvailableSP = priSP + secSP + humanSP;
+          } else {
+            const lvl1SP = Math.max(4, (baseSP + intMod) * 4) + (isHuman ? 4 : 0);
+            const addLvlSP = (character.level - 1) * (Math.max(1, baseSP + intMod) + (isHuman ? 1 : 0));
+            totalAvailableSP = lvl1SP + addLvlSP;
+          }
 
           const totalSpentSP = character.skills.reduce((sum, s) => {
             const ranks = s.ranks || 0;
@@ -294,6 +314,127 @@ export const SkillsPanel: React.FC<SkillsPanelProps> = ({
                       ({acpInfo.breakdown.join(', ')})
                     </span>
                   )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 5e Passive Senses Suite Banner */}
+        {character.edition !== '3.5e' && (() => {
+          const pPerception = getPassivePerception(character);
+          const pInvestigation = getPassiveInvestigation(character);
+          const pInsight = getPassiveInsight(character);
+          const hasObservant = hasObservantFeat(character);
+
+          const perceptionSkill = character.skills.find(s => s.name === 'Perception');
+          const investigationSkill = character.skills.find(s => s.name === 'Investigation');
+          const insightSkill = character.skills.find(s => s.name === 'Insight');
+
+          const getSenseCalcDetail = (skillName: string, abilityKey: 'WIS' | 'INT', skillObj?: Skill, extraBonus: number = 0) => {
+            const base = 10;
+            const mod = getAbilityModifier(effectiveAbilities[abilityKey]?.score || 10);
+            const prof = skillObj?.expertise ? profBonus * 2 : skillObj?.proficient ? profBonus : 0;
+            const parts = [`Base 10`, `${abilityKey} ${mod >= 0 ? '+' + mod : mod}`];
+            if (prof > 0) parts.push(`Prof +${prof}${skillObj?.expertise ? ' (Expertise)' : ''}`);
+            if (hasObservant && (skillName === 'Perception' || skillName === 'Investigation')) {
+              parts.push('Observant +5');
+            }
+            if (extraBonus > 0) parts.push(`Item +${extraBonus}`);
+            return parts.join(' + ');
+          };
+
+          return (
+            <div className="mb-2 bg-gradient-to-r from-stone-950 via-stone-900 to-stone-950 p-3 rounded-xl border border-teal-800/40 shadow-sm space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-serif font-bold text-teal-300 flex items-center gap-1.5 text-xs">
+                  <Eye className="w-3.5 h-3.5 text-teal-400" />
+                  <span>Passive Senses (D&D 5e RAW)</span>
+                  {hasObservant && (
+                    <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-teal-950 text-teal-300 border border-teal-600/60 font-semibold" title="Observant Feat: +5 bonus to passive Wisdom (Perception) and passive Intelligence (Investigation)">
+                      Observant (+5)
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10px] text-stone-400 font-mono hidden sm:inline">
+                  DC = 10 + modifier + prof. bonus
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {/* Passive Perception */}
+                <div
+                  className="bg-stone-950/80 p-2 rounded-lg border border-teal-900/60 flex flex-col items-center justify-between text-center group hover:border-teal-600/70 transition"
+                  title={`Passive Perception (Wisdom)\nFormula: ${getSenseCalcDetail('Perception', 'WIS', perceptionSkill)} = ${pPerception}`}
+                >
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-teal-200">
+                    <span>Perception</span>
+                    {perceptionSkill?.expertise && <span className="text-[9px] text-amber-400">★</span>}
+                  </div>
+                  <div className="text-lg font-mono font-extrabold text-teal-300 py-0.5">
+                    {pPerception}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const bonus = perceptionSkill ? getSkillBonus(perceptionSkill, effectiveAbilities, character.level, character) : getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+                      onRoll('Active Perception Check', 20, 1, bonus, 'normal');
+                    }}
+                    className="w-full mt-1 py-0.5 bg-stone-900 hover:bg-teal-950 text-stone-400 hover:text-teal-200 border border-stone-800 hover:border-teal-700/60 rounded text-[9px] font-mono transition flex items-center justify-center gap-0.5"
+                    title="Roll active d20 Perception check"
+                  >
+                    <Dices className="w-2.5 h-2.5 text-teal-400" /> Roll
+                  </button>
+                </div>
+
+                {/* Passive Investigation */}
+                <div
+                  className="bg-stone-950/80 p-2 rounded-lg border border-cyan-900/60 flex flex-col items-center justify-between text-center group hover:border-cyan-600/70 transition"
+                  title={`Passive Investigation (Intelligence)\nFormula: ${getSenseCalcDetail('Investigation', 'INT', investigationSkill)} = ${pInvestigation}`}
+                >
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-cyan-200">
+                    <span>Investigation</span>
+                    {investigationSkill?.expertise && <span className="text-[9px] text-amber-400">★</span>}
+                  </div>
+                  <div className="text-lg font-mono font-extrabold text-cyan-300 py-0.5">
+                    {pInvestigation}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const bonus = investigationSkill ? getSkillBonus(investigationSkill, effectiveAbilities, character.level, character) : getAbilityModifier(effectiveAbilities.INT?.score || 10);
+                      onRoll('Active Investigation Check', 20, 1, bonus, 'normal');
+                    }}
+                    className="w-full mt-1 py-0.5 bg-stone-900 hover:bg-cyan-950 text-stone-400 hover:text-cyan-200 border border-stone-800 hover:border-cyan-700/60 rounded text-[9px] font-mono transition flex items-center justify-center gap-0.5"
+                    title="Roll active d20 Investigation check"
+                  >
+                    <Dices className="w-2.5 h-2.5 text-cyan-400" /> Roll
+                  </button>
+                </div>
+
+                {/* Passive Insight */}
+                <div
+                  className="bg-stone-950/80 p-2 rounded-lg border border-emerald-900/60 flex flex-col items-center justify-between text-center group hover:border-emerald-600/70 transition"
+                  title={`Passive Insight (Wisdom)\nFormula: ${getSenseCalcDetail('Insight', 'WIS', insightSkill)} = ${pInsight}`}
+                >
+                  <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-200">
+                    <span>Insight</span>
+                    {insightSkill?.expertise && <span className="text-[9px] text-amber-400">★</span>}
+                  </div>
+                  <div className="text-lg font-mono font-extrabold text-emerald-300 py-0.5">
+                    {pInsight}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const bonus = insightSkill ? getSkillBonus(insightSkill, effectiveAbilities, character.level, character) : getAbilityModifier(effectiveAbilities.WIS?.score || 10);
+                      onRoll('Active Insight Check', 20, 1, bonus, 'normal');
+                    }}
+                    className="w-full mt-1 py-0.5 bg-stone-900 hover:bg-emerald-950 text-stone-400 hover:text-emerald-200 border border-stone-800 hover:border-emerald-700/60 rounded text-[9px] font-mono transition flex items-center justify-center gap-0.5"
+                    title="Roll active d20 Insight check"
+                  >
+                    <Dices className="w-2.5 h-2.5 text-emerald-400" /> Roll
+                  </button>
                 </div>
               </div>
             </div>

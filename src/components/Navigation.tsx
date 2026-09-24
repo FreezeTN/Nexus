@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, ExternalLink, MapPin, User, Sliders, GripVertical, RotateCcw } from 'lucide-react';
+import { ShieldAlert, Crosshair, Package, Wand2, ScrollText, BookOpen, Sparkles, Cpu, Zap, Library, ChevronLeft, ChevronRight, Crown, MapPin, User, Sliders, GripVertical, RotateCcw } from 'lucide-react';
 import { RuleEdition } from '../types';
 import { UserProfile, GameSession } from '../lib/firebase';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -445,24 +445,6 @@ export const Navigation: React.FC<NavigationProps> = ({
                     )}
                   </div>
                 </button>
-
-                {onDetachTab && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDetachTab(tab.id);
-                    }}
-                    title={`Detach ${tab.title} to popup window / secondary screen`}
-                    aria-label={`Detach ${tab.title} to new window`}
-                    className={`p-1 rounded-md transition hover:scale-110 ${
-                      isActive
-                        ? 'text-amber-400 hover:text-amber-200 hover:bg-amber-500/20'
-                        : 'text-stone-500 opacity-60 hover:opacity-100 hover:text-amber-300 hover:bg-stone-800'
-                    }`}
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
-                )}
               </div>
             );
           })}

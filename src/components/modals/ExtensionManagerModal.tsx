@@ -70,20 +70,26 @@ export function ExtensionManagerModal({
   };
 
   const handleInstallPlugin = (manifest: PluginManifest) => {
+    setCustomInstallError(null);
+    setCustomInstallSuccess(null);
     const res = pluginStore.installPlugin(manifest);
     if (res.success) {
       refreshInstalled();
+      setCustomInstallSuccess(`Successfully installed ${manifest.name} v${manifest.version}`);
     } else {
-      alert(`Installation failed: ${res.error}`);
+      setCustomInstallError(`Installation failed: ${res.error}`);
     }
   };
 
   const handleUpdatePlugin = (manifest: PluginManifest) => {
+    setCustomInstallError(null);
+    setCustomInstallSuccess(null);
     const res = pluginStore.updatePlugin(manifest);
     if (res.success) {
       refreshInstalled();
+      setCustomInstallSuccess(`Successfully updated ${manifest.name} to v${manifest.version}`);
     } else {
-      alert(`Update failed: ${res.error}`);
+      setCustomInstallError(`Update failed: ${res.error}`);
     }
   };
 
@@ -270,6 +276,28 @@ export function ExtensionManagerModal({
                   <span>{showManifestUploader ? 'Hide Uploader' : 'Install via manifest.json'}</span>
                 </button>
               </div>
+
+              {/* Status Message */}
+              {!showManifestUploader && (customInstallError || customInstallSuccess) && (
+                <div className={`p-3 rounded-lg text-xs flex items-center justify-between animate-fade-in ${
+                  customInstallError ? 'bg-rose-950/70 border border-rose-500/50 text-rose-300' : 'bg-emerald-950/70 border border-emerald-500/50 text-emerald-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {customInstallError ? <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                    <span>{customInstallError || customInstallSuccess}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomInstallError(null);
+                      setCustomInstallSuccess(null);
+                    }}
+                    className="text-stone-400 hover:text-stone-200 text-xs ml-2"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
               {/* Custom Manifest JSON Installer Form */}
               {showManifestUploader && (

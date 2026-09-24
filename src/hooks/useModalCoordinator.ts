@@ -32,6 +32,7 @@ interface UseModalCoordinatorProps {
   onAddSpellToSpellbook: (spell: any, targetId?: string) => void;
   onPopulateCombatEncounter?: (enc: any) => void;
   onAppendSessionNotes?: (notes: string) => void;
+  onLoadBattlemapLayout?: (layout: any) => void;
   onRoll: (label: string, dice: number, count?: number, modifier?: number, mode?: any) => any;
   onUserChange: (user: UserProfile | null) => void;
   onUndo?: () => void;
@@ -66,6 +67,7 @@ export function useModalCoordinator({
   onAddSpellToSpellbook,
   onPopulateCombatEncounter,
   onAppendSessionNotes,
+  onLoadBattlemapLayout,
   onRoll,
   onUserChange,
   onUndo,
@@ -249,9 +251,10 @@ export function useModalCoordinator({
       onAddItemToInventory,
       onAddSpellToSpellbook,
       onNavigateTab,
-      onSelectCharacter
+      onSelectCharacter,
+      onLoadBattlemapLayout
     });
-  }, [openModal, activeCharacter, characters, currentSystemTheme, onCreateCharacter, onAddItemToInventory, onAddSpellToSpellbook, onNavigateTab, onSelectCharacter]);
+  }, [openModal, activeCharacter, characters, currentSystemTheme, onCreateCharacter, onAddItemToInventory, onAddSpellToSpellbook, onNavigateTab, onSelectCharacter, onLoadBattlemapLayout]);
 
   const handleOpenGenerators = useCallback((tab: GeneratorTab = 'npc') => {
     openModal('tabletop-generators', {

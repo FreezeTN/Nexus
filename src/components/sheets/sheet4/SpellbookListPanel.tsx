@@ -3,13 +3,14 @@ import { CharacterData, Spell } from '../../../types';
 import { CollapsibleBox } from '../../common/CollapsibleBox';
 import { PRESET_5E_SPELLS, PRESET_35E_SPELLS } from '../../../data/presetSpells';
 import { saveCustomCompendiumEntry } from '../../../data/compendiumData';
-import { OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, getPreparedSpellsDetails } from '../../../utils/dndCalculations';
+import { OFFICIAL_DAMAGE_TYPES, getDamageTypeMeta, getPreparedSpellsDetails, isCharacterSpellcaster } from '../../../utils/dndCalculations';
 import { isShapeshiftAbility } from '../../../data/transformationData';
 import { isCompanionSummonAbility } from '../../../data/companionData';
 import { checkSpellEligibility, SpellEligibilityResult } from '../../../utils/spellClassUtils';
 import { eventBus } from '../../../events/eventBus';
 import { useLanguage } from '../../../i18n/LanguageContext';
 import { MetamagicSpellModal } from '../../modals/MetamagicSpellModal';
+import { VancianSlotMatrixPanel } from './VancianSlotMatrixPanel';
 import {
   Sparkles,
   Plus,
@@ -220,6 +221,16 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
               <span>{prepDetails.currentPrepared} / {prepDetails.maxPrepared} Prepared</span>
             </div>
           )}
+          {prepDetails.isKnownCaster && (
+            <div className={`text-xs font-mono font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1.5 ${
+              prepDetails.isOverLimit
+                ? 'bg-amber-950 text-amber-300 border-amber-600/60'
+                : 'bg-indigo-950 text-indigo-300 border-indigo-600/50'
+            }`}>
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{prepDetails.currentKnown} / {prepDetails.maxKnown} Known</span>
+            </div>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -233,6 +244,16 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
       }
     >
       <div className="space-y-4 pt-2">
+        {/* 3.5e Vancian Spell Slot Preparation Matrix */}
+        {character.edition === '3.5e' && (
+          <VancianSlotMatrixPanel
+            character={character}
+            onUpdateCharacter={onUpdateCharacter}
+            onRoll={onRoll}
+            onRollDamage={onRollDamage}
+          />
+        )}
+
         {/* Search, Preparation & Level Filters */}
         <div className="bg-stone-950 p-3 rounded-xl border border-stone-800 space-y-3">
           <div className="relative flex items-center">
@@ -315,7 +336,9 @@ export const SpellbookListPanel: React.FC<SpellbookListPanelProps> = ({
         {/* Spells Grid */}
         {character.spells.length === 0 ? (
           <p className="text-xs text-stone-500 italic py-4 text-center">
-            No spells added yet. Click &quot;+ Add Spell&quot; to build your spellbook or search official SRD spells!
+            {isCharacterSpellcaster(character)
+              ? 'No spells added yet. Click "+ Add Spell" to build your spellbook or search official SRD spells!'
+              : `No spells in spellbook. (${character.characterClass || 'This class'} is a non-spellcaster class; you can still add spells from magic items, scrolls, or feats).`}
           </p>
         ) : filteredSpells.length === 0 ? (
           <p className="text-xs text-stone-500 italic py-4 text-center">

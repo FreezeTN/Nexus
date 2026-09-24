@@ -514,6 +514,17 @@ export interface SpellSlots {
   current: number;
 }
 
+export interface VancianSlotAllocation {
+  id: string;
+  level: number; // 0 for Cantrips/Orisons, 1-9 for spell levels
+  slotIndex: number;
+  slotType: 'standard' | 'domain' | 'specialist';
+  spellId?: string;
+  spellName?: string;
+  isExpended: boolean;
+  notes?: string;
+}
+
 export interface ActiveConcentration {
   spellId?: string;
   spellName: string;
@@ -612,6 +623,87 @@ export interface CharacterData {
   damageImmunities?: string[];
   conditionImmunities?: string[];
 
+  // 3.5e Phase 2: Signature Class Feature Engines State
+  isRaging35e?: boolean; // Active Barbarian Rage state
+  rageState35e?: {
+    roundsRemaining: number;
+    tempHpGranted: number;
+    rageType: 'normal' | 'greater' | 'mighty';
+    isFatiguedAfter: boolean;
+  };
+
+  // 5e Signature Class Feature Engines State
+  classResources5e?: {
+    rage?: { current: number; max: number; isRaging?: boolean };
+    ki?: { current: number; max: number };
+    sorceryPoints?: { current: number; max: number };
+    channelDivinity?: { current: number; max: number };
+    bardicInspiration?: { current: number; max: number };
+    secondWind?: { available: boolean };
+    actionSurge?: { current: number; max: number };
+    wildShape?: { current: number; max: number };
+    layOnHands5e?: { current: number; max: number };
+  };
+  layOnHandsPoolRemaining?: number; // Remaining Paladin Lay on Hands healing pool
+  layOnHandsPoolMax?: number;
+  smiteEvilUsesRemaining?: number; // Remaining daily Smite Evil uses
+  smiteEvilUsesMax?: number;
+  bardicMusicUsesRemaining?: number; // Remaining daily Bardic Music performances
+  bardicMusicUsesMax?: number;
+  activeBardicPerformance?: string; // Currently maintained Bard song
+  favoredEnemies35e?: Array<{ category: string; bonus: number }>; // 3.5e Ranger Favored Enemies & bonuses
+  rangerCombatStyle?: 'archery' | 'two_weapon'; // 3.5e Ranger Combat Style
+  stunningFistUsesRemaining?: number; // Remaining daily Monk Stunning Fist uses
+  stunningFistUsesMax?: number;
+  wholenessOfBodyRemaining?: number; // Remaining daily Monk Wholeness of Body healing pool
+  wholenessOfBodyMax?: number;
+  psionicData?: {
+    powerPointsMax: number;
+    powerPointsRemaining: number;
+    isPsionicFocused: boolean;
+    discipline?: string;
+    wildSurgeBonus?: number;
+  };
+
+  // 3.5e Phase 3: Druid Nature's Bond, Cleric Domains & Magic Item Body Slots
+  druidData35e?: {
+    wildEmpathyBonus?: number;
+    woodlandStrideActive?: boolean;
+    tracklessStepActive?: boolean;
+    resistNaturesLureBonus?: number;
+    venomImmunity?: boolean;
+    thousandFacesActive?: boolean;
+    timelessBodyActive?: boolean;
+  };
+  clericData35e?: {
+    alignmentAura?: string; // 'Lawful Good', 'Chaotic Evil', etc.
+    deity?: string;
+    domain1?: string;
+    domain2?: string;
+    spontaneousCastingMode?: 'cure' | 'inflict';
+  };
+  bodySlots35e?: Record<string, string>; // Maps 3.5e slot key ('head', 'eyes', 'neck', etc.) to equipped GearItem id
+
+  // 3.5e Phase 4: Fighter Martial Feats, Wizard Specialization & Arcane Familiar
+  fighterData35e?: {
+    bonusFeatsChosen?: string[]; // Feats selected via Fighter bonus feat slots
+    weaponSpecializations?: Array<{
+      weaponName: string;
+      hasWeaponFocus?: boolean;
+      hasWeaponSpecialization?: boolean; // Lvl 4: +2 damage
+      hasGreaterWeaponFocus?: boolean; // Lvl 8: +1 attack
+      hasGreaterWeaponSpecialization?: boolean; // Lvl 12: +2 damage
+    }>;
+  };
+  familiarData35e?: {
+    familiarType?: string; // 'bat' | 'cat' | 'hawk' | 'lizard' | 'owl' | 'rat' | 'raven' | 'snake' | 'toad' | 'weasel'
+    name?: string;
+    isSummoned?: boolean;
+    isWithinArmReach?: boolean; // Grants Alertness (+2 Listen, +2 Spot)
+    currentHp?: number;
+    chosenLanguage?: string; // For Raven (speaks one language)
+  };
+
   // Racial Skill Bonuses (D&D 3.5e & 5e mechanics)
   racialSkillBonuses?: RacialSkillBonus[]; // Racial skill bonuses (specific, ability-affiliated, or conditional; non-stacking)
   appliedRacialAbilityBonuses?: Record<string, number>; // Exact racial ability score adjustments applied to character.abilities
@@ -707,6 +799,9 @@ export interface CharacterData {
     actionUsed5e?: boolean;
     bonusActionUsed5e?: boolean;
     reactionUsed5e?: boolean;
+    freeInteractionUsed5e?: boolean;
+    remainingSpeed?: number;
+    currentRound?: number;
   };
 
   // 3.5e Tactical Battlefield Positioning & Cover
@@ -861,6 +956,67 @@ export interface CharacterData {
   spellAttackBonusOverride?: number;
   spellSlots: SpellSlots[];
   spells: Spell[];
+  vancianSlots?: VancianSlotAllocation[]; // 3.5e Vancian prepared slot allocations
+  domains35e?: string[]; // 3.5e Cleric chosen domains (e.g. ['War', 'Sun'])
+  wizardSchool35e?: {
+    specialization?: string; // e.g. 'Evocation', 'Transmutation'
+    prohibitedSchools?: string[]; // e.g. ['Necromancy', 'Enchantment']
+  };
+
+  // 3.5e Supplemental Subsystem Engines
+  warlockInvocations35e?: {
+    knownInvocations: string[];
+    activeBlastShape?: string;
+    activeEldritchEssence?: string;
+    bonusBlastDice?: number;
+  };
+  factotumInspiration35e?: {
+    currentPoints: number;
+    maxPointsOverride?: number;
+    fontOfInspirationFeats?: number;
+    usedCunningKnowledgeSkills?: string[];
+    opportunisticPietyUsed?: number;
+    arcaneDilettanteSpells?: Array<{ spellName: string; spellLevel: number; isExpended: boolean }>;
+  };
+  tomeOfBattle35e?: {
+    initiatorLevelBonus?: number;
+    knownManeuvers: string[];
+    readiedManeuvers: string[];
+    expendedManeuvers: string[];
+    grantedManeuvers?: string[]; // Crusader dynamic card-draw granted pool
+    activeStance?: string;
+    steelyResolveDamage?: number; // Crusader delayed damage pool
+  };
+  artificerCraft35e?: {
+    craftReserveSpent: number;
+    craftReserveBonus?: number;
+    salvagedEssence?: number;
+    activeInfusions?: Array<{ id: string; name: string; targetItem: string; duration: string }>;
+  };
+  binderPact35e?: {
+    boundVestiges: Array<{
+      vestigeName: string;
+      goodPact: boolean;
+      suppressSign: boolean;
+      rechargeTimers?: Record<string, number>;
+    }>;
+  };
+  incarnum35e?: {
+    bonusEssentia?: number;
+    soulmelds: Array<{
+      name: string;
+      investedEssentia: number;
+      boundChakra?: string;
+    }>;
+  };
+  aurasAndKi35e?: {
+    activeMajorAura?: string;
+    activeMinorAura?: string;
+    activeDraconicAura?: string;
+    currentKiPoints?: number;
+    ghostStepActive?: boolean;
+    touchOfVitalitySpent?: number;
+  };
 
   // Description & Notes
   gender?: string;

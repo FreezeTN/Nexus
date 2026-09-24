@@ -183,8 +183,16 @@ export function getEffectiveAbilityDetails(char: CharacterData, ability: Ability
     overrideSource = `${setterSourceName} (Sets ${ability} to ${highestSetterValue})`;
   }
 
-  // D&D 3.5e Ability Damage vs. Ability Drain
+  // D&D 3.5e Ability Damage vs. Ability Drain & Barbarian Rage
   if (char?.edition === '3.5e') {
+    if (char.isRaging35e && (ability === 'STR' || ability === 'CON')) {
+      const lvl = Math.max(1, char.level || 1);
+      const rageBonus = lvl >= 20 ? 8 : lvl >= 11 ? 6 : 4;
+      const rageType = lvl >= 20 ? 'Mighty Rage' : lvl >= 11 ? 'Greater Rage' : 'Barbarian Rage';
+      effectiveScore += rageBonus;
+      bonusSources.push(`${rageType} (+${rageBonus})`);
+    }
+
     const damage = char?.abilityDamage?.[ability] || 0;
     const drain = char?.abilityDrain?.[ability] || 0;
     if (damage > 0) {

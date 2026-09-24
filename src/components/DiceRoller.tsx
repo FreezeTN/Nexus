@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { DiceRollResult, DiePoolItem } from '../types';
-import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX, Palette, Lock, Plus, Minus, RotateCcw, EyeOff, MessageSquareLock, Globe } from 'lucide-react';
+import { DiceRollResult, DiePoolItem, CharacterData } from '../types';
+import { Dices, Trash2, History, Sparkles, ChevronDown, ChevronUp, Volume2, VolumeX, Palette, Lock, Plus, Minus, RotateCcw, EyeOff, MessageSquareLock, Globe, Heart, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { playDiceSound, isDiceSoundEnabled, setDiceSoundEnabled } from '../utils/diceAudio';
 import { useLanguage } from '../i18n/LanguageContext';
@@ -27,6 +27,8 @@ interface DiceRollerProps {
   onOpenUpgradeModal?: (reason?: string, requiredTier?: 'hero' | 'guild') => void;
   isDm?: boolean;
   hasActiveSession?: boolean;
+  activeCharacter?: CharacterData | null;
+  onUpdateCharacter?: (updated: CharacterData) => void;
 }
 
 export const DiceRoller: React.FC<DiceRollerProps> = ({
@@ -39,11 +41,76 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
   onTogglePhysicalDiceMode,
   onOpenUpgradeModal,
   isDm = false,
-  hasActiveSession = false
+  hasActiveSession = false,
+  activeCharacter,
+  onUpdateCharacter
 }) => {
   const { t } = useLanguage();
   const { isHero, isGuild, isDeveloper, openUpgradeModal } = useSubscription();
   const [isOpen, setIsOpen] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  const showTemporaryFeedback = (msg: string) => {
+    setActionFeedback(msg);
+    setTimeout(() => setActionFeedback(null), 2500);
+  };
+
+  const handleReroll = (log: DiceRollResult) => {
+    const match = log.expression ? log.expression.match(/(\d+)d(\d+)/) : null;
+    if (match) {
+      const count = parseInt(match[1], 10) || 1;
+      const die = parseInt(match[2], 10) || 20;
+      onRoll(log.label, die, count, log.modifier || 0, log.mode || 'normal');
+    } else if (log.diceRolls && log.diceRolls.length > 0) {
+      onRoll(log.label, 20, log.diceRolls.length, log.modifier || 0, log.mode || 'normal');
+    } else {
+      onRoll(log.label, 20, 1, log.modifier || 0, log.mode || 'normal');
+    }
+  };
+
+  const handleApplyDamage = (amount: number, label: string) => {
+    if (!activeCharacter || !onUpdateCharacter || amount <= 0) return;
+    const currentHp = activeCharacter.hpCurrent ?? 0;
+    const tempHp = activeCharacter.hpTemp || 0;
+
+    let remainingDmg = amount;
+    let newTempHp = tempHp;
+
+    if (newTempHp > 0) {
+      if (remainingDmg >= newTempHp) {
+        remainingDmg -= newTempHp;
+        newTempHp = 0;
+      } else {
+        newTempHp -= remainingDmg;
+        remainingDmg = 0;
+      }
+    }
+
+    const newCurrentHp = Math.max(0, currentHp - remainingDmg);
+    onUpdateCharacter({
+      ...activeCharacter,
+      hpCurrent: newCurrentHp,
+      hpTemp: newTempHp
+    });
+    showTemporaryFeedback(`💔 Applied ${amount} dmg to ${activeCharacter.name} (HP: ${newCurrentHp}/${activeCharacter.hpMax})`);
+  };
+
+  const handleApplyHalfDamage = (amount: number, label: string) => {
+    const half = Math.floor(amount / 2);
+    handleApplyDamage(half, label);
+  };
+
+  const handleApplyHeal = (amount: number) => {
+    if (!activeCharacter || !onUpdateCharacter || amount <= 0) return;
+    const maxHp = activeCharacter.hpMax ?? 0;
+    const currentHp = activeCharacter.hpCurrent ?? 0;
+    const newCurrentHp = Math.min(maxHp, currentHp + amount);
+    onUpdateCharacter({
+      ...activeCharacter,
+      hpCurrent: newCurrentHp
+    });
+    showTemporaryFeedback(`💚 Healed +${amount} HP on ${activeCharacter.name} (HP: ${newCurrentHp}/${maxHp})`);
+  };
 
   // Roll visibility / secret options
   const [rollVisibility, setRollVisibility] = useState<'public' | 'whisper' | 'secret'>('public');
@@ -679,6 +746,13 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 )}
               </div>
 
+              {/* Temporary Toast / Action Notification */}
+              {actionFeedback && (
+                <div className="bg-amber-950/90 border border-amber-500/70 text-amber-200 px-2 py-1 rounded text-[11px] font-mono text-center animate-in fade-in">
+                  {actionFeedback}
+                </div>
+              )}
+
               {rollLogs.length === 0 ? (
                 <div className="text-xs text-stone-500 text-center py-2 italic">
                   {t('dice.noRollsYet', 'No dice rolls yet. Click any skill, stat, weapon or spell to roll!')}
@@ -687,7 +761,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                 rollLogs.slice(0, 8).map((log) => (
                   <div
                     key={log.id}
-                    className={`rounded-lg p-2 text-xs flex justify-between items-center border ${
+                    className={`rounded-lg p-2 text-xs flex justify-between items-start border ${
                       log.isWhisperToDm
                         ? 'bg-purple-950/40 border-purple-800/50'
                         : log.isSecret
@@ -695,7 +769,7 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                         : 'bg-stone-800/60 border-stone-800'
                     }`}
                   >
-                    <div className="min-w-0 pr-2">
+                    <div className="min-w-0 pr-2 flex-1">
                       <div className="font-medium text-amber-300/90 truncate flex items-center gap-1">
                         <span>{log.label}</span>
                         {log.isWhisperToDm && (
@@ -712,8 +786,54 @@ export const DiceRoller: React.FC<DiceRollerProps> = ({
                       <div className="text-[10px] text-stone-400 font-mono">
                         {log.expression} {log.diceRolls.length > 0 ? `[${log.diceRolls.join(', ')}]` : ''}
                       </div>
+
+                      {/* Quick Log Actions: Reroll, Apply Damage, Half Dmg, Heal */}
+                      <div className="flex items-center gap-1 mt-1.5 flex-wrap font-mono text-[9px]">
+                        <button
+                          type="button"
+                          onClick={() => handleReroll(log)}
+                          className="px-1.5 py-0.5 rounded bg-stone-900 hover:bg-stone-700 text-stone-300 hover:text-white border border-stone-700 transition flex items-center gap-0.5 active:scale-95 cursor-pointer"
+                          title="Reroll this exact roll"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5 text-amber-400" />
+                          <span>Reroll</span>
+                        </button>
+
+                        {log.total > 0 && activeCharacter && onUpdateCharacter && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleApplyDamage(log.total, log.label)}
+                              className="px-1.5 py-0.5 rounded bg-rose-950/80 hover:bg-rose-900 text-rose-300 hover:text-rose-100 border border-rose-800/60 transition flex items-center gap-0.5 active:scale-95 cursor-pointer"
+                              title={`Apply -${log.total} HP damage to ${activeCharacter.name} (temp HP absorbed first)`}
+                            >
+                              <span>💔 -{log.total} HP</span>
+                            </button>
+
+                            {log.total > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleApplyHalfDamage(log.total, log.label)}
+                                className="px-1.5 py-0.5 rounded bg-amber-950/80 hover:bg-amber-900 text-amber-300 hover:text-amber-100 border border-amber-800/60 transition flex items-center gap-0.5 active:scale-95 cursor-pointer"
+                                title={`Apply half damage (${Math.floor(log.total / 2)} HP) for save success / resistance`}
+                              >
+                                <span>🛡️ ½ ({Math.floor(log.total / 2)})</span>
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => handleApplyHeal(log.total)}
+                              className="px-1.5 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-100 border border-emerald-800/60 transition flex items-center gap-0.5 active:scale-95 cursor-pointer"
+                              title={`Heal +${log.total} HP on ${activeCharacter.name} (clamped to max HP)`}
+                            >
+                              <span>💚 +{log.total} HP</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-base font-bold text-amber-200 font-mono pl-2 flex-shrink-0">
+                    <div className="text-base font-bold text-amber-200 font-mono pl-2 flex-shrink-0 self-start">
                       {log.total > 0 || log.diceRolls.length > 0 ? log.total : '???'}
                     </div>
                   </div>
