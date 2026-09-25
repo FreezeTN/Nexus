@@ -13,13 +13,16 @@ import {
   FileText,
   Copy,
   CheckCircle2,
-  Layers
+  Layers,
+  BookOpen
 } from 'lucide-react';
 import { WorldAtlasView } from '../campaign/WorldAtlasView';
 import { QuestTrackerView } from '../campaign/QuestTrackerView';
 import { FactionMatrixView } from '../campaign/FactionMatrixView';
 import { CampaignTravelCalculator } from '../campaign/CampaignTravelCalculator';
 import { CampaignJournalView } from '../campaign/CampaignJournalView';
+import { LivingWorldView } from '../campaign/LivingWorldView';
+import { CampaignGraphModal } from './CampaignGraphModal';
 import { WorldLocation } from '../../types/campaign';
 import { CharacterData, Party } from '../../types';
 import { UserProfile } from '../../lib/firebase';
@@ -29,7 +32,7 @@ import {
   loadCampaignFactions
 } from '../../services/campaignService';
 
-export type CampaignTabId = 'atlas' | 'quests' | 'factions' | 'travel' | 'journal' | 'export';
+export type CampaignTabId = 'atlas' | 'quests' | 'factions' | 'graph' | 'living_world' | 'travel' | 'journal' | 'export';
 
 interface CampaignLoreVaultModalProps {
   isOpen: boolean;
@@ -199,6 +202,30 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
             </button>
 
             <button
+              onClick={() => setActiveTab('graph')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'graph'
+                  ? 'bg-indigo-600 text-white shadow-md'
+                  : 'text-stone-400 hover:text-indigo-200'
+              }`}
+            >
+              <Network className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Relationship Graph</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('living_world')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'living_world'
+                  ? 'bg-amber-600 text-stone-950 shadow-md'
+                  : 'text-stone-400 hover:text-amber-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Living World</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('travel')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 activeTab === 'travel'
@@ -207,7 +234,19 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
               }`}
             >
               <Navigation className="w-3.5 h-3.5" />
-              <span>Travel Calculator</span>
+              <span>Travel</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('journal')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'journal'
+                  ? 'bg-amber-500 text-stone-950 shadow-md'
+                  : 'text-stone-400 hover:text-stone-200'
+              }`}
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+              <span>Chronicles</span>
             </button>
 
             <button
@@ -219,9 +258,10 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
               }`}
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>Vault Export</span>
+              <span>Export</span>
             </button>
           </div>
+
 
           <button
             onClick={onClose}
@@ -236,37 +276,51 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
         <div className="md:hidden flex items-center justify-around bg-stone-900 border-b border-stone-800 p-2 text-xs">
           <button
             onClick={() => setActiveTab('atlas')}
-            className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'atlas' ? 'text-amber-400' : 'text-stone-400'}`}
+            className={`px-2.5 py-1 rounded-lg font-bold transition ${activeTab === 'atlas' ? 'text-amber-400 bg-amber-500/10' : 'text-stone-400 hover:text-stone-200'}`}
           >
             Atlas
           </button>
           <button
             onClick={() => setActiveTab('quests')}
-            className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'quests' ? 'text-amber-400' : 'text-stone-400'}`}
+            className={`px-2.5 py-1 rounded-lg font-bold transition ${activeTab === 'quests' ? 'text-amber-400 bg-amber-500/10' : 'text-stone-400 hover:text-stone-200'}`}
           >
             Quests
           </button>
           <button
             onClick={() => setActiveTab('factions')}
-            className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'factions' ? 'text-amber-400' : 'text-stone-400'}`}
+            className={`px-2.5 py-1 rounded-lg font-bold transition ${activeTab === 'factions' ? 'text-amber-400 bg-amber-500/10' : 'text-stone-400 hover:text-stone-200'}`}
           >
             Factions
           </button>
           <button
+            onClick={() => setActiveTab('graph')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1.5 ${activeTab === 'graph' ? 'text-indigo-300 bg-indigo-500/20' : 'text-stone-400 hover:text-stone-200'}`}
+          >
+            <Network className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Graph</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('living_world')}
+            className={`px-2.5 py-1 rounded-lg font-bold transition flex items-center gap-1.5 ${activeTab === 'living_world' ? 'text-amber-300 bg-amber-500/20' : 'text-stone-400 hover:text-stone-200'}`}
+          >
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>Living World</span>
+          </button>
+          <button
             onClick={() => setActiveTab('travel')}
-            className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'travel' ? 'text-amber-400' : 'text-stone-400'}`}
+            className={`px-2.5 py-1 rounded-lg font-bold transition ${activeTab === 'travel' ? 'text-amber-400 bg-amber-500/10' : 'text-stone-400 hover:text-stone-200'}`}
           >
             Travel
           </button>
           <button
             onClick={() => setActiveTab('journal')}
-            className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'journal' ? 'text-amber-400' : 'text-stone-400'}`}
+            className={`px-2.5 py-1 rounded-lg font-bold transition ${activeTab === 'journal' ? 'text-amber-400 bg-amber-500/10' : 'text-stone-400 hover:text-stone-200'}`}
           >
             Chronicles
           </button>
           <button
             onClick={() => setActiveTab('export')}
-            className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'export' ? 'text-amber-400' : 'text-stone-400'}`}
+            className={`px-2.5 py-1 rounded-lg font-bold transition ${activeTab === 'export' ? 'text-amber-400 bg-amber-500/10' : 'text-stone-400 hover:text-stone-200'}`}
           >
             Export
           </button>
@@ -312,6 +366,22 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
               onNavigateToAtlasLocation={handleNavigateToAtlasLocation}
             />
           )}
+
+          {activeTab === 'graph' && (
+            <CampaignGraphModal
+              isOpen={true}
+              isEmbedded={true}
+              onClose={() => {}}
+              initialEntityName={highlightedEntity || undefined}
+            />
+          )}
+
+          {activeTab === 'living_world' && (
+            <LivingWorldView
+              onOpenKnowledgeGraph={onOpenKnowledgeGraph}
+            />
+          )}
+
 
           {activeTab === 'travel' && (
             <CampaignTravelCalculator

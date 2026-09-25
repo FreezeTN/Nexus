@@ -176,3 +176,39 @@ export interface CampaignJournalEntry {
   participants?: string[];
   notes?: string;
 }
+
+export type WorldSeason = 'spring' | 'summer' | 'autumn' | 'winter';
+export type TimeOfDay = 'dawn' | 'morning' | 'noon' | 'afternoon' | 'dusk' | 'night' | 'midnight';
+
+export interface WorldCalendarState {
+  currentDay: number;
+  currentYear: number;
+  season: WorldSeason;
+  timeOfDay: TimeOfDay;
+  weather: string;
+  weatherDescription: string;
+  temperatureFahrenheit: number;
+  activeMoonPhase?: 'New Moon' | 'Waxing Crescent' | 'First Quarter' | 'Waxing Gibbous' | 'Full Moon' | 'Waning Gibbous' | 'Last Quarter' | 'Waning Crescent';
+  ambientHazardActive?: boolean;
+}
+
+export interface WorldGazetteItem {
+  id: string;
+  headline: string;
+  category: 'faction' | 'weather' | 'quest' | 'rumor' | 'economy';
+  body: string;
+  urgency: 'low' | 'moderate' | 'high' | 'critical';
+  affectedLocationId?: string;
+  affectedFactionId?: string;
+  timestampDay: number;
+}
+
+export interface WorldTickResult {
+  daysAdvanced: number;
+  newCalendar: WorldCalendarState;
+  gazette: WorldGazetteItem[];
+  factionShifts: Array<{ factionId: string; factionName: string; changeText: string; tensionDelta: number }>;
+  questUpdates: Array<{ questId: string; questTitle: string; changeText: string; deadlineWarning?: boolean }>;
+  npcRumors: Array<{ npcName: string; locationName?: string; rumor: string }>;
+}
+

@@ -758,7 +758,46 @@ MILESTONE 40: PHASE 1 AOE TRANSMUTATION & PHASE 2 MOVEMENT WAYPOINT PLANNING (v0
   - Full wall and obstacle path cost resolution: walking around walls requires navigating around impassable tiles, accurately accumulating true distance traveled per step.
   - Creature special movement mode integration: creatures with fly speed or vertical elevation ignore ground obstacles and walls that don't reach the ceiling; creatures with swim/climb speeds bypass terrain multipliers for water and climbing surfaces.
   - Visual waypoint path knot rendering with distance callouts at each node, color-coded by movement budget (Green: base speed, Amber: dash required, Red: exceeds dash budget).
-  - Undo waypoint support via Backspace / Ctrl+Z and interactive action bar with Confirm Move (Enter) / Cancel (Esc).
+--------------------------------------------------------------------------------
+MILESTONE 41: ATLAS TACTICAL ENCOUNTER PIPELINE & COMBAT VICTORY SPOILS (v0.9.21)
+--------------------------------------------------------------------------------
+* Seamless Atlas-to-Tactical Encounter Pipeline (`src/components/campaign/WorldAtlasView.tsx`, `App.tsx`, `useEncounterState.ts`):
+  - Added tactical encounter setup cards to World Atlas location inspector displaying linked battlemap layouts, boss encounters, danger level, and suggested monsters.
+  - "Launch Tactical Encounter" button initializes encounter state with persistent `linkedAtlasLocation`, auto-loads battlemap presets (terrain, doors, fog of war, and weather), populates boss and minions, and transitions directly to tactical combat.
+  - Contextual location badges displayed in Combat Mini-HUD and Encounter Tracker action bar.
+
+* Post-Combat Victory Spoils & Loot Allocation (`src/components/combat/encounter/CombatVictoryModal.tsx`, `EncounterTracker.tsx`):
+  - Vanquishing all enemy combatants triggers an alert banner and opens the Combat Victory & Spoils modal.
+  - Automated XP calculation with one-click allocation options (grant all to active hero or split evenly across the adventuring party).
+  - Procedural spoils generation matching dungeon and location danger level with one-click collection directly to purse and gear inventory.
+
+* Campaign Lore Vault Chronicles & Journal (`src/components/campaign/CampaignJournalView.tsx`, `CampaignLoreVaultModal.tsx`):
+  - Added dedicated Chronicles tab in the Campaign Lore Vault.
+  - Real-time logging of combat encounters with round counts, vanquished foe breakdowns, participants, and reward logs.
+  - Multi-category chronicle management (Combat, Exploration, Quest, Lore, Downtime) with search and tag filtering.
+
+--------------------------------------------------------------------------------
+MILESTONE 42: LIVING WORLD SIMULATION, RELATIONSHIP GRAPH & PLUGIN API (v0.9.22)
+--------------------------------------------------------------------------------
+* Living World Simulation Engine (`src/services/livingWorldService.ts`, `src/components/campaign/LivingWorldView.tsx`):
+  - In-game campaign calendar tracking year, day, seasons, moon phases, and atmospheric temperature.
+  - Between-session time advancement (+1 Day, +3 Days, +1 Week, or custom duration) with automated world state simulation:
+    - Faction Dynamics: Factions autonomously maneuver, deploy patrols, forge pacts, or execute covert actions, shifting standings.
+    - Quest Clocks: Active quest urgency clocks advance, escalating narrative stakes or triggering deadline events.
+    - Weather Progression: Seasonal and regional climate shifts with hazards (heatwaves, squalls, blizzards, dense fogs).
+    - Realm Gazette: Generates town crier news dispatches, political developments, and tavern whispers.
+    - Direct integration with Campaign Chronicles with one-click logging of world events.
+
+* Live Campaign Relationship Knowledge Graph (`src/services/relationshipGraphService.ts`, `CampaignGraphModal.tsx`):
+  - Replaced static sample graphs with dynamic synthesizer compiling live campaign data into an interactive force-directed graph.
+  - Automatically maps relational edges: Locations <-> Factions (territories, headquarters), Quests <-> Locations / Factions / NPCs / PCs, NPCs <-> Locations / Factions, Faction Alliances/Rivalries, and PC assignments.
+  - Added dedicated Relationship Graph tab to Campaign Lore Vault and "Sync Live Data" re-synthesis action.
+
+* Extended Game System Plugin Lifecycle API (`src/systems/types.ts`, `src/systems/registry.ts`, `PluginScaffoldingStudio.tsx`):
+  - Added `PluginLifecycleHooks` exposing session lifecycle (`onSessionStart`, `onSessionEnd`), replay hooks (`onReplayEventRecorded`), tactical battlemap events (`onBattlemapEvent`), and campaign timeline events (`onCampaignTimelineEvent`).
+  - Added `aiContextContributors` enabling plugins to inject domain mechanics and narrative lore into Gemini GM prompt contexts.
+  - Wired central event dispatchers across `sessionOrchestratorService`, `useEncounterState`, and `livingWorldService`.
+  - Updated Plugin Scaffolding Studio to automatically generate and verify these extended hooks and manifests.
 
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG

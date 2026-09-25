@@ -1,5 +1,11 @@
 import { RuleEdition } from '../types';
-import { GameSystemPlugin } from './types';
+import {
+  GameSystemPlugin,
+  PluginSessionLifecycleEvent,
+  PluginReplayHookPayload,
+  PluginBattlemapEvent,
+  PluginCampaignTimelineEvent
+} from './types';
 import { dnd5ePlugin } from './plugins/dnd5ePlugin';
 import { dnd35ePlugin } from './plugins/dnd35ePlugin';
 import { pathfinder2ePlugin } from './plugins/pathfinder2ePlugin';
@@ -82,7 +88,76 @@ class GameSystemRegistry {
   public getSupportedEditions(): RuleEdition[] {
     return Array.from(this.plugins.keys());
   }
+
+  // Expanded Lifecycle & Hook Dispatchers
+  public dispatchSessionLifecycle(event: PluginSessionLifecycleEvent): void {
+    this.getAllSystems().forEach(p => {
+      try {
+        if (event.action === 'start') {
+          p.lifecycleHooks?.onSessionStart?.(event);
+        } else if (event.action === 'end') {
+          p.lifecycleHooks?.onSessionEnd?.(event);
+        }
+      } catch (err) {
+        console.warn(`Plugin ${p.name} lifecycle error:`, err);
+      }
+    });
+  }
+
+  public dispatchReplayEvent(payload: PluginReplayHookPayload): void {
+    this.getAllSystems().forEach(p => {
+      try {
+        p.lifecycleHooks?.onReplayEventRecorded?.(payload);
+      } catch (err) {
+        console.warn(`Plugin ${p.name} replay hook error:`, err);
+      }
+    });
+  }
+
+  public dispatchBattlemapEvent(event: PluginBattlemapEvent): void {
+    this.getAllSystems().forEach(p => {
+      try {
+        p.lifecycleHooks?.onBattlemapEvent?.(event);
+      } catch (err) {
+        console.warn(`Plugin ${p.name} battlemap hook error:`, err);
+      }
+    });
+  }
+
+  public dispatchTimelineEvent(event: PluginCampaignTimelineEvent): void {
+    this.getAllSystems().forEach(p => {
+      try {
+        p.lifecycleHooks?.onCampaignTimelineEvent?.(event);
+      } catch (err) {
+        console.warn(`Plugin ${p.name} timeline hook error:`, err);
+      }
+    });
+  }
+
+  public collectAiContextSnippets(context: {
+    party: any[];
+    activeLocation?: string;
+    activeQuest?: string;
+    weather?: string;
+    timeOfDay?: string;
+  }): Array<{ title: string; promptSnippet: string }> {
+    const snippets: Array<{ title: string; promptSnippet: string }> = [];
+    this.getAllSystems().forEach(p => {
+      if (p.lifecycleHooks?.aiContextContributors) {
+        p.lifecycleHooks.aiContextContributors.forEach(c => {
+          try {
+            const snip = c.generateSnippet(context);
+            if (snip) snippets.push(snip);
+          } catch (e) {
+            console.warn(`Error generating AI snippet for ${c.key}:`, e);
+          }
+        });
+      }
+    });
+    return snippets;
+  }
 }
 
 export const systemRegistry = new GameSystemRegistry();
+
 

@@ -25,9 +25,11 @@ import {
   ChevronRight,
   Info,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  GitBranch
 } from 'lucide-react';
 import { CampaignEntity, SAMPLE_CAMPAIGN_ENTITIES } from '../../utils/searchIndexer';
+import { buildLiveCampaignGraphNodes } from '../../services/relationshipGraphService';
 
 interface NodePosition {
   id: string;
@@ -44,6 +46,7 @@ interface CampaignGraphModalProps {
   onNavigateTab?: (tab: string, payload?: any) => void;
   initialEntityId?: string;
   initialEntityName?: string;
+  isEmbedded?: boolean;
 }
 
 const TYPE_COLORS: Record<string, { bg: string; stroke: string; text: string; badge: string }> = {
@@ -64,20 +67,31 @@ export function CampaignGraphModal({
   onClose,
   onNavigateTab,
   initialEntityId,
-  initialEntityName
+  initialEntityName,
+  isEmbedded = false
 }: CampaignGraphModalProps) {
   const [entities, setEntities] = useState<CampaignEntity[]>(() => {
     try {
-      const saved = localStorage.getItem('penpaper_campaign_graph_nodes');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
+      const live = buildLiveCampaignGraphNodes();
+      if (live.length > 0) return live;
     } catch (e) {
-      console.warn('Failed to load campaign graph nodes from localStorage', e);
+      console.warn('Failed to synthesize live campaign graph nodes', e);
     }
     return SAMPLE_CAMPAIGN_ENTITIES;
   });
+
+  const handleSyncLiveCampaign = () => {
+    try {
+      const live = buildLiveCampaignGraphNodes();
+      setEntities(live);
+      if (live.length > 0) {
+        setSelectedEntity(live[0]);
+      }
+    } catch (e) {
+      console.warn('Failed to sync live campaign data', e);
+    }
+  };
+
 
   // Save to localStorage whenever entities change
   useEffect(() => {
@@ -538,12 +552,13 @@ export function CampaignGraphModal({
     setNewRegion('');
   };
 
-  if (!isOpen) return null;
+  if (!isOpen && !isEmbedded) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-hidden animate-fadeIn">
-      <div className="bg-stone-900 border border-amber-600/50 rounded-2xl w-full max-w-5xl max-h-[86vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-amber-500/20">
-        
+  const innerGraphContent = (
+    <div className={isEmbedded ? "relative w-full h-[720px] flex flex-col" : "fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 overflow-hidden animate-fadeIn"}>
+      <div className={`bg-stone-900 border border-amber-600/50 rounded-2xl w-full flex flex-col shadow-2xl overflow-hidden ring-1 ring-amber-500/20 ${
+        isEmbedded ? 'h-full' : 'max-w-5xl max-h-[86vh]'
+      }`}>
         {/* Header Bar */}
         <div className="px-5 py-3.5 bg-stone-950 border-b border-stone-800 flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
@@ -552,9 +567,9 @@ export function CampaignGraphModal({
             </div>
             <div>
               <h2 className="text-lg sm:text-xl font-serif font-bold text-amber-100 flex items-center gap-2">
-                <span>Campaign Graph</span>
+                <span>Campaign Relationship Graph</span>
                 <span className="text-[10px] font-mono px-2 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 rounded-full uppercase">
-                  Interactive Knowledge Network
+                  Live Knowledge Network
                 </span>
               </h2>
               <p className="text-xs text-stone-400 hidden sm:block">
@@ -587,20 +602,32 @@ export function CampaignGraphModal({
             </div>
 
             <button
+              onClick={handleSyncLiveCampaign}
+              className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-indigo-300 border border-indigo-800/50 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+              title="Re-sync graph from active Atlas locations, Factions, Quests, and PCs"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Sync Live Data</span>
+            </button>
+
+            <button
               onClick={() => setShowAddModal(true)}
-              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shadow"
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-stone-950 rounded-xl text-xs font-serif font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>Add Node</span>
             </button>
-            <button
-              onClick={onClose}
-              className="p-2 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded-full transition cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {!isEmbedded && (
+              <button
+                onClick={onClose}
+                className="p-2 text-stone-400 hover:text-stone-100 hover:bg-stone-800 rounded-full transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </div>
+
 
         {/* Search & Category Filter Header */}
         <div className="p-3 bg-stone-950/90 border-b border-stone-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shrink-0">
@@ -1097,6 +1124,10 @@ export function CampaignGraphModal({
       )}
     </div>
   );
+
+  return innerGraphContent;
 }
 
+
 export default CampaignGraphModal;
+

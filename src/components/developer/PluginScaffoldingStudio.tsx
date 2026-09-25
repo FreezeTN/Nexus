@@ -259,9 +259,37 @@ export const PluginScaffoldingStudio: React.FC = () => {
         races,
         primaryAttributes,
         damageTypes: ['Slashing', 'Piercing', 'Bludgeoning', 'Fire', 'Cold', 'Lightning', 'Arcane']
+      },
+      lifecycleHooks: {
+        onSessionStart: (session) => {
+          console.info(`[Plugin ${pluginName}] Session started: ${session.sessionTitle} (#${session.sessionNumber})`);
+        },
+        onSessionEnd: (session) => {
+          console.info(`[Plugin ${pluginName}] Session ended: ${session.sessionId}`);
+        },
+        onReplayEventRecorded: (event) => {
+          console.info(`[Plugin ${pluginName}] Replay hook: ${event.title}`);
+        },
+        onBattlemapEvent: (event) => {
+          console.info(`[Plugin ${pluginName}] Battlemap hook: ${event.type}`);
+        },
+        onCampaignTimelineEvent: (event) => {
+          console.info(`[Plugin ${pluginName}] Timeline hook: Day ${event.timestampDay}`);
+        },
+        aiContextContributors: [
+          {
+            key: `${pluginId}-system-context`,
+            priority: 5,
+            generateSnippet: () => ({
+              title: `${pluginName} Rule System Context`,
+              promptSnippet: `System using ${rollModelKind} rolls with primary resource "${primaryResource}".`
+            })
+          }
+        ]
       }
     };
   };
+
 
   const handleRegisterCustomPlugin = () => {
     try {
@@ -381,6 +409,35 @@ export const ${pluginId.replace(/[^a-zA-Z0-9]/g, '')}Plugin: GameSystemPlugin = 
     races: ${JSON.stringify(racesInput.split(',').map(s => s.trim()).filter(Boolean), null, 4)},
     primaryAttributes: ${JSON.stringify(attributesInput.split(',').map(s => s.trim()).filter(Boolean), null, 4)},
     damageTypes: ['Slashing', 'Piercing', 'Bludgeoning', 'Fire', 'Cold', 'Lightning', 'Arcane']
+  },
+
+  // Expanded Plugin Lifecycle & Extension Hooks
+  lifecycleHooks: {
+    onSessionStart: (session) => {
+      console.log(\`[\${'${pluginName}'}] Session #\${session.sessionNumber} started at \${session.startingLocation}\`);
+    },
+    onSessionEnd: (session) => {
+      console.log(\`[\${'${pluginName}'}] Session ended: \${session.notes || 'Normal conclusion'}\`);
+    },
+    onReplayEventRecorded: (event) => {
+      console.log(\`[\${'${pluginName}'}] Replay hook: \${event.title} (\${event.eventType})\`);
+    },
+    onBattlemapEvent: (event) => {
+      console.log(\`[\${'${pluginName}'}] Battlemap event: \${event.type}\`, event.payload);
+    },
+    onCampaignTimelineEvent: (event) => {
+      console.log(\`[\${'${pluginName}'}] Timeline advanced to Day \${event.timestampDay}: \${event.title}\`);
+    },
+    aiContextContributors: [
+      {
+        key: '${pluginId}-context',
+        priority: 10,
+        generateSnippet: (ctx) => ({
+          title: '${pluginName} System Flavor',
+          promptSnippet: 'Rules active: ${rollModelKind} rolls, primary stat resource: ${primaryResource}. Maintain tactical authenticity.'
+        })
+      }
+    ]
   }
 };
 `;
@@ -406,17 +463,29 @@ export const ${pluginId.replace(/[^a-zA-Z0-9]/g, '')}Plugin: GameSystemPlugin = 
         supportsConditionMonitors: supportsConditionMonitors,
         hasSpellcasting: hasSpellcasting
       },
-      minPlatformVersion: '1.0.0',
-      permissions: ['character:read', 'character:write', 'dice:roll', 'events:subscribe'],
+      minPlatformVersion: '3.3.1',
+      permissions: [
+        'character:read',
+        'character:write',
+        'dice:roll',
+        'events:subscribe',
+        'session:lifecycle',
+        'battlemap:events',
+        'ai:context'
+      ],
       capabilities: [
         { id: 'character-engine', name: 'Custom Character Sheet', enabled: true },
         { id: 'combat-calculator', name: 'Combat & Roll Resolution', enabled: true },
-        { id: 'spell-tracker', name: 'Resource & Spellcasting Meter', enabled: hasSpellcasting }
+        { id: 'spell-tracker', name: 'Resource & Spellcasting Meter', enabled: hasSpellcasting },
+        { id: 'session-lifecycle', name: 'Session Start/End Hooks', enabled: true },
+        { id: 'battlemap-hooks', name: 'Tactical Grid Event Subscriber', enabled: true },
+        { id: 'ai-context-injector', name: 'AI Director Prompt Contributor', enabled: true }
       ]
     },
     null,
     2
   );
+
 
   // Generate CLI Command
   const generatedCliCmd = `npm create @nexus-trpg/plugin@latest ${pluginId} \\

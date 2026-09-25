@@ -107,4 +107,62 @@ export interface GameSystemPlugin {
   combatEngine: SystemCombatEngine;
   spellEngine: SystemSpellEngine;
   data: SystemDataCatalog;
+
+  // Expanded Plugin Lifecycle & Extension Hooks
+  lifecycleHooks?: PluginLifecycleHooks;
 }
+
+export interface PluginBattlemapEvent {
+  type: 'tokenMove' | 'terrainChange' | 'doorToggle' | 'weatherChange' | 'roundAdvance' | 'aoePlaced';
+  payload: any;
+  timestamp: string;
+}
+
+export interface PluginReplayHookPayload {
+  eventId: string;
+  eventType: string;
+  title: string;
+  details?: string;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
+export interface PluginAiContextContributor {
+  key: string;
+  priority?: number;
+  generateSnippet(context: {
+    party: CharacterData[];
+    activeLocation?: string;
+    activeQuest?: string;
+    weather?: string;
+    timeOfDay?: string;
+  }): { title: string; promptSnippet: string } | null;
+}
+
+export interface PluginCampaignTimelineEvent {
+  type: 'worldTick' | 'questStage' | 'factionMove' | 'weatherShift' | 'custom';
+  timestampDay: number;
+  title: string;
+  description: string;
+  metadata?: Record<string, any>;
+}
+
+export interface PluginSessionLifecycleEvent {
+  action: 'start' | 'end' | 'pause' | 'resume';
+  sessionId: string;
+  sessionNumber: number;
+  sessionTitle: string;
+  startingLocation?: string;
+  timestamp: string;
+  notes?: string;
+}
+
+export interface PluginLifecycleHooks {
+  onSessionStart?(session: PluginSessionLifecycleEvent): void;
+  onSessionEnd?(session: PluginSessionLifecycleEvent): void;
+  onReplayEventRecorded?(event: PluginReplayHookPayload): void;
+  onBattlemapEvent?(event: PluginBattlemapEvent): void;
+  onCampaignTimelineEvent?(event: PluginCampaignTimelineEvent): void;
+  aiContextContributors?: PluginAiContextContributor[];
+}
+

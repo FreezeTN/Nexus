@@ -3,6 +3,7 @@ import { WorldLocation, CampaignQuest, CampaignJournalEntry } from '../types/cam
 import { eventBus } from '../events/eventBus';
 import { addCampaignJournalEntry, loadCampaignJournal } from './campaignService';
 import { askAssistant } from './geminiService';
+import { systemRegistry } from '../systems/registry';
 
 export interface SessionReplayEvent {
   id: string;
@@ -126,6 +127,22 @@ export function recordSessionReplayEvent(
 
   const updated = [newEvt, ...existing];
   saveSessionReplayEvents(updated);
+
+  // Dispatch to registered system plugins
+  systemRegistry.dispatchReplayEvent({
+    eventId: newEvt.id,
+    eventType: newEvt.type,
+    title: newEvt.title,
+    details: newEvt.details,
+    timestamp: newEvt.timestamp,
+    metadata: {
+      actor: newEvt.actor,
+      locationName: newEvt.locationName,
+      roundNumber: newEvt.roundNumber,
+      highlight: newEvt.highlight
+    }
+  });
+
   return newEvt;
 }
 
@@ -167,6 +184,16 @@ export function startSessionOrchestrator(params: {
 
   saveActiveSessionOrchestration(newSession);
 
+  // Dispatch session start to system plugins
+  systemRegistry.dispatchSessionLifecycle({
+    action: 'start',
+    sessionId: newSession.sessionId,
+    sessionNumber: newSession.sessionNumber,
+    sessionTitle: newSession.sessionTitle,
+    startingLocation: newSession.startingLocationName,
+    timestamp: startedAt
+  });
+
   // Record initial Session Start event in Replay log
   recordSessionReplayEvent({
     type: 'session_start',
@@ -204,6 +231,17 @@ export function endSessionOrchestrator(current: ActiveSessionOrchestration, summ
     status: 'completed'
   };
   saveActiveSessionOrchestration(null);
+
+  // Dispatch session end to system plugins
+  systemRegistry.dispatchSessionLifecycle({
+    action: 'end',
+    sessionId: current.sessionId,
+    sessionNumber: current.sessionNumber,
+    sessionTitle: current.sessionTitle,
+    startingLocation: current.startingLocationName,
+    timestamp: new Date().toISOString(),
+    notes: summaryNotes
+  });
 
   recordSessionReplayEvent({
     type: 'session_end',

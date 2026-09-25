@@ -14,6 +14,52 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.22',
+    date: 'Today',
+    title: 'Living World Simulation, Live Relationship Graph & Plugin Lifecycle API',
+    badge: 'Living World & Relationship Graph',
+    badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    highlights: [
+      {
+        category: '🌍 Autonomous Living World & Realm Simulation Engine',
+        detail: 'Simulate the passage of time between game sessions with advance controls (+1 Day, +3 Days, +1 Week, or custom days). Automatically cycles seasons, moon phases, and atmospheric weather, while generating realm headlines, tavern rumors, and faction movements.'
+      },
+      {
+        category: '⚔️ Dynamic Faction Standings & Quest Urgency Clocks',
+        detail: 'Factions proactively react during world simulation ticks—deploying border patrols, negotiating treaties, or launching shadow maneuvers—shifting influence and reputation. Active quest clocks tick down, triggering scouts’ alerts or escalating stakes.'
+      },
+      {
+        category: '🕸️ Live Dynamic Relationship Knowledge Graph',
+        detail: 'Synthesizes an interactive, force-directed relationship graph directly from live campaign data (Locations, Factions, Quests, NPCs, and Player Characters). Featuring automatic bidirectional edge generation, live sync button, and first-class integration in the Lore Vault.'
+      },
+      {
+        category: '🔌 Expanded Plugin Lifecycle & Replay API',
+        detail: 'Extended the Game System Plugin API with new lifecycle hooks: onSessionStart/onSessionEnd, onReplayEventRecorded, onBattlemapEvent (token moves, terrain shifts, weather changes), onCampaignTimelineEvent, and AI Context Contributors for custom Gemini prompt enrichment.'
+      }
+    ]
+  },
+  {
+    version: 'v0.9.21',
+    date: 'Today',
+    title: 'World Atlas Tactical Encounter Pipeline & Combat Victory Spoils',
+    badge: 'Atlas Encounters & Victory Spoils',
+    badgeColor: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40',
+    highlights: [
+      {
+        category: '🗺️ Seamless Atlas-to-Tactical Encounter Pipeline',
+        detail: 'Locations in the World Atlas feature tactical encounter readiness cards detailing linked battlemaps, boss encounters, and recommended monsters. Clicking "Launch Tactical Encounter" automatically configures the encounter, spawns foes, loads grid terrain/doors/fog/weather, and transitions directly to combat.'
+      },
+      {
+        category: '🏆 Combat Victory & Spoils Distribution Modal',
+        detail: 'Vanquishing all foes automatically prompts an alert banner and the Combat Victory & Spoils modal. Features single-click options to claim XP (awarded to the active hero or split evenly across the party) and collect harvested gold and relics directly into inventory.'
+      },
+      {
+        category: '📜 Campaign Lore Vault Chronicles & Journal',
+        detail: 'Added a dedicated Chronicles tab in the Campaign Lore Vault. Encounter victories, exploration notes, and downtime events can be logged with participants, defeated monsters, round counts, and tags, complete with real-time category filtering and text search.'
+      }
+    ]
+  },
+  {
     version: 'v0.9.20',
     date: 'Today',
     title: 'Tactical Waypoint Movement Planning & AoE Terrain Transmutation',

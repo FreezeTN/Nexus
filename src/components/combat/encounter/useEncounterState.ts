@@ -11,6 +11,7 @@ import { PRESET_BATTLEMAP_LAYOUTS } from '../../battlemap/battlemapPresets';
 import { WorldLocation } from '../../../types/campaign';
 import { eventBus } from '../../../events/eventBus';
 import { broadcastEncounterState } from '../../../utils/useDetachedSync';
+import { systemRegistry } from '../../../systems/registry';
 import { 
   UserProfile, 
   GameSession, 
@@ -1847,6 +1848,12 @@ export function useEncounterState({
         syncEncounterToSession(next, activeTurnIndex, roundNumber);
       }
       return next;
+    });
+
+    systemRegistry.dispatchBattlemapEvent({
+      type: 'tokenMove',
+      payload: { combatantId: id, x, y, distanceFeet, options },
+      timestamp: new Date().toISOString()
     });
 
     // Auto-sync Action Economy & Movement when moving tokens on the Battlemap
