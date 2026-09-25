@@ -6,7 +6,8 @@ import {
   FactionCategory,
   TravelCalculationParams,
   TravelCalculationResult,
-  MapPresetSkin
+  MapPresetSkin,
+  CampaignJournalEntry
 } from '../types/campaign';
 import { CampaignEntity } from '../utils/searchIndexer';
 
@@ -14,6 +15,7 @@ import { CampaignEntity } from '../utils/searchIndexer';
 const STORAGE_LOCATIONS_KEY = 'nexus_campaign_world_locations_v1';
 const STORAGE_QUESTS_KEY = 'nexus_campaign_quests_v1';
 const STORAGE_FACTIONS_KEY = 'nexus_campaign_factions_v1';
+const STORAGE_JOURNAL_KEY = 'nexus_campaign_journal_v1';
 
 // Default World Locations
 export const DEFAULT_WORLD_LOCATIONS: WorldLocation[] = [
@@ -66,7 +68,15 @@ export const DEFAULT_WORLD_LOCATIONS: WorldLocation[] = [
     linkedNpcNames: ['Halaster Blackcloak', 'Shunn Shurreth'],
     shopsAndServices: ['Goblin Black Market (Floor 2)'],
     isDiscovered: true,
-    tags: ['Megadungeon', 'Traps', 'Boss Arena', 'Relics']
+    tags: ['Megadungeon', 'Traps', 'Boss Arena', 'Relics'],
+    linkedBattlemapLayoutId: 'preset_sunken_crypt',
+    suggestedMonsterNames: ['Bugbear Thug', 'Goblin Archer', 'Skeleton Minion'],
+    dungeonDetails: {
+      bossName: 'Shunn Shurreth (Shadow Blade)',
+      bossCr: 'CR 7',
+      treasureNotes: 'Staff of the Adder, 450 gp, Runic Opal Key',
+      trapDetails: 'Pressure plate swinging scythe (DC 14 DEX save, 3d8 slashing)'
+    }
   },
   {
     id: 'loc-candlekeep',
@@ -334,6 +344,63 @@ export function saveCampaignFactions(factions: Faction[]): void {
   } catch (e) {
     console.warn('Failed to save campaign factions to localStorage', e);
   }
+}
+
+// Campaign Journal Log Helpers
+export const DEFAULT_JOURNAL_ENTRIES: CampaignJournalEntry[] = [
+  {
+    id: 'journal-init-prologue',
+    timestamp: new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    title: 'Arrival in Waterdeep & The Yawning Portal',
+    category: 'lore',
+    locationName: 'The Yawning Portal Tavern',
+    summary: 'The party gathered in the bustling taproom of the Yawning Portal to review regional bounties and rumors of subterranean incursions beneath Mount Waterdeep.',
+    notes: 'Durnan warned the party to prepare torches, 50-foot hempen ropes, and holy water before descending the dry well.'
+  }
+];
+
+export function loadCampaignJournal(): CampaignJournalEntry[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_JOURNAL_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.warn('Failed to load campaign journal from localStorage', e);
+  }
+  return DEFAULT_JOURNAL_ENTRIES;
+}
+
+export function saveCampaignJournal(entries: CampaignJournalEntry[]): void {
+  try {
+    localStorage.setItem(STORAGE_JOURNAL_KEY, JSON.stringify(entries));
+  } catch (e) {
+    console.warn('Failed to save campaign journal to localStorage', e);
+  }
+}
+
+export function addCampaignJournalEntry(entry: Omit<CampaignJournalEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }): CampaignJournalEntry {
+  const existing = loadCampaignJournal();
+  const newEntry: CampaignJournalEntry = {
+    id: entry.id || `journal-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    timestamp: entry.timestamp || new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    title: entry.title,
+    category: entry.category,
+    locationId: entry.locationId,
+    locationName: entry.locationName,
+    summary: entry.summary,
+    enemiesVanquished: entry.enemiesVanquished,
+    totalXpAwarded: entry.totalXpAwarded,
+    lootHarvested: entry.lootHarvested,
+    currencyFound: entry.currencyFound,
+    participants: entry.participants,
+    notes: entry.notes
+  };
+
+  const updated = [newEntry, ...existing];
+  saveCampaignJournal(updated);
+  return newEntry;
 }
 
 // Bi-directional Synchronization with Campaign Knowledge Graph

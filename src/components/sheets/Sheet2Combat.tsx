@@ -38,6 +38,7 @@ interface Sheet2Props {
   onRoll: (label: string, diceType: number, diceCount: number, modifier: number, mode: 'normal' | 'advantage' | 'disadvantage') => void;
   onRollDamage: (label: string, expression: string) => void;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  onOpenCampaignLoreVault?: (tab?: 'atlas' | 'quests' | 'factions' | 'travel' | 'journal') => void;
 }
 
 export const Sheet2Combat: React.FC<Sheet2Props> = ({
@@ -53,7 +54,8 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
   onAddMonsterToRoster,
   onRoll,
   onRollDamage,
-  onOpenGenerators
+  onOpenGenerators,
+  onOpenCampaignLoreVault
 }) => {
   const [showTransformationModal, setShowTransformationModal] = useState(false);
   const [showCompanionModal, setShowCompanionModal] = useState(false);
@@ -399,6 +401,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
               onRoll={onRoll}
               encounterState={encounter}
               onOpenGenerators={onOpenGenerators}
+              onOpenCampaignLoreVault={onOpenCampaignLoreVault}
             />
           )}
 
@@ -461,6 +464,7 @@ export const Sheet2Combat: React.FC<Sheet2Props> = ({
               onRoll={onRoll}
               encounterState={encounter}
               onOpenGenerators={onOpenGenerators}
+              onOpenCampaignLoreVault={onOpenCampaignLoreVault}
             />
           )}
 

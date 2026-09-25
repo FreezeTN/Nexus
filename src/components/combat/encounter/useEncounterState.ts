@@ -7,6 +7,8 @@ import { ENVIRONMENT_CONFIGS } from '../../../utils/environmentRules';
 import { playInitiativeTurnSound, playDamageAppliedSound, playHealSound, playDeathSound, playHitSound, playMissSound, playDiceSound } from '../../../utils/diceAudio';
 import { Combatant, CombatLogEntry, SavedEncounterData, EncounterMode, MerchantEncounterState, ConcentrationPrompt, MassiveDamagePrompt } from './encounterTypes';
 import { TerrainType, DoorState, AoETemplate, BattlemapLayout, BattlemapConfig, ActiveTeleportState, ActiveSpellTargetingState, isCellImpassable, WeatherEffectType } from '../../battlemap/battlemapTypes';
+import { PRESET_BATTLEMAP_LAYOUTS } from '../../battlemap/battlemapPresets';
+import { WorldLocation } from '../../../types/campaign';
 import { eventBus } from '../../../events/eventBus';
 import { broadcastEncounterState } from '../../../utils/useDetachedSync';
 import { 
@@ -89,6 +91,7 @@ export function loadSavedEncounter(char: CharacterData): SavedEncounterData {
           encounterEnvironment: parsed.encounterEnvironment || 'terrestrial',
           encounterMode: parsed.encounterMode || 'combat',
           activeMerchant: parsed.activeMerchant || null,
+          linkedAtlasLocation: parsed.linkedAtlasLocation || null,
           battlemapTerrain: parsed.battlemapTerrain || {},
           battlemapDoors: parsed.battlemapDoors || {},
           battlemapFogOfWar: parsed.battlemapFogOfWar || {},
@@ -175,6 +178,9 @@ export function useEncounterState({
     () => (loadSavedEncounter(character).battlemapWeatherEffect as WeatherEffectType) || 'none'
   );
   const [activeAoETemplate, setActiveAoETemplate] = useState<AoETemplate | null>(null);
+  const [linkedAtlasLocation, setLinkedAtlasLocation] = useState<SavedEncounterData['linkedAtlasLocation']>(
+    () => loadSavedEncounter(character).linkedAtlasLocation || null
+  );
   const instanceId = useRef(Math.random().toString(36).substring(2, 9) + Date.now().toString(36)).current;
   const isRemoteUpdateRef = useRef(false);
   const isInitialSyncMountRef = useRef(true);
@@ -438,6 +444,7 @@ export function useEncounterState({
         encounterEnvironment,
         encounterMode,
         activeMerchant,
+        linkedAtlasLocation,
         battlemapTerrain: terrainMap,
         battlemapDoors: doors,
         battlemapFogOfWar: fogOfWar,
@@ -449,7 +456,7 @@ export function useEncounterState({
     } catch (err) {
       console.error("Error saving encounter state to localStorage:", err);
     }
-  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, terrainMap, doors, fogOfWar, useFogOfWar, battlemapWeatherEffect, character.id, instanceId]);
+  }, [combatants, activeTurnIndex, roundNumber, combatLogs, encounterEnvironment, encounterMode, activeMerchant, linkedAtlasLocation, terrainMap, doors, fogOfWar, useFogOfWar, battlemapWeatherEffect, character.id, instanceId]);
 
   // Real-time cross-window synchronization listener (BroadcastChannel & storage event)
   useEffect(() => {
@@ -464,6 +471,7 @@ export function useEncounterState({
       if (data.encounterEnvironment) setEncounterEnvironment(data.encounterEnvironment);
       if (data.encounterMode) setEncounterMode(data.encounterMode);
       if (data.activeMerchant !== undefined) setActiveMerchant(data.activeMerchant);
+      if (data.linkedAtlasLocation !== undefined) setLinkedAtlasLocation(data.linkedAtlasLocation);
       if (data.battlemapTerrain) setTerrainMap(data.battlemapTerrain as Record<string, TerrainType>);
       if (data.battlemapDoors) setDoors(data.battlemapDoors as Record<string, DoorState>);
       if (data.battlemapFogOfWar) setFogOfWar(data.battlemapFogOfWar);
@@ -614,6 +622,86 @@ export function useEncounterState({
     });
     return () => unsub();
   }, [addLogEntry]);
+
+  // Deploy encounter linked from World Atlas
+  const handleLaunchAtlasEncounter = useCallback((location: WorldLocation) => {
+    const locData: NonNullable<SavedEncounterData['linkedAtlasLocation']> = {
+      id: location.id,
+      name: location.name,
+      dangerLevel: location.dangerLevel,
+      climate: location.climate,
+      type: location.type,
+      dungeonBossName: location.dungeonDetails?.bossName,
+      treasureNotes: location.dungeonDetails?.treasureNotes
+    };
+    setLinkedAtlasLocation(locData);
+
+    // Apply linked tactical battlemap layout if one is specified
+    if (location.linkedBattlemapLayoutId) {
+      const layout = PRESET_BATTLEMAP_LAYOUTS.find(l => l.id === location.linkedBattlemapLayoutId);
+      if (layout) {
+        setTerrainMap(layout.terrainMap || {});
+        setDoors(layout.doors || {});
+        if (layout.fogOfWar) setFogOfWar(layout.fogOfWar);
+        if (layout.weatherEffect) setBattlemapWeatherEffect(layout.weatherEffect);
+      }
+    }
+
+    // Spawn boss & suggested hostiles into the combatant list
+    const newCombatants: Combatant[] = [];
+    if (location.dungeonDetails?.bossName) {
+      const bossName = location.dungeonDetails.bossName;
+      if (!combatants.some(c => c.name === bossName)) {
+        newCombatants.push({
+          id: `boss-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          name: bossName,
+          initiative: Math.floor(Math.random() * 20) + 12,
+          armorClass: 16,
+          hpCurrent: 85,
+          hpMax: 85,
+          type: 'enemy',
+          monsterXpReward: 2900,
+          isDefeated: false,
+          portraitUrl: getMonsterPortraitUrl(bossName)
+        });
+      }
+    }
+
+    if (location.suggestedMonsterNames && location.suggestedMonsterNames.length > 0) {
+      location.suggestedMonsterNames.forEach((monsterName, idx) => {
+        if (!combatants.some(c => c.name === monsterName)) {
+          newCombatants.push({
+            id: `foe-${Date.now()}-${idx}-${Math.floor(Math.random() * 1000)}`,
+            name: monsterName,
+            initiative: Math.floor(Math.random() * 20) + 10,
+            armorClass: 13,
+            hpCurrent: 22,
+            hpMax: 22,
+            type: 'enemy',
+            monsterXpReward: 450,
+            isDefeated: false,
+            portraitUrl: getMonsterPortraitUrl(monsterName)
+          });
+        }
+      });
+    }
+
+    if (newCombatants.length > 0) {
+      setCombatants(prev => [...prev, ...newCombatants]);
+    }
+
+    addLogEntry('turn', `⚔️ Tactical encounter deployed at ${location.name}.`, 'DM');
+  }, [combatants, addLogEntry]);
+
+  // Listen for LaunchAtlasEncounter events from WorldAtlasView
+  useEffect(() => {
+    const unsub = eventBus.on('LaunchAtlasEncounter', (payload) => {
+      if (payload?.location) {
+        handleLaunchAtlasEncounter(payload.location);
+      }
+    });
+    return () => unsub();
+  }, [handleLaunchAtlasEncounter]);
 
   const handleClearCombatLogs = useCallback(() => {
     setCombatLogs([]);
@@ -2561,6 +2649,9 @@ export function useEncounterState({
     toggleAutoXpGain,
     handlePlayerSubmitInitiative,
     syncEncounterToSession,
+    linkedAtlasLocation,
+    setLinkedAtlasLocation,
+    handleLaunchAtlasEncounter,
     isDm,
     hasActiveSession: Boolean(activeSessionCode)
   };

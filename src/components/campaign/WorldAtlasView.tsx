@@ -36,7 +36,8 @@ import {
   Home,
   CheckSquare,
   Square,
-  FileText
+  FileText,
+  Swords
 } from 'lucide-react';
 import {
   WorldLocation,
@@ -56,6 +57,7 @@ interface WorldAtlasViewProps {
   onOpenKnowledgeGraph?: (entityName: string) => void;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
   onNavigateToFaction?: (factionName: string) => void;
+  onLaunchEncounterAtLocation?: (location: WorldLocation) => void;
 }
 
 const LOCATION_ICONS: Record<LocationType, { icon: any; color: string; bg: string; label: string }> = {
@@ -142,7 +144,8 @@ export const WorldAtlasView: React.FC<WorldAtlasViewProps> = ({
   onSelectLocationForTravel,
   onOpenKnowledgeGraph,
   onOpenGenerators,
-  onNavigateToFaction
+  onNavigateToFaction,
+  onLaunchEncounterAtLocation
 }) => {
   const [locations, setLocations] = useState<WorldLocation[]>(() => loadCampaignLocations());
   const [selectedLocation, setSelectedLocation] = useState<WorldLocation | null>(null);
@@ -920,15 +923,66 @@ export const WorldAtlasView: React.FC<WorldAtlasViewProps> = ({
                 />
               </div>
 
+              {/* Tactical Encounter Setup Intel */}
+              {(selectedLocation.linkedBattlemapLayoutId || (selectedLocation.suggestedMonsterNames && selectedLocation.suggestedMonsterNames.length > 0) || selectedLocation.dungeonDetails?.bossName) && (
+                <div className="bg-gradient-to-r from-red-950/40 via-stone-900 to-amber-950/30 border border-red-500/30 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-red-300">
+                    <span className="flex items-center gap-1.5">
+                      <Swords className="w-3.5 h-3.5 text-red-400" />
+                      <span>Tactical Encounter Intel</span>
+                    </span>
+                    <span className="text-[10px] font-mono uppercase text-red-400/80">Battle Ready</span>
+                  </div>
+                  <div className="text-[11px] text-stone-300 space-y-1">
+                    {selectedLocation.linkedBattlemapLayoutId && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-stone-400">Tactical Map:</span>
+                        <span className="font-mono text-amber-300 font-medium">
+                          {selectedLocation.linkedBattlemapLayoutId.replace('preset_', '').replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    )}
+                    {selectedLocation.dungeonDetails?.bossName && (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-stone-400">Boss / Champion:</span>
+                        <span className="text-rose-300 font-bold">{selectedLocation.dungeonDetails.bossName}</span>
+                        {selectedLocation.dungeonDetails.bossCr && (
+                          <span className="text-[10px] font-mono bg-rose-950/80 text-rose-300 px-1 py-0.2 rounded border border-rose-500/40">
+                            {selectedLocation.dungeonDetails.bossCr}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    {selectedLocation.suggestedMonsterNames && selectedLocation.suggestedMonsterNames.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-stone-400">Hostiles:</span>
+                        <span className="text-amber-200">{selectedLocation.suggestedMonsterNames.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="pt-2 border-t border-stone-800 flex flex-wrap gap-2">
+                {onLaunchEncounterAtLocation && (
+                  <button
+                    onClick={() => onLaunchEncounterAtLocation(selectedLocation)}
+                    className="flex-1 px-3 py-2 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-red-950/40"
+                    title={`Deploy tactical battlemap & encounter for ${selectedLocation.name}`}
+                  >
+                    <Swords className="w-3.5 h-3.5" />
+                    <span>Launch Encounter</span>
+                  </button>
+                )}
+
                 {onSelectLocationForTravel && (
                   <button
                     onClick={() => onSelectLocationForTravel(selectedLocation)}
-                    className="flex-1 px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+                    className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
                   >
                     <Navigation className="w-3.5 h-3.5" />
-                    <span>Travel Calculator</span>
+                    <span>Travel</span>
                   </button>
                 )}
 

@@ -57,6 +57,9 @@ const LevelUpWizardModal = lazy(() =>
 const LegalLicensingModal = lazy(() =>
   import('../components/modals/LegalLicensingModal').then(m => ({ default: m.LegalLicensingModal }))
 );
+const SessionOrchestratorModal = lazy(() =>
+  import('../components/modals/SessionOrchestratorModal').then(m => ({ default: m.SessionOrchestratorModal }))
+);
 
 export function ModalLoadingFallback() {
   return (
@@ -300,6 +303,26 @@ export function renderRegisteredModal<K extends ModalId>({
             onAddItemToInventory={p.onAddItemToInventory}
             onOpenKnowledgeGraph={p.onOpenKnowledgeGraph}
             onOpenGenerators={p.onOpenGenerators}
+            onLaunchEncounterAtLocation={p.onLaunchEncounterAtLocation}
+          />
+        </Suspense>
+      );
+    }
+    case 'session-orchestrator': {
+      const p = props as ModalPropsMap['session-orchestrator'];
+      return (
+        <Suspense fallback={<ModalLoadingFallback />}>
+          <SessionOrchestratorModal
+            isOpen={true}
+            onClose={onClose}
+            initialTab={p.initialTab}
+            activeCharacter={p.activeCharacter || null}
+            characters={p.characters || []}
+            parties={p.parties || []}
+            ruleEdition={p.ruleEdition || '5e'}
+            onUpdateCharacter={p.onUpdateCharacter}
+            onLaunchEncounterAtLocation={p.onLaunchEncounterAtLocation}
+            onNavigateTab={p.onNavigateTab}
           />
         </Suspense>
       );

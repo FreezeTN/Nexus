@@ -25,6 +25,7 @@ export type MapPresetSkin =
 export interface DungeonDetails {
   floors?: number;
   bossName?: string;
+  bossCr?: string;
   hazards?: string[];
   roomCount?: number;
   treasureNotes?: string;
@@ -53,6 +54,8 @@ export interface WorldLocation {
   markerIcon?: string;
   customLoreNotes?: string;
   dungeonDetails?: DungeonDetails;
+  linkedBattlemapLayoutId?: string; // ID of linked tactical battlemap layout (e.g. preset_sunken_crypt)
+  suggestedMonsterNames?: string[]; // e.g. ['Goblin', 'Skeleton', 'Bugbear']
 }
 
 export type QuestCategory = 'main' | 'side' | 'personal' | 'faction' | 'bounty' | 'rumor';
@@ -156,4 +159,20 @@ export interface TravelCalculationResult {
   exhaustionRisk: boolean;
   encounterCheckRolls: number;
   description: string;
+}
+
+export interface CampaignJournalEntry {
+  id: string;
+  timestamp: string; // ISO date or display string
+  title: string;
+  category: 'encounter' | 'exploration' | 'quest' | 'lore' | 'downtime';
+  locationId?: string;
+  locationName?: string;
+  summary: string;
+  enemiesVanquished?: Array<{ name: string; count: number; xpReward: number }>;
+  totalXpAwarded?: number;
+  lootHarvested?: Array<{ name: string; quantity: number; rarity?: string; notes?: string }>;
+  currencyFound?: { cp?: number; sp?: number; ep?: number; gp?: number; pp?: number };
+  participants?: string[];
+  notes?: string;
 }

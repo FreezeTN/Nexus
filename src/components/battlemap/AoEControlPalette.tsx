@@ -20,7 +20,9 @@ import {
 } from 'lucide-react';
 import {
   AoETemplate,
-  AoEShape
+  AoEShape,
+  TerrainType,
+  TERRAIN_DEFINITIONS
 } from './battlemapTypes';
 import { Combatant } from '../combat/encounter/encounterTypes';
 import { CharacterData, Spell } from '../../types';
@@ -33,6 +35,7 @@ interface AoEControlPaletteProps {
   onToggleRuler: () => void;
   onRollSavesForTargets?: (saveType: string, dc: number, targets: Combatant[]) => void;
   onApplyDamageToTargets?: (damageDice: string, damageType: string, targets: Combatant[]) => void;
+  onApplyTerrainEffect?: (terrain: TerrainType, durationRounds?: number) => void;
   onClose: () => void;
   selectedCharacter?: CharacterData | null;
   selectedCombatant?: Combatant | null;
@@ -78,19 +81,29 @@ export function inferSpellAoE(
   const school = (spell.school || '').toLowerCase();
   let color = 'rgba(239, 68, 68, 0.35)';
   let borderColor = '#ef4444';
+  let terrainEffect: import('./battlemapTypes').TerrainType | undefined = undefined;
 
-  if (dmg.includes('fire') || school.includes('evoc')) {
+  if (dmg.includes('fire') || school.includes('evoc') || desc.includes('fireball') || desc.includes('flame') || desc.includes('lava') || desc.includes('burn')) {
     color = 'rgba(249, 115, 22, 0.35)';
     borderColor = '#f97316';
-  } else if (dmg.includes('cold') || dmg.includes('ice')) {
+    if (desc.includes('wall of fire') || desc.includes('ignite') || desc.includes('set fire') || desc.includes('hazard') || desc.includes('lava') || desc.includes('fireball')) {
+      terrainEffect = 'hazard';
+    }
+  } else if (dmg.includes('cold') || dmg.includes('ice') || desc.includes('sleet') || desc.includes('blizzard') || desc.includes('cone of cold') || desc.includes('ice storm')) {
     color = 'rgba(56, 189, 248, 0.35)';
     borderColor = '#38bdf8';
+    terrainEffect = 'ice';
+  } else if (desc.includes('web') || desc.includes('vine') || desc.includes('entangle') || desc.includes('spike growth') || desc.includes('grease') || desc.includes('plant growth')) {
+    color = 'rgba(244, 244, 245, 0.3)';
+    borderColor = '#e4e4e7';
+    terrainEffect = desc.includes('web') ? 'web' : 'difficult';
   } else if (dmg.includes('lightning') || dmg.includes('thunder')) {
     color = 'rgba(234, 179, 8, 0.35)';
     borderColor = '#eab308';
   } else if (dmg.includes('acid') || dmg.includes('poison')) {
     color = 'rgba(34, 197, 94, 0.35)';
     borderColor = '#22c55e';
+    terrainEffect = 'hazard';
   } else if (dmg.includes('necrotic')) {
     color = 'rgba(168, 85, 247, 0.35)';
     borderColor = '#a855f7';
@@ -125,7 +138,9 @@ export function inferSpellAoE(
     damageDice: spell.damage || '',
     damageType: spell.damageType || '',
     description: spell.shortDescription || spell.description || `${spell.name} (${spell.level === 0 ? 'Cantrip' : `Level ${spell.level}`})`,
-    isLocked: false
+    isLocked: false,
+    terrainEffect,
+    terrainDurationRounds: terrainEffect ? (desc.includes('minute') ? 10 : desc.includes('hour') ? 60 : 3) : undefined
   };
 }
 
@@ -137,6 +152,7 @@ export const AoEControlPalette: React.FC<AoEControlPaletteProps> = ({
   onToggleRuler,
   onRollSavesForTargets,
   onApplyDamageToTargets,
+  onApplyTerrainEffect,
   onClose,
   selectedCharacter,
   selectedCombatant
@@ -472,6 +488,63 @@ export const AoEControlPalette: React.FC<AoEControlPaletteProps> = ({
                   <Flame className="w-3 h-3 text-amber-400" />
                   <span>{activeTemplate.damageDice}</span>
                 </button>
+              )}
+
+              {/* Dynamic Battlefield Transmutation (Ignite / Freeze / Web / Quagmire) */}
+              {onApplyTerrainEffect && (
+                <div className="flex items-center gap-1 ml-1 border-l border-stone-800 pl-1.5">
+                  {activeTemplate.terrainEffect ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onApplyTerrainEffect(
+                          activeTemplate.terrainEffect!,
+                          activeTemplate.terrainDurationRounds
+                        )
+                      }
+                      className="flex items-center gap-1 px-2 py-0.5 bg-amber-900/80 hover:bg-amber-800 text-amber-200 rounded text-[10px] font-bold border border-amber-600 transition shadow cursor-pointer animate-pulse"
+                      title={`Transmute terrain under template into ${TERRAIN_DEFINITIONS[activeTemplate.terrainEffect]?.name || activeTemplate.terrainEffect}`}
+                    >
+                      <span>{TERRAIN_DEFINITIONS[activeTemplate.terrainEffect]?.icon || '✨'}</span>
+                      <span>Apply {TERRAIN_DEFINITIONS[activeTemplate.terrainEffect]?.name || activeTemplate.terrainEffect}</span>
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onApplyTerrainEffect('hazard')}
+                        className="px-1.5 py-0.5 bg-rose-950 hover:bg-rose-900 text-rose-300 rounded text-[9px] font-bold border border-rose-800 transition"
+                        title="Set fire / ignite covered ground into Hazards"
+                      >
+                        🌋 Ignite
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onApplyTerrainEffect('ice')}
+                        className="px-1.5 py-0.5 bg-sky-950 hover:bg-sky-900 text-sky-300 rounded text-[9px] font-bold border border-sky-800 transition"
+                        title="Freeze covered ground into Slippery Ice"
+                      >
+                        ❄️ Freeze
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onApplyTerrainEffect('web')}
+                        className="px-1.5 py-0.5 bg-stone-900 hover:bg-stone-800 text-stone-200 rounded text-[9px] font-bold border border-stone-700 transition"
+                        title="Coat covered ground with Thick Webs"
+                      >
+                        🕸️ Webs
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onApplyTerrainEffect('difficult')}
+                        className="px-1.5 py-0.5 bg-amber-950 hover:bg-amber-900 text-amber-300 rounded text-[9px] font-bold border border-amber-800 transition"
+                        title="Churn ground into Difficult Terrain / Rubble"
+                      >
+                        🪨 Rubble
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 

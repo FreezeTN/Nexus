@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { RuleEdition, CharacterData } from './types';
 import { Header } from './components/Header';
 import { Navigation, TabId } from './components/Navigation';
@@ -38,6 +38,9 @@ import { Combatant, CombatLogEntry, SavedEncounterData } from './components/comb
 import { loadSavedEncounter } from './components/combat/encounter/useEncounterState';
 import { getMonsterPortraitUrl } from './data/monsterPortraits';
 import { EncounterEnvironment } from './types';
+import { WorldLocation } from './types/campaign';
+import { PRESET_BATTLEMAP_LAYOUTS } from './components/battlemap/battlemapPresets';
+import { eventBus } from './events/eventBus';
 import { GlobalDiceOverlay } from './components/dice/GlobalDiceOverlay';
 import { ThemeProvider } from './context/ThemeContext';
 import { SubscriptionProvider } from './context/SubscriptionContext';
@@ -343,6 +346,83 @@ function AppWorkspace() {
     updatedAt: new Date().toISOString()
   }), [activeParty, currentUser, activeCampaignPlayerCharacters]);
 
+  // Launch connected tactical encounter at a specific World Atlas location
+  const handleLaunchEncounterAtLocation = useCallback((location: WorldLocation) => {
+    // 1. Emit event to eventBus so active useEncounterState loads the encounter immediately
+    eventBus.emit('LaunchAtlasEncounter', { location });
+
+    // 2. Pre-seed encounter state in localStorage
+    if (activeCharacter) {
+      try {
+        const charKey = activeCharacter.id || 'default';
+        const raw = localStorage.getItem(`dnd_encounter_state_v1_${charKey}`);
+        const currentSaved = raw ? JSON.parse(raw) : { combatants: [] };
+
+        currentSaved.linkedAtlasLocation = {
+          id: location.id,
+          name: location.name,
+          dangerLevel: location.dangerLevel,
+          climate: location.climate,
+          type: location.type,
+          dungeonBossName: location.dungeonDetails?.bossName,
+          treasureNotes: location.dungeonDetails?.treasureNotes
+        };
+
+        if (location.linkedBattlemapLayoutId) {
+          const layout = PRESET_BATTLEMAP_LAYOUTS.find(l => l.id === location.linkedBattlemapLayoutId);
+          if (layout) {
+            currentSaved.battlemapTerrain = layout.terrainMap || {};
+            currentSaved.battlemapDoors = layout.doors || {};
+            currentSaved.battlemapFogOfWar = layout.fogOfWar || {};
+            currentSaved.battlemapWeatherEffect = layout.weatherEffect || 'none';
+          }
+        }
+
+        const newCombatants = Array.isArray(currentSaved.combatants) ? [...currentSaved.combatants] : [];
+        if (location.dungeonDetails?.bossName && !newCombatants.some((c: any) => c.name === location.dungeonDetails?.bossName)) {
+          newCombatants.push({
+            id: `boss-${Date.now()}`,
+            name: location.dungeonDetails.bossName,
+            initiative: 14,
+            armorClass: 16,
+            hpCurrent: 85,
+            hpMax: 85,
+            type: 'enemy',
+            monsterXpReward: 2900,
+            isDefeated: false,
+            portraitUrl: getMonsterPortraitUrl(location.dungeonDetails.bossName)
+          });
+        }
+        if (location.suggestedMonsterNames) {
+          location.suggestedMonsterNames.forEach((monsterName, idx) => {
+            if (!newCombatants.some((c: any) => c.name === monsterName)) {
+              newCombatants.push({
+                id: `foe-${Date.now()}-${idx}`,
+                name: monsterName,
+                initiative: 11,
+                armorClass: 13,
+                hpCurrent: 22,
+                hpMax: 22,
+                type: 'enemy',
+                monsterXpReward: 450,
+                isDefeated: false,
+                portraitUrl: getMonsterPortraitUrl(monsterName)
+              });
+            }
+          });
+        }
+        currentSaved.combatants = newCombatants;
+
+        localStorage.setItem(`dnd_encounter_state_v1_${charKey}`, JSON.stringify(currentSaved));
+      } catch (e) {
+        console.warn('Failed to pre-seed encounter state:', e);
+      }
+    }
+
+    // 3. Switch active tab to battlemap so the user immediately enters the tactical encounter
+    setActiveTab('battlemap');
+  }, [activeCharacter]);
+
   // 6. Centralized Modal Coordinator
   const {
     handleOpenUpgradeModal,
@@ -387,6 +467,7 @@ function AppWorkspace() {
       setEnabledSystems(updated);
       localStorage.setItem('dnd_app_enabled_systems_v2', JSON.stringify(updated));
     },
+    onLaunchEncounterAtLocation: handleLaunchEncounterAtLocation,
     onExportJson: handleExportJson,
     onImportJson: handleImportJson,
     onLoadCampaignSave: handleLoadCampaignSave,
@@ -611,6 +692,7 @@ function AppWorkspace() {
               onRoll={handleRoll}
               initialViewMode="battlemap"
               isStandaloneBattlemap={true}
+              onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
             />
           )}
 
@@ -867,6 +949,7 @@ function AppWorkspace() {
                         onRoll={handleRoll}
                         onRollDamage={handleRollDamage}
                         onOpenGenerators={handleOpenGenerators}
+                        onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
                       />
                     </div>
                   )}
@@ -885,6 +968,7 @@ function AppWorkspace() {
                         onRoll={handleRoll}
                         initialViewMode="battlemap"
                         isStandaloneBattlemap={true}
+                        onOpenCampaignLoreVault={handleOpenCampaignLoreVault}
                       />
                     </div>
                   )}

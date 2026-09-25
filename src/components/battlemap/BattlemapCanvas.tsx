@@ -76,7 +76,8 @@ import {
   detectAoOProvoked,
   isCellSheltered,
   getTileCeilingFeet,
-  getMaxAllowedElevation
+  getMaxAllowedElevation,
+  getAoECoveredCells
 } from './battlemapTypes';
 import { WeatherCanvasLayer } from './WeatherCanvasLayer';
 import { WeatherTacticalRulesModal } from './WeatherTacticalRulesModal';
@@ -490,6 +491,10 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           ? effectiveMover.movementRemaining
           : baseSpeed;
         const effectiveElevation = mount?.elevationFeet ?? c.elevationFeet;
+        const flySpeed = effectiveMover.flySpeed;
+        const swimSpeed = effectiveMover.swimSpeed;
+        const climbSpeed = effectiveMover.climbSpeed;
+        const speedSpecial = effectiveMover.speedSpecial;
 
         return {
           ...c,
@@ -499,6 +504,10 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           calculatedBaseSpeed: baseSpeed,
           calculatedRemainingSpeed: remainingSpeed,
           elevationFeet: effectiveElevation,
+          flySpeed,
+          swimSpeed,
+          climbSpeed,
+          speedSpecial,
           mountEntity: mount,
           lightSource: tokenLightSources[c.id] || c.lightSource || 'none'
         };
@@ -670,9 +679,24 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       config.feetPerSquare,
       config.diagonalRule,
       terrainMap,
-      doors
+      doors,
+      {
+        hasFlySpeed: Boolean(
+          (activeMover?.flySpeed && activeMover.flySpeed > 0) ||
+          activeMover?.speedSpecial?.toLowerCase().includes('fly')
+        ),
+        hasSwimSpeed: Boolean(
+          (activeMover?.swimSpeed && activeMover.swimSpeed > 0) ||
+          activeMover?.speedSpecial?.toLowerCase().includes('swim')
+        ),
+        hasClimbSpeed: Boolean(
+          (activeMover?.climbSpeed && activeMover.climbSpeed > 0) ||
+          activeMover?.speedSpecial?.toLowerCase().includes('climb')
+        ),
+        elevationFeet: activeMover?.elevationFeet || 0
+      }
     );
-  }, [activePathWaypoints, config.feetPerSquare, config.diagonalRule, terrainMap, doors]);
+  }, [activePathWaypoints, config.feetPerSquare, config.diagonalRule, terrainMap, doors, activeMover]);
 
   // Phase 3: Terrain statistics count
   const terrainCounts = useMemo(() => {
@@ -812,6 +836,46 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
       onUpdateConfig({ ...config, ceilingOverrides: {} });
     }
   };
+
+  // Phase 1 (Tactics & Combat Evolution): Dynamic AoE Battlefield Terrain Transmutation
+  const handleApplyAoETerrainEffect = useCallback((terrain: TerrainType, durationRounds?: number) => {
+    if (!currentAoETemplate) return;
+    const cells = getAoECoveredCells(
+      currentAoETemplate,
+      config.gridColumns,
+      config.gridRows,
+      config.feetPerSquare
+    );
+    if (cells.length === 0) return;
+
+    const nextTerrain = { ...terrainMap };
+    let modifiedCount = 0;
+    cells.forEach(({ x, y }) => {
+      const key = `${x},${y}`;
+      // Do not overwrite solid walls or doors unless intentionally forced
+      if (nextTerrain[key] !== 'wall' && nextTerrain[key] !== 'door') {
+        nextTerrain[key] = terrain;
+        modifiedCount++;
+      }
+    });
+
+    onUpdateTerrain?.(nextTerrain);
+
+    const terrainDef = TERRAIN_DEFINITIONS[terrain];
+    const durationText = durationRounds ? ` (${durationRounds} rounds)` : '';
+    const msg = `💥 Battlefield Altered: ${currentAoETemplate.name} transmuted ${modifiedCount} tiles into ${terrainDef?.name || terrain}${durationText}!`;
+
+    setMovementNotice({
+      type: 'info',
+      message: msg
+    });
+
+    onLogAction?.(
+      'ability',
+      msg,
+      currentAoETemplate.name || 'Tactical AoE'
+    );
+  }, [currentAoETemplate, config.gridColumns, config.gridRows, config.feetPerSquare, terrainMap, onUpdateTerrain, onLogAction]);
 
   // Phase 4: AoE caught combatants (3D aware)
   const aoeCaughtCombatants = useMemo(() => {
@@ -1923,7 +1987,9 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           if (onSetTargetCombatant) onSetTargetCombatant(null);
         }
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (isRulerActive || rulerOrigin) {
+        if (isMovePlanning && moveWaypoints.length > 0) {
+          setMoveWaypoints((prev) => prev.slice(0, -1));
+        } else if (isRulerActive || rulerOrigin) {
           setIsRulerActive(false);
           setRulerOrigin(null);
         } else if (selectedCombatantId) {
@@ -1931,6 +1997,11 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           onSelectCombatant?.(null);
         } else if (currentAoETemplate) {
           handleUpdateAoEInternal(null);
+        }
+      } else if (e.key === 'z' || e.key === 'Z') {
+        if ((e.ctrlKey || e.metaKey) && isMovePlanning && moveWaypoints.length > 0) {
+          e.preventDefault();
+          setMoveWaypoints((prev) => prev.slice(0, -1));
         }
       } else if (e.key === 'Enter') {
         if (isMovePlanning && activePathWaypoints.length >= 2) {
@@ -2621,6 +2692,7 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
           }}
           onRollSavesForTargets={onRollSavesForTargets}
           onApplyDamageToTargets={onApplyDamageToTargets}
+          onApplyTerrainEffect={handleApplyAoETerrainEffect}
           onClose={() => setIsAoEEditorOpen(false)}
           selectedCharacter={selectedCharacterData}
           selectedCombatant={activeMover}
@@ -4519,7 +4591,28 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
 
                     // Calculate distance up to this point
                     const subPath = activePathWaypoints.slice(0, idx + 1);
-                    const subDist = calculatePathDistanceFeet(subPath, config.feetPerSquare, config.diagonalRule);
+                    const subDist = calculatePathDistanceFeet(
+                      subPath,
+                      config.feetPerSquare,
+                      config.diagonalRule,
+                      terrainMap,
+                      doors,
+                      {
+                        hasFlySpeed: Boolean(
+                          (activeMover?.flySpeed && activeMover.flySpeed > 0) ||
+                          activeMover?.speedSpecial?.toLowerCase().includes('fly')
+                        ),
+                        hasSwimSpeed: Boolean(
+                          (activeMover?.swimSpeed && activeMover.swimSpeed > 0) ||
+                          activeMover?.speedSpecial?.toLowerCase().includes('swim')
+                        ),
+                        hasClimbSpeed: Boolean(
+                          (activeMover?.climbSpeed && activeMover.climbSpeed > 0) ||
+                          activeMover?.speedSpecial?.toLowerCase().includes('climb')
+                        ),
+                        elevationFeet: activeMover?.elevationFeet || 0
+                      }
+                    );
 
                     return (
                       <g key={`wpt-${idx}`}>
@@ -5104,6 +5197,17 @@ export const BattlemapCanvas: React.FC<BattlemapCanvasProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 border-l border-stone-800 pl-3">
+              {moveWaypoints.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMoveWaypoints((prev) => prev.slice(0, -1))}
+                  className="flex items-center gap-1 px-2 py-1 text-xs font-bold rounded-lg bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-700 transition"
+                  title="Undo last waypoint (Backspace / Z)"
+                >
+                  <RotateCcw className="w-3 h-3 text-stone-400" />
+                  <span>Undo</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleConfirmMove}

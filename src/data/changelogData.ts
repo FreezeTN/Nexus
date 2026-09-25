@@ -14,6 +14,31 @@ export interface ChangelogEntry {
 
 export const changelogData: ChangelogEntry[] = [
   {
+    version: 'v0.9.20',
+    date: 'Today',
+    title: 'Tactical Waypoint Movement Planning & AoE Terrain Transmutation',
+    badge: 'Movement Waypoints & Spell Transmutation',
+    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+    highlights: [
+      {
+        category: '👣 Interactive Movement Waypoint Planning',
+        detail: 'Plan intricate multi-leg paths around walls, hazardous terrain, and enemy threat zones before committing movement. Supports step-by-step waypoint placement, path preview lines, color-coded node distance callouts, and undo via Backspace or Ctrl+Z.'
+      },
+      {
+        category: '🧱 Wall & Obstacle Path Distance Accumulation',
+        detail: 'Characters navigating around walls and impassable obstacles naturally accumulate true path travel distance based on the active diagonal rule (5e Chebyshev, 3.5e 5-10-5, or Euclidean), preventing illegal path-clipping through barriers.'
+      },
+      {
+        category: '🦅 Flight Elevation & Special Movement Traversal',
+        detail: 'Creatures with active flight or elevated altitudes glide freely over ground chasms and sub-ceiling walls, while swim and climb speeds bypass standard difficult terrain movement cost multipliers.'
+      },
+      {
+        category: '🔥 AoE Spell Terrain Transmutation',
+        detail: 'AoE spell templates now support automatic environmental transmutation (Fire creates hazard embers, Cold creates slippery ice, Web conjures difficult webs, and Earthquake creates rubble), modifying the battlemap grid while preserving structural walls.'
+      }
+    ]
+  },
+  {
     version: 'v0.9.19',
     date: 'Today',
     title: 'Dual-Engine Tactical Battlemap: D&D 3.5e vs 5e RAW Combat Differentiation',

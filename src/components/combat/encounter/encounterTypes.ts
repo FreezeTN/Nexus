@@ -75,6 +75,9 @@ export interface Combatant {
   reachFeet?: number; // default 5ft
   elevationFeet?: number; // default 0ft
   flySpeed?: number; // Flying speed in feet (e.g. 60ft)
+  swimSpeed?: number; // Swim speed in feet
+  climbSpeed?: number; // Climb speed in feet
+  speedSpecial?: string; // e.g. "Fly 60ft, Swim 30ft, Climb 20ft"
   hasHover?: boolean; // Whether the creature can hover (prevents falling when knocked prone/incapacitated)
   speed?: number; // Base movement speed in feet (default 30ft)
   movementRemaining?: number; // Remaining movement feet in current turn
@@ -107,6 +110,8 @@ export interface EncounterTrackerProps {
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
   initialViewMode?: 'teams' | 'timeline' | 'battlemap';
   isStandaloneBattlemap?: boolean;
+  onNavigateToAtlasLocation?: (locationName: string) => void;
+  onOpenCampaignLoreVault?: (tab?: 'atlas' | 'quests' | 'factions' | 'travel' | 'journal') => void;
 }
 
 export interface SavedEncounterData {
@@ -117,6 +122,15 @@ export interface SavedEncounterData {
   encounterEnvironment?: EncounterEnvironment;
   encounterMode?: EncounterMode;
   activeMerchant?: MerchantEncounterState | null;
+  linkedAtlasLocation?: {
+    id: string;
+    name: string;
+    dangerLevel?: string;
+    climate?: string;
+    type?: string;
+    dungeonBossName?: string;
+    treasureNotes?: string;
+  } | null;
   battlemapTheme?: 'dungeon' | 'grass' | 'cave' | 'volcano' | 'snow' | 'ship' | 'void';
   battlemapColumns?: number;
   battlemapRows?: number;

@@ -597,14 +597,21 @@ export function getCellMovementCost(
 }
 
 /**
- * Calculates total path distance along a series of waypoints, accounting for terrain
+ * Calculates total path distance along a series of waypoints, accounting for terrain,
+ * diagonal movement rules (5e / 3.5e alternating / euclidean), and difficult terrain multipliers.
  */
 export function calculatePathDistanceFeet(
   waypoints: Array<{ x: number; y: number }>,
   feetPerSquare = 5,
   rule: DiagonalRule = 'standard5e',
   terrainMap?: Record<string, TerrainType>,
-  doors?: Record<string, DoorState>
+  doors?: Record<string, DoorState>,
+  options?: {
+    hasSwimSpeed?: boolean;
+    hasClimbSpeed?: boolean;
+    hasFlySpeed?: boolean;
+    elevationFeet?: number;
+  }
 ): number {
   if (waypoints.length < 2) return 0;
   let total = 0;
@@ -613,6 +620,26 @@ export function calculatePathDistanceFeet(
     const from = waypoints[i];
     const to = waypoints[i + 1];
 
+    // If terrainMap is provided, trace intermediate tiles using calculateDirectMoveCostFeet
+    if (terrainMap) {
+      const stepCost = calculateDirectMoveCostFeet(
+        from.x,
+        from.y,
+        to.x,
+        to.y,
+        feetPerSquare,
+        rule,
+        terrainMap,
+        doors,
+        options
+      );
+      if (stepCost.isPassable && isFinite(stepCost.totalFeet)) {
+        total += stepCost.totalFeet;
+        continue;
+      }
+    }
+
+    // Fallback or straight line calculation
     const baseDistance = calculateGridDistanceFeet(
       from.x,
       from.y,
@@ -622,7 +649,6 @@ export function calculatePathDistanceFeet(
       rule
     );
 
-    // Destination terrain movement penalty
     const destKey = `${to.x},${to.y}`;
     const destTerrain = terrainMap?.[destKey];
     if (destTerrain) {
@@ -819,6 +845,8 @@ export interface AoETemplate {
   damageType?: string;
   description?: string;
   isLocked?: boolean;
+  terrainEffect?: TerrainType; // Dynamic terrain transmutation (e.g. 'hazard', 'ice', 'web', 'difficult', 'water', 'open')
+  terrainDurationRounds?: number; // Duration in rounds or 0 for permanent
 }
 
 export interface SpellAoEPreset {
@@ -1371,6 +1399,45 @@ export function isTokenInsideAoE(
   return false;
 }
 
+/**
+ * Calculates all grid cells (x, y) covered by an AoE template.
+ * Used for dynamic battlefield modification (e.g. burning into hazard, freezing into ice, casting webs/grease).
+ */
+export function getAoECoveredCells(
+  aoe: AoETemplate,
+  gridColumns: number,
+  gridRows: number,
+  feetPerSquare = 5
+): Array<{ x: number; y: number }> {
+  const covered: Array<{ x: number; y: number }> = [];
+
+  // Determine conservative bounding box
+  let minCol = 0;
+  let maxCol = gridColumns - 1;
+  let minRow = 0;
+  let maxRow = gridRows - 1;
+
+  const maxRadiusSquares = Math.ceil(
+    Math.max(aoe.radiusFeet || 0, aoe.lengthFeet || 0, aoe.widthFeet || 0, 20) / feetPerSquare
+  ) + 1;
+
+  minCol = Math.max(0, Math.floor(aoe.originX - maxRadiusSquares));
+  maxCol = Math.min(gridColumns - 1, Math.ceil(aoe.originX + maxRadiusSquares));
+  minRow = Math.max(0, Math.floor(aoe.originY - maxRadiusSquares));
+  maxRow = Math.min(gridRows - 1, Math.ceil(aoe.originY + maxRadiusSquares));
+
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      // Check if a 1x1 token at (c, r) with 0 elevation is inside the AoE
+      if (isTokenInsideAoE(c, r, 1, aoe, feetPerSquare, aoe.elevationFeet || 0)) {
+        covered.push({ x: c, y: r });
+      }
+    }
+  }
+
+  return covered;
+}
+
 // ==========================================
 // BATTLEMAP LAYOUT PRE-BUILD & SAVE / LOAD
 // ==========================================
@@ -1421,6 +1488,7 @@ export interface BattlemapLayout {
   useFogOfWar?: boolean;
   activeAoE?: AoETemplate | null;
   tokens?: BattlemapLayoutToken[];
+  weatherEffect?: WeatherEffectType;
 }
 
 // ==========================================

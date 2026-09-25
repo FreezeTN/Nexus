@@ -19,6 +19,7 @@ import { WorldAtlasView } from '../campaign/WorldAtlasView';
 import { QuestTrackerView } from '../campaign/QuestTrackerView';
 import { FactionMatrixView } from '../campaign/FactionMatrixView';
 import { CampaignTravelCalculator } from '../campaign/CampaignTravelCalculator';
+import { CampaignJournalView } from '../campaign/CampaignJournalView';
 import { WorldLocation } from '../../types/campaign';
 import { CharacterData, Party } from '../../types';
 import { UserProfile } from '../../lib/firebase';
@@ -28,7 +29,7 @@ import {
   loadCampaignFactions
 } from '../../services/campaignService';
 
-export type CampaignTabId = 'atlas' | 'quests' | 'factions' | 'travel' | 'export';
+export type CampaignTabId = 'atlas' | 'quests' | 'factions' | 'travel' | 'journal' | 'export';
 
 interface CampaignLoreVaultModalProps {
   isOpen: boolean;
@@ -42,6 +43,7 @@ interface CampaignLoreVaultModalProps {
   onAddItemToInventory?: (item: any, targetId?: string) => void;
   onOpenKnowledgeGraph?: (entityName: string) => void;
   onOpenGenerators?: (tab?: 'npc' | 'encounter' | 'treasure' | 'session' | 'rules' | 'dungeon') => void;
+  onLaunchEncounterAtLocation?: (location: WorldLocation) => void;
 }
 
 export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
@@ -55,7 +57,8 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
   onUpdateCharacter,
   onAddItemToInventory,
   onOpenKnowledgeGraph,
-  onOpenGenerators
+  onOpenGenerators,
+  onLaunchEncounterAtLocation
 }) => {
   const [activeTab, setActiveTab] = useState<CampaignTabId>(initialTab);
   const [selectedLocationForTravel, setSelectedLocationForTravel] = useState<WorldLocation | null>(null);
@@ -256,6 +259,12 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
             Travel
           </button>
           <button
+            onClick={() => setActiveTab('journal')}
+            className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'journal' ? 'text-amber-400' : 'text-stone-400'}`}
+          >
+            Chronicles
+          </button>
+          <button
             onClick={() => setActiveTab('export')}
             className={`px-2 py-1 rounded-lg font-bold ${activeTab === 'export' ? 'text-amber-400' : 'text-stone-400'}`}
           >
@@ -272,6 +281,12 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
               onOpenKnowledgeGraph={onOpenKnowledgeGraph}
               onOpenGenerators={onOpenGenerators}
               onNavigateToFaction={handleNavigateToFaction}
+              onLaunchEncounterAtLocation={(loc) => {
+                if (onLaunchEncounterAtLocation) {
+                  onLaunchEncounterAtLocation(loc);
+                  onClose();
+                }
+              }}
             />
           )}
 
@@ -301,6 +316,13 @@ export const CampaignLoreVaultModal: React.FC<CampaignLoreVaultModalProps> = ({
           {activeTab === 'travel' && (
             <CampaignTravelCalculator
               initialDestination={selectedLocationForTravel}
+            />
+          )}
+
+          {activeTab === 'journal' && (
+            <CampaignJournalView
+              initialSearch={highlightedEntity || undefined}
+              onNavigateToAtlasLocation={handleNavigateToAtlasLocation}
             />
           )}
 

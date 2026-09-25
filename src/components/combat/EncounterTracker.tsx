@@ -29,7 +29,9 @@ import {
   Zap,
   Store,
   BookOpen,
-  Map as MapIcon
+  Map as MapIcon,
+  Trophy,
+  MapPin
 } from 'lucide-react';
 import { openDetachedWindow } from '../../utils/useDetachedSync';
 import { voiceManager, VoicePeerState } from '../../lib/voiceChatService';
@@ -43,6 +45,7 @@ import { BattlemapConfig, DEFAULT_BATTLEMAP_CONFIG, BattlemapLayout } from '../b
 import { Combatant, CombatLogEntry, EncounterTrackerProps, SavedEncounterData } from './encounter/encounterTypes';
 import { EncounterLogModal } from './encounter/EncounterLogModal';
 import { AddCombatantModal } from './encounter/AddCombatantModal';
+import { CombatVictoryModal } from './encounter/CombatVictoryModal';
 import { MonsterMechanicsBar } from './encounter/MonsterMechanicsBar';
 import { MerchantEncounterPanel } from './encounter/MerchantEncounterPanel';
 import { ConcentrationWatchdogBanner } from './encounter/ConcentrationWatchdogBanner';
@@ -69,7 +72,8 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
   encounterState: externalState,
   onOpenGenerators,
   initialViewMode,
-  isStandaloneBattlemap
+  isStandaloneBattlemap,
+  onOpenCampaignLoreVault
 }) => {
   const { t } = useLanguage();
   const localEncounter = useEncounterState({
@@ -160,12 +164,16 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
     handleDismountCombatant,
     handleToggleCombatantMountRole,
     syncEncounterToSession,
+    linkedAtlasLocation,
+    setLinkedAtlasLocation,
+    handleLaunchAtlasEncounter,
     isDm,
     hasActiveSession
   } = encounter;
 
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showVictoryModal, setShowVictoryModal] = useState(false);
   const [addModalInitialType, setAddModalInitialType] = useState<'ally' | 'enemy' | 'merchant'>('enemy');
   const [viewMode, setViewMode] = useState<'teams' | 'timeline' | 'battlemap'>(initialViewMode || (isStandaloneBattlemap ? 'battlemap' : 'teams'));
 
@@ -391,6 +399,38 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
         </div>
       )}
 
+      {/* Victory & Spoils Callout Banner when all enemies are defeated */}
+      {enemies.length > 0 && enemiesAliveCount === 0 && (
+        <div className="bg-gradient-to-r from-amber-950/60 via-stone-900 to-amber-950/50 border border-amber-500/50 rounded-xl p-3 sm:p-4 flex items-center justify-between flex-wrap gap-3 shadow-lg shadow-amber-950/40 animate-fadeIn">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500 text-stone-950 flex items-center justify-center font-bold shadow shrink-0">
+              <Trophy className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm font-serif font-bold text-amber-200 flex items-center gap-2 flex-wrap">
+                <span>All Foes Vanquished! Encounter Cleared!</span>
+                {linkedAtlasLocation && (
+                  <span className="text-[10px] font-sans px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                    {linkedAtlasLocation.name}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-stone-300">
+                Victory achieved. Distribute experience pool, claim harvested gold & relics, and record in the Campaign Chronicles.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setShowVictoryModal(true)}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-stone-950 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/20"
+          >
+            <Trophy className="w-4 h-4" />
+            <span>Claim Victory & Spoils</span>
+          </button>
+        </div>
+      )}
+
       {/* Top Controls */}
       <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
         <div className="flex items-center gap-2 flex-wrap">
@@ -418,6 +458,18 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
               <option value="lair_active">👑 Boss Lair (Lair Actions Engaged)</option>
             </select>
           </div>
+
+          {linkedAtlasLocation && (
+            <div className="flex items-center gap-1.5 bg-amber-950/70 border border-amber-500/40 px-2.5 py-1 rounded-xl text-xs font-serif font-bold text-amber-200 shadow">
+              <MapPin className="w-3.5 h-3.5 text-amber-400" />
+              <span>{linkedAtlasLocation.name}</span>
+              {linkedAtlasLocation.dangerLevel && (
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-rose-950/80 text-rose-300 border border-rose-500/40">
+                  {linkedAtlasLocation.dangerLevel}
+                </span>
+              )}
+            </div>
+          )}
 
           {activeSessionCode && (
             <div className="flex items-center gap-1.5 bg-emerald-950/80 border border-emerald-600/40 text-emerald-300 px-2.5 py-1 rounded-xl text-xs font-bold shadow">
@@ -529,6 +581,15 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
             >
               <Swords className="w-3.5 h-3.5 text-rose-400" />
               <span>+ {t('common.monster', 'Enemy')}</span>
+            </button>
+
+            <button
+              onClick={() => setShowVictoryModal(true)}
+              className="flex items-center gap-1 text-xs bg-amber-950/70 hover:bg-amber-900/80 text-amber-300 border border-amber-500/40 px-2.5 py-1.5 rounded-xl font-bold transition shadow-sm cursor-pointer"
+              title="Claim encounter victory spoils, allocate XP, and record in Campaign Chronicles"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Victory & Spoils</span>
             </button>
           </div>
 
@@ -1200,6 +1261,25 @@ export const EncounterTracker: React.FC<EncounterTrackerProps> = ({
           onUpdateCharacter={onUpdateCharacter}
           onApplyDamageToCombatant={(id, dmg) => handleAdjustHp(id, -dmg)}
           onRoll={onRoll}
+        />
+      )}
+
+      {/* Combat Victory & Spoils Modal */}
+      {showVictoryModal && (
+        <CombatVictoryModal
+          isOpen={showVictoryModal}
+          onClose={() => setShowVictoryModal(false)}
+          combatants={combatants}
+          allies={allies}
+          enemies={enemies}
+          roundNumber={roundNumber}
+          linkedAtlasLocation={linkedAtlasLocation}
+          activeCharacter={character}
+          allCharacters={allCharacters}
+          parties={parties}
+          onApplyXp={applyManualXp}
+          onUpdateCharacter={onUpdateCharacter}
+          onOpenCampaignLoreVault={onOpenCampaignLoreVault}
         />
       )}
     </CollapsibleBox>

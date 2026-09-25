@@ -970,7 +970,9 @@ export class UniversalModifierEngine {
 
     if (target === 'ac') {
       const inventory = character.inventory || [];
-      const armor = options?.equippedArmor !== undefined ? options.equippedArmor : inventory.find(i => i.equipped && !i.stored && (i.itemType === 'Armor' || i.armorAc));
+      const armor = options?.equippedArmor !== undefined 
+        ? options.equippedArmor 
+        : inventory.find(i => i.equipped && !i.stored && i.armorType !== 'Shield' && !i.name.toLowerCase().includes('shield') && (i.itemType === 'Armor' || i.armorAc));
       
       if (armor && armor.armorAc !== undefined) {
         baseValue = armor.armorAc;

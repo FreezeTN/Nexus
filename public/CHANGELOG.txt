@@ -686,6 +686,80 @@ MILESTONE 37: AUTOMATED 5E RAW WEATHER ENGINE, VISIBILITY GATING & SNUFFING (v0.
 * Tactical Line of Sight, Cover & Weather HUD (`src/components/battlemap/BattlemapCanvas.tsx`):
   - Upgraded the shift-click targeting line and the bottom Target HUD card to show real-time 3D distances, cover bonuses (+2 Half Cover, +5 Three-Quarters Cover), weather disadvantage warnings, and weather obscurement status.
 
+--------------------------------------------------------------------------------
+MILESTONE 38: AUTOMATED RAW WEATHER ABILITIES, SPELLS & LAIR TRIGGERS (v0.9.18)
+--------------------------------------------------------------------------------
+* Automated Spell Weather Shifts (`src/components/battlemap/weatherAbilityTriggers.ts`, `src/components/modals/SpellTargetModal.tsx`):
+  - Created a dedicated registry of official 5e RAW weather-modifying spells: Control Weather (8th lvl), Call Lightning (3rd lvl), Storm of Vengeance (9th lvl), Sleet Storm (3rd lvl), Fog Cloud (1st lvl), Incendiary Cloud (8th lvl), Whirlwind (7th lvl), Gust of Wind (2nd lvl), and Dawn (5th lvl).
+  - Integrated automatic detection into the spellcasting workflow (SpellTargetModal).
+  - Casting any of these spells displays a 5e RAW Atmospheric Weather Shift card with climate selection options (e.g., choice between Thunderstorm, Blizzard, Steady Rain, Gale Wind, or Clear Weather for Control Weather).
+  - Automatically shifts battlemap atmospheric weather across all clients when cast.
+
+* Call Lightning Storm Synergy (+1d10 Damage) (`src/components/combat/AttackResolver.tsx`):
+  - Implemented 5e PHB p. 220 RAW rule: if Call Lightning is cast or used when an outdoor storm already exists on the battlemap, the spell channels the existing storm, granting an automatic +1d10 lightning damage (+2d10 on critical hits).
+  - Displays dynamic synergy badge in the Attack Resolver and breakdown logs in the Combat Log.
+
+* Monster Regional Effects & Lair Weather Triggers (`src/components/combat/encounter/MonsterMechanicsBar.tsx`, `src/components/combat/EncounterTracker.tsx`):
+  - Integrated 5e Monster Manual regional environmental effects into the Monster Mechanics Action Bar:
+    - Adult & Ancient Blue Dragons: 6-mile regional thunderstorm or desert dust devil lair sandstorm (5e MM p. 91).
+    - Adult & Ancient White Dragons: 6-mile regional glacial blizzard (5e MM p. 100).
+    - Adult & Ancient Red Dragons: 6-mile regional volcanic ash plume & cinders (5e MM p. 97).
+    - Adult & Ancient Green Dragons: 1-mile regional unnatural creeping mist (5e MM p. 94).
+    - Mummy Lord: Tomb Sandstorm lair action (5e MM p. 229).
+    - Vampire: 1-mile creeping fog regional shroud (5e MM p. 297).
+    - Storm Giant: Innate tempest storm dominance (5e MM p. 156).
+  - Single-click triggering instantly shifts battlemap weather, applies mechanical rules, and logs tactical action in the combat log.
+
+* Global Weather Event Bus & Multi-Client Synchronization (`src/events/types.ts`, `src/events/eventBus.ts`, `src/components/combat/encounter/useEncounterState.ts`):
+  - Extended event bus with `WeatherChanged` event payload (`weather`, `sourceName`, `sourceType`, `reason`).
+  - Synced encounter state and multiplayer session state when weather shifts occur via spell, monster, or DM action.
+
+* Tactical Weather Rules Modal: RAW Abilities & Spells Tab (`src/components/battlemap/WeatherTacticalRulesModal.tsx`):
+  - Added dedicated tab indexing all 5e RAW environmental spells and monster regional effects.
+  - Interactive "Trigger Weather Shift" buttons allow DMs and players to quickly activate any atmospheric transition with instant grid particle updates and mechanical adjustments.
+
+--------------------------------------------------------------------------------
+MILESTONE 39: DUAL-ENGINE TACTICAL BATTLEMAP & 3.5e VS 5e RAW DIFFERENTIATION (v0.9.19)
+--------------------------------------------------------------------------------
+* Dual-Edition Attack of Opportunity (AoO) Engine (`src/components/battlemap/BattlemapCanvas.tsx`):
+  - Differentiated AoO provocation mechanics per official Rules-as-Written:
+    - 5e RAW (PHB p. 195): AoOs are provoked only upon exiting a creature's threat perimeter.
+    - 3.5e RAW (PHB p. 137): Exiting ANY threatened square provokes an AoO, even when moving between squares threatened by the same foe.
+    - Enforced 3.5e flat-footed restrictions (cannot make AoO unless possessing Combat Reflexes feat).
+
+* Edition-Specific Health Status Badges & HP Milestones:
+  - Gated modern 5e "Bloodied" status (<= 50% HP) so it only displays during 5e encounters.
+  - Implemented authentic 3.5e RAW health thresholds: 0 HP displays a yellow [Disabled] (staggered) condition, -1 to -9 HP displays a red [Dying] (unconscious, bleeding) condition, and [Dead] triggers at -10 HP or below.
+
+* Automatic 3.5e Core (5-10-5) vs 5e Chebyshev Grid Initialization:
+  - Encounter Tracker automatically detects character edition and sets battlemaps to the authentic 3.5e Core (5-10-5 Alternating) diagonal rule (PHB p. 147) for 3.5e campaigns, while maintaining 5e Chebyshev (5ft/diag) for 5e campaigns.
+  - Added an active edition combat badge (3.5e Combat / 5e Combat) to the battlemap toolbar.
+
+* Terrain Cover AC & Saving Throw Bonus Gating:
+  - Updated battlemap Terrain Palette chips, cover tooltips, and tactical markers with edition-specific RAW values: 3.5e Standard Cover (+4 AC / +2 Reflex) and Nine-Tenths Cover (+7 AC / +3 Reflex) vs 5e Half Cover (+2 AC / +2 DEX) and Three-Quarters Cover (+5 AC / +5 DEX).
+
+* Natural Reach for Large (Tall vs. Long) Creatures & Concentration Gating:
+  - Implemented 3.5e RAW (PHB p. 149) natural reach differentiation: Large bipedal/tall creatures automatically project a 10 ft threat reach (15 ft for Huge tall creatures) vs 5 ft for quadrupeds/long creatures.
+  - Restricted the purple concentration ring indicator to 5e rules where single-spell concentration is strictly mandated.
+
+--------------------------------------------------------------------------------
+MILESTONE 40: PHASE 1 AOE TRANSMUTATION & PHASE 2 MOVEMENT WAYPOINT PLANNING (v0.9.20)
+--------------------------------------------------------------------------------
+* Phase 1: Spell AoE Terrain Transmutation & Grid Coverage (`src/components/battlemap/battlemapTypes.ts`, `AoEControlPalette.tsx`, `BattlemapCanvas.tsx`):
+  - Added `terrainEffect` and `terrainDurationRounds` to `AoETemplate` interface.
+  - Built `getAoECoveredCells` algorithm for accurate geometric intersection testing (spheres/circles, cones, cubes/boxes, cylinders, lines) across battlemap grid tiles.
+  - Automated spell terrain effect detection via `inferSpellAoE` (Fire -> hazard/fire, Cold -> difficult/ice, Web -> difficult/web, Bludgeoning/Earthquake -> difficult/rubble).
+  - Integrated interactive "Apply Terrain Transmutation" buttons (Ignite Grid, Freeze Ice, Conjure Webs, Crush Rubble) directly into AoEControlPalette.
+  - Implemented `handleApplyAoETerrainEffect` in BattlemapCanvas to apply terrain modifications to the battlemap, preserving walls and closed doors.
+
+* Phase 2: Movement Waypoint Planning Engine & Wall/Terrain Path Traversal (`src/components/battlemap/BattlemapCanvas.tsx`, `battlemapTypes.ts`):
+  - Built interactive Waypoint Planning Mode (hotkey 'M', button in toolbar).
+  - Step-by-step intermediate movement waypoint routing around obstacles, walls, and hazardous zones.
+  - Full wall and obstacle path cost resolution: walking around walls requires navigating around impassable tiles, accurately accumulating true distance traveled per step.
+  - Creature special movement mode integration: creatures with fly speed or vertical elevation ignore ground obstacles and walls that don't reach the ceiling; creatures with swim/climb speeds bypass terrain multipliers for water and climbing surfaces.
+  - Visual waypoint path knot rendering with distance callouts at each node, color-coded by movement budget (Green: base speed, Amber: dash required, Red: exceeds dash budget).
+  - Undo waypoint support via Backspace / Ctrl+Z and interactive action bar with Confirm Move (Enter) / Cancel (Esc).
+
 ================================================================================
                     END OF DETAILED DEVELOPMENT CHANGELOG
 ================================================================================

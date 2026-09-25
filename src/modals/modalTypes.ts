@@ -20,6 +20,7 @@ export type ModalId =
   | 'ai-assistant'
   | 'tabletop-generators'
   | 'campaign-lore-vault'
+  | 'session-orchestrator'
   | 'upgrade'
   | 'new-character'
   | 'level-up-wizard'
@@ -122,6 +123,17 @@ export interface ModalPropsMap {
     onAddItemToInventory?: (item: any, targetId?: string) => void;
     onOpenKnowledgeGraph?: (entityName?: string) => void;
     onOpenGenerators?: (tab?: GeneratorTab) => void;
+    onLaunchEncounterAtLocation?: (location: any) => void;
+  };
+  'session-orchestrator': {
+    initialTab?: 'orchestrator' | 'recap' | 'replay';
+    activeCharacter?: CharacterData | null;
+    characters?: CharacterData[];
+    parties?: Party[];
+    ruleEdition?: RuleEdition;
+    onUpdateCharacter?: (char: CharacterData) => void;
+    onLaunchEncounterAtLocation?: (location: any) => void;
+    onNavigateTab?: (tab: string) => void;
   };
   upgrade: {
     defaultTier?: SubscriptionTier;

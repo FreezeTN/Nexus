@@ -1,4 +1,5 @@
 import { CharacterData, RuleEdition } from '../types';
+import { WorldLocation } from '../types/campaign';
 
 export type EventType =
   | 'CharacterCreated'
@@ -7,6 +8,7 @@ export type EventType =
   | 'QuestCompleted'
   | 'NPCUpdated'
   | 'CombatStarted'
+  | 'LaunchAtlasEncounter'
   | 'ItemAdded'
   | 'ItemRemoved'
   | 'SpellLearned'
@@ -24,6 +26,7 @@ export type EventType =
   | 'CloseModal';
 
 export interface EventPayloadMap {
+  LaunchAtlasEncounter: { location: WorldLocation };
   CompendiumUpdated: { id?: string; name?: string };
   OpenModal: { modalId: string; props?: Record<string, any> };
   CloseModal: { modalId?: string };

@@ -5,6 +5,7 @@ import { CharacterData, RuleEdition, Party } from '../types';
 import { useModal } from '../modals/ModalContext';
 import { GeneratorTab } from '../components/modals/TabletopGeneratorsModal';
 import { CampaignTabId } from '../components/modals/CampaignLoreVaultModal';
+import { WorldLocation } from '../types/campaign';
 
 interface UseModalCoordinatorProps {
   currentUser: UserProfile | null;
@@ -25,6 +26,7 @@ interface UseModalCoordinatorProps {
   onSetSessionCode: (code: string) => void;
   onSaveTRPGSystems: (systems: RuleEdition[]) => void;
   onToggleSystem: (sysId: RuleEdition) => void;
+  onLaunchEncounterAtLocation?: (location: WorldLocation) => void;
   onExportJson?: () => void;
   onImportJson?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onLoadCampaignSave?: (saveData: any) => void;
@@ -68,6 +70,7 @@ export function useModalCoordinator({
   onPopulateCombatEncounter,
   onAppendSessionNotes,
   onLoadBattlemapLayout,
+  onLaunchEncounterAtLocation,
   onRoll,
   onUserChange,
   onUndo,
@@ -279,9 +282,10 @@ export function useModalCoordinator({
       onUpdateCharacter,
       onAddItemToInventory,
       onOpenKnowledgeGraph: (entityName) => handleOpenCampaignGraph(entityName),
-      onOpenGenerators: handleOpenGenerators
+      onOpenGenerators: handleOpenGenerators,
+      onLaunchEncounterAtLocation
     });
-  }, [openModal, activeCharacter, characters, parties, currentUser, onUpdateCharacter, onAddItemToInventory, handleOpenCampaignGraph, handleOpenGenerators]);
+  }, [openModal, activeCharacter, characters, parties, currentUser, onUpdateCharacter, onAddItemToInventory, handleOpenCampaignGraph, handleOpenGenerators, onLaunchEncounterAtLocation]);
 
   const handleOpenLevelUpWizard = useCallback(() => {
     if (!activeCharacter) return;
@@ -330,6 +334,19 @@ export function useModalCoordinator({
     return () => window.removeEventListener('penpaper_navigate_tab', handleNavigate);
   }, [onNavigateTab]);
 
+  const handleOpenSessionOrchestrator = useCallback((tab: 'orchestrator' | 'recap' | 'replay' = 'orchestrator') => {
+    openModal('session-orchestrator', {
+      initialTab: tab,
+      activeCharacter,
+      characters,
+      parties,
+      ruleEdition: currentSystemTheme,
+      onUpdateCharacter,
+      onLaunchEncounterAtLocation,
+      onNavigateTab
+    });
+  }, [openModal, activeCharacter, characters, parties, currentSystemTheme, onUpdateCharacter, onLaunchEncounterAtLocation, onNavigateTab]);
+
   return {
     handleOpenUpgradeModal,
     handleOpenAuthModal,
@@ -347,6 +364,7 @@ export function useModalCoordinator({
     handleOpenAiAssistant,
     handleOpenGenerators,
     handleOpenCampaignLoreVault,
+    handleOpenSessionOrchestrator,
     handleOpenLevelUpWizard,
     closeModal,
     isModalOpen
